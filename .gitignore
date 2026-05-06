@@ -1,0 +1,31 @@
+# IDE
+.history
+.vscode
+.idea
+.cursor/
+
+# Node.js
+node_modules
+dist
+build
+.turbo
+.husky
+
+# Next.js
+.next
+
+# Logs
+*.log
+
+# test
+coverage*
+playwright-report
+test-results
+
+# graphify
+graphify-out/cache
+app/web/graphify-out/cache
+.graphify*
+
+# files
+*.tsbuildinfo
