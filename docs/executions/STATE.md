@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T1.1 (`02_MILESTONE_SKELETON.md`) — in progress
-**Last commit**: (none yet)
-**Last updated**: 2026-05-06T09:38Z
+**Next task**: T1.2 (`02_MILESTONE_SKELETON.md`)
+**Last commit**: 2239157
+**Last updated**: 2026-05-07T02:13Z
 
 ---
 
@@ -24,7 +24,7 @@
 - [s] T0.5 Detect GPU and install correct PyTorch — environment verified (no commit)
 
 ### M1 — Skeleton (`02_MILESTONE_SKELETON.md`)
-- [~] T1.1 Initialize pnpm monorepo
+- [x] T1.1 Initialize pnpm monorepo — commit 2239157
 - [ ] T1.2 Bootstrap Next.js app (apps/web)
 - [ ] T1.3 Bootstrap FastAPI app (apps/server)
 - [ ] T1.4 Create shared-schemas package
