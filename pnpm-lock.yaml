@@ -21,6 +21,8 @@ importers:
         specifier: ^4.19.0
         version: 4.21.0
 
+  apps/server: {}
+
   apps/web:
     dependencies:
       clsx:

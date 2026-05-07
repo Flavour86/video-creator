@@ -46,3 +46,4 @@ graphify-out/cache/
 app/web/graphify-out/cache/
 .graphify*
 *.tsbuildinfo
+.downloads/
