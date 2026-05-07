@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type RenderStage = "cache_warm" | "compose" | "muxing" | "done" | "error";
+export type RenderPreset = "draft" | "final";
 
 export type RenderProgressEvent = {
   type: "progress";
@@ -24,6 +25,7 @@ export type RenderProgressState =
       stage: Exclude<RenderStage, "done" | "error">;
       percent: number;
       etaSeconds?: number;
+      currentFrame?: number;
       speed?: string;
       message?: string;
     }
@@ -82,6 +84,7 @@ export function useRenderProgress(projectPath: string) {
         stage: event.stage,
         percent: event.percent,
         etaSeconds: event.eta_seconds,
+        currentFrame: event.current_frame,
         speed: event.speed,
         message: event.message,
       });
@@ -98,7 +101,7 @@ export function useRenderProgress(projectPath: string) {
     };
   }, []);
 
-  const startDraft = useCallback(async () => {
+  const startRender = useCallback(async (preset: RenderPreset) => {
     if (!projectPath || state.status === "starting" || state.status === "running") return;
     setState({ status: "starting" });
     try {
@@ -107,7 +110,7 @@ export function useRenderProgress(projectPath: string) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ preset: "draft" }),
+          body: JSON.stringify({ preset }),
         },
       );
       if (!response.ok) {
@@ -134,6 +137,14 @@ export function useRenderProgress(projectPath: string) {
     }
   }, [connect, projectPath, state.status]);
 
+  const startDraft = useCallback(async () => {
+    await startRender("draft");
+  }, [startRender]);
+
+  const startFinal = useCallback(async () => {
+    await startRender("final");
+  }, [startRender]);
+
   const cancel = useCallback(async () => {
     if (state.status !== "running") return;
     socketRef.current?.close();
@@ -150,7 +161,7 @@ export function useRenderProgress(projectPath: string) {
       ? state.percent
       : 0;
 
-  return { state, startDraft, cancel, isActive, percent };
+  return { state, startRender, startDraft, startFinal, cancel, isActive, percent };
 }
 
 function renderWsUrl(renderId: string): string {

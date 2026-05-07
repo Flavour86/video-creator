@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Clapperboard } from "lucide-react";
+import { Clapperboard, Film } from "lucide-react";
 
 import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { BgModal } from "@/components/bg-modal/BgModal";
@@ -190,6 +191,13 @@ function EditorContent() {
             <Clapperboard size={14} />
             {draftLabel}
           </button>
+          <Link
+            className="inline-flex items-center gap-1.5 rounded border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50"
+            href={`/render?project=${encodeURIComponent(projectPath)}`}
+          >
+            <Film size={14} />
+            Render Final
+          </Link>
           <LayersPopover
             layers={layers}
             onAddItem={() => openForSentence(sentences[0]?.index ?? 1)}

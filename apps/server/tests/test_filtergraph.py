@@ -80,6 +80,7 @@ def _expected_clip(project_dir: Path, media_path: Path, duration_s: float) -> Pa
         transition_out="cut",
         resolution="1280x720",
         fps=30,
+        crf=28,
     )
     return clip_cache_path(project_dir, key)
 

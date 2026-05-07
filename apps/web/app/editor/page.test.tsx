@@ -52,4 +52,8 @@ it("shows project path in toolbar when project param is present", () => {
   );
   expect(screen.getByText("E:/projects/demo")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /render final/i })).toHaveAttribute(
+    "href",
+    "/render?project=E%3A%2Fprojects%2Fdemo",
+  );
 });

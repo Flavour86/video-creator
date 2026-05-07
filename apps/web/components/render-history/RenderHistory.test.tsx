@@ -29,6 +29,7 @@ it("renders render history rows", async () => {
     expect(screen.getByText("E:/project/.vc/drafts/r-1.mp4")).toBeInTheDocument();
   });
   expect(screen.getByText("draft")).toBeInTheDocument();
+  expect(screen.getByText("playable")).toBeInTheDocument();
   expect(screen.getByText(/2.1s/)).toBeInTheDocument();
 });
 
@@ -41,6 +42,20 @@ it("calls reveal endpoint when open is clicked", async () => {
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/server/projects/renders/r-1/reveal?project=E%3A%2Fproject",
+      { method: "POST" },
+    );
+  });
+});
+
+it("calls play endpoint when play is clicked", async () => {
+  render(<RenderHistory projectPath="E:/project" />);
+
+  const button = await screen.findByRole("button", { name: /play r-1/i });
+  fireEvent.click(button);
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/server/projects/renders/r-1/play?project=E%3A%2Fproject",
       { method: "POST" },
     );
   });

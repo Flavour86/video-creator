@@ -14,7 +14,7 @@ JsonValue: TypeAlias = (
 )
 JsonObject: TypeAlias = dict[str, JsonValue]
 
-CLIP_CACHE_FORMAT_VERSION = 1
+CLIP_CACHE_FORMAT_VERSION = 2
 
 
 def compute_alignment_hash(audio_path: Path, transcript_text: str) -> str:
@@ -53,6 +53,7 @@ def clip_cache_components(
     transition_out: str | None,
     resolution: str,
     fps: int,
+    crf: int,
 ) -> JsonObject:
     return {
         "media_sha256": _compute_file_sha256(media_path),
@@ -62,6 +63,7 @@ def clip_cache_components(
         "transition_out": transition_out,
         "resolution": resolution,
         "fps": fps,
+        "crf": crf,
         "format_version": CLIP_CACHE_FORMAT_VERSION,
     }
 
@@ -80,6 +82,7 @@ def clip_cache_key(
     transition_out: str | None,
     resolution: str,
     fps: int,
+    crf: int,
 ) -> str:
     return clip_cache_key_from_components(
         clip_cache_components(
@@ -90,6 +93,7 @@ def clip_cache_key(
             transition_out=transition_out,
             resolution=resolution,
             fps=fps,
+            crf=crf,
         )
     )
 

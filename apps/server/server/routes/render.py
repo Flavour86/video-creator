@@ -14,6 +14,7 @@ from server.pipeline.render import RenderError
 
 router = APIRouter(tags=["render"])
 
+
 class RenderRequest(BaseModel):
     preset: RenderPreset
 
@@ -112,6 +113,39 @@ async def reveal_render(
         )
 
     render_pipeline.reveal_in_file_browser(output_path)
+    return {"ok": True}
+
+
+@router.post("/projects/renders/{render_id}/play", response_model=None)
+async def play_render(
+    render_id: str,
+    project: str = Query(...),
+) -> dict[str, bool] | JSONResponse:
+    project_dir = Path(project)
+    if not (project_dir / "project.json").exists():
+        return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
+
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    if row["status"] != "done":
+        return _error(
+            409,
+            "RENDER_NOT_PLAYABLE",
+            "Render is not playable.",
+            {"render_id": render_id},
+        )
+
+    output_path = Path(str(row["output_path"]))
+    if not output_path.is_file():
+        return _error(
+            404,
+            "OUTPUT_NOT_FOUND",
+            "Render output not found.",
+            {"path": str(output_path)},
+        )
+
+    render_pipeline.open_in_default_player(output_path)
     return {"ok": True}
 
 

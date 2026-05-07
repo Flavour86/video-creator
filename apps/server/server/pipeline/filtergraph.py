@@ -61,6 +61,7 @@ def build_compose_command(
                         project_dir=project_dir,
                         resolution=config.resolution,
                         fps=config.fps,
+                        crf=config.crf,
                     )
                 ),
             ]

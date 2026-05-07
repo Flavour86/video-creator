@@ -28,6 +28,7 @@ def test_clip_cache_key_is_deterministic(tmp_path: Path) -> None:
         transition_out="cut",
         resolution="1280x720",
         fps=30,
+        crf=28,
     )
     second = clip_cache_key(
         media_path=media_path,
@@ -37,6 +38,7 @@ def test_clip_cache_key_is_deterministic(tmp_path: Path) -> None:
         transition_out="cut",
         resolution="1280x720",
         fps=30,
+        crf=28,
     )
 
     assert first == second
@@ -53,6 +55,7 @@ def test_clip_cache_key_changes_when_inputs_change(tmp_path: Path) -> None:
         "transition_out": "cut",
         "resolution": "1280x720",
         "fps": 30,
+        "crf": 28,
     }
     base_key = clip_cache_key(**base_kwargs)
 
@@ -63,6 +66,7 @@ def test_clip_cache_key_changes_when_inputs_change(tmp_path: Path) -> None:
     assert clip_cache_key(**{**base_kwargs, "transition_out": "fade"}) != base_key
     assert clip_cache_key(**{**base_kwargs, "resolution": "1920x1080"}) != base_key
     assert clip_cache_key(**{**base_kwargs, "fps": 24}) != base_key
+    assert clip_cache_key(**{**base_kwargs, "crf": 18}) != base_key
 
     media_path.write_bytes(b"different-media")
     assert clip_cache_key(**base_kwargs) != base_key
@@ -104,6 +108,7 @@ def test_render_clip_to_cache_reuses_existing_file(
         transition_out="cut",
         resolution="1280x720",
         fps=30,
+        crf=28,
     )
     cached_path = clip_cache_path(tmp_path, key)
     cached_path.parent.mkdir(parents=True)

@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderOpen, History, RefreshCw } from "lucide-react";
+import { FolderOpen, History, Play, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type RenderHistoryItem = {
@@ -53,6 +53,13 @@ export function RenderHistory({ projectPath, refreshKey = "" }: Props) {
     );
   }
 
+  async function play(renderId: string) {
+    await fetch(
+      `/api/server/projects/renders/${encodeURIComponent(renderId)}/play?project=${encodeURIComponent(projectPath)}`,
+      { method: "POST" },
+    );
+  }
+
   return (
     <section className="border-b border-neutral-200 pb-3">
       <div className="mb-2 flex items-center justify-between">
@@ -78,9 +85,14 @@ export function RenderHistory({ projectPath, refreshKey = "" }: Props) {
               className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded border border-neutral-200 px-2 py-1.5"
               key={row.id}
             >
-              <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase">
-                {row.preset}
-              </span>
+              <div className="flex flex-col gap-1">
+                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase">
+                  {row.preset}
+                </span>
+                <span className="rounded bg-neutral-50 px-1.5 py-0.5 text-center text-[10px] font-medium uppercase opacity-60">
+                  {renderStatusLabel(row)}
+                </span>
+              </div>
               <div className="min-w-0">
                 <p className="truncate font-mono text-[11px]" title={row.output_path}>
                   {row.output_path}
@@ -90,14 +102,26 @@ export function RenderHistory({ projectPath, refreshKey = "" }: Props) {
                   {formatSize(row.file_size)}
                 </p>
               </div>
-              <button
-                aria-label={`Open ${row.id}`}
-                className="rounded border border-neutral-200 p-1 hover:bg-neutral-50"
-                onClick={() => void reveal(row.id)}
-                type="button"
-              >
-                <FolderOpen size={13} />
-              </button>
+              <div className="flex items-center gap-1">
+                {isPlayable(row) && (
+                  <button
+                    aria-label={`Play ${row.id}`}
+                    className="rounded border border-neutral-200 p-1 hover:bg-neutral-50"
+                    onClick={() => void play(row.id)}
+                    type="button"
+                  >
+                    <Play size={13} />
+                  </button>
+                )}
+                <button
+                  aria-label={`Open ${row.id}`}
+                  className="rounded border border-neutral-200 p-1 hover:bg-neutral-50"
+                  onClick={() => void reveal(row.id)}
+                  type="button"
+                >
+                  <FolderOpen size={13} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -130,4 +154,16 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function isPlayable(row: RenderHistoryItem): boolean {
+  return row.status === "done" && row.file_size > 0;
+}
+
+function renderStatusLabel(row: RenderHistoryItem): string {
+  if (isPlayable(row)) return "playable";
+  if (row.output_path.endsWith(".partial") || (row.status !== "done" && row.file_size > 0)) {
+    return "partial";
+  }
+  return row.status;
 }

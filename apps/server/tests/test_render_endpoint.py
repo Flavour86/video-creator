@@ -157,6 +157,39 @@ async def test_reveal_render_calls_opener(monkeypatch, tmp_path: Path) -> None:
     assert opened == [output_path]
 
 
+@pytest.mark.asyncio
+async def test_play_render_calls_default_player(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    output_path = tmp_path / "renders" / "final.mp4"
+    output_path.parent.mkdir()
+    output_path.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-play",
+        project_path=tmp_path,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime_now(),
+    )
+    mark_render_finished(
+        render_id="r-play",
+        finished_at=datetime_now(),
+        duration_s=2.0,
+    )
+    opened: list[Path] = []
+    monkeypatch.setattr(render_pipeline, "open_in_default_player", opened.append)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/projects/renders/r-play/play",
+            params={"project": str(tmp_path)},
+        )
+
+    assert response.status_code == 200
+    assert opened == [output_path]
+
+
 def datetime_now():
     from datetime import UTC, datetime
 

@@ -7,6 +7,7 @@ import secrets
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -138,8 +139,13 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
         await _emit(job.render_id, "muxing", 98.0, message="muxing audio")
     except asyncio.CancelledError:
         message = "Render canceled."
-        mark_render_failed(render_id=job.render_id, finished_at=datetime.now(UTC), message=message)
-        _discard_partial(job.output_path)
+        partial_path = _preserve_partial(job.output_path)
+        mark_render_failed(
+            render_id=job.render_id,
+            finished_at=datetime.now(UTC),
+            message=message,
+            output_path=partial_path,
+        )
         await _emit(job.render_id, "error", 0.0, message=message)
         if raise_errors:
             raise RenderError(409, "RENDER_CANCELED", message) from None
@@ -259,20 +265,33 @@ async def _run_ffmpeg(
 
     stderr_task = asyncio.create_task(proc.stderr.read())
     progress: dict[str, str] = {}
-    while True:
-        line_bytes = await proc.stdout.readline()
-        if not line_bytes:
-            break
-        line = line_bytes.decode(errors="replace").strip()
-        if not line or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        progress[key] = value
-        if key == "progress":
-            await _emit_ffmpeg_progress(render_id, progress, total_s)
+    try:
+        while True:
+            line_bytes = await proc.stdout.readline()
+            if not line_bytes:
+                break
+            line = line_bytes.decode(errors="replace").strip()
+            if not line or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            progress[key] = value
+            if key == "progress":
+                await _emit_ffmpeg_progress(render_id, progress, total_s)
 
-    await proc.wait()
-    stderr = await stderr_task
+        await proc.wait()
+        stderr = await stderr_task
+    except asyncio.CancelledError:
+        if proc.returncode is None:
+            proc.terminate()
+            with suppress(TimeoutError):
+                await asyncio.wait_for(proc.wait(), timeout=5)
+            if proc.returncode is None:
+                proc.kill()
+                await proc.wait()
+        stderr_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await stderr_task
+        raise
     if proc.returncode != 0:
         detail = stderr.decode(errors="replace").strip()
         raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
@@ -371,6 +390,19 @@ def _discard_partial(output_path: Path) -> None:
         output_path.unlink()
 
 
+def _preserve_partial(output_path: Path) -> Path | None:
+    if not output_path.exists():
+        return None
+    if output_path.stat().st_size == 0:
+        output_path.unlink()
+        return None
+    partial_path = output_path.with_name(f"{output_path.name}.partial")
+    if partial_path.exists():
+        partial_path.unlink()
+    output_path.replace(partial_path)
+    return partial_path
+
+
 def reveal_in_file_browser(path: Path) -> None:
     target = path if path.is_dir() else path.parent
     if os.name == "nt":
@@ -382,3 +414,15 @@ def reveal_in_file_browser(path: Path) -> None:
         subprocess.Popen(["open", str(target)])
         return
     subprocess.Popen(["xdg-open", str(target)])
+
+
+def open_in_default_player(path: Path) -> None:
+    if os.name == "nt":
+        startfile = getattr(os, "startfile", None)
+        if callable(startfile):
+            startfile(str(path))
+            return
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+        return
+    subprocess.Popen(["xdg-open", str(path)])

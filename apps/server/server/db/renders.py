@@ -63,15 +63,25 @@ def mark_render_failed(
     render_id: str,
     finished_at: datetime,
     message: str,
+    output_path: Path | None = None,
 ) -> None:
     with connection() as conn:
         conn.execute(
             """
             UPDATE render_history
-            SET finished_at = ?, status = ?, message = ?
+            SET finished_at = ?,
+                status = ?,
+                message = ?,
+                output_path = COALESCE(?, output_path)
             WHERE id = ?
             """,
-            (finished_at.isoformat(), "error", message, render_id),
+            (
+                finished_at.isoformat(),
+                "error",
+                message,
+                str(output_path) if output_path is not None else None,
+                render_id,
+            ),
         )
 
 

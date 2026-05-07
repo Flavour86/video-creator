@@ -47,6 +47,7 @@ def render_clip_to_cache(
         project_dir=project_dir,
         resolution=resolution,
         fps=fps,
+        crf=crf,
     )
     if is_cached(project_dir, key):
         return clip_cache_path(project_dir, key)
@@ -66,12 +67,14 @@ def clip_cache_path_for_item(
     project_dir: Path,
     resolution: str = "1280x720",
     fps: int = 30,
+    crf: int = 28,
 ) -> Path:
     key = clip_cache_key_for_item(
         item=item,
         project_dir=project_dir,
         resolution=resolution,
         fps=fps,
+        crf=crf,
     )
     return clip_cache_path(project_dir, key)
 
@@ -82,6 +85,7 @@ def clip_cache_key_for_item(
     project_dir: Path,
     resolution: str = "1280x720",
     fps: int = 30,
+    crf: int = 28,
 ) -> str:
     media_path = _resolve_media_path(project_dir, _media_id(item))
     duration_s = _duration_s(item)
@@ -95,6 +99,7 @@ def clip_cache_key_for_item(
         transition_out=transition_out,
         resolution=resolution,
         fps=fps,
+        crf=crf,
     )
     return clip_cache_key_from_components(components)
 
@@ -151,6 +156,7 @@ def render_clip(
         output_path=output_path,
         resolution=resolution,
         fps=fps,
+        crf=crf,
         command=cmd,
     )
     return output_path
@@ -386,6 +392,7 @@ def _write_metadata(
     output_path: Path,
     resolution: str,
     fps: int,
+    crf: int,
     command: list[str],
 ) -> None:
     components = clip_cache_components(
@@ -396,6 +403,7 @@ def _write_metadata(
         transition_out=_transition_value(item, "out"),
         resolution=resolution,
         fps=fps,
+        crf=crf,
     )
     metadata = {
         "key_components": components,
