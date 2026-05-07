@@ -49,7 +49,7 @@ def build_compose_command(
     preset: RenderPreset,
 ) -> list[str]:
     config = PRESETS[preset]
-    items = _visual_items_bottom_to_top(project)
+    items = visual_items_bottom_to_top(project)
     cmd = ["ffmpeg", "-y", "-i", str(project_dir / project.audio)]
     for item in items:
         cmd.extend(
@@ -98,7 +98,7 @@ def build_compose_command(
     return cmd
 
 
-def _visual_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
+def visual_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
     items: list[ClipRenderItem] = []
     for layer_container in reversed(project.layers):
         layer = getattr(layer_container, "root", layer_container)
@@ -115,7 +115,7 @@ def _visual_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
 def _duration_s(project: Project, alignment: AlignmentResult) -> float:
     if alignment.sentences:
         return max(sentence.end_s for sentence in alignment.sentences)
-    item_ends = [_item_float(item, "end") for item in _visual_items_bottom_to_top(project)]
+    item_ends = [_item_float(item, "end") for item in visual_items_bottom_to_top(project)]
     if item_ends:
         return max(item_ends)
     return 0.001
