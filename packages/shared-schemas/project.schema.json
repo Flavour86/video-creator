@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://video-creator.local/schemas/project.json",
+  "title": "Project",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "audio", "transcript", "output", "layers"],
+  "properties": {
+    "version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "audio": { "type": "string" },
+    "transcript": {
+      "type": "object",
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": { "enum": ["plain_text", "pre_segmented"] },
+        "path": { "type": "string" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["preset"],
+      "properties": {
+        "preset": { "enum": ["draft", "final"] }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "description": "Ordered top-to-bottom in render stack: SUB first, BG last. Loose stub; T2.2 fills this in with full discriminated-union schema.",
+      "items": { "type": "object" }
+    },
+    "subtitles": { "type": ["object", "null"] },
+    "watermark": { "type": ["object", "null"] }
+  }
+}
