@@ -5,31 +5,118 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+export type ForegroundItem = VisualItemBase;
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type SentenceRange = [number, number];
+export type PipItem = VisualItemBase & {
+  pip: PipPlacement;
+};
+export type BackgroundItem = VisualItemBase & {
+  crossfade: number;
+};
+
 export interface Project {
   version: 1;
   name: string;
   created_at?: string;
   updated_at?: string;
   audio: string;
-  transcript: {
-    kind: "plain_text" | "pre_segmented";
-    path: string;
-    [k: string]: unknown;
-  };
-  output: {
-    preset: "draft" | "final";
-    [k: string]: unknown;
-  };
+  transcript: Transcript;
+  output: Output;
   /**
-   * Ordered top-to-bottom in render stack: SUB first, BG last. Loose stub; T2.2 fills this in with full discriminated-union schema.
+   * Ordered top-to-bottom in render stack: subtitles first, background last.
    */
-  layers: {
+  layers: (SubtitlesLayer | ForegroundLayer | PipLayer | BackgroundLayer)[];
+  subtitles?: null | SubtitlesSettings;
+  watermark?: null | Watermark;
+  ai?: null | {
     [k: string]: unknown;
-  }[];
-  subtitles?: {
-    [k: string]: unknown;
-  } | null;
-  watermark?: {
-    [k: string]: unknown;
-  } | null;
+  };
+  characters?:
+    | null
+    | {
+        [k: string]: unknown;
+      }[];
+}
+export interface Transcript {
+  kind: "plain_text" | "pre_segmented";
+  path: string;
+}
+export interface Output {
+  preset: "draft" | "final";
+}
+export interface SubtitlesLayer {
+  id: string;
+  kind: "sub";
+  name: string;
+  items: SubtitlesItem[];
+}
+export interface SubtitlesItem {
+  id: string;
+  auto: true;
+  label: string;
+  style: "default";
+}
+export interface ForegroundLayer {
+  id: string;
+  kind: "fg";
+  name: string;
+  items: ForegroundItem[];
+}
+export interface VisualItemBase {
+  id: string;
+  mediaId: string;
+  sentences: SentenceRange;
+  start: number;
+  end: number;
+  motion: Motion;
+  transitions: Transitions;
+}
+export interface Motion {
+  kind: "none" | "static" | "ken_burns" | "ken_burns_strong" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
+  easing: "linear" | "ease_in" | "ease_out" | "ease_in_out";
+}
+export interface Transitions {
+  in: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
+  out: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
+}
+export interface PipLayer {
+  id: string;
+  kind: "pip";
+  name: string;
+  items: PipItem[];
+}
+export interface PipPlacement {
+  posX: number;
+  posY: number;
+  size: number;
+  radius: number;
+  opacity: number;
+}
+export interface BackgroundLayer {
+  id: string;
+  kind: "bg";
+  name: string;
+  items: BackgroundItem[];
+}
+export interface SubtitlesSettings {
+  burn_in: boolean;
+  style: SubtitleStyle;
+}
+export interface SubtitleStyle {
+  font: string;
+  size: number;
+  position: "bottom-center" | "top-center";
+  max_chars_per_line: number;
+  bg_style: "none" | "shadow" | "box";
+}
+export interface Watermark {
+  mediaId: string;
+  posX: number;
+  posY: number;
+  scale: number;
+  opacity: number;
 }

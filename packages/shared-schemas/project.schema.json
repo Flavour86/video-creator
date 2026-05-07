@@ -11,27 +11,250 @@
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" },
     "audio": { "type": "string" },
-    "transcript": {
+    "transcript": { "$ref": "#/$defs/Transcript" },
+    "output": { "$ref": "#/$defs/Output" },
+    "layers": {
+      "type": "array",
+      "description": "Ordered top-to-bottom in render stack: subtitles first, background last.",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/SubtitlesLayer" },
+          { "$ref": "#/$defs/ForegroundLayer" },
+          { "$ref": "#/$defs/PipLayer" },
+          { "$ref": "#/$defs/BackgroundLayer" }
+        ],
+        "discriminator": { "propertyName": "kind" }
+      }
+    },
+    "subtitles": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/SubtitlesSettings" }]
+    },
+    "watermark": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Watermark" }]
+    },
+    "ai": {
+      "oneOf": [{ "type": "null" }, { "type": "object", "additionalProperties": true }]
+    },
+    "characters": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      ]
+    }
+  },
+  "$defs": {
+    "Transcript": {
+      "title": "Transcript",
       "type": "object",
+      "additionalProperties": false,
       "required": ["kind", "path"],
       "properties": {
         "kind": { "enum": ["plain_text", "pre_segmented"] },
         "path": { "type": "string" }
       }
     },
-    "output": {
+    "Output": {
+      "title": "Output",
       "type": "object",
+      "additionalProperties": false,
       "required": ["preset"],
       "properties": {
         "preset": { "enum": ["draft", "final"] }
       }
     },
-    "layers": {
-      "type": "array",
-      "description": "Ordered top-to-bottom in render stack: SUB first, BG last. Loose stub; T2.2 fills this in with full discriminated-union schema.",
-      "items": { "type": "object" }
+    "Motion": {
+      "title": "Motion",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "easing"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "static",
+            "ken_burns",
+            "ken_burns_strong",
+            "zoom_in",
+            "zoom_out",
+            "pan_left",
+            "pan_right"
+          ]
+        },
+        "easing": { "enum": ["linear", "ease_in", "ease_out", "ease_in_out"] }
+      }
     },
-    "subtitles": { "type": ["object", "null"] },
-    "watermark": { "type": ["object", "null"] }
+    "Transitions": {
+      "title": "Transitions",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["in", "out"],
+      "properties": {
+        "in": { "enum": ["cut", "fade", "slide_left", "slide_right", "dip_black"] },
+        "out": { "enum": ["cut", "fade", "slide_left", "slide_right", "dip_black"] }
+      }
+    },
+    "SentenceRange": {
+      "title": "SentenceRange",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "integer", "minimum": 1 }
+    },
+    "VisualItemBase": {
+      "title": "VisualItemBase",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mediaId", "sentences", "start", "end", "motion", "transitions"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "mediaId": { "type": "string", "minLength": 1 },
+        "sentences": { "$ref": "#/$defs/SentenceRange" },
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "minimum": 0 },
+        "motion": { "$ref": "#/$defs/Motion" },
+        "transitions": { "$ref": "#/$defs/Transitions" }
+      }
+    },
+    "ForegroundItem": {
+      "title": "ForegroundItem",
+      "allOf": [{ "$ref": "#/$defs/VisualItemBase" }]
+    },
+    "PipPlacement": {
+      "title": "PipPlacement",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["posX", "posY", "size", "radius", "opacity"],
+      "properties": {
+        "posX": { "type": "number", "minimum": 0, "maximum": 100 },
+        "posY": { "type": "number", "minimum": 0, "maximum": 100 },
+        "size": { "type": "number", "minimum": 10, "maximum": 70 },
+        "radius": { "type": "number", "minimum": 0 },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "PipItem": {
+      "title": "PipItem",
+      "allOf": [
+        { "$ref": "#/$defs/VisualItemBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pip"],
+          "properties": {
+            "pip": { "$ref": "#/$defs/PipPlacement" }
+          }
+        }
+      ]
+    },
+    "BackgroundItem": {
+      "title": "BackgroundItem",
+      "allOf": [
+        { "$ref": "#/$defs/VisualItemBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["crossfade"],
+          "properties": {
+            "crossfade": { "type": "number", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "SubtitlesItem": {
+      "title": "SubtitlesItem",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "auto", "label", "style"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "auto": { "const": true },
+        "label": { "type": "string" },
+        "style": { "const": "default" }
+      }
+    },
+    "SubtitlesLayer": {
+      "title": "SubtitlesLayer",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "items"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "const": "sub" },
+        "name": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/SubtitlesItem" } }
+      }
+    },
+    "ForegroundLayer": {
+      "title": "ForegroundLayer",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "items"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "const": "fg" },
+        "name": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/ForegroundItem" } }
+      }
+    },
+    "PipLayer": {
+      "title": "PipLayer",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "items"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "const": "pip" },
+        "name": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/PipItem" } }
+      }
+    },
+    "BackgroundLayer": {
+      "title": "BackgroundLayer",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "items"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "const": "bg" },
+        "name": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/BackgroundItem" } }
+      }
+    },
+    "SubtitleStyle": {
+      "title": "SubtitleStyle",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["font", "size", "position", "max_chars_per_line", "bg_style"],
+      "properties": {
+        "font": { "type": "string" },
+        "size": { "type": "number", "minimum": 1 },
+        "position": { "enum": ["bottom-center", "top-center"] },
+        "max_chars_per_line": { "type": "integer", "minimum": 1 },
+        "bg_style": { "enum": ["none", "shadow", "box"] }
+      }
+    },
+    "SubtitlesSettings": {
+      "title": "SubtitlesSettings",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["burn_in", "style"],
+      "properties": {
+        "burn_in": { "type": "boolean" },
+        "style": { "$ref": "#/$defs/SubtitleStyle" }
+      }
+    },
+    "Watermark": {
+      "title": "Watermark",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mediaId", "posX", "posY", "scale", "opacity"],
+      "properties": {
+        "mediaId": { "type": "string", "minLength": 1 },
+        "posX": { "type": "number", "minimum": 0, "maximum": 100 },
+        "posY": { "type": "number", "minimum": 0, "maximum": 100 },
+        "scale": { "type": "number", "minimum": 0 },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    }
   }
 }

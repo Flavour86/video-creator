@@ -29,6 +29,9 @@ const child = spawn(
     "pydantic_v2.BaseModel",
     "--target-python-version",
     "3.11",
+    "--snake-case-field",
+    "--allow-population-by-field-name",
+    "--use-root-model-type-alias",
   ],
   { stdio: "inherit", cwd: repoRoot },
 );

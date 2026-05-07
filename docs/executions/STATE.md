@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T2.1 (`03_MILESTONE_PROJECT_IO.md`)
-**Last commit**: ff4ee2f
-**Last updated**: 2026-05-07T06:56Z
+**Next task**: T2.2 (`03_MILESTONE_PROJECT_IO.md`)
+**Last commit**: 0c895e5
+**Last updated**: 2026-05-07T06:58Z
 
 ---
 
@@ -33,10 +33,10 @@
 - [x] T1.7 Browser auto-open and graceful shutdown — commit ff4ee2f
 
 ### M2 — Project I/O (`03_MILESTONE_PROJECT_IO.md`)
-- [ ] T2.1 Global app DB (SQLite)
-- [ ] T2.2 New project flow
-- [ ] T2.3 Open project flow
-- [ ] T2.4 Recent projects UI
+- [x] T2.1 Global app DB (SQLite) — commit 0c895e5
+- [ ] T2.2 Full `project.json` schema + JSON Schema validation
+- [ ] T2.3 New project flow
+- [ ] T2.4 Open project + Recent projects UI
 - [ ] T2.5 Media ingest (drag-drop into project)
 
 ### M3 — Alignment (`04_MILESTONE_ALIGNMENT.md`)
