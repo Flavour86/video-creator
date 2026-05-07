@@ -3,12 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "description": "Local-first AI-augmented video creator.",
+  "bin": {
+    "video-creator": "./bin/video-creator.mjs"
+  },
   "engines": {
     "node": ">=22",
     "pnpm": ">=9"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "launch": "node bin/video-creator.mjs",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
