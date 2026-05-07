@@ -1,0 +1,165 @@
+"""Clip cache key tests for T5.2."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import pytest
+
+from server.pipeline.cache import clip_cache_key, clip_cache_path, is_cached
+from server.pipeline.clip_render import render_clip, render_clip_to_cache
+
+
+def _write_media(path: Path, data: bytes = b"media-bytes") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path
+
+
+def test_clip_cache_key_is_deterministic(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path / "media" / "image.jpg")
+    motion = {"kind": "ken_burns", "easing": "ease_in_out"}
+
+    first = clip_cache_key(
+        media_path=media_path,
+        duration_s=4.2,
+        motion=motion,
+        transition_in="fade",
+        transition_out="cut",
+        resolution="1280x720",
+        fps=30,
+    )
+    second = clip_cache_key(
+        media_path=media_path,
+        duration_s=4.2,
+        motion=motion,
+        transition_in="fade",
+        transition_out="cut",
+        resolution="1280x720",
+        fps=30,
+    )
+
+    assert first == second
+    assert len(first) == 64
+
+
+def test_clip_cache_key_changes_when_inputs_change(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path / "media" / "image.jpg")
+    base_kwargs = {
+        "media_path": media_path,
+        "duration_s": 4.2,
+        "motion": {"kind": "ken_burns", "easing": "ease_in_out"},
+        "transition_in": "fade",
+        "transition_out": "cut",
+        "resolution": "1280x720",
+        "fps": 30,
+    }
+    base_key = clip_cache_key(**base_kwargs)
+
+    assert clip_cache_key(**{**base_kwargs, "duration_s": 5.0}) != base_key
+    changed_motion = {"kind": "zoom_in", "easing": "ease_in_out"}
+    assert clip_cache_key(**{**base_kwargs, "motion": changed_motion}) != base_key
+    assert clip_cache_key(**{**base_kwargs, "transition_in": "cut"}) != base_key
+    assert clip_cache_key(**{**base_kwargs, "transition_out": "fade"}) != base_key
+    assert clip_cache_key(**{**base_kwargs, "resolution": "1920x1080"}) != base_key
+    assert clip_cache_key(**{**base_kwargs, "fps": 24}) != base_key
+
+    media_path.write_bytes(b"different-media")
+    assert clip_cache_key(**base_kwargs) != base_key
+
+
+def test_clip_cache_path_and_is_cached(tmp_path: Path) -> None:
+    key = "a" * 64
+    path = clip_cache_path(tmp_path, key)
+
+    assert path == tmp_path / ".vc" / "clips" / "aaaaaaaaaaaaaaaa.mp4"
+    assert is_cached(tmp_path, key) is False
+
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"")
+    assert is_cached(tmp_path, key) is False
+
+    path.write_bytes(b"mp4")
+    assert is_cached(tmp_path, key) is True
+
+
+def test_render_clip_to_cache_reuses_existing_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "image.jpg")
+    item = {
+        "id": "fg-1",
+        "media_id": media_path.name,
+        "start": 0.0,
+        "end": 4.2,
+        "motion": {"kind": "ken_burns", "easing": "ease_in_out"},
+        "transitions": {"in": "fade", "out": "cut"},
+    }
+    key = clip_cache_key(
+        media_path=media_path,
+        duration_s=4.2,
+        motion=item["motion"],
+        transition_in="fade",
+        transition_out="cut",
+        resolution="1280x720",
+        fps=30,
+    )
+    cached_path = clip_cache_path(tmp_path, key)
+    cached_path.parent.mkdir(parents=True)
+    cached_path.write_bytes(b"mp4")
+
+    def fail_render(
+        *,
+        item: object,
+        project_dir: Path,
+        output_path: Path,
+        resolution: str,
+        fps: int,
+        crf: int,
+    ) -> Path:
+        raise AssertionError("render_clip should not run on a cache hit")
+
+    monkeypatch.setattr("server.pipeline.clip_render.render_clip", fail_render)
+
+    assert render_clip_to_cache(item=item, project_dir=tmp_path) == cached_path
+
+
+@pytest.mark.skipif(
+    os.environ.get("VC_INTEGRATION") != "1",
+    reason="Set VC_INTEGRATION=1 to run ffmpeg clip render integration tests.",
+)
+def test_render_clip_image_integration(tmp_path: Path) -> None:
+    project_dir = tmp_path
+    media_path = _write_media(
+        project_dir / "media" / "pixel.png",
+        data=(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+            b"\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x03\x01"
+            b"\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82"
+        ),
+    )
+    item = {
+        "id": "fg-1",
+        "media_id": media_path.name,
+        "start": 0.0,
+        "end": 0.5,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+    }
+
+    output_path = project_dir / ".vc" / "clips" / "test.mp4"
+
+    rendered = render_clip(
+        item=item,
+        project_dir=project_dir,
+        output_path=output_path,
+        resolution="320x180",
+        fps=5,
+        crf=35,
+    )
+
+    assert rendered == output_path
+    assert rendered.stat().st_size > 0
+    assert rendered.with_suffix(".json").exists()
