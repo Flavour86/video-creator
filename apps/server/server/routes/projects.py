@@ -8,8 +8,8 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from server.db.projects import touch_recent
-from server.domain.project import Project
+from server.db.projects import list_recent, remove_recent, touch_recent
+from server.domain.project import Project, load_project
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -24,10 +24,38 @@ class ProjectResponse(BaseModel):
     name: str
 
 
+class RecentProject(BaseModel):
+    path: str
+    name: str
+    last_opened_at: str
+    voice_duration: str = ""
+    sentence_count: int = 0
+    media_count: int = 0
+
+
+class OpenProjectRequest(BaseModel):
+    path: str = Field(min_length=1)
+
+
 def _error(status_code: int, code: str, message: str, details: dict[str, str]) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message, "details": details}},
+    )
+
+
+def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") -> RecentProject:
+    media_dir = project_dir / "media"
+    media_count = (
+        len([entry for entry in media_dir.iterdir() if entry.is_file()])
+        if media_dir.exists()
+        else 0
+    )
+    return RecentProject(
+        path=str(project_dir),
+        name=name,
+        last_opened_at=last_opened_at,
+        media_count=media_count,
     )
 
 
@@ -76,3 +104,34 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
     )
     touch_recent(project_dir, payload.name)
     return ProjectResponse(path=str(project_dir), name=payload.name)
+
+
+@router.get("/recent", response_model=list[RecentProject])
+async def recent_projects() -> list[RecentProject]:
+    rows = list_recent()
+    return [
+        _project_metadata(Path(row["path"]), row["name"], row["last_opened_at"])
+        for row in rows
+    ]
+
+
+@router.post("/open", response_model=RecentProject)
+async def open_project(payload: OpenProjectRequest) -> RecentProject | JSONResponse:
+    project_dir = Path(payload.path)
+    project_json = project_dir / "project.json"
+    if not project_json.exists():
+        return _error(
+            404,
+            "PROJECT_NOT_FOUND",
+            "Project folder is missing or does not contain project.json.",
+            {"path": payload.path},
+        )
+    project = load_project(project_dir)
+    touch_recent(project_dir, project.name)
+    return _project_metadata(project_dir, project.name)
+
+
+@router.delete("/recent")
+async def delete_recent_project(payload: OpenProjectRequest) -> dict[str, bool]:
+    remove_recent(Path(payload.path))
+    return {"ok": True}
