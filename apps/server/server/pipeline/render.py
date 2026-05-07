@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import secrets
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,6 +22,17 @@ from server.pipeline.filtergraph import (
     build_compose_command,
     visual_items_bottom_to_top,
 )
+from server.pipeline.render_progress import RenderProgressEvent, RenderStage, publish_progress
+
+
+@dataclass(frozen=True)
+class RenderJob:
+    render_id: str
+    project_dir: Path
+    project: Project
+    preset: RenderPreset
+    output_path: Path
+    started_at: datetime
 
 
 class RenderResult(BaseModel):
@@ -36,7 +48,40 @@ class RenderError(Exception):
         self.message = message
 
 
+_active_projects: dict[str, str] = {}
+_active_tasks: dict[str, asyncio.Task[None]] = {}
+_active_jobs: dict[str, RenderJob] = {}
+
+
+async def start_render_project(*, project_dir: Path, preset: RenderPreset) -> RenderResult:
+    job = _create_job(project_dir=project_dir, preset=preset)
+    project_key = str(project_dir.resolve())
+    if project_key in _active_projects:
+        raise RenderError(409, "RENDER_IN_PROGRESS", "Render already running for this project.")
+
+    _active_projects[project_key] = job.render_id
+    _active_jobs[job.render_id] = job
+    task = asyncio.create_task(_run_job(job, raise_errors=False))
+    _active_tasks[job.render_id] = task
+    task.add_done_callback(lambda _task: _clear_active(job))
+    return RenderResult(render_id=job.render_id, output_path=job.output_path)
+
+
 async def render_project(*, project_dir: Path, preset: RenderPreset) -> RenderResult:
+    job = _create_job(project_dir=project_dir, preset=preset)
+    await _run_job(job, raise_errors=True)
+    return RenderResult(render_id=job.render_id, output_path=job.output_path)
+
+
+async def cancel_render(render_id: str) -> bool:
+    task = _active_tasks.get(render_id)
+    if task is None:
+        return False
+    task.cancel()
+    return True
+
+
+def _create_job(*, project_dir: Path, preset: RenderPreset) -> RenderJob:
     project = load_project(project_dir)
     render_id = _new_render_id()
     output_path = _output_path(project_dir, preset, render_id)
@@ -48,42 +93,92 @@ async def render_project(*, project_dir: Path, preset: RenderPreset) -> RenderRe
         preset=preset,
         started_at=started_at,
     )
+    return RenderJob(
+        render_id=render_id,
+        project_dir=project_dir,
+        project=project,
+        preset=preset,
+        output_path=output_path,
+        started_at=started_at,
+    )
+
+
+async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
     timer = time.perf_counter()
 
     try:
-        alignment = await _ensure_alignment(project_dir, project)
-        preset_config = PRESETS[preset]
+        await _emit(job.render_id, "cache_warm", 1.0, message="verifying cache")
+        alignment = await _ensure_alignment(job.project_dir, job.project)
+        preset_config = PRESETS[job.preset]
         await _warm_clip_cache(
-            project_dir=project_dir,
-            project=project,
+            project_dir=job.project_dir,
+            project=job.project,
             resolution=preset_config.resolution,
             fps=preset_config.fps,
             crf=preset_config.crf,
+            render_id=job.render_id,
         )
+        await _emit(job.render_id, "compose", 12.0, message="ffmpeg compose")
         command = build_compose_command(
-            project_dir=project_dir,
-            project=project,
+            project_dir=job.project_dir,
+            project=job.project,
             alignment=alignment,
-            output_path=output_path,
-            preset=preset,
+            output_path=job.output_path,
+            preset=job.preset,
         )
-        await _run_ffmpeg(_with_progress(command), output_path)
+        await _run_ffmpeg(
+            _with_progress(command),
+            job.output_path,
+            render_id=job.render_id,
+            total_s=_alignment_duration_s(alignment),
+        )
+        await _emit(job.render_id, "muxing", 98.0, message="muxing audio")
+    except asyncio.CancelledError:
+        message = "Render canceled."
+        mark_render_failed(render_id=job.render_id, finished_at=datetime.now(UTC), message=message)
+        _discard_partial(job.output_path)
+        await _emit(job.render_id, "error", 0.0, message=message)
+        if raise_errors:
+            raise RenderError(409, "RENDER_CANCELED", message) from None
     except RenderError as exc:
-        mark_render_failed(render_id=render_id, finished_at=datetime.now(UTC), message=exc.message)
-        _discard_partial(output_path)
-        raise
+        mark_render_failed(
+            render_id=job.render_id,
+            finished_at=datetime.now(UTC),
+            message=exc.message,
+        )
+        _discard_partial(job.output_path)
+        await _emit(job.render_id, "error", 0.0, message=exc.message)
+        if raise_errors:
+            raise
     except Exception as exc:
         message = str(exc) or exc.__class__.__name__
-        mark_render_failed(render_id=render_id, finished_at=datetime.now(UTC), message=message)
-        _discard_partial(output_path)
-        raise RenderError(500, "RENDER_FAILED", message) from exc
+        mark_render_failed(render_id=job.render_id, finished_at=datetime.now(UTC), message=message)
+        _discard_partial(job.output_path)
+        await _emit(job.render_id, "error", 0.0, message=message)
+        if raise_errors:
+            raise RenderError(500, "RENDER_FAILED", message) from exc
+    else:
+        duration_s = time.perf_counter() - timer
+        mark_render_finished(
+            render_id=job.render_id,
+            finished_at=datetime.now(UTC),
+            duration_s=duration_s,
+        )
+        await _emit(
+            job.render_id,
+            "done",
+            100.0,
+            message="Draft ready" if job.preset == "draft" else "Render ready",
+            output_path=str(job.output_path),
+        )
 
-    mark_render_finished(
-        render_id=render_id,
-        finished_at=datetime.now(UTC),
-        duration_s=time.perf_counter() - timer,
-    )
-    return RenderResult(render_id=render_id, output_path=output_path)
+
+def _clear_active(job: RenderJob) -> None:
+    project_key = str(job.project_dir.resolve())
+    if _active_projects.get(project_key) == job.render_id:
+        _active_projects.pop(project_key, None)
+    _active_tasks.pop(job.render_id, None)
+    _active_jobs.pop(job.render_id, None)
 
 
 async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentResult:
@@ -122,8 +217,11 @@ async def _warm_clip_cache(
     resolution: str,
     fps: int,
     crf: int,
+    render_id: str,
 ) -> None:
-    for item in visual_items_bottom_to_top(project):
+    items = visual_items_bottom_to_top(project)
+    total = max(1, len(items))
+    for index, item in enumerate(items, start=1):
         await asyncio.to_thread(
             render_clip_to_cache,
             item=item,
@@ -132,16 +230,46 @@ async def _warm_clip_cache(
             fps=fps,
             crf=crf,
         )
+        await _emit(
+            render_id,
+            "cache_warm",
+            min(10.0, (index / total) * 10.0),
+            message="pre-rendering clips",
+        )
 
 
-async def _run_ffmpeg(command: list[str], output_path: Path) -> None:
+async def _run_ffmpeg(
+    command: list[str],
+    output_path: Path,
+    *,
+    render_id: str,
+    total_s: float,
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     proc = await asyncio.create_subprocess_exec(
         *command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    _stdout, stderr = await proc.communicate()
+    if proc.stdout is None or proc.stderr is None:
+        raise RenderError(500, "FFMPEG_FAILED", "ffmpeg progress pipes were not available.")
+
+    stderr_task = asyncio.create_task(proc.stderr.read())
+    progress: dict[str, str] = {}
+    while True:
+        line_bytes = await proc.stdout.readline()
+        if not line_bytes:
+            break
+        line = line_bytes.decode(errors="replace").strip()
+        if not line or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        progress[key] = value
+        if key == "progress":
+            await _emit_ffmpeg_progress(render_id, progress, total_s)
+
+    await proc.wait()
+    stderr = await stderr_task
     if proc.returncode != 0:
         detail = stderr.decode(errors="replace").strip()
         raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
@@ -151,6 +279,78 @@ async def _run_ffmpeg(command: list[str], output_path: Path) -> None:
 
 def _with_progress(command: list[str]) -> list[str]:
     return [*command[:2], "-progress", "pipe:1", "-nostats", *command[2:]]
+
+
+async def _emit(
+    render_id: str,
+    stage: RenderStage,
+    percent: float,
+    *,
+    eta_seconds: int | None = None,
+    current_frame: int | None = None,
+    speed: str | None = None,
+    message: str | None = None,
+    output_path: str | None = None,
+) -> None:
+    await publish_progress(
+        RenderProgressEvent(
+            render_id=render_id,
+            stage=stage,
+            percent=max(0.0, min(100.0, percent)),
+            eta_seconds=eta_seconds,
+            current_frame=current_frame,
+            speed=speed,
+            message=message,
+            output_path=output_path,
+        )
+    )
+
+
+async def _emit_ffmpeg_progress(
+    render_id: str,
+    progress: dict[str, str],
+    total_s: float,
+) -> None:
+    out_time_us = _int_or_none(progress.get("out_time_us")) or 0
+    out_time_s = out_time_us / 1_000_000
+    percent = 12.0 + min(85.0, (out_time_s / max(total_s, 0.001)) * 85.0)
+    speed = progress.get("speed")
+    await _emit(
+        render_id,
+        "compose",
+        percent,
+        eta_seconds=_eta_seconds(total_s, out_time_s, speed),
+        current_frame=_int_or_none(progress.get("frame")),
+        speed=speed,
+        message="ffmpeg compose",
+    )
+
+
+def _alignment_duration_s(alignment: AlignmentResult) -> float:
+    if alignment.sentences:
+        return max(sentence.end_s for sentence in alignment.sentences)
+    return 0.001
+
+
+def _int_or_none(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _eta_seconds(total_s: float, out_time_s: float, speed: str | None) -> int | None:
+    if not speed or not speed.endswith("x"):
+        return None
+    try:
+        speed_value = float(speed[:-1])
+    except ValueError:
+        return None
+    if speed_value <= 0:
+        return None
+    return max(0, round((total_s - out_time_s) / speed_value))
 
 
 def _new_render_id() -> str:

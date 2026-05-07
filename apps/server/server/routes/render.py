@@ -13,9 +13,6 @@ from server.pipeline.render import RenderError
 
 router = APIRouter(tags=["render"])
 
-_in_progress: set[str] = set()
-
-
 class RenderRequest(BaseModel):
     preset: RenderPreset
 
@@ -41,24 +38,26 @@ async def render_project(
     if not (project_dir / "project.json").exists():
         return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
 
-    project_key = str(project_dir.resolve())
-    if project_key in _in_progress:
-        return _error(
-            409,
-            "RENDER_IN_PROGRESS",
-            "Render already running for this project.",
-            {"project": project},
-        )
-
-    _in_progress.add(project_key)
     try:
-        result = await render_pipeline.render_project(
+        result = await render_pipeline.start_render_project(
             project_dir=project_dir,
             preset=payload.preset,
         )
     except RenderError as exc:
         return _error(exc.status_code, exc.code, exc.message, {"project": project})
-    finally:
-        _in_progress.discard(project_key)
 
     return RenderResponse(render_id=result.render_id, output_path=str(result.output_path))
+
+
+@router.delete("/projects/render/{render_id}", response_model=None)
+async def cancel_render(
+    render_id: str,
+    project: str = Query(...),
+) -> dict[str, bool] | JSONResponse:
+    project_dir = Path(project)
+    if not (project_dir / "project.json").exists():
+        return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
+    canceled = await render_pipeline.cancel_render(render_id)
+    if not canceled:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    return {"ok": True}

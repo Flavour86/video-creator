@@ -15,6 +15,16 @@ type Props = {
   onSeekRequest?: (time: number) => void;
 };
 
+type WaveSurferLike = {
+  load(url: string): void;
+  on(event: "ready" | "play" | "pause" | "finish", handler: () => void): void;
+  playPause(): void;
+  setTime(t: number): void;
+  getDuration(): number;
+  getCurrentTime(): number;
+  destroy(): void;
+};
+
 export function Waveform({
   audioUrl,
   sentences = [],
@@ -24,7 +34,7 @@ export function Waveform({
   onDurationReady,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<{ playPause(): void; setTime(t: number): void; getDuration(): number; getCurrentTime(): number; destroy(): void } | null>(null);
+  const wsRef = useRef<WaveSurferLike | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [isReady, setIsReady] = useState(false);
@@ -43,7 +53,7 @@ export function Waveform({
   // Load WaveSurfer
   useEffect(() => {
     if (!containerRef.current || !audioUrl) return;
-    let ws: typeof wsRef.current;
+    let ws: WaveSurferLike | null = null;
 
     async function init() {
       const { default: WaveSurfer } = await import("wavesurfer.js");
@@ -73,7 +83,7 @@ export function Waveform({
 
     void init();
     return () => { ws?.destroy(); wsRef.current = null; setIsReady(false); };
-  }, [audioUrl]);
+  }, [audioUrl, onDurationReady]);
 
   // External seek (e.g. clicking a sentence in TranscriptPanel)
   useEffect(() => {

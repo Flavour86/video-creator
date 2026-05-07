@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 
@@ -9,7 +8,7 @@ import pytest
 
 from server.main import app
 from server.pipeline import render as render_pipeline
-from server.pipeline.render import RenderResult
+from server.pipeline.render import RenderError, RenderResult
 
 
 def _write_project(project_dir: Path) -> None:
@@ -35,7 +34,7 @@ def _write_project(project_dir: Path) -> None:
 async def test_render_endpoint_returns_render_result(monkeypatch, tmp_path: Path) -> None:
     _write_project(tmp_path)
 
-    async def fake_render_project(*, project_dir: Path, preset: str) -> RenderResult:
+    async def fake_start_render_project(*, project_dir: Path, preset: str) -> RenderResult:
         assert project_dir == tmp_path
         assert preset == "draft"
         return RenderResult(
@@ -43,7 +42,7 @@ async def test_render_endpoint_returns_render_result(monkeypatch, tmp_path: Path
             output_path=tmp_path / ".vc" / "drafts" / "draft.mp4",
         )
 
-    monkeypatch.setattr(render_pipeline, "render_project", fake_render_project)
+    monkeypatch.setattr(render_pipeline, "start_render_project", fake_start_render_project)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -75,42 +74,24 @@ async def test_render_endpoint_project_not_found(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_render_endpoint_rejects_concurrent_project_render(
+async def test_render_endpoint_rejects_in_progress_error(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     _write_project(tmp_path)
-    started = asyncio.Event()
-    release = asyncio.Event()
 
-    async def slow_render_project(*, project_dir: Path, preset: str) -> RenderResult:
-        started.set()
-        await release.wait()
-        return RenderResult(
-            render_id="r-slow",
-            output_path=project_dir / ".vc" / "drafts" / "draft.mp4",
-        )
+    async def busy_start_render_project(*, project_dir: Path, preset: str) -> RenderResult:
+        raise RenderError(409, "RENDER_IN_PROGRESS", "Render already running.")
 
-    monkeypatch.setattr(render_pipeline, "render_project", slow_render_project)
+    monkeypatch.setattr(render_pipeline, "start_render_project", busy_start_render_project)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        first = asyncio.create_task(
-            client.post(
-                "/projects/render",
-                params={"project": str(tmp_path)},
-                json={"preset": "draft"},
-            )
-        )
-        await started.wait()
-        second = await client.post(
+        response = await client.post(
             "/projects/render",
             params={"project": str(tmp_path)},
             json={"preset": "draft"},
         )
-        release.set()
-        first_response = await first
 
-    assert second.status_code == 409
-    assert second.json()["error"]["code"] == "RENDER_IN_PROGRESS"
-    assert first_response.status_code == 200
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RENDER_IN_PROGRESS"

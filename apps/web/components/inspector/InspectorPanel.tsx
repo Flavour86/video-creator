@@ -64,7 +64,7 @@ function patchItem(
       ...l,
       items: l.items.map((it) => {
         if ((it as { id: string }).id !== itemId) return it;
-        return { ...it, ...patch };
+        return { ...(it as VisualItem), ...patch };
       }),
     } as Layer;
   });

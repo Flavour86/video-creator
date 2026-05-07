@@ -109,4 +109,28 @@ describe("resolveDisplay", () => {
     expect(spec.fg).toHaveLength(1);
     expect(spec.fg[0].mediaId).toBe("cat.jpg");
   });
+
+  it("returns nested PiP placement for active pip item", () => {
+    const pipLayer: Layer = {
+      id: "L-pip",
+      kind: "pip",
+      name: "PiP",
+      items: [
+        {
+          id: "pip-1",
+          mediaId: "chart.jpg",
+          sentences: [1, 1],
+          start: 0,
+          end: 10,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          pip: { posX: 98, posY: 2, size: 22, radius: 16, opacity: 90 },
+        },
+      ],
+    };
+
+    const spec = resolveDisplay([pipLayer], [], 5);
+    expect(spec.pip[0].placement.posX).toBe(98);
+    expect(spec.pip[0].placement.opacity).toBe(90);
+  });
 });

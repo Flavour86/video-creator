@@ -18,11 +18,7 @@ type BaseItem = {
 type BgItem = BaseItem & { crossfade: number };
 
 type PipItem = BaseItem & {
-  posX: number;
-  posY: number;
-  size: number;
-  radius: number;
-  opacity: number;
+  pip: PipPlacement;
 };
 
 export type Layer =
@@ -96,11 +92,11 @@ export function resolveDisplay(
         spec.pip.push({
           mediaId: item.mediaId,
           placement: {
-            posX: item.posX,
-            posY: item.posY,
-            size: item.size,
-            radius: item.radius,
-            opacity: item.opacity,
+            posX: item.pip.posX,
+            posY: item.pip.posY,
+            size: item.pip.size,
+            radius: item.pip.radius,
+            opacity: item.pip.opacity,
           },
           opacity: transitionOpacity(item, currentTime),
         });

@@ -2,18 +2,21 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Clapperboard } from "lucide-react";
 
 import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { BgModal } from "@/components/bg-modal/BgModal";
 import { InspectorPanel } from "@/components/inspector/InspectorPanel";
 import { LayersPopover } from "@/components/layers-popover/LayersPopover";
 import { PreviewPlayer } from "@/components/preview-player/PreviewPlayer";
+import { RenderDraftBar } from "@/components/render-draft-bar/RenderDraftBar";
 import { Waveform } from "@/components/preview-player/Waveform";
 import { Timeline } from "@/components/timeline/Timeline";
 import { TranscriptPanel } from "@/components/transcript-panel/TranscriptPanel";
 import { useAlignment } from "@/lib/hooks/useAlignment";
 import { useAssignModal } from "@/lib/hooks/useAssignModal";
 import { useProject } from "@/lib/hooks/useProject";
+import { useRenderProgress } from "@/lib/hooks/useRenderProgress";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
 type MediaItem = {
@@ -55,6 +58,7 @@ function EditorContent() {
 
   // Alignment
   const { state: alignState, selected, runAlignment, selectSentence } = useAlignment(projectPath);
+  const renderProgress = useRenderProgress(projectPath);
 
   // Audio URL for waveform
   const audioFilename = "voice.wav";
@@ -119,6 +123,9 @@ function EditorContent() {
   }
 
   const existingBg = layers.find((l) => l.kind === "bg") as Extract<Layer, { kind: "bg" }> | undefined;
+  const draftLabel = renderProgress.isActive
+    ? `Drafting ${Math.round(renderProgress.percent)}%`
+    : "Render Draft";
 
   // File upload
   function enqueueFiles(list: FileList | null) {
@@ -173,6 +180,15 @@ function EditorContent() {
       <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-2">
         <p className="max-w-xs truncate font-mono text-xs opacity-40">{projectPath}</p>
         <div className="flex items-center gap-2">
+          <button
+            className="inline-flex items-center gap-1.5 rounded bg-neutral-950 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={renderProgress.isActive}
+            onClick={() => void renderProgress.startDraft()}
+            type="button"
+          >
+            <Clapperboard size={14} />
+            {draftLabel}
+          </button>
           <LayersPopover
             layers={layers}
             onAddItem={() => openForSentence(sentences[0]?.index ?? 1)}
@@ -197,6 +213,11 @@ function EditorContent() {
           </BgModal>
         </div>
       </div>
+      <RenderDraftBar
+        onCancel={() => void renderProgress.cancel()}
+        projectPath={projectPath}
+        state={renderProgress.state}
+      />
 
       {/* ── Main area ── */}
       <div className="flex min-h-0 flex-1 overflow-hidden">

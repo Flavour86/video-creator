@@ -51,4 +51,5 @@ it("shows project path in toolbar when project param is present", () => {
     </Suspense>,
   );
   expect(screen.getByText("E:/projects/demo")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
 });
