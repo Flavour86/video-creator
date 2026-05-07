@@ -97,3 +97,25 @@ def list_renders_for_project(project_path: Path, limit: int = 10) -> list[Render
             (str(project_path.resolve()), limit),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_render_for_project(render_id: str, project_path: Path) -> RenderHistoryRow | None:
+    with connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                id,
+                project_path,
+                output_path,
+                preset,
+                started_at,
+                finished_at,
+                duration_s,
+                status,
+                message
+            FROM render_history
+            WHERE id = ? AND project_path = ?
+            """,
+            (render_id, str(project_path.resolve())),
+        ).fetchone()
+    return dict(row) if row is not None else None

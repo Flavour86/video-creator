@@ -10,6 +10,7 @@ import { InspectorPanel } from "@/components/inspector/InspectorPanel";
 import { LayersPopover } from "@/components/layers-popover/LayersPopover";
 import { PreviewPlayer } from "@/components/preview-player/PreviewPlayer";
 import { RenderDraftBar } from "@/components/render-draft-bar/RenderDraftBar";
+import { RenderHistory } from "@/components/render-history/RenderHistory";
 import { Waveform } from "@/components/preview-player/Waveform";
 import { Timeline } from "@/components/timeline/Timeline";
 import { TranscriptPanel } from "@/components/transcript-panel/TranscriptPanel";
@@ -319,6 +320,11 @@ function EditorContent() {
             selectedItemId={selectedItemId}
             selectedLayerId={selectedLayerId}
             sentences={sentences}
+          />
+
+          <RenderHistory
+            projectPath={projectPath}
+            refreshKey={renderProgress.state.status === "done" ? renderProgress.state.renderId : ""}
           />
 
           <div className="flex items-center justify-between">

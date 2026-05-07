@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import secrets
+import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -366,3 +369,16 @@ def _output_path(project_dir: Path, preset: RenderPreset, render_id: str) -> Pat
 def _discard_partial(output_path: Path) -> None:
     if output_path.exists():
         output_path.unlink()
+
+
+def reveal_in_file_browser(path: Path) -> None:
+    target = path if path.is_dir() else path.parent
+    if os.name == "nt":
+        startfile = getattr(os, "startfile", None)
+        if callable(startfile):
+            startfile(str(target))
+            return
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", str(target)])
+        return
+    subprocess.Popen(["xdg-open", str(target)])
