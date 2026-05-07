@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T2.4 (`03_MILESTONE_PROJECT_IO.md`)
-**Last commit**: d5036d7
-**Last updated**: 2026-05-07T07:08Z
+**Next task**: T3.1 (`04_MILESTONE_ALIGNMENT.md`)
+**Last commit**: 8851d4f
+**Last updated**: 2026-05-07T08:30Z
 
 ---
 
@@ -36,8 +36,8 @@
 - [x] T2.1 Global app DB (SQLite) — commit 0c895e5
 - [x] T2.2 Full `project.json` schema + JSON Schema validation — commit 6da0195
 - [x] T2.3 New project flow — commit d5036d7
-- [ ] T2.4 Open project + Recent projects UI
-- [ ] T2.5 Media ingest (drag-drop into project)
+- [x] T2.4 Open project + Recent projects UI — commit 6392935
+- [x] T2.5 Media ingest (ingest project) — commit 8851d4f
 
 ### M3 — Alignment (`04_MILESTONE_ALIGNMENT.md`)
 - [ ] T3.1 Sentence segmentation
