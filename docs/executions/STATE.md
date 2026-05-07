@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T1.7 (`02_MILESTONE_SKELETON.md`)
-**Last commit**: 081f9c0
-**Last updated**: 2026-05-07T06:52Z
+**Next task**: T2.1 (`03_MILESTONE_PROJECT_IO.md`)
+**Last commit**: ff4ee2f
+**Last updated**: 2026-05-07T06:56Z
 
 ---
 
@@ -30,7 +30,7 @@
 - [x] T1.4 Create shared-schemas package — commit d39510c
 - [x] T1.5 Concurrent dev script (`pnpm dev`) — commit d94b477
 - [x] T1.6 npx launcher (bin script) — commit 081f9c0
-- [ ] T1.7 Browser auto-open and graceful shutdown
+- [x] T1.7 Browser auto-open and graceful shutdown — commit ff4ee2f
 
 ### M2 — Project I/O (`03_MILESTONE_PROJECT_IO.md`)
 - [ ] T2.1 Global app DB (SQLite)
@@ -81,6 +81,12 @@
 ---
 
 ## Notes log
+
+2026-05-07T06:56Z [agent: codex] M1:
+- What I changed: completed T1.3 through T1.7, including FastAPI sidecar scaffolding, CUDA PyTorch wheel correction from `.downloads`, shared schema codegen, concurrent dev runner, production launcher, readiness polling, and browser auto-open.
+- What works: Milestone 1 verification commands passed; `pnpm launch` starts production server/web, returns 200 for both root and `/health`, and browser shows `Sidecar: ok`.
+- What is incomplete: real terminal Ctrl+C cannot be delivered by the MCP process session; external Windows signal probes are not equivalent and required manual cleanup. Launcher/dev scripts include Windows cleanup safeguards.
+- Next agent should: start T2.1 in `03_MILESTONE_PROJECT_IO.md`.
 
 2026-05-06T09:38Z [agent: codex] T1.1:
 - What I changed: created root scaffold files, ran `pnpm install`, created `scripts/.env-detect`, and updated execution docs to use `master` as the trunk branch per user instruction.
