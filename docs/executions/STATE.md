@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T4.1 (`05_MILESTONE_PREVIEW.md`)
-**Last commit**: 315e4c5
-**Last updated**: 2026-05-07T09:15Z
+**Next task**: T5.1 (`06_MILESTONE_FOREGROUND_RENDER.md`)
+**Last commit**: 25ecb9e
+**Last updated**: 2026-05-07T16:05Z
 
 ---
 
@@ -47,11 +47,11 @@
 - [x] T3.5 Transcript display in UI — commit 315e4c5
 
 ### M4 — Preview (`05_MILESTONE_PREVIEW.md`)
-- [ ] T4.1 WaveSurfer integration
-- [ ] T4.2 Transcript panel with sentence selection
-- [ ] T4.3 Layer 1 auto-distribute (single image) preview
-- [ ] T4.4 In-browser preview player (image swap on timestamp)
-- [ ] T4.5 Timeline strip with thumbnails
+- [x] T4.1 WaveSurfer integration — commit a08fd30
+- [x] T4.2 Transcript panel with sentence selection — commit d2ac49c
+- [x] T4.3 Layer 1 auto-distribute (single image) preview — commit b86fb2b
+- [x] T4.4 In-browser preview player (image swap on timestamp) — commit 6431256
+- [x] T4.5 Timeline strip with thumbnails — commit 3673495
 
 ### M5 — Foreground & Render (`06_MILESTONE_FOREGROUND_RENDER.md`)
 - [ ] T5.1 Drop image onto sentence range (foreground item creation)
