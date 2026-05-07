@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T6.1 (`07_MILESTONE_POLISH.md`)
-**Last commit**: c4685bb
-**Last updated**: 2026-05-07T12:34Z
+**Next task**: T6.2 (`07_MILESTONE_POLISH.md`)
+**Last commit**: 9c0e19f
+**Last updated**: 2026-05-07T12:50Z
 
 ---
 
@@ -62,7 +62,7 @@
 - [x] T5.6 Render history UI 鈥?commit c4685bb
 
 ### M6 — Polish (`07_MILESTONE_POLISH.md`)
-- [ ] T6.1 Final render preset
+- [x] T6.1 Final render preset 鈥?commit 9c0e19f
 - [ ] T6.2 Subtitle SRT generation
 - [ ] T6.3 Subtitle burn-in toggle
 - [ ] T6.4 Auto-distribute multi-image
