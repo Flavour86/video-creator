@@ -1,0 +1,179 @@
+"""Filtergraph builder tests for T5.3."""
+from __future__ import annotations
+
+from pathlib import Path
+
+from server.domain.project import Project
+from server.domain.timing import AlignedSentence, AlignmentResult
+from server.pipeline.cache import clip_cache_key, clip_cache_path
+from server.pipeline.filtergraph import build_compose_command
+
+
+def _alignment(duration_s: float = 10.0) -> AlignmentResult:
+    return AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text="One sentence.",
+                start_s=0.0,
+                end_s=duration_s,
+                confidence_avg=1.0,
+            )
+        ],
+        words=[],
+        cache_hit=True,
+    )
+
+
+def _item(media_id: str, start: float, end: float, item_id: str = "fg-1") -> dict[str, object]:
+    return {
+        "id": item_id,
+        "mediaId": media_id,
+        "sentences": [1, 1],
+        "start": start,
+        "end": end,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+    }
+
+
+def _fg_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object]:
+    return {"id": layer_id, "kind": "fg", "name": layer_id, "items": items}
+
+
+def _project(layers: list[dict[str, object]]) -> Project:
+    return Project.model_validate(
+        {
+            "version": 1,
+            "name": "test",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": layers,
+            "subtitles": None,
+            "watermark": None,
+        }
+    )
+
+
+def _write_media(project_dir: Path, name: str, data: bytes) -> Path:
+    path = project_dir / "media" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path
+
+
+def _filtergraph(command: list[str]) -> str:
+    return command[command.index("-filter_complex") + 1]
+
+
+def _input_paths(command: list[str]) -> list[str]:
+    return [command[index + 1] for index, value in enumerate(command) if value == "-i"]
+
+
+def _expected_clip(project_dir: Path, media_path: Path, duration_s: float) -> Path:
+    key = clip_cache_key(
+        media_path=media_path,
+        duration_s=duration_s,
+        motion={"kind": "none", "easing": "linear"},
+        transition_in="cut",
+        transition_out="cut",
+        resolution="1280x720",
+        fps=30,
+    )
+    return clip_cache_path(project_dir, key)
+
+
+def test_empty_foreground_uses_black_canvas_and_audio(tmp_path: Path) -> None:
+    project = _project([])
+    output_path = tmp_path / "draft.mp4"
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=output_path,
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert _input_paths(command) == [str(tmp_path / "voice.wav")]
+    assert "color=black:s=1280x720:r=30:d=10[bg]" in filtergraph
+    assert "overlay=" not in filtergraph
+    assert "[bg]format=yuv420p[vout]" in filtergraph
+    assert "[0:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]" in filtergraph
+
+
+def test_one_foreground_item_adds_overlay_with_timestamps(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path, "one.jpg", b"one")
+    project = _project([_fg_layer("fg-z1", [_item("one.jpg", 1.5, 3.0)])])
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    expected_clip = _expected_clip(tmp_path, media_path, 1.5)
+    assert _input_paths(command) == [str(tmp_path / "voice.wav"), str(expected_clip)]
+    assert "overlay=enable='between(t,1.5,3)':eof_action=pass[v1]" in filtergraph
+    assert "[v1]format=yuv420p[vout]" in filtergraph
+
+
+def test_two_items_add_two_overlays(tmp_path: Path) -> None:
+    _write_media(tmp_path, "one.jpg", b"one")
+    _write_media(tmp_path, "two.jpg", b"two")
+    project = _project(
+        [
+            _fg_layer(
+                "fg-z1",
+                [
+                    _item("one.jpg", 1.0, 2.0, "fg-1"),
+                    _item("two.jpg", 4.0, 6.0, "fg-2"),
+                ],
+            )
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert filtergraph.count("overlay=enable=") == 2
+    assert "[bg][1:v]overlay=enable='between(t,1,2)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][2:v]overlay=enable='between(t,4,6)':eof_action=pass[v2]" in filtergraph
+
+
+def test_layer_z_order_is_bottom_to_top(tmp_path: Path) -> None:
+    bottom_media = _write_media(tmp_path, "bottom.jpg", b"bottom")
+    top_media = _write_media(tmp_path, "top.jpg", b"top")
+    project = _project(
+        [
+            _fg_layer("fg-top", [_item("top.jpg", 0.0, 5.0, "top")]),
+            _fg_layer("fg-bottom", [_item("bottom.jpg", 0.0, 5.0, "bottom")]),
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    bottom_clip = _expected_clip(tmp_path, bottom_media, 5.0)
+    top_clip = _expected_clip(tmp_path, top_media, 5.0)
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(bottom_clip),
+        str(top_clip),
+    ]

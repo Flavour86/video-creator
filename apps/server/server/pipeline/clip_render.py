@@ -42,6 +42,47 @@ def render_clip_to_cache(
     fps: int = 30,
     crf: int = 28,
 ) -> Path:
+    key = clip_cache_key_for_item(
+        item=item,
+        project_dir=project_dir,
+        resolution=resolution,
+        fps=fps,
+    )
+    if is_cached(project_dir, key):
+        return clip_cache_path(project_dir, key)
+    return render_clip(
+        item=item,
+        project_dir=project_dir,
+        output_path=clip_cache_path(project_dir, key),
+        resolution=resolution,
+        fps=fps,
+        crf=crf,
+    )
+
+
+def clip_cache_path_for_item(
+    *,
+    item: ClipRenderItem,
+    project_dir: Path,
+    resolution: str = "1280x720",
+    fps: int = 30,
+) -> Path:
+    key = clip_cache_key_for_item(
+        item=item,
+        project_dir=project_dir,
+        resolution=resolution,
+        fps=fps,
+    )
+    return clip_cache_path(project_dir, key)
+
+
+def clip_cache_key_for_item(
+    *,
+    item: ClipRenderItem,
+    project_dir: Path,
+    resolution: str = "1280x720",
+    fps: int = 30,
+) -> str:
     media_path = _resolve_media_path(project_dir, _media_id(item))
     duration_s = _duration_s(item)
     transition_in = _transition_value(item, "in")
@@ -55,17 +96,7 @@ def render_clip_to_cache(
         resolution=resolution,
         fps=fps,
     )
-    key = clip_cache_key_from_components(components)
-    if is_cached(project_dir, key):
-        return clip_cache_path(project_dir, key)
-    return render_clip(
-        item=item,
-        project_dir=project_dir,
-        output_path=clip_cache_path(project_dir, key),
-        resolution=resolution,
-        fps=fps,
-        crf=crf,
-    )
+    return clip_cache_key_from_components(components)
 
 
 def render_clip(
