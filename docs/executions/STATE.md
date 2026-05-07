@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T3.1 (`04_MILESTONE_ALIGNMENT.md`)
-**Last commit**: 8851d4f
-**Last updated**: 2026-05-07T08:30Z
+**Next task**: T4.1 (`05_MILESTONE_PREVIEW.md`)
+**Last commit**: 315e4c5
+**Last updated**: 2026-05-07T09:15Z
 
 ---
 
@@ -40,11 +40,11 @@
 - [x] T2.5 Media ingest (ingest project) — commit 8851d4f
 
 ### M3 — Alignment (`04_MILESTONE_ALIGNMENT.md`)
-- [ ] T3.1 Sentence segmentation
-- [ ] T3.2 WhisperX wrapper
-- [ ] T3.3 Forced alignment endpoint
-- [ ] T3.4 Alignment cache
-- [ ] T3.5 Transcript display in UI
+- [x] T3.1 Sentence segmentation — commit 01b9e81
+- [x] T3.2 WhisperX wrapper — commit f1a269a
+- [x] T3.3 Forced alignment endpoint — commit 4a1b5a6
+- [x] T3.4 Alignment cache — commit 4a1b5a6
+- [x] T3.5 Transcript display in UI — commit 315e4c5
 
 ### M4 — Preview (`05_MILESTONE_PREVIEW.md`)
 - [ ] T4.1 WaveSurfer integration
