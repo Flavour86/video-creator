@@ -4,6 +4,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from server.routes.media import router as media_router
 from server.routes.projects import router as projects_router
 from server.settings import settings
 
@@ -21,6 +22,7 @@ log = structlog.get_logger()
 
 app = FastAPI(title="Video Creator Sidecar", version="0.1.0")
 app.include_router(projects_router)
+app.include_router(media_router)
 
 
 @app.get("/health")
