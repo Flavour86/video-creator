@@ -9,6 +9,8 @@ type Props = {
   currentTime: number;
   sentences?: AlignedSentence[];
   projectPath?: string;
+  selectedItemId?: string | null;
+  onSelectItem?: (layerId: string, itemId: string) => void;
 };
 
 function SentenceChips({
@@ -65,7 +67,46 @@ function BgBlock({
   );
 }
 
-export function TimelineTrack({ layer, duration, currentTime, sentences, projectPath }: Props) {
+function FgBlocks({
+  layer,
+  duration,
+  selectedItemId,
+  onSelectItem,
+}: {
+  layer: Extract<Layer, { kind: "fg" | "pip" }>;
+  duration: number;
+  selectedItemId?: string | null;
+  onSelectItem?: (layerId: string, itemId: string) => void;
+}) {
+  type VisualItem = { id: string; mediaId: string; start: number; end: number; motion: { kind: string } };
+  return (
+    <div className="relative h-7 w-full overflow-hidden">
+      {(layer.items as VisualItem[]).map((item) => {
+        const left = (item.start / duration) * 100;
+        const width = ((item.end - item.start) / duration) * 100;
+        const isSelected = item.id === selectedItemId;
+        return (
+          <button
+            className={`absolute top-1 flex h-5 cursor-pointer items-center overflow-hidden rounded-sm px-1 text-left transition-colors ${
+              isSelected
+                ? "border border-sky-500 bg-sky-200 text-sky-800"
+                : "bg-violet-200 text-violet-800 hover:bg-violet-300"
+            }`}
+            key={item.id}
+            onClick={() => onSelectItem?.(layer.id, item.id)}
+            style={{ left: `${left}%`, width: `${Math.max(width, 0.8)}%` }}
+            title={`${item.mediaId} · ${item.motion.kind}`}
+            type="button"
+          >
+            <span className="truncate text-[9px] font-medium">{item.mediaId}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function TimelineTrack({ layer, duration, currentTime, sentences, projectPath, selectedItemId, onSelectItem }: Props) {
   const label = layer.name;
 
   return (
@@ -82,7 +123,15 @@ export function TimelineTrack({ layer, duration, currentTime, sentences, project
         {layer.kind === "bg" && duration > 0 && (
           <BgBlock duration={duration} layer={layer as Extract<Layer, { kind: "bg" }>} projectPath={projectPath} />
         )}
-        {(layer.kind === "fg" || layer.kind === "pip") && (
+        {(layer.kind === "fg" || layer.kind === "pip") && duration > 0 && (
+          <FgBlocks
+            duration={duration}
+            layer={layer as Extract<Layer, { kind: "fg" | "pip" }>}
+            onSelectItem={onSelectItem}
+            selectedItemId={selectedItemId}
+          />
+        )}
+        {(layer.kind === "fg" || layer.kind === "pip") && duration === 0 && (
           <div className="h-7" />
         )}
         {/* Playhead */}

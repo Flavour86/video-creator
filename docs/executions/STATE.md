@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T5.1 (`06_MILESTONE_FOREGROUND_RENDER.md`)
-**Last commit**: 25ecb9e
-**Last updated**: 2026-05-07T16:05Z
+**Next task**: T5.2 (`06_MILESTONE_FOREGROUND_RENDER.md`)
+**Last commit**: (pending)
+**Last updated**: 2026-05-07T17:30Z
 
 ---
 
@@ -54,7 +54,7 @@
 - [x] T4.5 Timeline strip with thumbnails — commit 3673495
 
 ### M5 — Foreground & Render (`06_MILESTONE_FOREGROUND_RENDER.md`)
-- [ ] T5.1 Drop image onto sentence range (foreground item creation)
+- [x] T5.1 Drop image onto sentence range (foreground item creation) — commit (pending)
 - [ ] T5.2 Asset cache (per-clip pre-render)
 - [ ] T5.3 Filtergraph builder
 - [ ] T5.4 Compose endpoint (single ffmpeg invocation)

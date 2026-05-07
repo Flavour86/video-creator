@@ -3,12 +3,16 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { BgModal } from "@/components/bg-modal/BgModal";
+import { InspectorPanel } from "@/components/inspector/InspectorPanel";
+import { LayersPopover } from "@/components/layers-popover/LayersPopover";
 import { PreviewPlayer } from "@/components/preview-player/PreviewPlayer";
 import { Waveform } from "@/components/preview-player/Waveform";
 import { Timeline } from "@/components/timeline/Timeline";
 import { TranscriptPanel } from "@/components/transcript-panel/TranscriptPanel";
 import { useAlignment } from "@/lib/hooks/useAlignment";
+import { useAssignModal } from "@/lib/hooks/useAssignModal";
 import { useProject } from "@/lib/hooks/useProject";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
@@ -28,8 +32,14 @@ function EditorContent() {
   const projectPath = params.get("project") ?? "";
 
   // Project store
-  const { layers, sentences, duration, setProjectPath, setLayers, setSentences, setDuration, saveLayers } =
-    useProject();
+  const {
+    layers, sentences, duration,
+    selectedLayerId, selectedItemId,
+    setProjectPath, setLayers, setSentences, setDuration, setSelectedItem, saveLayers,
+  } = useProject();
+
+  // Assign modal store
+  const { isOpen: assignOpen, fromSentence, toSentence, editItemId, editLayerId, close: closeAssign, openForSentence, openForEdit } = useAssignModal();
 
   // Media
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -90,6 +100,24 @@ function EditorContent() {
     await saveLayers(newLayers);
   }
 
+  // Assign modal confirm
+  async function handleAssignConfirm(updatedLayers: Layer[], newLayerId: string, newItemId: string) {
+    await saveLayers(updatedLayers);
+    setSelectedItem(newLayerId, newItemId);
+  }
+
+  // Inspector changes
+  async function handleLayersChange(updatedLayers: Layer[]) {
+    await saveLayers(updatedLayers);
+  }
+
+  // Layers popover: delete a layer
+  async function handleDeleteLayer(layerId: string) {
+    const updated = layers.filter((l) => l.id !== layerId);
+    await saveLayers(updated);
+    if (selectedLayerId === layerId) setSelectedItem(null, null);
+  }
+
   const existingBg = layers.find((l) => l.kind === "bg") as Extract<Layer, { kind: "bg" }> | undefined;
 
   // File upload
@@ -145,6 +173,14 @@ function EditorContent() {
       <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-2">
         <p className="max-w-xs truncate font-mono text-xs opacity-40">{projectPath}</p>
         <div className="flex items-center gap-2">
+          <LayersPopover
+            layers={layers}
+            onAddItem={() => openForSentence(sentences[0]?.index ?? 1)}
+            onDeleteLayer={(id) => void handleDeleteLayer(id)}
+            onSelectItem={(lid, iid) => setSelectedItem(lid, iid)}
+            selectedItemId={selectedItemId}
+            selectedLayerId={selectedLayerId}
+          />
           <BgModal
             duration={duration}
             existing={existingBg}
@@ -196,7 +232,10 @@ function EditorContent() {
             duration={duration}
             layers={layers}
             onSeek={(t) => setSeekToTime(t)}
+            onSelectItem={(lid, iid) => setSelectedItem(lid, iid)}
             projectPath={projectPath}
+            selectedItemId={selectedItemId}
+            selectedLayerId={selectedLayerId}
             sentences={sentences}
           />
 
@@ -246,8 +285,21 @@ function EditorContent() {
           </details>
         </div>
 
-        {/* Right: transcript panel */}
-        <div className="flex w-72 shrink-0 flex-col gap-3 border-l border-neutral-200 p-3">
+        {/* Right: inspector + transcript panel */}
+        <div className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-neutral-200 p-3">
+          {/* Inspector — only when an item is selected */}
+          <InspectorPanel
+            layers={layers}
+            media={media}
+            onDeselect={() => setSelectedItem(null, null)}
+            onLayersChange={(updated) => void handleLayersChange(updated)}
+            onOpenAssignEdit={(lid, iid, from, to) => openForEdit(lid, iid, from, to)}
+            projectPath={projectPath}
+            selectedItemId={selectedItemId}
+            selectedLayerId={selectedLayerId}
+            sentences={sentences}
+          />
+
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-widest opacity-40">Transcript</h2>
             <div className="flex gap-2">
@@ -299,6 +351,19 @@ function EditorContent() {
           )}
         </div>
       </div>
+      {/* AssignModal — controlled by useAssignModal store */}
+      <AssignModal
+        editItemId={editItemId}
+        editLayerId={editLayerId}
+        fromSentence={fromSentence}
+        layers={layers}
+        media={media}
+        onClose={closeAssign}
+        onConfirm={(updated, lid, iid) => void handleAssignConfirm(updated, lid, iid)}
+        open={assignOpen}
+        sentences={sentences}
+        toSentence={toSentence}
+      />
     </main>
   );
 }

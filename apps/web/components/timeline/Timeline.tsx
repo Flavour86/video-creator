@@ -12,6 +12,9 @@ type Props = {
   currentTime: number;
   projectPath: string;
   onSeek: (time: number) => void;
+  selectedLayerId?: string | null;
+  selectedItemId?: string | null;
+  onSelectItem?: (layerId: string, itemId: string) => void;
 };
 
 const TRACK_ORDER: Layer["kind"][] = ["sub", "pip", "fg", "bg"];
@@ -23,6 +26,9 @@ export function Timeline({
   currentTime,
   projectPath,
   onSeek,
+  selectedLayerId,
+  selectedItemId,
+  onSelectItem,
 }: Props) {
   // Sort layers into display order: sub → pip → fg → bg
   const sorted = [...layers].sort(
@@ -68,7 +74,9 @@ export function Timeline({
           duration={duration}
           key={layer.id}
           layer={layer}
+          onSelectItem={onSelectItem}
           projectPath={projectPath}
+          selectedItemId={layer.id === selectedLayerId ? selectedItemId : null}
           sentences={layer.kind === "sub" ? sentences : undefined}
         />
       ))}

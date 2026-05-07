@@ -7,10 +7,13 @@ type ProjectStore = {
   layers: Layer[];
   sentences: AlignedSentence[];
   duration: number;
+  selectedLayerId: string | null;
+  selectedItemId: string | null;
   setProjectPath: (path: string) => void;
   setLayers: (layers: Layer[]) => void;
   setSentences: (sentences: AlignedSentence[]) => void;
   setDuration: (duration: number) => void;
+  setSelectedItem: (layerId: string | null, itemId: string | null) => void;
   saveLayers: (layers: Layer[]) => Promise<void>;
 };
 
@@ -19,11 +22,14 @@ export const useProject = create<ProjectStore>((set, get) => ({
   layers: [],
   sentences: [],
   duration: 0,
+  selectedLayerId: null,
+  selectedItemId: null,
 
   setProjectPath: (path) => set({ projectPath: path }),
   setLayers: (layers) => set({ layers }),
   setSentences: (sentences) => set({ sentences }),
   setDuration: (duration) => set({ duration }),
+  setSelectedItem: (layerId, itemId) => set({ selectedLayerId: layerId, selectedItemId: itemId }),
 
   saveLayers: async (layers) => {
     const { projectPath } = get();

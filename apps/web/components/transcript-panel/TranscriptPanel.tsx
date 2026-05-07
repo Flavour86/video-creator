@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { AlignmentResult } from "@/lib/hooks/useAlignment";
+import { useAssignModal } from "@/lib/hooks/useAssignModal";
 
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
@@ -23,6 +24,7 @@ export function TranscriptPanel({ result, selected, currentTime, onSelect, onSee
     : undefined;
 
   const activeRef = useRef<HTMLButtonElement | null>(null);
+  const { openForSentence } = useAssignModal();
 
   // Scroll active sentence into view during playback
   useEffect(() => {
@@ -35,30 +37,43 @@ export function TranscriptPanel({ result, selected, currentTime, onSelect, onSee
         const isActive = s.index === activeIndex;
         const isSelected = selected.has(s.index);
         return (
-          <button
-            className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-neutral-50 ${
+          <div
+            className={`flex w-full items-start gap-1 pr-1 text-sm transition-colors hover:bg-neutral-50 ${
               isActive
-                ? "border-l-2 border-sky-500 bg-sky-50/60 font-medium"
+                ? "border-l-2 border-sky-500 bg-sky-50/60"
                 : isSelected
-                  ? "bg-neutral-100 font-medium"
+                  ? "bg-neutral-100"
                   : ""
             }`}
             key={s.index}
-            onClick={(e) => {
-              onSelect(s.index, e.shiftKey, e.ctrlKey || e.metaKey);
-              onSeek?.(s.start_s);
-            }}
-            ref={isActive ? (el) => { activeRef.current = el; } : undefined}
-            type="button"
           >
-            <span className="w-5 shrink-0 pt-px text-right text-xs tabular-nums opacity-40">
-              {s.index}
-            </span>
-            <span className="flex-1 leading-snug">{s.text}</span>
-            <span className="shrink-0 pt-px font-mono text-xs tabular-nums opacity-40">
-              {fmtTime(s.start_s)}
-            </span>
-          </button>
+            <button
+              className={`flex flex-1 items-start gap-3 px-3 py-2 text-left ${isActive ? "border-l-2 border-sky-500" : ""}`}
+              onClick={(e) => {
+                onSelect(s.index, e.shiftKey, e.ctrlKey || e.metaKey);
+                onSeek?.(s.start_s);
+              }}
+              ref={isActive ? (el) => { activeRef.current = el; } : undefined}
+              type="button"
+            >
+              <span className="w-5 shrink-0 pt-px text-right text-xs tabular-nums opacity-40">
+                {s.index}
+              </span>
+              <span className={`flex-1 leading-snug ${isActive || isSelected ? "font-medium" : ""}`}>{s.text}</span>
+              <span className="shrink-0 pt-px font-mono text-xs tabular-nums opacity-40">
+                {fmtTime(s.start_s)}
+              </span>
+            </button>
+            <button
+              aria-label={`Assign media to sentence ${s.index}`}
+              className="mt-1.5 shrink-0 rounded px-1 py-0.5 text-xs opacity-0 hover:bg-sky-100 hover:text-sky-600 hover:opacity-100 group-hover:opacity-40"
+              onClick={() => openForSentence(s.index)}
+              title="Assign media to this sentence"
+              type="button"
+            >
+              +
+            </button>
+          </div>
         );
       })}
     </section>
