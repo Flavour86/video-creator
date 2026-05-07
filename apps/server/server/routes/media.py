@@ -140,6 +140,59 @@ async def list_media(project: str = Query(...)) -> list[MediaItem] | JSONRespons
     ]
 
 
+_MEDIA_CONTENT_TYPES: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".webm": "video/webm",
+}
+
+_AUDIO_CONTENT_TYPES: dict[str, str] = {
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+}
+
+
+@router.get("/projects/audio", response_model=None)  # FileResponse | JSONResponse union
+async def get_audio(
+    project: str = Query(...),
+    filename: str = Query(...),
+) -> FileResponse | JSONResponse:
+    # Reject path traversal: filename must not contain separators or dots-only segments
+    safe = Path(filename).name
+    if safe != filename or ".." in filename:
+        return _error(400, "INVALID_FILENAME", "Invalid audio filename.", {"filename": filename})
+
+    audio_path = Path(project) / safe
+    if not audio_path.exists() or not audio_path.is_file():
+        return _error(404, "AUDIO_NOT_FOUND", "Audio file not found.", {"filename": filename})
+
+    content_type = _AUDIO_CONTENT_TYPES.get(audio_path.suffix.lower(), "audio/wav")
+    return FileResponse(str(audio_path), media_type=content_type, headers={"Accept-Ranges": "bytes"})
+
+
+@router.get("/projects/media-file", response_model=None)
+async def get_media_file(
+    project: str = Query(...),
+    filename: str = Query(...),
+) -> FileResponse | JSONResponse:
+    safe = Path(filename).name
+    if safe != filename or ".." in filename:
+        return _error(400, "INVALID_FILENAME", "Invalid filename.", {"filename": filename})
+    media_path = Path(project) / "media" / safe
+    if not media_path.exists() or not media_path.is_file():
+        return _error(404, "MEDIA_NOT_FOUND", "Media file not found.", {"filename": filename})
+    content_type = _MEDIA_CONTENT_TYPES.get(media_path.suffix.lower(), "application/octet-stream")
+    return FileResponse(str(media_path), media_type=content_type)
+
+
 @router.get("/projects/thumb", response_model=None)
 async def get_thumb(
     project: str = Query(...),
