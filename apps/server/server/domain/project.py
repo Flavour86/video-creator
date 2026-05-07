@@ -26,6 +26,6 @@ def save_project(project_dir: Path, project: Project) -> None:
     project_json = project_dir / "project.json"
     project_dir.mkdir(parents=True, exist_ok=True)
     project_json.write_text(
-        json.dumps(project.model_dump(mode="json", exclude_none=True), indent=2),
+        json.dumps(project.model_dump(mode="json", by_alias=True, exclude_none=False), indent=2),
         encoding="utf-8",
     )

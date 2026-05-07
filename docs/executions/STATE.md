@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T2.2 (`03_MILESTONE_PROJECT_IO.md`)
-**Last commit**: 0c895e5
-**Last updated**: 2026-05-07T06:58Z
+**Next task**: T2.3 (`03_MILESTONE_PROJECT_IO.md`)
+**Last commit**: 6da0195
+**Last updated**: 2026-05-07T07:05Z
 
 ---
 
@@ -34,7 +34,7 @@
 
 ### M2 — Project I/O (`03_MILESTONE_PROJECT_IO.md`)
 - [x] T2.1 Global app DB (SQLite) — commit 0c895e5
-- [ ] T2.2 Full `project.json` schema + JSON Schema validation
+- [x] T2.2 Full `project.json` schema + JSON Schema validation — commit 6da0195
 - [ ] T2.3 New project flow
 - [ ] T2.4 Open project + Recent projects UI
 - [ ] T2.5 Media ingest (drag-drop into project)
