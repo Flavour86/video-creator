@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T1.6 (`02_MILESTONE_SKELETON.md`)
-**Last commit**: d94b477
-**Last updated**: 2026-05-07T06:47Z
+**Next task**: T1.7 (`02_MILESTONE_SKELETON.md`)
+**Last commit**: 081f9c0
+**Last updated**: 2026-05-07T06:52Z
 
 ---
 
@@ -29,7 +29,7 @@
 - [x] T1.3 Bootstrap FastAPI app (apps/server) — commit 2791241
 - [x] T1.4 Create shared-schemas package — commit d39510c
 - [x] T1.5 Concurrent dev script (`pnpm dev`) — commit d94b477
-- [ ] T1.6 npx launcher (bin script)
+- [x] T1.6 npx launcher (bin script) — commit 081f9c0
 - [ ] T1.7 Browser auto-open and graceful shutdown
 
 ### M2 — Project I/O (`03_MILESTONE_PROJECT_IO.md`)

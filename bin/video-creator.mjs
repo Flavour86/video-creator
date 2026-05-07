@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -108,6 +109,36 @@ start(
   },
 );
 
-setTimeout(() => {
-  if (!shuttingDown) console.log("[launcher] http://localhost:3000");
-}, 4000);
+async function waitForReady(maxMs = 60000) {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    if (shuttingDown) return false;
+    const [isSidecarReady, isWebReady] = await Promise.all([
+      fetch("http://127.0.0.1:8787/health")
+        .then((response) => response.ok)
+        .catch(() => false),
+      fetch("http://127.0.0.1:3000/")
+        .then((response) => response.ok)
+        .catch(() => false),
+    ]);
+    if (isSidecarReady && isWebReady) return true;
+    await sleep(500);
+  }
+  return false;
+}
+
+function openBrowser(url) {
+  const cmd =
+    process.platform === "win32" ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+}
+
+waitForReady().then((ready) => {
+  if (ready && !shuttingDown) {
+    console.log("[launcher] ready - opening browser");
+    openBrowser("http://localhost:3000");
+  } else if (!shuttingDown) {
+    console.error("[launcher] timed out waiting for servers; visit http://localhost:3000");
+  }
+});
