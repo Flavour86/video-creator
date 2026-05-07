@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T1.4 (`02_MILESTONE_SKELETON.md`)
-**Last commit**: 2791241
-**Last updated**: 2026-05-07T06:20Z
+**Next task**: T1.5 (`02_MILESTONE_SKELETON.md`)
+**Last commit**: d39510c
+**Last updated**: 2026-05-07T06:24Z
 
 ---
 
@@ -27,7 +27,7 @@
 - [x] T1.1 Initialize pnpm monorepo — commit 2239157
 - [x] T1.2 Bootstrap Next.js app (apps/web) — commit b0546a3
 - [x] T1.3 Bootstrap FastAPI app (apps/server) — commit 2791241
-- [ ] T1.4 Create shared-schemas package
+- [x] T1.4 Create shared-schemas package — commit d39510c
 - [ ] T1.5 Concurrent dev script (`pnpm dev`)
 - [ ] T1.6 npx launcher (bin script)
 - [ ] T1.7 Browser auto-open and graceful shutdown
