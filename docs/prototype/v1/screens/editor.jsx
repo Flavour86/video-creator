@@ -1,0 +1,634 @@
+// Editor screen — transcript-anchored video editor.
+// Top→bottom layer order in UI: SUB · PiP layers · FG layers · BG.
+
+const PROJECT_DURATION = 942;
+
+const RESOLUTIONS = {
+  "1080p": { w: 1920, h: 1080, label: "1080p · 16:9", aspect: 16 / 9 },
+  "720p": { w: 1280, h: 720, label: "720p · 16:9", aspect: 16 / 9 },
+  "vert": { w: 1080, h: 1920, label: "9:16 · vertical", aspect: 9 / 16 }
+};
+
+// ───────── Transcript ─────────
+
+const Transcript = ({ sentences, selection, currentSentence, onSelect, onContext }) => {
+  return (
+    <div className="tcol">
+      <div className="tx-search">
+        <Icon name="search" />
+        <input placeholder="Search transcript… (⌘F)" />
+        <span className="kbd">⌘F</span>
+      </div>
+      <div className="tx-bar">
+        <span className="label">Transcript · {sentences.length} aligned</span>
+        {selection.length > 0 &&
+        <span className="selrange">{selection.length === 1 ? `s${selection[0]}` : `s${selection[0]}–s${selection[selection.length - 1]}`}</span>
+        }
+      </div>
+      <div className="tx-list">
+        {sentences.map((s, i) => {
+          const isSel = selection.includes(s.idx);
+          const isFirst = isSel && (i === 0 || !selection.includes(sentences[i - 1]?.idx));
+          const isLast = isSel && (i === sentences.length - 1 || !selection.includes(sentences[i + 1]?.idx));
+          const isNow = currentSentence === s.idx;
+          const cls = ["sentence"];
+          if (isSel) cls.push("sel");
+          if (isFirst) cls.push("first");
+          if (isLast) cls.push("last");
+          if (isNow) cls.push("now");
+          if (s.orphan) cls.push("orphan");
+          return (
+            <div key={s.idx} className={cls.join(" ")}
+            onClick={(e) => onSelect(s.idx, e)}
+            onContextMenu={(e) => {e.preventDefault();onContext(s.idx, e);}}>
+              <button className="sent-add" title="Assign media to this sentence" onClick={(e) => {e.stopPropagation();onContext(s.idx, e);}}>
+                <Icon name="plusCircle" size={14} />
+              </button>
+              <span className="idx">{s.idx}</span>
+              <span className="tc">{fmtTC(s.start, false)}</span>
+              <span className="text">{s.text}</span>
+            </div>);
+
+        })}
+      </div>
+    </div>);
+
+};
+
+// ───────── Preview ─────────
+
+const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, fit, subtitleText, onAddBG, onOpenSubtitles }) => {
+  // Find the topmost active fullscreen item (PiP and BG are always on)
+  const fgItem = (() => {
+    for (const L of layers.filter((l) => l.kind === "fg")) {
+      const it = L.items.find((it) => time >= it.start && time <= it.end);
+      if (it) return { item: it, layer: L };
+    }
+    return null;
+  })();
+  const bgLayer = layers.find((l) => l.kind === "bg");
+  const bgItem = bgLayer?.items[0];
+  const pipItems = layers.filter((l) => l.kind === "pip").flatMap((L) => L.items.filter((it) => time >= it.start && time <= it.end).map((it) => ({ item: it, layer: L })));
+
+  const showFG = !!fgItem;
+  const fgMedia = fgItem ? MEDIA_BY_ID[fgItem.item.mediaId] : null;
+  const bgMedia = bgItem ? MEDIA_BY_ID[bgItem.mediaId] : null;
+
+  const stageStyle = { aspectRatio: `${resolution.w} / ${resolution.h}`, maxHeight: "100%" };
+  if (fit === "actual") {stageStyle.width = `${resolution.w / 2}px`;}
+
+  return (
+    <div className="preview-wrap">
+      <div className="preview-stage" style={stageStyle}>
+        <div className="preview-canvas">
+          {bgMedia && <div className="scene bg-scene" style={{ background: thumbGrad(bgMedia.thumb) }} />}
+          {!bgMedia && <div className="scene empty"><span>No background — <button className="link" onClick={onAddBG}>add one</button></span></div>}
+          {showFG && <div className="scene fg-scene" style={{ background: thumbGrad(fgMedia.thumb) }} />}
+          {pipItems.map(({ item, layer }) => {
+            const m = MEDIA_BY_ID[item.mediaId];
+            const pip = item.pip;
+            const style = {
+              width: `${pip.size}%`, aspectRatio: "16/9", borderRadius: pip.radius, opacity: pip.opacity / 100,
+              background: thumbGrad(m?.thumb),
+              left: pip.posX === 0 ? "4%" : pip.posX === 1 ? "50%" : "auto",
+              right: pip.posX === 2 ? "4%" : "auto",
+              top: pip.posY === 0 ? "4%" : pip.posY === 1 ? "50%" : "auto",
+              bottom: pip.posY === 2 ? "4%" : "auto",
+              transform: `translate(${pip.posX === 1 ? "-50%" : "0"}, ${pip.posY === 1 ? "-50%" : "0"})`,
+              boxShadow: "0 8px 30px rgba(0,0,0,0.45)"
+            };
+            return <div key={item.id} className="pip-overlay" style={style} />;
+          })}
+          <div className="subtitles">{subtitleText}</div>
+          <div className="watermark">VC</div>
+        </div>
+      </div>
+      <div className="preview-meta">
+        <div className="transport">
+          <button className="iconbtn" title="Previous sentence"><Icon name="skipBack" /></button>
+          <button className="iconbtn play" onClick={onTogglePlay} title={playing ? "Pause" : "Play"}>
+            <Icon name={playing ? "pause" : "play"} size={14} />
+          </button>
+          <button className="iconbtn" title="Next sentence"><Icon name="skipFwd" /></button>
+        </div>
+        <div className="tc-display">
+          <span className="tc-now">{fmtTC(time)}</span>
+          <span className="tc-sep">/</span>
+          <span>{fmtTC(PROJECT_DURATION)}</span>
+        </div>
+      </div>
+    </div>);
+
+};
+
+// ───────── Timeline ─────────
+
+const WAVE_BARS = Array.from({ length: 200 }, (_, i) =>
+30 + Math.abs(Math.sin(i * 0.5) * 30) + Math.abs(Math.sin(i * 0.13) * 25) + (i % 7 === 0 ? 15 : 0));
+
+const Clip = ({ left, width, kind, label, selected, onClick, onResize, onDelete }) => {
+  const startResize = (side) => (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX;
+    const trackEl = e.currentTarget.closest(".track");
+    const trackW = trackEl?.getBoundingClientRect().width || 1;
+    const move = (ev) => {
+      const dx = ev.clientX - startX;
+      const dPct = dx / trackW * 100;
+      onResize(side, dPct);
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+  return (
+    <div className={"clip " + kind + (selected ? " selected" : "")} style={{ left: `${left}%`, width: `${width}%` }}
+    onClick={(e) => {e.stopPropagation();onClick && onClick();}}>
+      <span className="grip l" onMouseDown={startResize("l")} />
+      <span className="lbl">{label}</span>
+      <span className="grip r" onMouseDown={startResize("r")} />
+      {selected && onDelete && <button className="x" onClick={(e) => {e.stopPropagation();onDelete();}} title="Delete"><Icon name="x" size={9} /></button>}
+    </div>);
+
+};
+
+const TimelineRow = ({ layer, selection, onSelect, onResize, onDelete, onClickHeader }) => {
+  return (
+    <div className="track-row" data-layer={layer.kind}>
+      <div className="track-label" onClick={onClickHeader}>
+        <span className={"ldot " + layer.kind} />
+        <span className="lname">{layer.name}</span>
+        <span className="lct">{layer.items.length}</span>
+      </div>
+      <div className="track">
+        {layer.kind === "sub" ?
+        // synthesize sub clips per sentence, distributed across the project duration
+        SENTENCES.map((s, i) => {
+          const segPct = 100 / SENTENCES.length;
+          const left = i * segPct;
+          const width = segPct * 0.92; // small gap between cues
+          return <div key={s.idx} className="clip sub" style={{ left: `${left}%`, width: `${width}%` }} title={`s${s.idx}`} />;
+        }) :
+
+        layer.items.map((it) => {
+          const dur = layer.kind === "bg" ? PROJECT_DURATION : it.end - it.start;
+          const left = it.start / PROJECT_DURATION * 100;
+          const width = dur / PROJECT_DURATION * 100;
+          const sel = selection?.layerId === layer.id && selection?.itemId === it.id;
+          const m = MEDIA_BY_ID[it.mediaId];
+          const label = layer.kind === "bg" ? `auto · ${m?.name || "background"}` : m?.name || "item";
+          return (
+            <Clip key={it.id} left={left} width={width} kind={layer.kind} label={label}
+            selected={sel}
+            onClick={() => onSelect(layer.id, it.id)}
+            onResize={(side, dPct) => onResize(layer.id, it.id, side, dPct)}
+            onDelete={layer.kind === "bg" ? null : () => onDelete(layer.id, it.id)} />);
+
+
+        })
+        }
+      </div>
+    </div>);
+
+};
+
+const Timeline = ({ layers, time, onSeek, selection, onSelect, onResize, onDelete }) => {
+  const playPct = time / PROJECT_DURATION * 100;
+  const ticks = Array.from({ length: 16 }, (_, i) => ({ pct: i / 15 * 100, label: fmtTC(i / 15 * PROJECT_DURATION, false) }));
+
+  return (
+    <div className="timeline">
+      <div className="tl-header">
+        <h3>Timeline</h3>
+        <div className="meta">
+          <span>30 fps</span>
+          <span>{layers.reduce((n, l) => n + (l.kind === "sub" ? 0 : l.items.length), 0)} clips</span>
+          <span>cache 24/24</span>
+        </div>
+      </div>
+      <div style={{ position: "relative" }} onClick={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left - 100;
+        if (x < 0) return;
+        const w = rect.width - 100 - 10;
+        onSeek(x / w * PROJECT_DURATION);
+      }}>
+        <div className="ruler">
+          {ticks.map((t, i) =>
+          <div key={i} className={"tick " + (i % 2 === 0 ? "" : "minor")} style={{ left: `${t.pct}%` }}>
+              {i % 2 === 0 && <span>{t.label}</span>}
+            </div>
+          )}
+        </div>
+        <div className="waveform">
+          {WAVE_BARS.map((h, i) => {
+            const pct = i / WAVE_BARS.length * 100;
+            const played = pct <= playPct;
+            return <div key={i} className={"bar " + (played ? "played" : "")} style={{ height: `${h}%` }}></div>;
+          })}
+        </div>
+        <div className="tracks">
+          {layers.map((L) =>
+          <TimelineRow key={L.id} layer={L} selection={selection} onSelect={onSelect} onResize={onResize} onDelete={onDelete} />
+          )}
+        </div>
+        <div className="playhead-line" style={{ left: `calc(100px + (100% - 100px - 10px) * ${playPct} / 100)` }} />
+      </div>
+    </div>);
+
+};
+
+// ───────── Editor screen ─────────
+
+const EditorScreen = ({ go }) => {
+  const [time, setTime] = React.useState(38.4);
+  const [playing, setPlaying] = React.useState(false);
+  const [selection, setSelection] = React.useState([6, 7]);
+  const [layers, setLayers] = React.useState(INITIAL_LAYERS);
+  const [selItem, setSelItem] = React.useState({ layerId: "L-fg-1", itemId: "fg-002" });
+  const [modal, setModal] = React.useState(null); // {kind:"assign", range, edit?} | {kind:"subtitles"}
+  const [resolutionKey, setResolutionKey] = React.useState("1080p");
+  const [fit, setFit] = React.useState("fit");
+  const [showLayersMenu, setShowLayersMenu] = React.useState(false);
+  const [contextMenu, setContextMenu] = React.useState(null); // {x,y,sentenceIdx}
+  const [subSettings, setSubSettings] = React.useState({ burnin: true, pos: "bottom", font: "Inter", size: 44, bg: "shadow", maxChars: 42 });
+  const [draft, setDraft] = React.useState(null); // null | { progress: 0..100, stage, done?: boolean }
+
+  // Simulated draft render — drives the progress bar under the editor toolbar.
+  React.useEffect(() => {
+    if (!draft || draft.done || draft.cancelled) return;
+    const id = setInterval(() => {
+      setDraft((d) => {
+        if (!d) return d;
+        const next = Math.min(100, d.progress + (1.6 + Math.random() * 1.4));
+        const stage =
+          next < 18 ? "verifying cache" :
+          next < 55 ? "pre-rendering clips" :
+          next < 70 ? "building subtitles.srt" :
+          next < 95 ? "ffmpeg compose" : "muxing audio";
+        if (next >= 100) {
+          return { ...d, progress: 100, stage: "done", done: true, finishedAt: Date.now() };
+        }
+        return { ...d, progress: next, stage };
+      });
+    }, 180);
+    return () => clearInterval(id);
+  }, [draft]);
+
+  // Auto-dismiss the bar 2.6s after completion.
+  React.useEffect(() => {
+    if (!draft?.done) return;
+    const id = setTimeout(() => setDraft(null), 2600);
+    return () => clearTimeout(id);
+  }, [draft?.done]);
+
+  const startDraft = () => {
+    if (draft && !draft.done) return; // already running
+    setDraft({ progress: 0, stage: "verifying cache" });
+  };
+  const cancelDraft = () => setDraft(null);
+
+  React.useEffect(() => {
+    if (!playing) return;
+    let raf,last = performance.now();
+    const tick = (now) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      setTime((t) => {
+        const nt = t + dt;
+        return nt >= PROJECT_DURATION ? 0 : nt;
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+
+  React.useEffect(() => {
+    const onDocClick = () => {setContextMenu(null);setShowLayersMenu(false);};
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
+
+  const currentSentence = React.useMemo(() => {
+    const s = SENTENCES.find((s) => time >= s.start && time <= s.end);
+    return s ? s.idx : SENTENCES.find((s) => time < s.start)?.idx ?? SENTENCES.length;
+  }, [time]);
+
+  const onSentenceSelect = (idx, e) => {
+    if (e.shiftKey && selection.length > 0) {
+      const lo = Math.min(selection[0], idx);
+      const hi = Math.max(selection[selection.length - 1], idx);
+      setSelection(Array.from({ length: hi - lo + 1 }, (_, i) => lo + i));
+    } else {
+      setSelection([idx]);
+      setTime(SENTENCES[idx - 1].start);
+    }
+  };
+
+  const onSentenceContext = (idx, e) => {
+    setContextMenu({ x: e.clientX, y: e.clientY, sentenceIdx: idx });
+  };
+
+  // ── layer mutations ──
+  const patchItem = (layerId, itemId, patch) => {
+    setLayers((ls) => ls.map((L) => L.id !== layerId ? L : {
+      ...L, items: L.items.map((it) => it.id !== itemId ? it : { ...it, ...patch })
+    }));
+  };
+
+  const deleteItem = (layerId, itemId) => {
+    setLayers((ls) => {
+      const next = ls.map((L) => L.id !== layerId ? L : { ...L, items: L.items.filter((it) => it.id !== itemId) });
+      // auto-delete empty fg/pip layers
+      const cleaned = next.filter((L) => !((L.kind === "fg" || L.kind === "pip") && L.items.length === 0));
+      return cleaned;
+    });
+    setSelItem(null);
+  };
+
+  const resizeItem = (layerId, itemId, side, dPct) => {
+    const dt = dPct / 100 * PROJECT_DURATION;
+    setLayers((ls) => ls.map((L) => L.id !== layerId ? L : {
+      ...L, items: L.items.map((it) => {
+        if (it.id !== itemId) return it;
+        if (side === "l") return { ...it, start: Math.max(0, Math.min(it.end - 0.5, it.start + dt)) };
+        return { ...it, end: Math.min(PROJECT_DURATION, Math.max(it.start + 0.5, it.end + dt)) };
+      })
+    }));
+  };
+
+  const onAssignSubmit = (data) => {
+    // Edit mode: update existing item in place (asset/range/motion/etc.)
+    if (data.editing) {
+      setLayers((ls) => ls.map((L) => L.id !== data.editing.layerId ? L : {
+        ...L,
+        items: L.items.map((it) => it.id !== data.editing.itemId ? it : {
+          ...it,
+          mediaId: data.mediaId,
+          sentences: data.sentences,
+          start: data.start,
+          end: data.end,
+          motion: data.motion,
+          transitions: data.transitions,
+          pip: data.pip
+        })
+      }));
+      setSelItem({ layerId: data.editing.layerId, itemId: data.editing.itemId });
+      return;
+    }
+    const id = `${data.comp === "pip" ? "pip" : "fg"}-${Math.random().toString(36).slice(2, 7)}`;
+    const newItem = {
+      id,
+      mediaId: data.mediaId,
+      sentences: data.sentences,
+      start: data.start,
+      end: data.end,
+      motion: data.motion,
+      transitions: data.transitions,
+      pip: data.pip
+    };
+    setLayers((ls) => {
+      let target = ls.find((L) => L.id === data.zTarget);
+      if (target && target.items) {
+        return ls.map((L) => L.id === data.zTarget ? { ...L, items: [...L.items, newItem] } : L);
+      }
+      // create new layer
+      const fgCount = ls.filter((L) => L.kind === "fg").length;
+      const pipCount = ls.filter((L) => L.kind === "pip").length;
+      const isPip = data.comp === "pip";
+      const newLayer = {
+        id: (isPip ? "L-pip-" : "L-fg-") + Math.random().toString(36).slice(2, 5),
+        kind: isPip ? "pip" : "fg",
+        name: isPip ? `PiP · z${pipCount + 3}` : `Foreground · z${fgCount + 1}`,
+        items: [newItem]
+      };
+      // insert PiP layers above FG, FG layers above BG, SUB stays at top
+      const subIdx = ls.findIndex((L) => L.kind === "sub");
+      const bgIdx = ls.findIndex((L) => L.kind === "bg");
+      const insertAt = isPip ? subIdx + 1 : bgIdx;
+      const next = [...ls];
+      next.splice(insertAt, 0, newLayer);
+      return next;
+    });
+    setSelItem({ layerId: data.zTarget !== "__new__" ? data.zTarget : null, itemId: id });
+  };
+
+  // ── BG add ──
+  const addBackground = () => {
+    setLayers((ls) => {
+      const bg = ls.find((L) => L.kind === "bg");
+      if (bg) return ls;
+      const newBG = { id: "L-bg", kind: "bg", name: "Background", items: [{
+          id: "bg-001", mediaId: "m6", sentences: [1, SENTENCES.length], start: 0, end: PROJECT_DURATION,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "cut", out: "cut" }, crossfade: 0.6
+        }] };
+      return [...ls, newBG];
+    });
+  };
+
+  const removeBackground = () => setLayers((ls) => ls.filter((L) => L.kind !== "bg"));
+
+  const resolution = RESOLUTIONS[resolutionKey];
+  const subtitleText = SENTENCES[currentSentence - 1]?.text || "";
+
+  const layerCounts = {
+    fg: layers.filter((L) => L.kind === "fg").length,
+    pip: layers.filter((L) => L.kind === "pip").length
+  };
+
+  return (
+    <div className="screen" data-screen-label="03 Editor" style={{ display: "flex", flexDirection: "column", overflow: "hidden", height: "100%" }}>
+      <div className="editor" style={{ flex: 1, minHeight: 0 }}>
+        <div className="editor-bar">
+          <div className="title">
+            <button className="iconbtn" onClick={() => go("launcher")}><Icon name="folderOpen" /></button>
+            <h2>Tokyo Essay</h2>
+            <span className="crumb">E:\video-projects\tokyo-essay</span>
+          </div>
+          <div className="center">
+            <button className="btn sm ghost" onClick={() => setModal({ kind: "subtitles" })}>
+              <Icon name="type" size={13} /> Subtitles
+            </button>
+            <button className="btn sm ghost" onClick={() => setModal({ kind: "bg" })} title="Add or change background asset">
+              <Icon name="image" size={13} /> {layers.find((L) => L.kind === "bg") ? "Change BG" : "Add BG"}
+            </button>
+          </div>
+          <div className="right">
+            <span className="tag info"><span className="dot info" />cache 24/24</span>
+            <button className="btn"><Icon name="save" size={13} /> Save</button>
+            <button className="btn" onClick={startDraft} disabled={draft && !draft.done}>
+              {draft && !draft.done ? `Drafting · ${Math.round(draft.progress)}%` : "Render Draft"}
+            </button>
+            <button className="btn accent" onClick={() => go("render")}><Icon name="film" size={13} /> Render Final</button>
+          </div>
+        </div>
+
+        {draft &&
+        <div className={"draft-bar " + (draft.done ? "draft-bar-done" : "")} role="progressbar"
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(draft.progress)}>
+            <div className="draft-bar-fill" style={{ width: `${draft.progress}%` }} />
+            <div className="draft-bar-meta">
+              <span className="stage" style={{ background: 'none', color: 'white' }}>
+                <span style={{ color: 'inherit' }}>{draft.done ? "Draft ready" : "Rendering draft"}</span>
+                <span className="muted"  style={{ color: 'inherit' }}>: {draft.stage}</span>
+              </span>
+              <span className="pct">{Math.round(draft.progress)}%</span>
+              {!draft.done &&
+              <button className="btn ghost xs" onClick={cancelDraft}>Cancel</button>
+              }
+            </div>
+          </div>
+        }
+
+        <div className="editor-body">
+          <Transcript
+            sentences={SENTENCES}
+            selection={selection}
+            currentSentence={currentSentence}
+            onSelect={onSentenceSelect}
+            onContext={onSentenceContext} />
+          
+
+          <div className="center-pane">
+            <Preview
+              playing={playing} time={time}
+              onTogglePlay={() => setPlaying((p) => !p)}
+              currentSentence={currentSentence}
+              layers={layers}
+              resolution={resolution}
+              fit={fit}
+              subtitleText={subtitleText}
+              onAddBG={addBackground}
+              onOpenSubtitles={() => setModal({ kind: "subtitles" })} />
+            
+            {/* Preview controls strip */}
+            <div className="preview-controls">
+              <div className="pc-left">
+                <div className="seg sm">
+                  <button className={resolutionKey === "1080p" ? "on" : ""} onClick={() => setResolutionKey("1080p")}>1080p</button>
+                  <button className={resolutionKey === "720p" ? "on" : ""} onClick={() => setResolutionKey("720p")}>720p</button>
+                  <button className={resolutionKey === "vert" ? "on" : ""} onClick={() => setResolutionKey("vert")}>9:16</button>
+                </div>
+                <div className="seg sm">
+                  <button className={fit === "fit" ? "on" : ""} onClick={() => setFit("fit")}>Fit</button>
+                  <button className={fit === "actual" ? "on" : ""} onClick={() => setFit("actual")}>Actual</button>
+                </div>
+              </div>
+              <div className="pc-right">
+                <div className="layers-pop-wrap">
+                  <button className="btn sm ghost" onClick={(e) => {e.stopPropagation();setShowLayersMenu((s) => !s);}}>
+                    <Icon name="layers" size={13} /> Layers · {layers.length}
+                  </button>
+                  {showLayersMenu &&
+                  <div className="layers-pop" onClick={(e) => e.stopPropagation()}>
+                      <div className="lp-head">Layer order · top renders on top</div>
+                      <div className="lp-rows">
+                      {layers.map((L) =>
+                      <div key={L.id} className="lp-row" onClick={() => {if (L.items[0]) setSelItem({ layerId: L.id, itemId: L.items[0].id });setShowLayersMenu(false);}}>
+                          <span className={"ldot " + L.kind} />
+                          <span className="name">{L.name}</span>
+                          <span className="ct">{L.items.length} {L.items.length === 1 ? "item" : "items"}</span>
+                          {L.kind === "bg" && <button className="iconbtn xs" onClick={(e) => {e.stopPropagation();removeBackground();}} title="Remove BG"><Icon name="trash" size={11} /></button>}
+                        </div>
+                      )}
+                      </div>
+                      <div className="lp-foot">
+                        <button className="btn sm ghost" onClick={(e) => {e.stopPropagation();setShowLayersMenu(false);setContextMenu(null);setModal({ kind: "assign", range: [currentSentence, currentSentence] });}}>+ Add layer item</button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <Timeline
+              layers={layers} time={time} onSeek={setTime}
+              selection={selItem}
+              onSelect={(layerId, itemId) => setSelItem({ layerId, itemId })}
+              onResize={resizeItem}
+              onDelete={deleteItem} />
+            
+          </div>
+
+          <div className="tcol rail">
+            <div className="rail-tabs">
+              <button className="on">Inspector</button>
+            </div>
+            <div className="rail-body">
+              <Inspector selection={selItem} layers={layers}
+              onPatch={patchItem} onDelete={deleteItem}
+              onChangeAsset={(layer, item) => setModal({
+                kind: "assign",
+                range: item.sentences,
+                editing: {
+                  layerId: layer.id, itemId: item.id, kind: layer.kind,
+                  mediaId: item.mediaId, sentences: item.sentences,
+                  motion: item.motion, transitions: item.transitions, pip: item.pip
+                }
+              })}
+              onChangeBGAsset={() => setModal({ kind: "bg" })} />
+              
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {contextMenu &&
+      <div className="ctx-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          <button onClick={() => {setModal({ kind: "assign", range: [contextMenu.sentenceIdx, contextMenu.sentenceIdx] });setContextMenu(null);}}>
+            <Icon name="upload" size={12} /> Assign media to range…
+          </button>
+          <button onClick={() => {setSelection([contextMenu.sentenceIdx]);setTime(SENTENCES[contextMenu.sentenceIdx - 1].start);setContextMenu(null);}}>
+            <Icon name="play" size={12} /> Play from here
+          </button>
+          <div className="sep" />
+          <button className="muted" onClick={() => setContextMenu(null)}>Cancel</button>
+        </div>
+      }
+
+      <AssignModal
+        open={modal?.kind === "assign"}
+        onClose={() => setModal(null)}
+        onSubmit={onAssignSubmit}
+        initialRange={modal?.range}
+        layers={layers}
+        editing={modal?.editing} />
+      
+      <BGModal
+        open={modal?.kind === "bg"}
+        onClose={() => setModal(null)}
+        bgItem={layers.find((L) => L.kind === "bg")?.items[0]}
+        onApply={(data) => {
+          setLayers((ls) => {
+            const exists = ls.find((L) => L.kind === "bg");
+            if (exists) {
+              return ls.map((L) => L.kind !== "bg" ? L : {
+                ...L, items: L.items.map((it) => ({ ...it, mediaId: data.mediaId, motion: data.motion, crossfade: data.crossfade }))
+              });
+            }
+            const newBG = { id: "L-bg", kind: "bg", name: "Background", items: [{
+                id: "bg-001", mediaId: data.mediaId, sentences: [1, SENTENCES.length], start: 0, end: PROJECT_DURATION,
+                motion: data.motion, transitions: { in: "cut", out: "cut" }, crossfade: data.crossfade
+              }] };
+            return [...ls, newBG];
+          });
+          setModal(null);
+        }} />
+      
+      <SubtitlesModal
+        open={modal?.kind === "subtitles"}
+        onClose={() => setModal(null)}
+        settings={subSettings}
+        onSave={setSubSettings} />
+      
+    </div>);
+
+};
+
+window.EditorScreen = EditorScreen;

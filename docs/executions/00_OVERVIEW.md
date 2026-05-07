@@ -17,6 +17,7 @@
 4. **`STATE.md`** — current progress checklist. Read this to know what's done and what's next.
 5. **`01_ENVIRONMENT.md`** — prerequisites verification + dependency installation.
 6. **Milestone files** (`02_…` through `07_…`) — execute tasks in order.
+7. **`docs/prototype/v1` is the prototype code, [SPEC.md](../prototype/v1/SPEC.md) is the specification of interactions**, if you are not able to browse the visual page in the browser, I have already run it at `http://192.168.31.48:8000/app.html`, using MCP tool to check the real interactions out 
 
 ### 0.2 Per-session protocol (every time an agent picks up work)
 
@@ -46,7 +47,8 @@
 5. **Never commit secrets** (API keys, tokens, `.env` files). The repo's `.gitignore` blocks `.env*` — do not weaken it.
 6. **Always run all verification commands** for the task, not just the first one.
 7. **One task per commit.** Atomic, revertable history.
-8. **Stop and ask** if a task's instructions conflict with what you find on disk. Add a `## Blocked` entry to `STATE.md` and stop.
+8. Highly replicate the fidelity of the visual effect presented by the prototype `docs/prototype/v1`
+9. **Stop and ask** if a task's instructions conflict with what you find on disk. Add a `## Blocked` entry to `STATE.md` and stop.
 
 ### 0.4 Task ID grammar
 

@@ -65,7 +65,7 @@ If the spec says "use WhisperX" and the previous agent blocked because WhisperX 
 If you find that:
 - A file the spec says should exist, doesn't.
 - A file exists with content the spec doesn't describe.
-- The repo is on a branch other than `main`.
+- The repo is on a branch other than `master`.
 - A previous agent added a dependency not on the approved list in `CONVENTIONS.md`.
 
 …**stop and add a `## Blocked` entry** describing what you found. Do not "fix" the inconsistency unilaterally.

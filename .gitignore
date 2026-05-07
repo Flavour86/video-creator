@@ -1,31 +1,48 @@
-# IDE
-.history
-.vscode
-.idea
-.cursor/
-
-# Node.js
-node_modules
-dist
-build
-.turbo
-.husky
-
-# Next.js
-.next
-
-# Logs
+# Node
+node_modules/
+.next/
+out/
+dist/
 *.log
 
-# test
-coverage*
-playwright-report
-test-results
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# graphify
-graphify-out/cache
-app/web/graphify-out/cache
+# Project-local
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Per-project caches (when test fixtures are committed)
+**/.vc/
+
+# Build artifacts
+*.egg-info/
+build/
+
+# Existing local tool caches
+.history/
+.cursor/
+.turbo/
+.husky/
+coverage*/
+playwright-report/
+test-results/
+graphify-out/cache/
+app/web/graphify-out/cache/
 .graphify*
-
-# files
 *.tsbuildinfo

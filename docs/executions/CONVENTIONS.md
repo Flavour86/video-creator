@@ -117,7 +117,7 @@ Per user policy: **never** add `Co-Authored-By`, `Signed-off-by`, or any other a
 
 ## 4. Branch and PR strategy (solo dev)
 
-- Trunk-based. All work on `main`.
+- Trunk-based. All work on `master`.
 - One task = one commit, pushed directly. No PRs in Phase 1.
 - A task that produces a working state but defers polish (e.g., "T3.3 done; T3.4 will improve error UI") is allowed; mark `[~]` in STATE.md and finish the deferred work in the next task.
 

@@ -1,0 +1,26 @@
+{
+  "name": "video-creator",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first AI-augmented video creator.",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\" --ignore-path .gitignore",
+    "gen:types": "pnpm -F @vc/shared-schemas gen:ts",
+    "gen:py": "pnpm -F @vc/shared-schemas gen:py"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3",
+    "prettier": "^3.3.0",
+    "tsx": "^4.19.0"
+  },
+  "packageManager": "pnpm@10.0.0"
+}

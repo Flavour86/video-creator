@@ -8,23 +8,23 @@
 
 ## Current focus
 
-**Next task**: T0.3 (`01_ENVIRONMENT.md`)
+**Next task**: T1.1 (`02_MILESTONE_SKELETON.md`) — in progress
 **Last commit**: (none yet)
-**Last updated**: 2026-05-06T09:13Z
+**Last updated**: 2026-05-06T09:38Z
 
 ---
 
 ## Progress
 
 ### M0 — Environment (`01_ENVIRONMENT.md`)
-- [x] T0.1 Verify Node.js 22+ — environment verified (no commit)
-- [x] T0.2 Verify Python 3.11 — environment verified (no commit)
-- [ ] T0.3 Verify ffmpeg ≥ 6.0
-- [ ] T0.4 Verify Git
-- [ ] T0.5 Detect GPU and install correct PyTorch
+- [s] T0.1 Verify Node.js 22+ — environment verified (no commit)
+- [s] T0.2 Verify Python 3.11 — environment verified (no commit)
+- [s] T0.3 Verify ffmpeg ≥ 6.0 — environment verified (no commit)
+- [s] T0.4 Verify Git — environment verified (no commit)
+- [s] T0.5 Detect GPU and install correct PyTorch — environment verified (no commit)
 
 ### M1 — Skeleton (`02_MILESTONE_SKELETON.md`)
-- [ ] T1.1 Initialize pnpm monorepo
+- [~] T1.1 Initialize pnpm monorepo
 - [ ] T1.2 Bootstrap Next.js app (apps/web)
 - [ ] T1.3 Bootstrap FastAPI app (apps/server)
 - [ ] T1.4 Create shared-schemas package
@@ -82,7 +82,11 @@
 
 ## Notes log
 
-(empty — agents append timestamped notes here when relevant)
+2026-05-06T09:38Z [agent: codex] T1.1:
+- What I changed: created root scaffold files, ran `pnpm install`, created `scripts/.env-detect`, and updated execution docs to use `master` as the trunk branch per user instruction.
+- What works: Milestone 0 verification passed; `python --version` resolves to Python 3.11.9 from this repo; root `pnpm install` completed and produced `pnpm-lock.yaml`.
+- What is incomplete: T1.1 verification and commit have not been run because the user asked to stop after scaffolding before prototype work.
+- Next agent should: after prototype work, resume T1.1 by running verification, committing the scaffold, and marking T1.1 complete.
 
 ---
 

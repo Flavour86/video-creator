@@ -37,7 +37,7 @@ If both return `True` and contain the workspace config below, skip.
 
 #### 1. Initialize Git (if not already)
 ```powershell
-git init -b main
+git init -b master
 ```
 
 #### 2. Create `package.json` (root)
