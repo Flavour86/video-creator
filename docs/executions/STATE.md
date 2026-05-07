@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T5.4 (`06_MILESTONE_FOREGROUND_RENDER.md`)
-**Last commit**: c6e4a9d
-**Last updated**: 2026-05-07T12:08Z
+**Next task**: T5.5 (`06_MILESTONE_FOREGROUND_RENDER.md`)
+**Last commit**: 718d3db
+**Last updated**: 2026-05-07T12:13Z
 
 ---
 
@@ -57,7 +57,7 @@
 - [x] T5.1 Drop image onto sentence range (foreground item creation) — commit ed98508
 - [x] T5.2 Asset cache (per-clip pre-render) 鈥?commit 5e7c61e
 - [x] T5.3 Filtergraph builder 鈥?commit c6e4a9d
-- [ ] T5.4 Compose endpoint (single ffmpeg invocation)
+- [x] T5.4 Compose endpoint (single ffmpeg invocation) 鈥?commit 718d3db
 - [ ] T5.5 WebSocket render progress
 - [ ] T5.6 Render history UI
 
