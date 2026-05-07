@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -135,3 +136,37 @@ async def open_project(payload: OpenProjectRequest) -> RecentProject | JSONRespo
 async def delete_recent_project(payload: OpenProjectRequest) -> dict[str, bool]:
     remove_recent(Path(payload.path))
     return {"ok": True}
+
+
+class PutLayersRequest(BaseModel):
+    layers: list[Any]
+
+
+class PutLayersResponse(BaseModel):
+    layers: list[Any]
+
+
+@router.get("/load", response_model=None)
+async def load_project_data(project: str = Query(...)) -> JSONResponse:
+    project_json = Path(project) / "project.json"
+    if not project_json.exists():
+        return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
+    data = json.loads(project_json.read_text(encoding="utf-8"))
+    return JSONResponse(data)
+
+
+@router.put("/layers", response_model=None)
+async def put_layers(
+    payload: PutLayersRequest,
+    project: str = Query(...),
+) -> PutLayersResponse | JSONResponse:
+    project_dir = Path(project)
+    project_json = project_dir / "project.json"
+    if not project_json.exists():
+        return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
+
+    data: dict[str, Any] = json.loads(project_json.read_text(encoding="utf-8"))
+    data["layers"] = payload.layers
+    data["updated_at"] = datetime.now(UTC).isoformat()
+    project_json.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return PutLayersResponse(layers=payload.layers)
