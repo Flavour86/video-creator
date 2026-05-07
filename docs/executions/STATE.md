@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T5.6 (`06_MILESTONE_FOREGROUND_RENDER.md`)
-**Last commit**: 1b32990
-**Last updated**: 2026-05-07T12:29Z
+**Next task**: T6.1 (`07_MILESTONE_POLISH.md`)
+**Last commit**: c4685bb
+**Last updated**: 2026-05-07T12:34Z
 
 ---
 
@@ -59,7 +59,7 @@
 - [x] T5.3 Filtergraph builder 鈥?commit c6e4a9d
 - [x] T5.4 Compose endpoint (single ffmpeg invocation) 鈥?commit 718d3db
 - [x] T5.5 WebSocket render progress 鈥?commit 1b32990
-- [ ] T5.6 Render history UI
+- [x] T5.6 Render history UI 鈥?commit c4685bb
 
 ### M6 — Polish (`07_MILESTONE_POLISH.md`)
 - [ ] T6.1 Final render preset
