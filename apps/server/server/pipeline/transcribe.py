@@ -25,18 +25,18 @@ def _device() -> str:
         return "cpu"
 
 
-def _load_model(device: str) -> tuple[Any, Any]:
+def _load_model(device: str, language: str = "en") -> tuple[Any, Any]:
     global _align_model, _align_metadata, _align_device
     if _align_model is not None and _align_device == device:
         return _align_model, _align_metadata
     import whisperx  # noqa: PLC0415
 
-    model, metadata = whisperx.load_align_model(language_code="en", device=device)
+    model, metadata = whisperx.load_align_model(language_code=language, device=device)
     _align_model, _align_metadata, _align_device = model, metadata, device
     return model, metadata
 
 
-def _run_align(audio_path: Path, sentences: list[Sentence], device: str) -> AlignmentResult:
+def _run_align(audio_path: Path, sentences: list[Sentence], device: str, language: str = "en") -> AlignmentResult:
     import whisperx  # noqa: PLC0415
 
     audio = whisperx.load_audio(str(audio_path))
@@ -49,7 +49,7 @@ def _run_align(audio_path: Path, sentences: list[Sentence], device: str) -> Alig
     ]
 
     try:
-        model, metadata = _load_model(device)
+        model, metadata = _load_model(device, language)
         result = whisperx.align(
             input_segments, model, metadata, audio, device,
             return_char_alignments=False,
@@ -57,7 +57,7 @@ def _run_align(audio_path: Path, sentences: list[Sentence], device: str) -> Alig
     except RuntimeError as exc:
         if "CUDA out of memory" not in str(exc) or device == "cpu":
             raise
-        model, metadata = _load_model("cpu")
+        model, metadata = _load_model("cpu", language)
         result = whisperx.align(
             input_segments, model, metadata, audio, "cpu",
             return_char_alignments=False,
@@ -94,8 +94,9 @@ def _run_align(audio_path: Path, sentences: list[Sentence], device: str) -> Alig
 async def align(
     audio_path: Path,
     sentences: list[Sentence],
+    language: str = "en",
     device: str | None = None,
 ) -> AlignmentResult:
     """Run WhisperX forced alignment in a thread pool."""
     dev = device or _device()
-    return await asyncio.to_thread(_run_align, audio_path, sentences, dev)
+    return await asyncio.to_thread(_run_align, audio_path, sentences, dev, language)
