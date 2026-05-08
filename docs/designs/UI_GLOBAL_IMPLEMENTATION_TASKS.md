@@ -159,7 +159,7 @@ at `1440x1000` first, then again near `950px` width.
       live in a client component.
     - Suggested component: `apps/web/components/app-shell/AppShell.tsx`.
 
-27. `[FE]` Implement the compact header.
+27. [x] `[FE]` Implement the compact header.
     - Height about `44px`.
     - Full viewport width.
     - Surface uses `--bg-1`.

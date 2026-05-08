@@ -22,6 +22,22 @@ describe("AppShell", () => {
     expect(screen.getByText("Page content")).toBeInTheDocument();
   });
 
+  test("renders a compact full-width tokenized header surface", () => {
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    const header = screen.getByRole("banner");
+
+    expect(header.className).toContain("h-11");
+    expect(header.className).toContain("w-full");
+    expect(header.className).toContain("bg-(--bg-1)");
+    expect(header.className).toContain("border-(--line)");
+    expect(header.className).not.toMatch(/rounded|shadow/);
+  });
+
   test("keeps RootLayout server-rendered while delegating shell UI to AppShell", () => {
     const layoutSource = readFileSync(join(process.cwd(), "app", "layout.tsx"), "utf8");
 

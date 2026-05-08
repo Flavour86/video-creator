@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 27 - implement compact header
-**Last commit**: current HEAD (UI global task 26)
-**Last updated**: 2026-05-08T10:13Z
+**Next task**: UI global task 28 - implement left brand cluster
+**Last commit**: current HEAD (UI global task 27)
+**Last updated**: 2026-05-08T10:15Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:15Z [agent: codex] UI global task 27:
+- What I changed: tightened `AppShell` to a compact `h-11` full-width header
+  using the `--bg-1` surface and token border, with no rounded/floating treatment.
+- What works: `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: brand cluster, centered segmented nav, `/tokens`, theme toggle,
+  language selector, and status bar remain for tasks 28-33. Existing unrelated warnings
+  remain from Radix dialog descriptions, `<img>` usage, `next lint` deprecation,
+  and Git line-ending notices for `AppShell` files.
+- Next agent should: continue with UI global task 28 via TDD.
 
 2026-05-08T10:13Z [agent: codex] UI global task 26:
 - What I changed: added a client `AppShell` boundary, moved the simple global
