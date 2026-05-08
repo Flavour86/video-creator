@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 36 - add global theme state
-**Last commit**: current HEAD (UI global task 35)
-**Last updated**: 2026-05-08T10:56Z
+**Next task**: UI global task 37 - prevent theme flash where practical
+**Last commit**: current HEAD (UI global task 36)
+**Last updated**: 2026-05-08T11:00Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:00Z [agent: codex] UI global task 36:
+- What I changed: replaced the temporary AppShell theme state with a global
+  Zustand theme store that defaults to dark, persists `vc.theme` in `localStorage`,
+  and applies light mode through `document.documentElement.dataset.theme`.
+- What works: `pnpm -F @vc/web test -- lib/theme/theme-store.test.ts components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: pre-hydration flash prevention remains task 37. Existing
+  unrelated warnings remain from `<img>` usage and `next lint` deprecation.
+- Next agent should: continue with UI global task 37 via TDD.
 
 2026-05-08T10:56Z [agent: codex] UI global task 35:
 - What I changed: verified the implementation header with Chrome DevTools against

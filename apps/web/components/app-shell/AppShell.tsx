@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { IconButton, Kbd, SegmentedControl, StatusTag } from "@/components/ui";
+import { useThemeStore } from "@/lib/theme/theme-store";
 
 export type AppShellProps = {
   children: ReactNode;
@@ -25,7 +26,6 @@ const languageItems = [
 ] as const;
 
 type NavValue = (typeof navItems)[number]["value"];
-type ThemeMode = "dark" | "light";
 type LanguageMode = (typeof languageItems)[number]["value"];
 
 function valueForPathname(pathname: string | null): NavValue {
@@ -47,30 +47,16 @@ function DefaultStatusContent() {
 
 export function AppShell({ children, statusContent }: AppShellProps) {
   const pathname = usePathname();
-  const [theme, setTheme] = useState<ThemeMode>("dark");
   const [language, setLanguage] = useState<LanguageMode>("en");
+  const hydrateTheme = useThemeStore((state) => state.hydrateTheme);
+  const theme = useThemeStore((state) => state.theme);
+  const toggleTheme = useThemeStore((state) => state.toggleTheme);
 
   useEffect(() => {
-    const currentTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
-
-    setTheme(currentTheme);
-  }, []);
+    hydrateTheme();
+  }, [hydrateTheme]);
 
   const ThemeIcon = theme === "light" ? Moon : Sun;
-
-  function handleThemeToggle() {
-    setTheme((currentTheme) => {
-      const nextTheme = currentTheme === "light" ? "dark" : "light";
-
-      if (nextTheme === "light") {
-        document.documentElement.dataset.theme = "light";
-      } else {
-        delete document.documentElement.dataset.theme;
-      }
-
-      return nextTheme;
-    });
-  }
 
   return (
     <div className="min-h-screen bg-(--bg-0) pb-(--space-9) text-(--text)">
@@ -105,7 +91,7 @@ export function AppShell({ children, statusContent }: AppShellProps) {
               className="h-8 w-8 rounded-(--r-sm)"
               icon={ThemeIcon}
               label="Toggle theme"
-              onClick={handleThemeToggle}
+              onClick={toggleTheme}
             />
             <SegmentedControl
               ariaLabel="Language"

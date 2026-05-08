@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { THEME_STORAGE_KEY, useThemeStore } from "@/lib/theme/theme-store";
 import { AppShell } from "./AppShell";
 
 let mockPathname = "/";
@@ -15,7 +16,9 @@ vi.mock("next/navigation", () => ({
 describe("AppShell", () => {
   beforeEach(() => {
     mockPathname = "/";
+    window.localStorage.clear();
     delete document.documentElement.dataset.theme;
+    useThemeStore.setState({ hydrated: false, theme: "dark" });
   });
 
   test("renders the global shell navigation and page content", () => {
@@ -110,6 +113,7 @@ describe("AppShell", () => {
     fireEvent.click(toggle);
 
     expect(document.documentElement.dataset.theme).toBe("light");
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
     expect(toggle.querySelector(".lucide-moon")).toBeInTheDocument();
   });
 

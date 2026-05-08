@@ -214,7 +214,7 @@ at `1440x1000` first, then again near `950px` width.
 
 ## 4. Theme State
 
-36. `[FE]` Add global theme state.
+36. [x] `[FE]` Add global theme state.
     - Default: dark.
     - Persist in `localStorage`.
     - Apply by setting `document.documentElement.dataset.theme`.
