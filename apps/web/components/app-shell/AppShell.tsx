@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Moon, Sun } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { IconButton, Kbd, SegmentedControl, StatusTag } from "@/components/ui";
+import { useLanguageStore, type LanguageMode } from "@/lib/i18n/language-store";
 import { useThemeStore } from "@/lib/theme/theme-store";
 
 export type AppShellProps = {
@@ -26,7 +27,6 @@ const languageItems = [
 ] as const;
 
 type NavValue = (typeof navItems)[number]["value"];
-type LanguageMode = (typeof languageItems)[number]["value"];
 
 function valueForPathname(pathname: string | null): NavValue {
   const current = pathname ?? "/";
@@ -47,14 +47,17 @@ function DefaultStatusContent() {
 
 export function AppShell({ children, statusContent }: AppShellProps) {
   const pathname = usePathname();
-  const [language, setLanguage] = useState<LanguageMode>("en");
+  const hydrateLanguage = useLanguageStore((state) => state.hydrateLanguage);
+  const language = useLanguageStore((state) => state.language);
+  const setLanguage = useLanguageStore((state) => state.setLanguage);
   const hydrateTheme = useThemeStore((state) => state.hydrateTheme);
   const theme = useThemeStore((state) => state.theme);
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
 
   useEffect(() => {
+    hydrateLanguage();
     hydrateTheme();
-  }, [hydrateTheme]);
+  }, [hydrateLanguage, hydrateTheme]);
 
   const ThemeIcon = theme === "light" ? Moon : Sun;
 

@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 40 - add global language state
-**Last commit**: current HEAD (UI global task 39)
-**Last updated**: 2026-05-08T11:11Z
+**Next task**: UI global task 41 - add frontend dictionaries
+**Last commit**: current HEAD (UI global task 40)
+**Last updated**: 2026-05-08T11:14Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:14Z [agent: codex] UI global task 40:
+- What I changed: added a global language store with `en` / `zh`, persisted
+  `vc.language` in `localStorage`, and wired the AppShell language selector to
+  apply `document.documentElement.lang`.
+- What works: `pnpm -F @vc/web test -- lib/i18n/language-store.test.ts components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: dictionaries and copy replacement remain tasks 41-42.
+- Next agent should: continue with UI global task 41 via TDD.
 
 2026-05-08T11:11Z [agent: codex] UI global task 39:
 - What I changed: fixed Launcher route-level token leaks found during dark/light

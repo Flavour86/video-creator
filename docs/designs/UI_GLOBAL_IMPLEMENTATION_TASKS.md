@@ -232,7 +232,7 @@ at `1440x1000` first, then again near `950px` width.
 
 ## 5. Language State And Localization
 
-40. `[FE]` Add global language state.
+40. [x] `[FE]` Add global language state.
     - Supported values: `en`, `zh`.
     - Persist in `localStorage`.
     - Apply `lang` attribute to the `<html>` element.

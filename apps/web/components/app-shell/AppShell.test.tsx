@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { LANGUAGE_STORAGE_KEY, useLanguageStore } from "@/lib/i18n/language-store";
 import { THEME_STORAGE_KEY, useThemeStore } from "@/lib/theme/theme-store";
 import { AppShell } from "./AppShell";
 
@@ -18,6 +19,8 @@ describe("AppShell", () => {
     mockPathname = "/";
     window.localStorage.clear();
     delete document.documentElement.dataset.theme;
+    document.documentElement.lang = "en";
+    useLanguageStore.setState({ hydrated: false, language: "en" });
     useThemeStore.setState({ hydrated: false, theme: "dark" });
   });
 
@@ -136,6 +139,8 @@ describe("AppShell", () => {
 
     expect(english).toHaveAttribute("aria-checked", "false");
     expect(chinese).toHaveAttribute("aria-checked", "true");
+    expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe("zh");
+    expect(document.documentElement.lang).toBe("zh");
     expect(chinese.className).toContain("bg-(--bg-4)");
   });
 
