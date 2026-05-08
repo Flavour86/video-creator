@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: Phase 1 acceptance test (`07_MILESTONE_POLISH.md`)
-**Last commit**: 770fc5e
-**Last updated**: 2026-05-08T01:51Z
+**Next task**: Phase 1 complete; awaiting user check
+**Last commit**: da6a19d
+**Last updated**: 2026-05-08T05:00Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T05:00Z [agent: codex] Phase 1 acceptance:
+- What I changed: fixed render compose duration and clip timestamp offsets,
+  cleared server lint/type failures, and built `projects/test01/project.json`
+  with cleaned transcript/media for acceptance rendering.
+- What works: `pnpm test`, `pnpm build`, and `pnpm -F @vc/server lint`
+  pass. Production launcher returned HTTP 200 on `http://localhost:3000`.
+  Draft render completed in 33.77s and Final render completed in 65.47s
+  for `projects/test01`; Final output is 1920x1080 H.264 + AAC, 300.304s,
+  no black segments, visible BG/FG/PiP/watermark/subtitles.
+- What is incomplete: user visual approval is still needed.
+- Next agent should: show the user `projects/test01/renders/r-2026-05-08-0454-bf036f.mp4`
+  and the contact sheets under `projects/test01/.vc/inspection/`.
 
 2026-05-07T06:56Z [agent: codex] M1:
 - What I changed: completed T1.3 through T1.7, including FastAPI sidecar scaffolding, CUDA PyTorch wheel correction from `.downloads`, shared schema codegen, concurrent dev runner, production launcher, readiness polling, and browser auto-open.
