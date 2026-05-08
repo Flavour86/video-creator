@@ -5,10 +5,12 @@ import importlib.util
 import platform
 import re
 import subprocess
+from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from server.db.projects import list_recent
 from server.pipeline.render import active_render_count
 from server.settings import Settings
 
@@ -42,7 +44,17 @@ class WhisperXStatus(BaseModel):
 class RuntimeHealthResponse(BaseModel):
     status: Literal["ok"]
     version: str
-    active_renders: int
+    active_renders: int = Field(
+        ge=0,
+        description="Number of render jobs currently tracked by the active render manager.",
+    )
+    cached_projects: int = Field(
+        ge=0,
+        description=(
+            "Count of the latest 500 recent projects whose project folder contains a .vc "
+            "cache directory."
+        ),
+    )
     sidecar: SidecarStatus
     python: VersionedRuntimeStatus
     ffmpeg: VersionedRuntimeStatus
@@ -55,6 +67,7 @@ def collect_runtime_health(settings: Settings) -> RuntimeHealthResponse:
         status="ok",
         version=SERVER_VERSION,
         active_renders=active_render_count(),
+        cached_projects=count_cached_projects(),
         sidecar=SidecarStatus(
             status="ready",
             address=f"http://{settings.host}:{settings.port}",
@@ -65,6 +78,10 @@ def collect_runtime_health(settings: Settings) -> RuntimeHealthResponse:
         cuda=_detect_cuda_status(),
         whisperx=_detect_whisperx_status(settings.whisperx_model),
     )
+
+
+def count_cached_projects() -> int:
+    return sum(1 for row in list_recent(limit=500) if (Path(row["path"]) / ".vc").is_dir())
 
 
 def _detect_ffmpeg_status() -> VersionedRuntimeStatus:

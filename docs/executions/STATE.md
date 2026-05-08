@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 47 - add cached project count
-**Last commit**: current HEAD (UI global task 46)
-**Last updated**: 2026-05-08T11:51Z
+**Next task**: UI global task 48 - improve recent project metadata
+**Last commit**: current HEAD (UI global task 47)
+**Last updated**: 2026-05-08T11:54Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:54Z [agent: codex] UI global task 47:
+- What I changed: added `/health.cached_projects` and documented the schema
+  definition as the latest 500 recent projects whose folder contains `.vc`.
+- What works: the count uses the existing parameterized recent-project DB query
+  and then verifies cache presence on disk. `pnpm -F @vc/server test`,
+  `pnpm -F @vc/server lint`, and `pnpm -F @vc/server build` completed
+  successfully.
+- What is incomplete: recent project metadata fields remain task 48.
+- Next agent should: continue with UI global task 48 via TDD, FastAPI, and
+  SQLite skills.
 
 2026-05-08T11:51Z [agent: codex] UI global task 46:
 - What I changed: added `active_render_count()` to the render manager and

@@ -271,7 +271,7 @@ at `1440x1000` first, then again near `950px` width.
     - Derive from render DB rows or active render manager.
     - Expose count for Launcher and status bar.
 
-47. `[BE]` Add cached project count if not already derivable.
+47. [x] `[BE]` Add cached project count if not already derivable.
     - Count recent projects with cache metadata, or return a conservative count.
     - Document exact definition in the endpoint schema.
 

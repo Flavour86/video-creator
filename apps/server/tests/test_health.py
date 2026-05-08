@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import httpx
 import pytest
 
 import server.runtime_status as runtime_status
+from server.db.projects import touch_recent
 from server.main import app
+from server.settings import settings
 
 
 @pytest.mark.asyncio
@@ -52,3 +56,25 @@ async def test_health_returns_active_render_count(monkeypatch: pytest.MonkeyPatc
 
     assert response.status_code == 200
     assert response.json()["active_renders"] == 2
+
+
+@pytest.mark.asyncio
+async def test_health_returns_cached_project_count(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    cached_project = tmp_path / "cached"
+    uncached_project = tmp_path / "uncached"
+    cached_project.mkdir()
+    uncached_project.mkdir()
+    (cached_project / ".vc").mkdir()
+    touch_recent(cached_project, "Cached")
+    touch_recent(uncached_project, "Uncached")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["cached_projects"] == 1
