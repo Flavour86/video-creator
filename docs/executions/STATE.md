@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 21 - implement Kbd
-**Last commit**: current HEAD (UI global task 20)
-**Last updated**: 2026-05-08T09:53Z
+**Next task**: UI global task 22 - implement Panel or Surface layout primitive
+**Last commit**: current HEAD (UI global task 21)
+**Last updated**: 2026-05-08T09:55Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:55Z [agent: codex] UI global task 21:
+- What I changed: added a tested `Kbd` primitive using native `<kbd>`, mono metadata
+  typography, and tokenized border/background/padding.
+- What works: `pnpm -F @vc/web test -- components/ui/Kbd.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, `next lint` deprecation, and a Git line-ending notice for
+  `apps/web/components/ui/index.ts`.
+- Next agent should: continue with UI global task 22 via TDD.
 
 2026-05-08T09:53Z [agent: codex] UI global task 20:
 - What I changed: added a tested `StatusTag` pill primitive with a visible status dot and

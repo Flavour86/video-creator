@@ -6,3 +6,5 @@ export { SegmentedControl } from "./SegmentedControl";
 export type { SegmentedControlItem, SegmentedControlProps, SegmentedControlTone } from "./SegmentedControl";
 export { StatusTag } from "./StatusTag";
 export type { StatusTagProps, StatusTagVariant } from "./StatusTag";
+export { Kbd } from "./Kbd";
+export type { KbdProps } from "./Kbd";

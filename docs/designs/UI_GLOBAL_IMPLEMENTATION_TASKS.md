@@ -129,7 +129,7 @@ at `1440x1000` first, then again near `950px` width.
       info, error.
     - Map variants to green, amber, blue, red, violet, or neutral tokens.
 
-21. `[FE]` Implement `Kbd`.
+21. [x] `[FE]` Implement `Kbd`.
     - Support command chips such as `Ctrl+K`, `Cmd+K`, `Ctrl+F`, and `Space`.
     - Use mono or compact caption treatment.
 
