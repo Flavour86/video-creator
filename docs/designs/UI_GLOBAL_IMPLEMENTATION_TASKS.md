@@ -249,7 +249,7 @@ at `1440x1000` first, then again near `950px` width.
     - Language control label.
     - Footer/status labels.
 
-43. `[FE]` Preserve technical metadata as language-neutral.
+43. [x] `[FE]` Preserve technical metadata as language-neutral.
     - Paths, timecodes, codec names, version strings, GPU names, and cache counts
       should remain stable.
 

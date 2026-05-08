@@ -180,6 +180,26 @@ describe("AppShell", () => {
     expect(screen.getByText("命令")).toBeInTheDocument();
   });
 
+  test("marks technical shell metadata as language-neutral while localizing labels", async () => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "zh");
+
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    expect(await screen.findByText("缓存 24/24 已预热")).toBeInTheDocument();
+
+    const neutralMetadata = screen.getAllByTestId("shell-technical-metadata");
+
+    expect(neutralMetadata).toHaveLength(2);
+    expect(neutralMetadata.map((item) => item.textContent)).toEqual(["tokyo-essay/project.json", "v0.1.0-prototype"]);
+    for (const item of neutralMetadata) {
+      expect(item).toHaveAttribute("data-i18n-neutral", "true");
+    }
+  });
+
   test("renders the global status bar", () => {
     render(
       <AppShell>

@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 43 - preserve technical metadata as language-neutral
-**Last commit**: current HEAD (UI global task 42)
-**Last updated**: 2026-05-08T11:32Z
+**Next task**: UI global task 44 - test language switching at 1440px and near 950px
+**Last commit**: current HEAD (UI global task 43)
+**Last updated**: 2026-05-08T11:35Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:35Z [agent: codex] UI global task 43:
+- What I changed: added a regression test for Chinese shell rendering that
+  confirms cache counts stay stable and footer path/version metadata are marked
+  `data-i18n-neutral="true"`.
+- What works: technical footer metadata stays `tokyo-essay/project.json` and
+  `v0.1.0-prototype` while surrounding labels localize. `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: task 44 still needs Chrome visual/interaction QA at
+  `1440px` and near `950px`.
+- Next agent should: continue with UI global task 44 using Chrome DevTools.
 
 2026-05-08T11:32Z [agent: codex] UI global task 42:
 - What I changed: installed and configured `next-intl`, wired AppShell through

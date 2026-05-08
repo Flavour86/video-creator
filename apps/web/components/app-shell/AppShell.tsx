@@ -131,8 +131,20 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
             {statusContent ?? <DefaultStatusContent />}
           </div>
           <div className="flex min-w-0 items-center justify-end gap-(--space-4)">
-            <span className="vc-type-mono-meta min-w-0 truncate text-(--text-3)">tokyo-essay/project.json</span>
-            <span className="vc-type-mono-meta shrink-0 text-(--text-3)">v0.1.0-prototype</span>
+            <span
+              className="vc-type-mono-meta min-w-0 truncate text-(--text-3)"
+              data-i18n-neutral="true"
+              data-testid="shell-technical-metadata"
+            >
+              tokyo-essay/project.json
+            </span>
+            <span
+              className="vc-type-mono-meta shrink-0 text-(--text-3)"
+              data-i18n-neutral="true"
+              data-testid="shell-technical-metadata"
+            >
+              v0.1.0-prototype
+            </span>
           </div>
         </div>
       </footer>
