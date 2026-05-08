@@ -52,10 +52,23 @@ describe("resolveDisplay", () => {
     expect(spec.bg).toBeUndefined();
   });
 
-  it("always includes bg layer regardless of time", () => {
+  it("uses the active bg item for the current time", () => {
     expect(resolveDisplay([BG_LAYER], [], 0).bg?.mediaId).toBe("sky.jpg");
     expect(resolveDisplay([BG_LAYER], [], 30).bg?.mediaId).toBe("sky.jpg");
     expect(resolveDisplay([BG_LAYER], [], 59.9).bg?.mediaId).toBe("sky.jpg");
+  });
+
+  it("rotates through multiple bg items by timestamp", () => {
+    const layer = {
+      ...BG_LAYER,
+      items: [
+        { ...BG_LAYER.items[0], id: "bg-1", mediaId: "one.jpg", start: 0, end: 5 },
+        { ...BG_LAYER.items[0], id: "bg-2", mediaId: "two.jpg", start: 5, end: 10 },
+      ],
+    };
+
+    expect(resolveDisplay([layer], [], 2).bg?.mediaId).toBe("one.jpg");
+    expect(resolveDisplay([layer], [], 7).bg?.mediaId).toBe("two.jpg");
   });
 
   it("includes fg item when currentTime is within its range", () => {

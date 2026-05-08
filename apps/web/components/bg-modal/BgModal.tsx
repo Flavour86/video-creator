@@ -42,33 +42,69 @@ const MOTION_OPTIONS = [
 export function BgModal({ media, existing, totalSentences, duration, onSave, children }: Props) {
   const existingItem = existing?.items[0];
   const [open, setOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState(existingItem?.mediaId ?? "");
+  const [selectedMedia, setSelectedMedia] = useState<string[]>(
+    existing?.items.map((item) => item.mediaId) ?? [],
+  );
   const [motionKind, setMotionKind] = useState(existingItem?.motion.kind ?? "none");
   const [crossfade, setCrossfade] = useState(existingItem?.crossfade ?? 0);
 
   const isEdit = !!existing;
 
   function handleSave() {
-    if (!selectedMedia) return;
+    if (selectedMedia.length === 0) return;
+    const slotDuration = duration / selectedMedia.length;
+    const fadeSeconds = Math.min(crossfade, slotDuration / 2);
     const layer: BgLayer = {
       id: existing?.id ?? `L-bg-${Date.now()}`,
       kind: "bg",
       name: "Background",
-      items: [
-        {
-          id: existingItem?.id ?? `bg-${Date.now()}`,
-          mediaId: selectedMedia,
-          sentences: [1, Math.max(totalSentences, 1)],
-          start: 0,
-          end: duration,
+      items: selectedMedia.map((mediaId, index) => {
+        const start = Math.max(0, index * slotDuration - (index > 0 ? fadeSeconds : 0));
+        const end = Math.min(
+          duration,
+          (index + 1) * slotDuration + (index < selectedMedia.length - 1 ? fadeSeconds : 0),
+        );
+        const existingForMedia = existing?.items.find((item) => item.mediaId === mediaId);
+        return {
+          id: existingForMedia?.id ?? `bg-${Date.now()}-${index}`,
+          mediaId,
+          sentences: [1, Math.max(totalSentences, 1)] as [number, number],
+          start,
+          end,
           motion: { kind: motionKind, easing: "linear" },
-          transitions: { in: "cut", out: "cut" },
+          transitions: {
+            in: index > 0 && crossfade > 0 ? "fade" : "cut",
+            out: index < selectedMedia.length - 1 && crossfade > 0 ? "fade" : "cut",
+          },
           crossfade,
-        },
-      ],
+        };
+      }),
     };
     onSave(layer);
     setOpen(false);
+  }
+
+  function toggleMedia(filename: string) {
+    setSelectedMedia((current) =>
+      current.includes(filename)
+        ? current.filter((item) => item !== filename)
+        : [...current, filename],
+    );
+  }
+
+  function moveMedia(filename: string, direction: -1 | 1) {
+    setSelectedMedia((current) => {
+      const index = current.indexOf(filename);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      const currentItem = next[index];
+      const swapItem = next[nextIndex];
+      if (!currentItem || !swapItem) return current;
+      next[index] = swapItem;
+      next[nextIndex] = currentItem;
+      return next;
+    });
   }
 
   return (
@@ -84,7 +120,7 @@ export function BgModal({ media, existing, totalSentences, duration, onSave, chi
           {/* Asset picker */}
           <div className="mb-5">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">
-              Asset
+              Assets
             </p>
             {media.length === 0 ? (
               <p className="text-sm opacity-50">No media uploaded yet.</p>
@@ -93,12 +129,12 @@ export function BgModal({ media, existing, totalSentences, duration, onSave, chi
                 {media.map((item) => (
                   <button
                     className={`aspect-video overflow-hidden rounded border-2 transition-colors ${
-                      selectedMedia === item.filename
+                      selectedMedia.includes(item.filename)
                         ? "border-sky-500"
                         : "border-transparent hover:border-neutral-300"
                     }`}
                     key={item.filename}
-                    onClick={() => setSelectedMedia(item.filename)}
+                    onClick={() => toggleMedia(item.filename)}
                     type="button"
                   >
                     {item.thumb_url ? (
@@ -117,6 +153,40 @@ export function BgModal({ media, existing, totalSentences, duration, onSave, chi
               </div>
             )}
           </div>
+
+          {selectedMedia.length > 0 && (
+            <div className="mb-5">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">
+                Order
+              </p>
+              <div className="flex max-h-28 flex-col gap-1 overflow-y-auto">
+                {selectedMedia.map((filename, index) => (
+                  <div
+                    className="grid grid-cols-[1fr_auto_auto] items-center gap-1 rounded border border-neutral-200 px-2 py-1 text-xs"
+                    key={filename}
+                  >
+                    <span className="truncate">{filename}</span>
+                    <button
+                      className="rounded px-1.5 py-0.5 opacity-50 hover:bg-neutral-100 hover:opacity-100 disabled:opacity-20"
+                      disabled={index === 0}
+                      onClick={() => moveMedia(filename, -1)}
+                      type="button"
+                    >
+                      Up
+                    </button>
+                    <button
+                      className="rounded px-1.5 py-0.5 opacity-50 hover:bg-neutral-100 hover:opacity-100 disabled:opacity-20"
+                      disabled={index === selectedMedia.length - 1}
+                      onClick={() => moveMedia(filename, 1)}
+                      type="button"
+                    >
+                      Down
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Options */}
           <div className="mb-6 grid grid-cols-2 gap-4">
@@ -142,10 +212,10 @@ export function BgModal({ media, existing, totalSentences, duration, onSave, chi
               </span>
               <input
                 className="rounded border border-neutral-200 px-2 py-1.5 text-sm"
-                max={5}
+                max={2}
                 min={0}
                 onChange={(e) => setCrossfade(parseFloat(e.target.value) || 0)}
-                step={0.5}
+                step={0.1}
                 type="number"
                 value={crossfade}
               />
@@ -158,7 +228,7 @@ export function BgModal({ media, existing, totalSentences, duration, onSave, chi
             </Dialog.Close>
             <button
               className="rounded bg-neutral-950 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
-              disabled={!selectedMedia}
+              disabled={selectedMedia.length === 0}
               onClick={handleSave}
               type="button"
             >

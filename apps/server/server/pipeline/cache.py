@@ -1,4 +1,5 @@
 """Content-hash helpers for alignment and clip caches."""
+
 from __future__ import annotations
 
 import hashlib
@@ -9,9 +10,7 @@ from typing import TypeAlias, cast
 
 from pydantic import BaseModel
 
-JsonValue: TypeAlias = (
-    None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
-)
+JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
 
 CLIP_CACHE_FORMAT_VERSION = 2
@@ -54,6 +53,7 @@ def clip_cache_components(
     resolution: str,
     fps: int,
     crf: int,
+    crossfade_s: float | None = None,
 ) -> JsonObject:
     return {
         "media_sha256": _compute_file_sha256(media_path),
@@ -64,6 +64,7 @@ def clip_cache_components(
         "resolution": resolution,
         "fps": fps,
         "crf": crf,
+        "crossfade_s": round(crossfade_s, 6) if crossfade_s is not None else None,
         "format_version": CLIP_CACHE_FORMAT_VERSION,
     }
 
@@ -83,6 +84,7 @@ def clip_cache_key(
     resolution: str,
     fps: int,
     crf: int,
+    crossfade_s: float | None = None,
 ) -> str:
     return clip_cache_key_from_components(
         clip_cache_components(
@@ -94,6 +96,7 @@ def clip_cache_key(
             resolution=resolution,
             fps=fps,
             crf=crf,
+            crossfade_s=crossfade_s,
         )
     )
 

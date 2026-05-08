@@ -49,20 +49,31 @@ function BgBlock({
   duration: number;
   projectPath?: string;
 }) {
-  const item = layer.items[0];
-  if (!item) return <div className="h-7 w-full bg-neutral-100 rounded" />;
-  const thumbUrl = projectPath
-    ? `/api/server/projects/thumb?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(item.mediaId.replace(/\.[^.]+$/, ".jpg"))}`
-    : undefined;
+  if (layer.items.length === 0) return <div className="h-7 w-full rounded bg-neutral-100" />;
 
   return (
     <div className="relative h-7 w-full overflow-hidden rounded bg-neutral-200">
-      {thumbUrl && (
-        <img alt="" className="h-full w-full object-cover opacity-60" src={thumbUrl} />
-      )}
-      <span className="absolute inset-0 flex items-center px-2 text-[10px] font-medium opacity-70 truncate">
-        {item.mediaId}
-      </span>
+      {layer.items.map((item) => {
+        const left = (item.start / duration) * 100;
+        const width = ((item.end - item.start) / duration) * 100;
+        const thumbUrl = projectPath
+          ? `/api/server/projects/thumb?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(item.mediaId.replace(/\.[^.]+$/, ".jpg"))}`
+          : undefined;
+        return (
+          <div
+            className="absolute inset-y-0 overflow-hidden border-r border-white/50"
+            key={item.id}
+            style={{ left: `${left}%`, width: `${Math.max(width, 0.8)}%` }}
+          >
+            {thumbUrl && (
+              <img alt="" className="h-full w-full object-cover opacity-60" src={thumbUrl} />
+            )}
+            <span className="absolute inset-0 flex truncate px-2 text-[10px] font-medium opacity-70">
+              {item.mediaId}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

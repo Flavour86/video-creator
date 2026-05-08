@@ -1,4 +1,5 @@
 """Per-clip pre-rendering for the render asset cache."""
+
 from __future__ import annotations
 
 import json
@@ -100,6 +101,7 @@ def clip_cache_key_for_item(
         resolution=resolution,
         fps=fps,
         crf=crf,
+        crossfade_s=_crossfade_s(item),
     )
     return clip_cache_key_from_components(components)
 
@@ -128,6 +130,7 @@ def render_clip(
         motion_kind=_motion_kind(item),
         transition_in=_transition_value(item, "in"),
         transition_out=_transition_value(item, "out"),
+        fade_seconds=_fade_seconds(item),
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_name(f"{output_path.stem}.tmp{output_path.suffix}")
@@ -232,6 +235,23 @@ def _transition_value(item: ClipRenderItem, name: str) -> str | None:
     return value
 
 
+def _crossfade_s(item: ClipRenderItem) -> float | None:
+    try:
+        value = _field(item, "crossfade")
+    except (AttributeError, KeyError):
+        return None
+    if not isinstance(value, int | float):
+        raise TypeError("Clip item crossfade must be numeric.")
+    return float(value)
+
+
+def _fade_seconds(item: ClipRenderItem) -> float:
+    crossfade_s = _crossfade_s(item)
+    if crossfade_s is None or crossfade_s <= 0:
+        return FADE_SECONDS
+    return crossfade_s
+
+
 def _resolve_media_path(project_dir: Path, media_id: str) -> Path:
     safe_name = Path(media_id).name
     if safe_name != media_id or ".." in media_id:
@@ -263,13 +283,14 @@ def _fade_filters(
     duration_s: float,
     transition_in: str | None,
     transition_out: str | None,
+    fade_seconds: float,
 ) -> list[str]:
     filters: list[str] = []
     if transition_in == "fade":
-        fade_in = min(FADE_SECONDS, duration_s / 2)
+        fade_in = min(fade_seconds, duration_s / 2)
         filters.append(f"fade=t=in:st=0:d={_fmt(fade_in)}")
     if transition_out == "fade":
-        fade_out = min(FADE_SECONDS, duration_s / 2)
+        fade_out = min(fade_seconds, duration_s / 2)
         filters.append(f"fade=t=out:st={_fmt(max(0.0, duration_s - fade_out))}:d={_fmt(fade_out)}")
     return filters
 
@@ -284,13 +305,14 @@ def _build_clip_filter(
     motion_kind: str,
     transition_in: str | None,
     transition_out: str | None,
+    fade_seconds: float,
 ) -> str:
     filters = (
         _image_motion_filters(width, height, duration_s, fps, motion_kind)
         if media_path.suffix.lower() in IMAGE_EXTENSIONS
         else _video_fit_filters(width, height, fps)
     )
-    filters.extend(_fade_filters(duration_s, transition_in, transition_out))
+    filters.extend(_fade_filters(duration_s, transition_in, transition_out, fade_seconds))
     filters.extend(["setsar=1", "format=yuv420p"])
     return f"[0:v]{','.join(filters)}[vout]"
 
@@ -404,6 +426,7 @@ def _write_metadata(
         resolution=resolution,
         fps=fps,
         crf=crf,
+        crossfade_s=_crossfade_s(item),
     )
     metadata = {
         "key_components": components,

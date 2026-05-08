@@ -48,14 +48,21 @@ export type DisplaySpec = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function transitionOpacity(item: BaseItem, t: number): number {
-  const FADE_DUR = 0.5; // seconds
-  if (item.transitions.in === "fade" && t - item.start < FADE_DUR) {
-    return (t - item.start) / FADE_DUR;
+  const fadeDuration = bgCrossfade(item);
+  if (item.transitions.in === "fade" && t - item.start < fadeDuration) {
+    return (t - item.start) / fadeDuration;
   }
-  if (item.transitions.out === "fade" && item.end - t < FADE_DUR) {
-    return (item.end - t) / FADE_DUR;
+  if (item.transitions.out === "fade" && item.end - t < fadeDuration) {
+    return (item.end - t) / fadeDuration;
   }
   return 1;
+}
+
+function bgCrossfade(item: BaseItem): number {
+  if ("crossfade" in item && typeof item.crossfade === "number" && item.crossfade > 0) {
+    return item.crossfade;
+  }
+  return 0.5;
 }
 
 function activeItem<T extends BaseItem>(items: T[], t: number): T | undefined {
@@ -73,7 +80,9 @@ export function resolveDisplay(
 
   for (const layer of layers) {
     if (layer.kind === "bg") {
-      const item = layer.items[0] as BgItem | undefined;
+      const item = [...layer.items].reverse().find((candidate) => {
+        return candidate.start <= currentTime && currentTime < candidate.end;
+      }) as BgItem | undefined;
       if (item) {
         spec.bg = { mediaId: item.mediaId, opacity: transitionOpacity(item, currentTime) };
       }

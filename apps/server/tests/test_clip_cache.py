@@ -1,4 +1,5 @@
 """Clip cache key tests for T5.2."""
+
 from __future__ import annotations
 
 import os
@@ -67,6 +68,7 @@ def test_clip_cache_key_changes_when_inputs_change(tmp_path: Path) -> None:
     assert clip_cache_key(**{**base_kwargs, "resolution": "1920x1080"}) != base_key
     assert clip_cache_key(**{**base_kwargs, "fps": 24}) != base_key
     assert clip_cache_key(**{**base_kwargs, "crf": 18}) != base_key
+    assert clip_cache_key(**{**base_kwargs, "crossfade_s": 0.6}) != base_key
 
     media_path.write_bytes(b"different-media")
     assert clip_cache_key(**base_kwargs) != base_key
