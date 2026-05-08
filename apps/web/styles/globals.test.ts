@@ -95,4 +95,25 @@ describe("global design tokens", () => {
     expect(globalsCss).not.toContain("@font-face");
     expect(globalsCss).not.toContain("url(");
   });
+
+  test("defines the prototype spacing token scale", () => {
+    const spacingTokens = new Map([
+      ["--space-1", "4px"],
+      ["--space-2", "6px"],
+      ["--space-3", "8px"],
+      ["--space-4", "10px"],
+      ["--space-5", "12px"],
+      ["--space-6", "14px"],
+      ["--space-7", "16px"],
+      ["--space-8", "20px"],
+      ["--space-9", "24px"],
+      ["--space-10", "32px"],
+      ["--space-11", "40px"],
+      ["--space-12", "56px"],
+    ]);
+
+    for (const [token, value] of spacingTokens) {
+      expect(globalsCss).toContain(`${token}: ${value};`);
+    }
+  });
 });

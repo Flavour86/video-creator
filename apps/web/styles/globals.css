@@ -25,6 +25,18 @@
   --green: oklch(0.74 0.13 155);
   --red: oklch(0.7 0.16 25);
   --violet: oklch(0.72 0.13 305);
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+  --space-11: 40px;
+  --space-12: 56px;
   --r-sm: 4px;
   --r: 6px;
   --r-md: 10px;

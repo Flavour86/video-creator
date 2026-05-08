@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 11 - add spacing tokens
-**Last commit**: current HEAD (UI global task 10)
-**Last updated**: 2026-05-08T09:28Z
+**Next task**: UI global task 12 - add radius tokens
+**Last commit**: current HEAD (UI global task 11)
+**Last updated**: 2026-05-08T09:31Z
 
 ---
 
@@ -81,6 +81,15 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:31Z [agent: codex] UI global task 11:
+- What I changed: added failing-first coverage for the prototype spacing token scale, then
+  declared `--space-1` through `--space-12` on the root token set.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation.
+- Next agent should: continue with UI global task 12 via TDD.
 
 2026-05-08T09:28Z [agent: codex] UI global task 10:
 - What I changed: added failing-first coverage for the no-network Tailwind font strategy,

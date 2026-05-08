@@ -73,7 +73,7 @@ at `1440x1000` first, then again near `950px` width.
     - Otherwise use CSS font stacks without network dependence.
     - Verify Windows fallback still resembles the prototype.
 
-11. `[FE]` Add spacing tokens.
+11. [x] `[FE]` Add spacing tokens.
     - `space-1` through `space-12` must map to the requirement values.
     - Use these tokens in new shared components instead of arbitrary Tailwind
       spacing values.
