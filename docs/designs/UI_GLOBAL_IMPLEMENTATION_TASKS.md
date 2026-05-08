@@ -223,7 +223,7 @@ at `1440x1000` first, then again near `950px` width.
     - Use a small pre-hydration script if needed.
     - Initial server output should not visibly flash white before dark mode.
 
-38. `[FE]` Wire every shared primitive to theme tokens.
+38. [x] `[FE]` Wire every shared primitive to theme tokens.
     - No component-level dark-mode color branches unless they assign token names.
 
 39. `[QA]` Verify dark and light modes on Launcher, Editor, Render, and Tokens.

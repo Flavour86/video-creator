@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 38 - wire every shared primitive to theme tokens
-**Last commit**: current HEAD (UI global task 37)
-**Last updated**: 2026-05-08T11:03Z
+**Next task**: UI global task 39 - verify dark and light modes on Launcher, Editor, Render, and Tokens
+**Last commit**: current HEAD (UI global task 38)
+**Last updated**: 2026-05-08T11:05Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:05Z [agent: codex] UI global task 38:
+- What I changed: added a regression guard over every `components/ui` shared
+  primitive source file to reject raw palette classes and `dark:` branches.
+- What works: `pnpm -F @vc/web test -- components/ui/SharedPrimitives.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: broader route/component token migration remains in later
+  screen fidelity tasks; this task covers the shared primitive layer.
+- Next agent should: continue with UI global task 39 using Chrome DevTools.
 
 2026-05-08T11:03Z [agent: codex] UI global task 37:
 - What I changed: added `ThemeInitScript` before `AppShell` in the root layout,
