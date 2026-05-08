@@ -84,4 +84,15 @@ describe("global design tokens", () => {
     expect(globalsCss).toContain("text-(--text)");
     expect(globalsCss).not.toMatch(/\[[^\]]*var\(--/);
   });
+
+  test("declares a no-network Tailwind font strategy", () => {
+    expect(globalsCss).toContain("@theme inline");
+    expect(globalsCss).toContain('--font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;');
+    expect(globalsCss).toContain(
+      '--font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;',
+    );
+    expect(globalsCss).toContain("font-family: var(--font-sans);");
+    expect(globalsCss).not.toContain("@font-face");
+    expect(globalsCss).not.toContain("url(");
+  });
 });

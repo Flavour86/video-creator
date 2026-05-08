@@ -68,7 +68,7 @@ at `1440x1000` first, then again near `950px` width.
    - Add named CSS utility classes or component classes for display, H2, section
      title, body, caption, eyebrow, mono timecode, and mono metadata.
 
-10. `[FE]` Load or declare the font strategy.
+10. [x] `[FE]` Load or declare the font strategy.
     - Prefer Next font loading if bundled fonts are available.
     - Otherwise use CSS font stacks without network dependence.
     - Verify Windows fallback still resembles the prototype.

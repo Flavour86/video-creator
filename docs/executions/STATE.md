@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 10 - declare or load the font strategy
-**Last commit**: 816a193
-**Last updated**: 2026-05-08T09:15Z
+**Next task**: UI global task 11 - add spacing tokens
+**Last commit**: current HEAD (UI global task 10)
+**Last updated**: 2026-05-08T09:28Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:28Z [agent: codex] UI global task 10:
+- What I changed: added failing-first coverage for the no-network Tailwind font strategy,
+  then declared the prototype sans and mono font stacks through `@theme inline`.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: no bundled font files were found, so the implementation uses local
+  CSS font stacks without external network font loading. Existing unrelated warnings remain
+  from `<img>` usage and `next lint` deprecation.
+- Next agent should: continue with UI global task 11 via TDD.
 
 2026-05-08T09:15Z [agent: codex] UI global task 9:
 - What I changed: added failing-first coverage for named typography utilities, then added

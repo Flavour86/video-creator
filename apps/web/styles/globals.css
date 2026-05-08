@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme inline {
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
 :root {
   color-scheme: dark;
 
@@ -20,8 +25,6 @@
   --green: oklch(0.74 0.13 155);
   --red: oklch(0.7 0.16 25);
   --violet: oklch(0.72 0.13 305);
-  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --r-sm: 4px;
   --r: 6px;
   --r-md: 10px;
