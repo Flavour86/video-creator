@@ -153,7 +153,7 @@ at `1440x1000` first, then again near `950px` width.
 
 ## 3. App Shell
 
-26. `[FE]` Replace the simple `apps/web/app/layout.tsx` nav with a global app
+26. [x] `[FE]` Replace the simple `apps/web/app/layout.tsx` nav with a global app
     shell.
     - Root layout can stay server-rendered, but interactive shell controls should
       live in a client component.

@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 26 - replace simple layout nav with global app shell
-**Last commit**: current HEAD (UI global task 25)
-**Last updated**: 2026-05-08T10:09Z
+**Next task**: UI global task 27 - implement compact header
+**Last commit**: current HEAD (UI global task 26)
+**Last updated**: 2026-05-08T10:13Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:13Z [agent: codex] UI global task 26:
+- What I changed: added a client `AppShell` boundary, moved the simple global
+  navigation out of `apps/web/app/layout.tsx`, and kept `RootLayout` server-rendered.
+- What works: `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: header geometry, brand cluster, centered segmented nav,
+  `/tokens`, theme toggle, language selector, and status bar remain for tasks 27-33.
+  Existing unrelated warnings remain from Radix dialog descriptions, `<img>` usage,
+  `next lint` deprecation, and a Git line-ending notice for `apps/web/app/layout.tsx`.
+- Next agent should: continue with UI global task 27 via TDD.
 
 2026-05-08T10:09Z [agent: codex] UI global task 25:
 - What I changed: added a focused shared-primitives QA spec covering representative
