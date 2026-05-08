@@ -108,7 +108,7 @@ at `1440x1000` first, then again near `950px` width.
     - Suggested path: `apps/web/components/ui`.
     - Keep components small and reusable.
 
-17. `[FE]` Implement `Button`.
+17. [x] `[FE]` Implement `Button`.
     - Variants: primary, render/accent, default, ghost, danger, small, extra-small,
       and icon-only.
     - Use tokenized height, padding, radius, border, hover, active, disabled, and

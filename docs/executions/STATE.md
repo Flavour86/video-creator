@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 17 - implement Button
-**Last commit**: current HEAD (UI global task 16)
-**Last updated**: 2026-05-08T09:42Z
+**Next task**: UI global task 18 - implement IconButton
+**Last commit**: current HEAD (UI global task 17)
+**Last updated**: 2026-05-08T09:45Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:45Z [agent: codex] UI global task 17:
+- What I changed: added a tested shared `Button` primitive with tokenized default, primary,
+  render, ghost, and danger variants plus default, small, extra-small, and icon-only sizes.
+- What works: `pnpm -F @vc/web test -- components/ui/Button.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and `pnpm -F @vc/web lint`
+  completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, `next lint` deprecation, and a Git line-ending notice for
+  `apps/web/components/ui/index.ts`.
+- Next agent should: continue with UI global task 18 via TDD.
 
 2026-05-08T09:42Z [agent: codex] UI global task 16:
 - What I changed: added a tested `apps/web/components/ui` root with a stable barrel module for
