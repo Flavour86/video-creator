@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 44 - test language switching at 1440px and near 950px
-**Last commit**: current HEAD (UI global task 43)
-**Last updated**: 2026-05-08T11:35Z
+**Next task**: UI global task 45 - expand backend runtime health data
+**Last commit**: current HEAD (UI global task 44)
+**Last updated**: 2026-05-08T11:43Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:43Z [agent: codex] UI global task 44:
+- What I changed: used Chrome DevTools at `1440x1000` and `950x1000` to
+  verify EN/ZH language switching, then increased the fixed footer reserve from
+  `--space-9` to `--space-10` so localized status chips do not clip.
+- What works: header brand/nav/right controls do not overlap in EN or ZH at
+  both widths, there is no horizontal overflow, and the footer contents fit.
+  `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated `<img>` lint warnings and the
+  `next lint` deprecation notice remain. Backend runtime tasks start at task 45.
+- Next agent should: continue with UI global task 45 via TDD and backend skills.
 
 2026-05-08T11:35Z [agent: codex] UI global task 43:
 - What I changed: added a regression test for Chinese shell rendering that

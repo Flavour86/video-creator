@@ -253,7 +253,7 @@ at `1440x1000` first, then again near `950px` width.
     - Paths, timecodes, codec names, version strings, GPU names, and cache counts
       should remain stable.
 
-44. `[QA]` Test language switching at `1440px` and near `950px`.
+44. [x] `[QA]` Test language switching at `1440px` and near `950px`.
     - No clipping.
     - No header shift.
     - No overlapping controls.

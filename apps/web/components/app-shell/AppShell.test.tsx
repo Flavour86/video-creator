@@ -209,8 +209,10 @@ describe("AppShell", () => {
 
     const statusBar = screen.getByRole("contentinfo", { name: "Global status" });
 
+    expect(statusBar.parentElement?.className).toContain("pb-(--space-10)");
     expect(statusBar.className).toContain("fixed");
     expect(statusBar.className).toContain("bottom-0");
+    expect(statusBar.className).toContain("h-(--space-10)");
     expect(screen.getByText("⌘K")).toBeInTheDocument();
     expect(screen.getByText("command")).toBeInTheDocument();
     expect(screen.getByText("alignment cached")).toBeInTheDocument();

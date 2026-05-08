@@ -68,7 +68,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
   const ThemeIcon = theme === "light" ? Moon : Sun;
 
   return (
-    <div className="min-h-screen bg-(--bg-0) pb-(--space-9) text-(--text)">
+    <div className="min-h-screen bg-(--bg-0) pb-(--space-10) text-(--text)">
       <header className="relative h-11 w-full border-b border-(--line) bg-(--bg-1)">
         <div className="flex h-full items-center px-(--space-4)">
           <div className="flex shrink-0 items-center gap-(--space-3)" data-testid="brand-cluster">
@@ -117,7 +117,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
       {children}
       <footer
         aria-label={t("statusBar.ariaLabel")}
-        className="fixed bottom-0 left-0 right-0 z-40 h-(--space-9) border-t border-(--line) bg-(--bg-1)"
+        className="fixed bottom-0 left-0 right-0 z-40 h-(--space-10) border-t border-(--line) bg-(--bg-1)"
       >
         <div className="grid h-full grid-cols-3 items-center px-(--space-4)">
           <div className="flex min-w-0 items-center gap-(--space-2)">
