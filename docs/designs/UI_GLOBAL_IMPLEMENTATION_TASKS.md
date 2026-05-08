@@ -104,7 +104,7 @@ at `1440x1000` first, then again near `950px` width.
 
 ## 2. Shared Frontend Primitives
 
-16. `[FE]` Create a design-system component folder in `apps/web/components`.
+16. [x] `[FE]` Create a design-system component folder in `apps/web/components`.
     - Suggested path: `apps/web/components/ui`.
     - Keep components small and reusable.
 

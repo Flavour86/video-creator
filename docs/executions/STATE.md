@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 16 - create design-system component folder
-**Last commit**: current HEAD (UI global task 15)
-**Last updated**: 2026-05-08T09:41Z
+**Next task**: UI global task 17 - implement Button
+**Last commit**: current HEAD (UI global task 16)
+**Last updated**: 2026-05-08T09:42Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:42Z [agent: codex] UI global task 16:
+- What I changed: added a tested `apps/web/components/ui` root with a stable barrel module for
+  shared design-system primitives.
+- What works: `pnpm -F @vc/web test -- components/ui/index.test.ts`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and `pnpm -F @vc/web lint`
+  completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation.
+- Next agent should: continue with UI global task 17 via TDD.
 
 2026-05-08T09:41Z [agent: codex] UI global task 15:
 - What I changed: added a tested `tokens:audit` package command that scans changed frontend
