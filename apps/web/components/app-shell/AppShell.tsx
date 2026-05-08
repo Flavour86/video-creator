@@ -5,7 +5,9 @@ import { useEffect } from "react";
 import { Moon, Sun } from "lucide-react";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
-import { IconButton, Kbd, SegmentedControl, StatusTag } from "@/components/ui";
+import type { RuntimeHealthResponse, RuntimeState } from "@vc/shared-schemas";
+import { IconButton, Kbd, SegmentedControl, StatusTag, type StatusTagVariant } from "@/components/ui";
+import { useRuntimeStatus } from "@/lib/hooks/useRuntimeStatus";
 import { useLanguageStore, type LanguageMode } from "@/lib/i18n/language-store";
 import { dictionaries } from "@/lib/i18n/messages";
 import { useThemeStore } from "@/lib/theme/theme-store";
@@ -33,15 +35,69 @@ function valueForPathname(pathname: string | null): NavValue {
 }
 
 function DefaultStatusContent() {
-  const t = useTranslations("appShell.statusBar.defaults");
+  const t = useTranslations("appShell.statusBar.runtimeStatus");
+  const { error, isLoading, status } = useRuntimeStatus();
+
+  if (isLoading) {
+    return <StatusTag variant="warning">{t("checking")}</StatusTag>;
+  }
+
+  if (error || !status) {
+    return <StatusTag variant="error">{t("fetchFailed")}</StatusTag>;
+  }
+
+  const renderCacheVariant = status.active_renders > 0 ? "warning" : "ready";
 
   return (
     <>
-      <StatusTag variant="aligned">{t("alignmentCached")}</StatusTag>
-      <StatusTag variant="cached">{t("cacheWarm", { count: "24/24" })}</StatusTag>
-      <StatusTag variant="idle">{t("autosaveAgo", { seconds: "02" })}</StatusTag>
+      <StatusTag variant={variantForRuntimeState(status.sidecar.status)}>
+        {t("sidecar", { value: sidecarValue(status, (state) => t(state)) })}
+      </StatusTag>
+      <StatusTag variant={variantForRuntimeState(status.ffmpeg.status)}>
+        {t("ffmpeg", { value: versionValue(status.ffmpeg.status, status.ffmpeg.version, (state) => t(state)) })}
+      </StatusTag>
+      <StatusTag variant={variantForRuntimeState(status.cuda.status)}>
+        {t("cuda", { value: cudaValue(status, (state) => t(state)) })}
+      </StatusTag>
+      <StatusTag variant={renderCacheVariant}>
+        {t("renderCache", { renders: status.active_renders, cache: status.cached_projects })}
+      </StatusTag>
     </>
   );
+}
+
+function variantForRuntimeState(state: RuntimeState): StatusTagVariant {
+  if (state === "ready") {
+    return "ready";
+  }
+
+  return state === "unknown" ? "warning" : "error";
+}
+
+function versionValue(state: RuntimeState, version: string, runtimeStateLabel: (state: RuntimeState) => string) {
+  if (state === "ready" && version !== "unknown") {
+    return version;
+  }
+
+  return runtimeStateLabel(state);
+}
+
+function sidecarValue(status: RuntimeHealthResponse, runtimeStateLabel: (state: RuntimeState) => string) {
+  if (status.sidecar.status !== "ready") {
+    return runtimeStateLabel(status.sidecar.status);
+  }
+
+  return status.sidecar.address.replace(/^https?:\/\//, "");
+}
+
+function cudaValue(status: RuntimeHealthResponse, runtimeStateLabel: (state: RuntimeState) => string) {
+  if (status.cuda.status !== "ready" || status.cuda.available !== true) {
+    return runtimeStateLabel(status.cuda.status);
+  }
+
+  const values = [status.cuda.version, status.cuda.gpu_label].filter((value) => value && value !== "unknown");
+
+  return values.length > 0 ? values.join(" · ") : runtimeStateLabel("ready");
 }
 
 type AppShellChromeProps = AppShellProps & {
@@ -120,7 +176,11 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
         className="fixed bottom-0 left-0 right-0 z-40 h-(--space-10) border-t border-(--line) bg-(--bg-1)"
       >
         <div className="grid h-full grid-cols-3 items-center px-(--space-4)">
-          <div className="flex min-w-0 items-center gap-(--space-2)">
+          <div
+            aria-label={t("statusBar.command")}
+            className="flex min-w-0 items-center gap-(--space-2) rounded-(--r-sm) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
+            tabIndex={0}
+          >
             <Kbd>⌘K</Kbd>
             <span className="vc-type-caption text-(--text-3)">{t("statusBar.command")}</span>
           </div>

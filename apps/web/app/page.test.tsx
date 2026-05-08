@@ -23,7 +23,7 @@ describe("LauncherPage", () => {
     expect(screen.getByRole("link", { name: "New Project" }).className).toContain("bg-(--blue)");
     await waitFor(() => expect(screen.getByText("No projects yet - create one to get started.")).toBeInTheDocument());
     expect(screen.getByText("No projects yet - create one to get started.").closest("section")?.className).toContain(
-      "border-(--line)",
+      "vc-drop-zone",
     );
   });
 

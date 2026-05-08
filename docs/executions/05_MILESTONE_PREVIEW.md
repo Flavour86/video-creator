@@ -88,44 +88,39 @@ Refs: T4.2
 
 ---
 
-## T4.3 — Layer 1 auto-distribute (single image)
+## T4.3 — Background layer setup and preview
 
 ### Goal
-A user can pick one image as the "auto-distribute single image" — it shows whenever no foreground item is active. For Phase 1, this is the simplest auto-distribute kind. Multi-image and clip variants come in M6.
+The user assigns a single image or video as the background — a `"bg"` layer that fills the canvas whenever no foreground item is visible. This is the first content assignment in the editor.
 
 ### Behavior
-- A small "Background" panel above the transcript shows the current auto-distribute image (or "None").
-- Click "Set background" → media picker (lists current `media/` images) → choose one.
-- Saving updates `project.json`:
-  ```json
-  "layers": {
-    "auto_distribute": {
-      "kind": "single_image",
-      "items": ["bg.jpg"],
-      "transition": "cut",
-      "transition_duration_s": 0
-    }
-  }
-  ```
+The editor toolbar has an **"Add or change background asset"** button (center of toolbar, between a Subtitles button and Save). When clicked:
+- If no `"bg"` layer exists in `layers[]`: opens the **BG modal** in add mode. Fields: asset picker (images and video from `media/`), motion kind, crossfade duration. Confirming appends a new `"bg"` layer to `layers[]` with one item covering `sentences: [1, total_sentences]`, `start: 0`, `end: project_duration_s`.
+- If a `"bg"` layer exists: opens the **BG modal** in edit mode, pre-filled with current values. Confirming replaces the `"bg"` layer's single item.
+
+After assigning, the preview canvas shows the background image/video continuously.
 
 ### API
-- `PATCH /projects/<id>` with a JSON Patch (RFC 6902) or just a delta over the layers. For simplicity in Phase 1: full replacement of the `layers` object via `PUT /projects/<id>/layers`.
+`PUT /projects/<id>/layers` — replaces the full `layers` array. Used for all layer mutations throughout the app. Server validates the array structure, writes `project.json`, returns the saved layers.
 
 ### Files
-- `apps/server/server/routes/projects.py` — add layers PUT.
-- `apps/web/components/background-picker/BackgroundPicker.tsx`.
-- `apps/web/lib/hooks/useProject.ts` — Zustand store for current project state.
+- `apps/server/server/routes/projects.py` — add `PUT /projects/<id>/layers` endpoint.
+- `apps/web/components/bg-modal/BgModal.tsx` — modal for add/change BG.
+- `apps/web/lib/hooks/useProject.ts` — Zustand store holding `{ project, layers, sentences }`. All UI mutations call the API then update the store optimistically.
 
 ### Verification
 
 Manual:
-1. Pick an image as background.
-2. `project.json` updates correctly.
-3. Reload — background persists.
+1. Open a project with alignment done.
+2. Click "Add BG". Pick an image. Confirm.
+3. Preview shows the image filling the canvas continuously.
+4. `project.json` has a `layers` array containing one `{ kind: "bg" }` entry.
+5. Click "Change BG". Switch asset. Preview updates immediately.
+6. Reload — background persists.
 
 ### Commit
 ```
-feat(web,server): single-image auto-distribute background
+feat(web,server): background layer add/change via BG modal
 
 Refs: T4.3
 ```
@@ -149,14 +144,30 @@ A `<canvas>` (or layered `<img>`) above the waveform that, at every animation fr
 - `apps/web/lib/preview/resolveDisplay.ts` — pure function `(project, time) => DisplaySpec`.
 
 ### Resolve function
+
+The resolver walks the `layers[]` array (which is in render order, top → bottom) and determines what to draw at the given time. It returns a `DisplaySpec`:
+
 ```ts
+type PipPlacement = { posX: number; posY: number; size: number; radius: number; opacity: number };
+
 type DisplaySpec = {
-  background?: { src: string; opacity: number };
-  foreground: Array<{ src: string; compositing: "fullscreen" | { mode: "pip"; ... }; opacity: number }>;
-  watermark?: { src: string; ... };
+  // One entry per visible layer, bottom of stack first (drawn in order)
+  bg?: { mediaId: string; opacity: number };
+  fg: Array<{ mediaId: string; compositing: "fullscreen"; opacity: number }>;
+  pip: Array<{ mediaId: string; placement: PipPlacement; opacity: number }>;
+  watermark?: { mediaId: string; posX: number; posY: number; scale: number; opacity: number };
   subtitle?: { text: string };
 };
 ```
+
+Resolution rule for a given `currentTime`:
+1. Walk the `layers[]` array from last (BG) to first (SUB).
+2. For each `"bg"` layer: its single item always covers the full duration → include it.
+3. For each `"fg"` or `"pip"` layer: find the item where `item.start <= currentTime < item.end` (if any) → include it.
+4. Transitions (fade in/out) are approximated with CSS `opacity` based on how far into the item's `start`/`end` the current time falls.
+5. Subtitles: find the alignment sentence whose `[start_s, end_s]` contains `currentTime` → pass its text as `subtitle.text`.
+
+The resolver is a **pure function** — no side effects. The preview component calls it on every animation frame.
 
 ### Verification
 
@@ -174,30 +185,47 @@ Refs: T4.4
 
 ---
 
-## T4.5 — Timeline strip with thumbnails
+## T4.5 — Timeline with layer tracks
 
 ### Goal
-A thin horizontal strip beneath the waveform shows the *visual schedule* — what's on screen at every moment. For now, just the auto-distribute image stretched across the full duration. M5 adds foreground items.
+A multi-track timeline below the preview shows the visual schedule for every layer. In M4, BG and Subtitles tracks are visible; FG and PiP tracks appear in M5 as items are added.
+
+### Layout (matches the prototype)
+
+```
+[ruler: timecodes at regular intervals — 00:00  02:05  04:11 ...]
+[Subtitles row  | s1 | s2 | s3 … s21 |  (sentence chips, non-editable in M4) ]
+[PiP rows       |                     |  (empty until M5)                      ]
+[Foreground rows|                     |  (empty until M5)                      ]
+[Background row | ████████████████████|  (full-width BG thumbnail if set)      ]
+```
+
+The timeline header shows: fps (`30 fps`), total clip count, cache status pill (`cache N/N`).
 
 ### Behavior
-- Same time-axis as waveform (synced).
-- Track 1: "BG" — strip of images.
-- Each slot is clickable → seeks to that time.
-- Hovering shows time tooltip.
+- **Ruler**: time markers at regular intervals, scaled to the project duration. Click anywhere → seek playhead.
+- **Playhead**: vertical amber line that tracks `currentTime`. Moves on play and on click.
+- **Sentence chips** (Subtitles row): one chip per sentence (`s1`, `s2`, …), width proportional to sentence duration. Non-interactive in M4 (clicking them is implemented in M5 via the "Assign media" flow).
+- **Background row**: if a `"bg"` layer exists, renders one full-width block with the asset's thumbnail gradient. Clicking anywhere on it seeks.
+- **Clip blocks** (FG/PiP rows, added in M5): colored blocks whose width = `(end - start) / project_duration * timelineWidth`. Clicking selects the clip and shows the Inspector.
+- The timeline has a shared horizontal scroll when project duration is long.
 
 ### Files
-- `apps/web/components/timeline-strip/TimelineStrip.tsx`.
+- `apps/web/components/timeline/Timeline.tsx` — container; renders ruler + one `<TimelineTrack>` per layer in render order.
+- `apps/web/components/timeline/TimelineTrack.tsx` — single layer row with clip blocks.
+- `apps/web/components/timeline/TimelineRuler.tsx` — ruler with time markers.
 
 ### Verification
 
 Manual:
-1. After T4.3, the BG track shows a single full-width thumbnail.
-2. Clicking any X position seeks the waveform.
-3. Strip resizes correctly with window resize.
+1. After T4.3 (BG set), the Background row shows a full-width block.
+2. Subtitles row shows sentence chips with correct relative widths.
+3. Clicking the ruler at any point moves the playhead and seeks audio.
+4. Timeline resizes with the window.
 
 ### Commit
 ```
-feat(web): timeline strip with BG track
+feat(web): multi-track timeline with ruler, sentence chips, and BG row
 
 Refs: T4.5
 ```

@@ -75,13 +75,16 @@ describe("global design tokens", () => {
       expect(globalsCss).toContain(utility);
     }
 
-    expect(globalsCss).toContain("text-[32px]");
-    expect(globalsCss).toContain("text-2xl");
-    expect(globalsCss).toContain("text-base");
-    expect(globalsCss).toContain("tracking-[-0.02em]");
-    expect(globalsCss).toContain("tracking-[0.06em]");
-    expect(globalsCss).toContain("font-mono");
-    expect(globalsCss).toContain("text-(--text)");
+    expect(globalsCss).toContain("--type-display-size: 32px;");
+    expect(globalsCss).toContain("--type-h2-size: 24px;");
+    expect(globalsCss).toContain("--type-section-size: 16px;");
+    expect(globalsCss).toContain("font-size: var(--type-display-size);");
+    expect(globalsCss).toContain("font-size: var(--type-mono-meta-size);");
+    expect(globalsCss).not.toMatch(/tracking-\[-/);
+    expect(globalsCss).not.toMatch(/tracking-\[[^\]]+em\]/);
+    expect(globalsCss.match(/letter-spacing: 0;/g)?.length).toBeGreaterThanOrEqual(8);
+    expect(globalsCss).toContain("font-family: var(--font-mono);");
+    expect(globalsCss).toContain("color: var(--text);");
     expect(globalsCss).not.toMatch(/\[[^\]]*var\(--/);
   });
 
@@ -177,5 +180,13 @@ describe("global design tokens", () => {
     expect(globalsCss).toContain("aspect-ratio: var(--cinema-aspect-landscape);");
     expect(globalsCss).toContain(".vc-cinema-portrait");
     expect(globalsCss).toContain("aspect-ratio: var(--cinema-aspect-portrait);");
+  });
+
+  test("defines shared drag and drop visual states", () => {
+    expect(globalsCss).toContain(".vc-drop-zone");
+    expect(globalsCss).toContain('.vc-drop-zone[data-state="active"]');
+    expect(globalsCss).toContain('.vc-drop-zone[data-state="invalid"]');
+    expect(globalsCss).toContain("border-color: var(--amber);");
+    expect(globalsCss).toContain("border-color: var(--red);");
   });
 });

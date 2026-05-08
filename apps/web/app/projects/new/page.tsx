@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { PageChrome } from "@/components/app-shell/PageChrome";
+import { Button, Field, Surface, TextInput } from "@/components/ui";
 
 type SubmitState = "idle" | "saving" | "saved" | "error";
 
@@ -31,47 +32,44 @@ export default function NewProjectPage() {
   }
 
   return (
-    <PageChrome variant="empty">
-      <section className="flex w-full max-w-xl flex-col gap-6 text-left">
-        <div>
-          <h1 className="text-3xl font-semibold">New Project</h1>
-          <p className="mt-2 text-sm opacity-70">Choose an empty folder and project name.</p>
-        </div>
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Name
-            <input
-              className="rounded border border-neutral-300 bg-transparent px-3 py-2 text-base"
+    <PageChrome>
+      <header className="grid gap-(--space-2)">
+        <p className="vc-type-eyebrow text-(--text-3)">Local workspace</p>
+        <h1 className="vc-type-display text-(--text)">New Project</h1>
+        <p className="vc-type-body text-(--text-2)">Choose an empty local folder and project name.</p>
+      </header>
+
+      <Surface className="grid gap-(--space-6)" tone="raised">
+        <form className="grid gap-(--space-4)" onSubmit={handleSubmit}>
+          <Field htmlFor="project-name" label="Name">
+            <TextInput
+              id="project-name"
               onChange={(event) => setName(event.target.value)}
               required
-              type="text"
               value={name}
             />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Folder path
-            <input
-              className="rounded border border-neutral-300 bg-transparent px-3 py-2 font-mono text-sm"
+          </Field>
+          <Field htmlFor="project-path" label="Folder path" hint="Use a local folder that Video Creator can initialize.">
+            <TextInput
+              className="font-mono"
+              id="project-path"
               onChange={(event) => setPath(event.target.value)}
               required
-              type="text"
               value={path}
             />
-          </label>
-          <button
-            className="rounded bg-neutral-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            disabled={state === "saving"}
-            type="submit"
-          >
-            {state === "saving" ? "Creating..." : "Create Project"}
-          </button>
+          </Field>
+          <div className="flex flex-wrap items-center gap-(--space-3)">
+            <Button disabled={state === "saving"} type="submit" variant="primary">
+              {state === "saving" ? "Creating..." : "Create Project"}
+            </Button>
+            {message ? (
+              <p className={state === "error" ? "vc-type-body text-(--red)" : "vc-type-body text-(--green)"}>
+                {message}
+              </p>
+            ) : null}
+          </div>
         </form>
-        {message ? (
-          <p className={state === "error" ? "text-sm text-red-600" : "text-sm text-green-700"}>
-            {message}
-          </p>
-        ) : null}
-      </section>
+      </Surface>
     </PageChrome>
   );
 }

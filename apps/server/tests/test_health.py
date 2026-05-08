@@ -5,6 +5,7 @@ import pytest
 
 import server.runtime_status as runtime_status
 from server.db.projects import touch_recent
+from server.domain.project import CudaStatus, VersionedRuntimeStatus, WhisperXStatus
 from server.main import app
 from server.settings import settings
 
@@ -44,6 +45,65 @@ async def test_health_returns_runtime_dependency_status() -> None:
     assert set(body["whisperx"]) == {"status", "model"}
     assert body["whisperx"]["status"] in {"ready", "unavailable", "unknown"}
     assert body["whisperx"]["model"] == "large-v3"
+
+
+@pytest.mark.asyncio
+async def test_health_returns_stable_json_when_runtime_dependencies_are_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_status, "active_render_count", lambda: 0, raising=False)
+    monkeypatch.setattr(runtime_status, "count_cached_projects", lambda: 3, raising=False)
+    monkeypatch.setattr(
+        runtime_status,
+        "_detect_ffmpeg_status",
+        lambda: VersionedRuntimeStatus(status="unavailable", version="unknown"),
+    )
+    monkeypatch.setattr(
+        runtime_status,
+        "_detect_cuda_status",
+        lambda: CudaStatus(
+            status="unavailable",
+            available=False,
+            version="unknown",
+            gpu_label=None,
+        ),
+    )
+    monkeypatch.setattr(
+        runtime_status,
+        "_detect_whisperx_status",
+        lambda model: WhisperXStatus(status="unavailable", model=model),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["python"]["version"].startswith("3.11")
+    assert body == {
+        "status": "ok",
+        "version": "0.1.0",
+        "active_renders": 0,
+        "cached_projects": 3,
+        "sidecar": {
+            "status": "ready",
+            "address": "http://127.0.0.1:8787",
+            "version": "0.1.0",
+        },
+        "python": {
+            "status": "ready",
+            "version": body["python"]["version"],
+        },
+        "ffmpeg": {"status": "unavailable", "version": "unknown"},
+        "cuda": {
+            "status": "unavailable",
+            "available": False,
+            "version": "unknown",
+            "gpu_label": None,
+        },
+        "whisperx": {"status": "unavailable", "model": "large-v3"},
+    }
 
 
 @pytest.mark.asyncio

@@ -123,7 +123,7 @@ export function BgModal({ media, existing, totalSentences, duration, onSave, chi
               Assets
             </p>
             {media.length === 0 ? (
-              <p className="text-sm opacity-50">No media uploaded yet.</p>
+              <p className="text-sm opacity-50">No media added yet.</p>
             ) : (
               <div className="grid max-h-44 grid-cols-4 gap-2 overflow-y-auto">
                 {media.map((item) => (

@@ -19,56 +19,138 @@
 
 ---
 
-## T5.1 — Drop image onto sentence range
+## T5.1 — Assign Media modal, Inspector panel, and Layers popover
 
 ### Goal
-With one or more sentences selected in the transcript, the user clicks a thumbnail in the media library to assign that image as a foreground item covering the selected sentence range.
+The user assigns images/videos to specific sentence ranges using the **Assign Media modal**. The assigned clips appear in the timeline and can be inspected and edited via the **Inspector panel**. All layers are managed via the **Layers popover**.
 
-### Behavior
-- Selection state is already tracked from T3.5.
-- Media library shows clickable thumbnails. While a sentence range is selected, hovering a thumb says "Assign to sentences X–Y".
-- Click → server adds a new entry to `layers.foreground[]`:
-  ```json
-  {
-    "id": "fg-<random>",
-    "z": 1,
-    "anchor": "transcript",
-    "sentences": [4, 5, 6],
-    "media": "tokyo.jpg",
-    "compositing": "fullscreen",
-    "transition_in": { "kind": "fade", "duration_s": 0.4 },
-    "transition_out": { "kind": "fade", "duration_s": 0.4 }
-  }
-  ```
-- Foreground items appear in the preview canvas and timeline strip immediately (the preview already handles the layer model from T4.4 — it just needs to be passed the new project state).
-- A foreground item can be deleted: hover its strip in the timeline → trash icon → DELETE → server removes from `layers.foreground[]`.
+---
 
-### API
-- `POST /projects/<id>/layers/foreground` — body: foreground item JSON (server validates and assigns `id`, `z`).
-- `DELETE /projects/<id>/layers/foreground/<fg_id>`.
-- `PATCH /projects/<id>/layers/foreground/<fg_id>` — partial update (used in M6 for compositing/motion edits).
+### 5.1-A — Assign Media modal
 
-### Validation rules
-- Two items with the same `z` must not have overlapping sentence ranges. Server returns `422 OVERLAP` if so.
-- Sentences must exist in alignment (server checks against `.vc/alignment.json`).
-- `media` must exist in `media/`.
+#### Trigger paths
+1. **"+" button on a transcript sentence**: Each sentence row in the transcript panel has a button labelled "Assign media to this sentence". Clicking it opens the modal pre-filled with `from = to = clicked sentence index`.
+2. **"+ Add layer item" in the Layers popover**: Opens the modal pre-filled to the current sentence.
+3. **Clicking the asset thumbnail in the Inspector**: Opens the modal in edit mode for the selected item (allows changing asset and other fields).
 
-### Files
-- `apps/server/server/routes/foreground.py`.
-- `apps/web/components/foreground-list/ForegroundList.tsx` — list view + delete.
-- Edit `apps/web/components/timeline-strip/TimelineStrip.tsx` — add FG track.
+#### Modal fields (in order)
+1. **Asset** — scrollable media library grid (images and videos from `media/`). One selected at a time.
+2. **Sentence range** — `From` and `To` number inputs (1-based). Below them, a live preview: `s6–s7 · 00:33–00:47 · 14.2s` and a list of the sentences in range. Changing the inputs updates the preview in real time using the alignment data.
+3. **Compositing** — radio: **Fullscreen** (FG layer) or **Picture-in-Picture** (PiP layer).
+4. **Layer** — dropdown listing existing layers of the matching kind (`Foreground · z1`, `PiP · z3`, …) plus `+ Create new Foreground layer (z2)`. Only layers of the chosen compositing kind are shown.
+5. **PiP placement** — visible only when Compositing = PiP:
+   - 3×3 anchor grid (click to set `posX`/`posY` — corners are 2/98, center is 50).
+   - Size slider (10–80%, default 22%).
+   - Corner radius slider (0–32 px, default 16).
+   - Opacity slider (0–100%, default 90).
+6. **Motion** — dropdown: `None — static`, `Ken Burns · subtle`, `Ken Burns · strong`, `Zoom in`, `Zoom out`, `Pan left`, `Pan right`. Default: `Ken Burns · subtle`.
+7. **Easing** — dropdown: `linear`, `ease in`, `ease out`, `ease in-out`. Disabled when motion = None. Default: `ease in-out`.
+8. **Transition In / Out** — two dropdowns: `cut`, `fade · 0.4s`, `slide left`, `slide right`, `dip to black`. Defaults: both `fade · 0.4s`.
+
+#### Confirm action
+- Creates a new item in the chosen layer (or a new layer of the correct kind if "Create new" was selected).
+- Calls `PUT /projects/<id>/layers` with the updated layers array.
+- Closes the modal, selects the new clip in the timeline, and opens the Inspector.
+
+#### Validation
+- Asset must be selected.
+- `from ≤ to`, both within `[1, sentence_count]`.
+- Two items in the same layer must not overlap by sentence range. Show inline error `"Overlaps with existing item in this layer"` if they do. The user must pick a different layer or range.
+
+#### Files
+- `apps/web/components/assign-modal/AssignModal.tsx`
+- `apps/web/lib/hooks/useAssignModal.ts` — open/close state + pre-fill values.
+
+---
+
+### 5.1-B — Inspector panel
+
+The Inspector is a right-side panel that shows editable properties of the **currently selected timeline clip**. Selecting a clip in the timeline (click) opens the Inspector for that item.
+
+#### Inspector is layer-kind aware:
+
+**FG item Inspector:**
+- Asset thumbnail (clickable → re-opens Assign modal in edit mode for asset pick).
+- Sentence range display: `s6–s7 · 00:33–00:47`. `From` / `To` number inputs.
+- "Stretch" hint: `drag clip edges in timeline ↗` (the time-precise start/end is set by dragging).
+- Motion kind dropdown + easing dropdown (same options as modal).
+- Transition In / Transition Out dropdowns (same options as modal).
+- **Delete item** button (removes item from layer; if last item in FG/PiP layer, deletes the layer).
+
+**PiP item Inspector:**
+- Same as FG plus the PiP placement controls (3×3 grid, size, radius, opacity sliders).
+
+**BG item Inspector:**
+- Asset thumbnail (clickable → re-opens BG modal).
+- Motion kind.
+- Crossfade slider (0–2 s).
+- **"Remove background"** button (deletes the `"bg"` layer entirely).
+
+**SUB Inspector:**
+- Burn-in toggle.
+- Font family dropdown, size slider.
+- Position: `bottom-center` / `top-center`.
+- Max chars per line number input.
+- Background style: `none` / `shadow` / `box`.
+
+#### Inspector edits apply immediately — no Save button inside the Inspector. Each change calls `PUT /projects/<id>/layers` and updates the Zustand store.
+
+#### Files
+- `apps/web/components/inspector/Inspector.tsx`
+- `apps/web/lib/hooks/useSelectedClip.ts` — tracks `{ layerId, itemId } | null`.
+
+---
+
+### 5.1-C — Layers popover
+
+Opens from the **"Layers · N"** button beneath the preview (where N is total item count across all layers). Lists all layers in render order, top to bottom:
+
+```
+SUBTITLES         164 cues
+PiP · z4          2 items
+PiP · z3          1 item
+Foreground · z1   3 items     [trash]
+Background        1 item      [trash]
+```
+
+- Clicking a row selects the first item in that layer and opens the Inspector.
+- Trash icon on BG and FG/PiP layers: deletes the entire layer (with a confirmation dialog).
+- **"+ Add layer item"** button at the bottom: opens the Assign modal pre-filled to the current sentence.
+- Max height 360px; scrolls when there are many layers.
+
+#### Files
+- `apps/web/components/layers-popover/LayersPopover.tsx`
+
+---
+
+### API (all layer mutations share one endpoint)
+
+`PUT /projects/<id>/layers` — body: `{ layers: Layer[] }`. Replaces the full layers array. Server validates, writes `project.json`, returns `{ layers }`.
+
+There are no separate POST/DELETE/PATCH per item. The frontend always sends the complete updated layers array. This keeps the server simple and the client as the single source of truth for layer state during a session.
+
+### Validation (server-side)
+- All `mediaId` values must exist in `media/`.
+- Within each layer, no two items may have overlapping `[start, end]` ranges.
+- `sentences[0] ≤ sentences[1]`, both within `[1, sentence_count]`.
+- A `"bg"` layer has exactly one item.
+- A `"sub"` layer has exactly one item with `auto: true`.
 
 ### Verification
 
 Manual:
-1. Select sentences 5–7. Click an image thumb.
-2. New strip appears in timeline at sentences 5–7.
-3. Press play → at the time range covered, the image is shown in the preview.
-4. Delete it → strip removed, preview reverts to BG.
+1. Click "+" on sentence 6. Assign Modal opens with `from=6, to=6`.
+2. Pick an image. Set range to 6–7. Compositing: Fullscreen. Layer: `Foreground · z1`. Motion: `Ken Burns · subtle`. Confirm.
+3. A new clip block appears in the `Foreground · z1` timeline track at the correct position.
+4. Click the clip → Inspector opens showing `s6–s7` range and motion settings.
+5. Change motion to `Zoom in` in Inspector → timeline clip label updates, preview uses new motion.
+6. Open Layers popover → `Foreground · z1  1 item` is listed.
+7. Delete item from Inspector → clip removed from timeline; layer removed (was the only item).
+8. Press play → at sentences 6–7, the foreground image shows; otherwise BG shows.
 
 ### Commit
 ```
-feat(web,server): foreground item assignment via sentence selection
+feat(web,server): assign media modal, inspector panel, layers popover
 
 Refs: T5.1
 ```
@@ -224,11 +306,12 @@ Refs: T5.3
 8. Returns `200 { render_id, output_path }` (or `400/422/500` with reasons).
 
 ### Behavior
-- `preset: "draft"` → 1280×720, CRF 28, x264 ultrafast, AAC 128kbps.
-- `preset: "final"` → 1920×1080, CRF 18, x264 slow, AAC 192kbps.
+- `preset: "draft"` → 1280×720, CRF 28, x264 ultrafast, AAC 128kbps. Written to `<project>/.vc/drafts/<timestamp>.mp4`.
+- `preset: "final"` → 1920×1080, CRF 18, x264 slow, AAC 192kbps. Written to `<project>/renders/<timestamp>.mp4`.
 - Single-flight per project: concurrent calls return `409 RENDER_IN_PROGRESS`.
 - `render_id` format: `r-<YYYY-MM-DD-HHmm>-<rand>`.
-- Output path: `renders/<preset>-<YYYY-MM-DD-HHmm>.mp4` (relative to project dir).
+
+**Important**: `preset: "draft"` is triggered from the editor toolbar and does **not** navigate away from the editor. `preset: "final"` is triggered from the Render screen (T6.1) and runs there. The endpoint is shared; the distinction is in how the UI handles the response.
 
 ### Files
 - `apps/server/server/routes/render.py`.
@@ -253,22 +336,19 @@ Refs: T5.4
 
 ---
 
-## T5.5 — WebSocket render progress
+## T5.5 — WebSocket render progress + Render Draft inline UI
 
 ### Goal
-A WebSocket at `/projects/<id>/render/ws` streams progress events as ffmpeg runs. The UI subscribes during a render and shows a progress bar.
+A WebSocket at `/projects/<id>/render/ws` streams progress events as ffmpeg runs. The **Render Draft** path shows progress inline in the editor (the user stays on the Editor screen). The **Render Final** path shows progress on the dedicated Render screen (T6.1).
 
-### Behavior
+### Server
 
-#### Server
 - ffmpeg invoked with `-progress pipe:1`.
 - A reader task parses key=value lines: `out_time_us`, `frame`, `speed`, `progress` (`continue` / `end`).
-- Computes `percent = out_time_us / total_us`.
-- Computes `eta_seconds` from `speed`.
-- Pushes events to all connected WS clients of that project's render channel.
+- Computes `percent = out_time_us / total_us`, `eta_seconds` from `speed`.
+- Pushes events per `CONVENTIONS.md` §9 to all WS clients subscribed to that `render_id`.
 
-#### Event shape
-Per `CONVENTIONS.md` §9:
+### Event shape (unchanged — from CONVENTIONS.md §9)
 ```json
 {
   "type": "progress",
@@ -282,31 +362,34 @@ Per `CONVENTIONS.md` §9:
 }
 ```
 
-#### Stages
-- `cache_warm` — pre-rendering uncached clips. `percent` = clips_done / clips_total * 100.
-- `compose` — main ffmpeg invocation. `percent` = video time / total.
-- `muxing` — final tail (post-encode, container finalization). Briefly visible.
-- `done` — emitted once with `output_path` field.
-- `error` — emitted on any failure with `message`.
+### Render Draft — inline editor progress bar
+
+When the user clicks **"Render Draft"** in the editor toolbar:
+1. Editor calls `POST /projects/<id>/render` with `preset: "draft"`. Response: `{ render_id, output_path }`.
+2. Editor subscribes to the WS. A **28px accent-color progress bar** appears as a full-width row directly below the editor toolbar (between toolbar and editor body), pushing content down slightly.
+3. Bar fills left-to-right. Contents: `● verifying cache → pre-rendering clips → ffmpeg compose → muxing audio` stage label · `42%` · `Cancel` button.
+4. The **Render Draft** button becomes disabled and reads `Drafting · 42%`.
+5. On `stage: "done"`: bar turns green, label reads "Draft ready", an `Open` link appears that navigates to the **Render screen** for playback. Bar auto-dismisses after 2.6 s if untouched.
+6. Cancel: calls `DELETE /projects/<id>/render/<render_id>`, removes bar, re-enables button. Partial draft is discarded.
 
 ### Files
 - `apps/server/server/routes/ws.py` — WebSocket route.
 - `apps/server/server/pipeline/render.py` — emits events to a per-render `asyncio.Queue`.
-- `apps/web/lib/hooks/useRenderProgress.ts` — subscribes to WS, returns progress state.
-- `apps/web/components/render-status/RenderStatus.tsx` — progress bar UI.
+- `apps/web/lib/hooks/useRenderProgress.ts` — subscribes to WS, returns `{ stage, percent, eta }`.
+- `apps/web/components/render-draft-bar/RenderDraftBar.tsx` — the inline progress bar rendered inside the Editor layout, conditionally visible when a draft render is active.
 
 ### Verification
 
 Manual:
-1. Start a render.
-2. UI shows progress bar updating ~2–5×/sec.
-3. ETA decreases.
-4. On completion: bar fills, "Done" message + link to output.
-5. Cancel button (added in T5.6) terminates ffmpeg.
+1. Click "Render Draft".
+2. Progress bar appears below toolbar. Stage label and % update ~2–5×/sec.
+3. On completion: bar goes green, "Draft ready · Open" link visible.
+4. Click "Open" → navigates to Render screen.
+5. Click "Cancel" mid-render → bar disappears, "Render Draft" button re-enables.
 
 ### Commit
 ```
-feat(web,server): WebSocket progress for renders
+feat(web,server): WebSocket render progress + inline Render Draft bar
 
 Refs: T5.5
 ```

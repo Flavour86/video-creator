@@ -38,7 +38,7 @@
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 0.3 Hard rules for agents (do not violate)
+### 0.3 Hard rules for agents (**Do not violate**)
 
 1. **Never proceed past a failed verification.** Diagnose and fix. Do not modify the verification to make it pass.
 2. **Never skip ahead.** Tasks have ordering for a reason. If T2.3 depends on T2.1, do not attempt T2.3 first.
@@ -49,6 +49,7 @@
 7. **One task per commit.** Atomic, revertable history.
 8. Highly replicate the fidelity of the visual effect presented by the prototype `docs/prototype/v1`
 9. **Stop and ask** if a task's instructions conflict with what you find on disk. Add a `## Blocked` entry to `STATE.md` and stop.
+10. **When you are in the development, invoke the `test-driven-development` skill, [frontend](../../apps/web) related code also should invoke `next-best-practices` skill, [backend](../../apps/server) related code also should invoke `fastapi-python` skill** 
 
 ### 0.4 Task ID grammar
 
@@ -69,11 +70,16 @@ T<milestone>.<task>.<step>    e.g., T3.2.1 = Step 1 of T3.2 (rare; only used inl
 
 ---
 
-## 1. Project north star (one-paragraph summary)
+## 1. Project north star (summary)
 
-A locally-run web app (Next.js + FastAPI sidecar) that takes a user's voice recording, written transcript, and a folder of images/clips, then composes a 1080p YouTube-ready MP4. The user assigns images to ranges of sentences in the transcript, with optional time-pinned overrides. Phase 1 is fully local; no AI generation, no cloud calls. Phase 2 (out of scope here) adds AI image generation, image-to-video, and LoRA-trained character consistency, all routed through online serverless GPUs (Fal / Modal). Phase 3 (out of scope here) productizes as a SaaS.
+A locally-run web app (Next.js + FastAPI sidecar) that takes a user's voice recording, written transcript, and a folder of images/clips, then composes a 1080p YouTube-ready MP4. The user assigns images or videos to ranges of sentences in the transcript, with optional time-pinned overrides. Phase 1 is fully local; no AI generation, no cloud calls. Phase 2 (out of scope here) adds AI image generation, image-to-video, and LoRA-trained character consistency, all routed through online serverless GPUs (Fal / Modal). Phase 3 (out of scope here) productizes as a SaaS.
 
-For the full design, read `../designs/PHASE_1_DESIGN.md`.
+The prototype(UI) at `docs/prototype/v1/app.html` is the **reference implementation** for all UI interactions, data shapes, and visual behavior. Run it at `http://192.168.31.48:8000/app.html` or serve locally. Consult `docs/prototype/v1/SPEC.md` for the full interaction specification before implementing any Editor or Preview milestone.
+
+The UI is a 5-tab single-page app: **Launcher** (recent projects), **Setup** (voice/transcript/media), **Editor** (main editing surface), **Render** (render pipeline + history), and **Tokens** (live design-system reference), Tokens tab is for tailwind to extract the css tokens for global usage and theme changing, so don't show it in the app.
+
+The Editor's core model is a **layers array** — Subtitles (always on top), one or more PiP layers, one or more Foreground layers, and an optional Background layer at the bottom. The user assigns images/videos to sentence ranges via the **Assign Media modal**, fine-tunes clips in the **Inspector**, and manages all layers via the **Layers popover**. 
+The transcript is always the source of truth for timing; WhisperX forced-alignment turns sentence ranges into time ranges. The user can draft-render inline (stays in editor) or final-render on the Render screen.
 
 ---
 
@@ -86,20 +92,29 @@ Acceptance test (literal):
    run:
        npx @yourname/video-creator
 2. A browser tab opens to http://localhost:3000.
-3. Click "New Project". Pick a folder. Drag in:
-     - voice.wav (12-20 minutes, ~150-200 sentences)
+3. Click "New Project". stuff test ingredients in:
+     - voice.wav (5-30 minutes, ~50-300 sentences)
      - transcript.txt (matching script)
      - 5-80 images (jpg/png)
 4. Wait for alignment to finish (≤ 90 sec on RTX 5070 Ti, ≤ 5 min on CPU).
 5. Multi-select sentence range, drop image → it appears in timeline strip.
 6. Repeat ~30 times.
-7. Click "Render Draft" → preview MP4 in renders/ within 5 minutes.
-8. Click "Render Final" → 1080p MP4 in renders/ within 25 minutes.
-9. Upload to YouTube → ingests cleanly, no transcoding errors.
-10. Edit one foreground item → click "Render Final" again → completes in < 5 minutes.
+7. Check "Render Draft" → preview MP4 in renders/ within 2 minutes.
+8. Check "Render Final" → 1080p MP4 in renders/ with whole duration, this one start testing after the "Render Draft" test passed.
+9. Check the resule of render whether matches our expectation, see  video checking steps below.
+10. If any one is failed in the video checking steps, fix them and run again until everything runs same as we expected.
+11. The UI and interactions replication should realize exactly basing on URL:http://192.168.31.48/app.html, which is the truth of visual scenes user want, the code is in the `docs/prototype/v1`, don't copy the css code from it, implement same effect with tailwind css, if you aren't able to know the effect visually, using chrome-devtool MCP interact with it. Stop and ask user when the URL is unable to access.
 ```
 
-When all 10 steps pass on the user's machine, Phase 1 is done.
+When all 11 steps pass on the user's machine, Phase 1 is done and then ask user checking
+
+### video checking steps
+- Run the app/render pipeline with provided transcript voice, and image scenes.
+- Use ffprobe to verify codec, duration, resolution, audio/video streams, frame count, timestamps.
+- Extract frames at key timestamps or every N seconds with ffmpeg.
+- Open/view sampled frame images here and check whether the expected scene, PiP/FG/BG/subtitles/watermark/transitions appear.
+- Detect obvious issues: black frames, missing overlays, wrong scene timing, bad opacity, wrong position, subtitle accuracy according transcript, subtitle burn-in, resolution mismatch, no audio, duration mismatch.
+- Generate contact sheets from many frames so we can review the whole render visually in one or a few images.
 
 ---
 

@@ -27,6 +27,17 @@
       "command": "命令",
       "runtime": "运行时",
       "version": "版本",
+      "runtimeStatus": {
+        "checking": "正在检查运行时",
+        "fetchFailed": "运行时不可用",
+        "ready": "就绪",
+        "unknown": "未知",
+        "unavailable": "不可用",
+        "sidecar": "sidecar {value}",
+        "ffmpeg": "ffmpeg {value}",
+        "cuda": "CUDA {value}",
+        "renderCache": "渲染 {renders} · 缓存 {cache}"
+      },
       "defaults": {
         "alignmentCached": "对齐已缓存",
         "cacheWarm": "缓存 {count} 已预热",
@@ -51,7 +62,7 @@
       "renderFinal": "渲染最终版",
       "chooseLocalFolder": "选择本地文件夹",
       "assignMedia": "分配媒体",
-      "uploadMedia": "上传媒体"
+      "uploadMedia": "添加媒体"
     },
     "tooltips": {
       "toggleTheme": "切换主题",
@@ -82,7 +93,7 @@
     "requiredProjectName": "项目名称为必填项",
     "requiredProjectFolder": "项目文件夹为必填项",
     "folderMissing": "文件夹缺失",
-    "uploadFailed": "上传失败",
+    "uploadFailed": "添加失败",
     "renderFailed": "渲染失败",
     "renderFailedToStart": "渲染启动失败。",
     "renderProgressConnectionFailed": "渲染进度连接失败。",
@@ -121,7 +132,7 @@
     },
     "editor": {
       "title": "编辑器",
-      "dropHint": "拖入图片 / 视频 - jpg png webp mp4 mov webm",
+      "dropHint": "添加图片 / 视频 - jpg png webp mp4 mov webm",
       "draftActive": "正在渲染草稿..."
     },
     "render": {
@@ -132,6 +143,7 @@
     "tokens": {
       "eyebrow": "设计令牌",
       "title": "令牌",
+      "summary": "开发参考页，展示 styles.css 中 :root 上的 CSS 自定义属性，以及消费这些令牌的共享组件。",
       "sections": {
         "colors": "颜色",
         "type": "字体",
@@ -140,6 +152,15 @@
         "shadows": "阴影",
         "cinema": "影像",
         "components": "组件"
+      },
+      "descriptions": {
+        "colors": "本地工作区使用的表面、文字层级、线条和强调色语义。",
+        "type": "受支持的字体角色和字体族。技术值使用时间码和路径等 monospace 示例。",
+        "spacing": "从 space-1 到 space-12 的固定间距刻度，并显示像素值。",
+        "radii": "共享圆角令牌，以及标签、状态徽标和圆形图标控件使用的 pill 约定。",
+        "shadows": "内联层级保持克制；模态框和弹出层使用更深的阴影令牌。",
+        "cinema": "用于画布、预览、安全区、画中画、时间线、播放头和片段的视频常量。",
+        "components": "示例直接渲染应用屏幕使用的共享组件；组件必须引用令牌和共享原语，而不是原始视觉值。"
       }
     }
   }

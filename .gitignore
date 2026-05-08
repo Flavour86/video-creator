@@ -47,3 +47,7 @@ app/web/graphify-out/cache/
 .graphify*
 *.tsbuildinfo
 .downloads/
+
+# project
+projects/
+docs/designs/audits

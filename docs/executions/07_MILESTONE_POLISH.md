@@ -20,31 +20,55 @@
 
 ---
 
-## T6.1 — Final render preset
+## T6.1 — Render Final screen + final preset
 
 ### Goal
-Wire the `final` preset through the entire pipeline. When the user clicks "Render Final", the result is 1080p / CRF 18 / x264 slow / AAC 192 kbps / MP4 with `+faststart`.
+Wire the `final` preset (1080p / CRF 18 / x264 slow / AAC 192 kbps / `+faststart`) and implement the dedicated **Render screen** where Final renders run and render history is shown.
 
-### Behavior
-- The compose command from T5.4 already accepts a `preset` arg. Switch between draft and final settings.
-- Cache keys include resolution and CRF — final and draft caches are independent.
-- The UI now has two render buttons: "Render Draft" and "Render Final".
+### Render Final flow
+- Clicking **"Render Final"** in the editor toolbar navigates to `/render?project=<path>`.
+- The **Render screen** (tab: Render) starts `POST /projects/<id>/render` with `preset: "final"` automatically on arrival if no render is already in progress.
+- The Render screen shows:
+  - **Multi-stage pipeline** with individual stage rows: `verifying cache` · `pre-rendering clips` · `building subtitles.srt` · `ffmpeg compose` · `muxing audio`. Each row shows a spinner / checkmark / error icon.
+  - A progress bar + percent + ETA below the stage list.
+  - A **Cancel** button. Cancelled renders go to history as `*.partial` (not playable).
+  - On completion: a **Play** button that opens the output file, or an **Open folder** button.
+- Cache keys include resolution and CRF — Final and Draft caches are fully independent.
+
+### Render history
+Below the active render, a list of past renders for this project:
+- Columns: preset badge (`DRAFT` / `FINAL`), timestamp, duration, file size, status.
+- **Open** button reveals the file in Explorer/Finder.
+- **Play** button (if file exists): calls server to open in the OS default player.
+- Partial renders are labelled `partial — not playable`.
+
+### API additions
+- `GET /projects/<id>/renders` — returns render history rows.
+- `POST /projects/<id>/renders/<render_id>/reveal` — shell-opens the containing folder.
+
+### Files
+- `apps/web/app/(app)/render/page.tsx` — Render screen.
+- `apps/web/components/render-pipeline/RenderPipeline.tsx` — stage rows + progress bar.
+- `apps/web/components/render-history/RenderHistory.tsx` — history list.
+- `apps/server/server/routes/render.py` — add list + reveal endpoints.
+- `apps/server/server/db/renders.py` — render_history CRUD.
 
 ### Verification
 
 Manual:
-1. Render Draft on the smoke project → 720p MP4.
-2. Render Final on the same project → 1080p MP4.
-3. Verify with `ffprobe`:
+1. Assign items, click "Render Final" → navigated to Render screen.
+2. Pipeline stages check off one by one.
+3. Output: 1080p MP4. Verify:
    ```powershell
-   ffprobe -v error -show_streams renders/final-*.mp4 | Select-String "width|height|codec_name|bit_rate"
+   ffprobe -v error -show_streams renders/final-*.mp4 | Select-String "width|height|codec_name"
    ```
-4. Upload the Final output to YouTube. It should ingest without re-encode warnings.
-5. Time budget: cache-cold ≤ 25 min; cache-hit ≤ 8 min.
+4. History row appears. "Open" reveals the file.
+5. Upload to YouTube → ingests cleanly, no re-encode warnings.
+6. Time budget: cache-cold ≤ 25 min; cache-hit ≤ 8 min.
 
 ### Commit
 ```
-feat(server,web): final render preset (1080p CRF 18)
+feat(server,web): render screen with Final preset, pipeline view, and history
 
 Refs: T6.1
 ```
@@ -137,62 +161,62 @@ Refs: T6.3
 
 ---
 
-## T6.4 — Auto-distribute multi-image
+## T6.4 — Background layer: multi-image rotation
 
 ### Goal
-Auto-distribute supports `kind: "images"` with multiple items. They're divided evenly across the audio duration with crossfade transitions between them.
+The BG layer supports multiple images that rotate evenly across the project duration, with configurable crossfade between them.
 
 ### Behavior
-- UI: background panel now supports adding multiple images in order. Drag to reorder.
-- Server: when computing the auto-distribute schedule, `slot_duration = audio_duration_s / len(items)`. Each slot gets a clip rendered with the configured `transition` ("crossfade" or "cut") and `transition_duration_s`.
-- Asset cache hashes already include item-level info; multi-item just produces multiple cached clips.
-- Filtergraph adds the auto-distribute clips as Layer 1 overlays. They run in sequence and fall through to black at the start (briefly during fade-in if the first item fades in).
+- The BG modal (from T4.3) gains a **multi-asset picker**: the user can add more than one image, drag to reorder. A `crossfade` slider (0–2 s) sets the transition between each image.
+- The server stores this as a single `"bg"` layer with **multiple items** (one per image). Each item's `start`/`end` is computed as `slot_duration = project_duration_s / image_count`.
+- The filtergraph concatenates the pre-rendered BG clips sequentially, inserting a crossfade between each pair.
+- Cache hashing per BG item is already compatible (each item is hashed independently on its `mediaId`, `duration`, `motion`, `crossfade`).
 
 ### Files
-- Edit `apps/web/components/background-picker/BackgroundPicker.tsx`.
-- Edit `apps/server/server/pipeline/filtergraph.py`.
-- Edit `apps/server/server/pipeline/clip_render.py`.
+- Edit `apps/web/components/bg-modal/BgModal.tsx` — add multi-asset list + drag-reorder + crossfade slider.
+- Edit `apps/server/server/pipeline/filtergraph.py` — BG layer can now have N items instead of 1.
+- Edit `apps/server/server/pipeline/clip_render.py` — no changes needed (already handles per-item render).
 
 ### Verification
 
 Manual:
-1. Pick 3 images for auto-distribute.
-2. Preview shows them rotating evenly through the duration.
-3. Render → output MP4 has the same rotation with smooth crossfades.
+1. In BG modal, add 3 images. Set crossfade to 0.6 s.
+2. Preview shows them rotating across the duration.
+3. Render → output MP4 has smooth crossfades between BG images.
 
 ### Commit
 ```
-feat(server,web): auto-distribute multi-image with crossfades
+feat(server,web): multi-image background layer with crossfade rotation
 
 Refs: T6.4
 ```
 
 ---
 
-## T6.5 — Auto-distribute clips with black-tail fallback
+## T6.5 — Background layer: video clip with black-tail fallback
 
 ### Goal
-Auto-distribute supports `kind: "clips"`. Clips concatenate sequentially. If their total duration is less than the audio, the trailing gap shows the universal black fallback (Layer 0).
+The BG layer supports video clips as the background asset. If the clip is shorter than the project, the remainder shows black (with foreground items still visible on top).
 
 ### Behavior
-- Probe each clip's duration with `ffprobe`.
-- Compute schedule: clip 1 covers `[0, d1]`, clip 2 covers `[d1, d1+d2]`, etc.
-- Whatever time remains after the last clip ends → the auto-distribute layer simply has nothing scheduled there. Layer 0 (black) is visible. Foreground items still appear normally.
-- Each clip is added to the cache with its native motion (no Ken Burns); transitions between clips per the `transition` setting.
+- In the BG modal, the user can pick a **video** from `media/`. The server probes its duration with `ffprobe`.
+- If `clip_duration < project_duration`: the BG item covers `[0, clip_duration]`; the remaining time `[clip_duration, project_duration]` has no BG — black shows underneath any FG/PiP items.
+- The video plays through once; it does not loop.
+- Motion (Ken Burns etc.) is not applied to video BG items — only scale/crop to fit canvas.
 
 ### Files
-- Edit `apps/server/server/pipeline/clip_render.py` — clip-input branch.
-- Edit `apps/server/server/pipeline/filtergraph.py`.
+- Edit `apps/server/server/pipeline/clip_render.py` — video-input branch for BG clips.
+- Edit `apps/server/server/pipeline/filtergraph.py` — BG segment ends at `clip_duration`, not `project_duration`.
 
 ### Verification
 
 Manual:
-1. Pick 2 clips totaling 30 seconds for an 80-second voice.
-2. Render → seconds 0–30 show clips, seconds 30–80 show black (with foregrounds where assigned).
+1. Pick a video clip (e.g. 30 s) as BG for an 80 s project.
+2. Render → seconds 0–30 show the video; seconds 30–80 show black with FG items.
 
 ### Commit
 ```
-feat(server,web): auto-distribute clips with black-tail fallback
+feat(server,web): video clip background with black-tail fallback
 
 Refs: T6.5
 ```
@@ -262,33 +286,50 @@ Refs: T6.7
 
 ---
 
-## T6.8 — PiP compositing mode
+## T6.8 — PiP compositing mode (render support)
 
 ### Goal
-A foreground item can use `compositing: { mode: "pip", position, offset_x, offset_y, scale, border_radius }` to overlay as picture-in-picture instead of replacing the full screen.
+PiP items are already creatable via the Assign modal (T5.1) and visible in the preview. This task wires PiP into the ffmpeg render pipeline so they appear correctly in the output MP4.
+
+### PiP item data model (reminder)
+```json
+{
+  "id": "pip-001", "mediaId": "callout-map.png",
+  "sentences": [6, 7], "start": 36.0, "end": 44.0,
+  "motion": { "kind": "none", "easing": "linear" },
+  "transitions": { "in": "fade", "out": "fade" },
+  "pip": { "posX": 2, "posY": 2, "size": 30, "radius": 12, "opacity": 100 }
+}
+```
+
+- `posX` / `posY`: 0–100, percentage of canvas. `posX=2, posY=2` = top-left corner. `posX=98, posY=2` = top-right.
+- `size`: % of canvas width. `size=30` on a 1920-wide canvas = 576 px wide.
+- `radius`: corner radius in px (applied with a rounded-mask filter).
+- `opacity`: 0–100.
 
 ### Behavior
-- UI: per-foreground-item dropdown switching "Full screen" / "Picture-in-picture". When PiP, show controls for position (9-grid), scale (0.10–0.50), offset, border radius (px).
-- Preview: PiP shown via absolutely-positioned scaled `<img>`. The underlying layers (auto-distribute, lower-z foreground) keep displaying.
-- Render: filtergraph constructs a sub-clip for the PiP item with rounded corners (use `geq` filter or pre-mask), then overlays it at the configured position.
-- Z-order matters: a fullscreen item at higher z covers a PiP at lower z. A PiP at higher z overlays whatever's below.
+- The PiP clip is pre-rendered like FG clips (cached to `.vc/clips/<hash>.mp4`) but with additional overlay geometry baked into the cache key.
+- Rounded corners: pre-bake an alpha mask using ffmpeg's `geq` filter to create a rounded rectangle mask, then apply `alphamerge` / `format=yuva420p`. Output is a VP9 clip with alpha (not H.264, which doesn't support alpha).
+- The filtergraph overlays each PiP clip at the correct canvas position using `overlay=x=<posX_px>:y=<posY_px>:enable='between(t,start,end)'`.
+- Opacity: applied with `colorchannelmixer=aa=<opacity/100>` before the overlay.
+- Z-order: PiP layers with higher z-index appear later in the filtergraph (drawn on top). Array order drives this — PiP layers at lower array index are drawn later (on top).
 
 ### Files
-- Edit `apps/web/components/foreground-list/`.
-- Edit `apps/web/lib/preview/resolveDisplay.ts`.
-- Edit `apps/server/server/pipeline/clip_render.py` — PiP clips need transparency-aware encoding for the rounded corners (use `format=yuva420p` then composite with alpha).
-- Edit `apps/server/server/pipeline/filtergraph.py`.
+- Edit `apps/server/server/pipeline/clip_render.py` — PiP render branch: scale to `size`% of canvas width, apply rounded-corner alpha mask, encode as VP9 with alpha.
+- Edit `apps/server/server/pipeline/filtergraph.py` — overlay PiP clips in z-order after FG overlays, before subtitles and watermark.
+- Edit `apps/web/lib/preview/resolveDisplay.ts` — already returns `pip[]` array; confirm `posX`/`posY`/`size`/`opacity` are being used for the preview CSS positioning.
 
 ### Verification
 
 Manual:
-1. Set a foreground item to PiP, top-right, scale 0.3.
-2. Preview shows the PiP.
-3. Render → PiP visible in MP4 with the BG showing through the rest of the frame.
+1. Open a project with a PiP item at `posX=98, posY=2, size=22` (top-right corner).
+2. Render Draft.
+3. Output: PiP image appears at top-right with rounded corners, BG visible through the rest of the frame.
+4. Opacity 50% → PiP is semi-transparent in output.
 
 ### Common failures
-- **Rounded corners are square**: alpha-aware path not used. Use `libvpx-vp9` for the cached PiP clip (with alpha) or pre-bake alpha mask via `geq`.
-- **PiP scale wrong**: confirm scale is interpreted as fraction-of-canvas, not absolute pixels.
+- **Rounded corners appear square in render**: alpha path not used. Check that the PiP clip is encoded as VP9 (`libvpx-vp9`) with the `yuva420p` pixel format.
+- **PiP position offset from preview**: `posX`/`posY` in the preview is CSS percentage of a scaled container; in ffmpeg it must be converted to absolute pixels of the output canvas.
 
 ### Commit
 ```
@@ -302,21 +343,31 @@ Refs: T6.8
 ## T6.9 — Configurable transitions
 
 ### Goal
-Each foreground item supports configurable `transition_in` and `transition_out`: `cut`, `fade`, or `slide` (with direction). Default: fade 0.4s in/out.
+Each FG and PiP item supports five transition options for both `in` and `out`: `cut`, `fade`, `slide_left`, `slide_right`, `dip_black`. The UI dropdowns are already wired by T5.1. This task wires them into the render pipeline.
 
-### Behavior
-- UI: per-item dropdowns for in and out, with optional direction for slide.
-- Cache key already includes transitions (T5.2).
-- Render:
-  - `cut`: zero-duration; clip just appears/disappears.
-  - `fade`: alpha fade applied at clip boundaries (already in T5.2's example command).
-  - `slide`: clip enters from the specified edge using `overlay` with a time-varying x/y expression (e.g., `overlay=x='if(lt(t,0.3), W*(1 - t/0.3), 0)'` for slide-from-right).
-- Slide is more complex and applied at the *compose* stage (filtergraph), not pre-baked into the cache, because positioning depends on canvas size. **However**, fade is baked into the cached clip per T5.2 — so the cache key's transition_in/out pertains to fade only. Slide is recomputed in the filtergraph using the original cache.
+### Transition options (match prototype exactly)
+| Value | Description |
+|---|---|
+| `cut` | Instant — clip appears/disappears with no transition |
+| `fade` | Alpha fade over 0.4 s |
+| `slide_left` | Clip slides in from right / exits to left |
+| `slide_right` | Clip slides in from left / exits to right |
+| `dip_black` | Fade to black then fade in (for in) or fade to black (for out) |
+
+### Render implementation
+- **`cut`**: no filter added. Clip simply starts/ends at its `start`/`end` time.
+- **`fade`**: baked into the cached clip (already in T5.2's `fade=t=in:st=0:d=0.4` / `fade=t=out`). Cache key includes `transition_in`/`transition_out` values.
+- **`slide_left` / `slide_right`**: applied at the **compose stage** (filtergraph), NOT pre-baked, because the slide offset depends on canvas size. Use a time-varying `overlay=x=` expression:
+  - Slide-in from right: `overlay=x='if(lt(t-START, 0.4), W*(1-(t-START)/0.4), 0)'`
+  - Slide-out to left: `overlay=x='if(gt(t, END-0.4), -W*((t-(END-0.4))/0.4), 0)'`
+- **`dip_black`**: two-phase fade on top of the clip — compose a black overlay that fades out (in) or fades in (out) over 0.4 s.
+
+### Cache key note
+`slide_left`/`slide_right`/`dip_black` transitions do **not** change the cached clip — they are applied at compose time. Only `fade` is baked. The cache key still includes `transition_in`/`transition_out` to future-proof it (a `fade` cached clip cannot be reused as `cut`).
 
 ### Files
-- Edit `apps/server/server/pipeline/clip_render.py` — handle fade.
-- Edit `apps/server/server/pipeline/filtergraph.py` — handle slide at compose stage.
-- UI: `apps/web/components/transition-picker/TransitionPicker.tsx`.
+- Edit `apps/server/server/pipeline/clip_render.py` — fade baking only.
+- Edit `apps/server/server/pipeline/filtergraph.py` — slide and dip_black overlay expressions.
 
 ### Verification
 

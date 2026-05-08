@@ -6,13 +6,40 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { LANGUAGE_STORAGE_KEY, useLanguageStore } from "@/lib/i18n/language-store";
 import { THEME_STORAGE_KEY, useThemeStore } from "@/lib/theme/theme-store";
+import type { RuntimeHealthResponse } from "@vc/shared-schemas";
 import { AppShell } from "./AppShell";
 
 let mockPathname = "/";
+let mockRuntimeStatus: RuntimeHealthResponse | null = null;
+let mockRuntimeError: string | null = null;
+let mockRuntimeLoading = false;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname,
 }));
+
+vi.mock("@/lib/hooks/useRuntimeStatus", () => ({
+  useRuntimeStatus: () => ({
+    status: mockRuntimeStatus,
+    isLoading: mockRuntimeLoading,
+    error: mockRuntimeError,
+    refresh: vi.fn(),
+  }),
+}));
+
+function readyRuntimeStatus(): RuntimeHealthResponse {
+  return {
+    status: "ok",
+    version: "0.1.0",
+    active_renders: 0,
+    cached_projects: 4,
+    sidecar: { status: "ready", address: "http://127.0.0.1:8787", version: "0.1.0" },
+    python: { status: "ready", version: "3.11.9" },
+    ffmpeg: { status: "ready", version: "6.1.1" },
+    cuda: { status: "ready", available: true, version: "12.8", gpu_label: "NVIDIA RTX" },
+    whisperx: { status: "ready", model: "large-v3" },
+  };
+}
 
 describe("AppShell", () => {
   beforeEach(() => {
@@ -20,6 +47,9 @@ describe("AppShell", () => {
     window.localStorage.clear();
     delete document.documentElement.dataset.theme;
     document.documentElement.lang = "en";
+    mockRuntimeStatus = readyRuntimeStatus();
+    mockRuntimeError = null;
+    mockRuntimeLoading = false;
     useLanguageStore.setState({ hydrated: false, language: "en" });
     useThemeStore.setState({ hydrated: false, theme: "dark" });
   });
@@ -189,7 +219,7 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
-    expect(await screen.findByText("缓存 24/24 已预热")).toBeInTheDocument();
+    expect(await screen.findByText("渲染 0 · 缓存 4")).toBeInTheDocument();
 
     const neutralMetadata = screen.getAllByTestId("shell-technical-metadata");
 
@@ -215,11 +245,76 @@ describe("AppShell", () => {
     expect(statusBar.className).toContain("h-(--space-10)");
     expect(screen.getByText("⌘K")).toBeInTheDocument();
     expect(screen.getByText("command")).toBeInTheDocument();
-    expect(screen.getByText("alignment cached")).toBeInTheDocument();
-    expect(screen.getByText("cache 24/24 warm")).toBeInTheDocument();
-    expect(screen.getByText("autosave · 02s ago")).toBeInTheDocument();
+    expect(screen.getByText("command").parentElement).toHaveAttribute("tabindex", "0");
+    expect(screen.getByText("command").parentElement?.className).toContain("focus-visible:outline");
+    expect(screen.getByText("sidecar 127.0.0.1:8787")).toBeInTheDocument();
+    expect(screen.getByText("ffmpeg 6.1.1")).toBeInTheDocument();
+    expect(screen.getByText("cuda 12.8 · NVIDIA RTX")).toBeInTheDocument();
+    expect(screen.getByText("renders 0 · cache 4")).toBeInTheDocument();
     expect(screen.getByText("tokyo-essay/project.json")).toBeInTheDocument();
     expect(screen.getByText("v0.1.0-prototype")).toBeInTheDocument();
+  });
+
+  test("renders healthy runtime status segments in green", () => {
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    for (const label of [
+      "sidecar 127.0.0.1:8787",
+      "ffmpeg 6.1.1",
+      "cuda 12.8 · NVIDIA RTX",
+      "renders 0 · cache 4",
+    ]) {
+      expect(screen.getByText(label).className).toContain("bg-(--green)");
+    }
+  });
+
+  test("renders warning runtime status segments in amber", () => {
+    mockRuntimeStatus = {
+      ...readyRuntimeStatus(),
+      active_renders: 2,
+      ffmpeg: { status: "unknown", version: "unknown" },
+    };
+
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    expect(screen.getByText("ffmpeg unknown").className).toContain("bg-(--amber)");
+    expect(screen.getByText("renders 2 · cache 4").className).toContain("bg-(--amber)");
+  });
+
+  test("renders error runtime status segments in red", () => {
+    mockRuntimeStatus = {
+      ...readyRuntimeStatus(),
+      cuda: { status: "unavailable", available: false, version: "unknown", gpu_label: null },
+    };
+
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    expect(screen.getByText("cuda unavailable").className).toContain("bg-(--red)");
+  });
+
+  test("renders runtime fetch failures in red", () => {
+    mockRuntimeStatus = null;
+    mockRuntimeError = "Runtime status unavailable";
+
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    expect(screen.getByText("runtime unavailable").className).toContain("bg-(--red)");
   });
 
   test("allows screen-specific status content", () => {
@@ -232,7 +327,7 @@ describe("AppShell", () => {
     const center = screen.getByTestId("status-center");
 
     expect(center).toHaveTextContent("render queued");
-    expect(screen.queryByText("alignment cached")).not.toBeInTheDocument();
+    expect(screen.queryByText("sidecar 127.0.0.1:8787")).not.toBeInTheDocument();
   });
 
   test("keeps RootLayout server-rendered while delegating shell UI to AppShell", () => {

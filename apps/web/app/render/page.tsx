@@ -29,7 +29,7 @@ function RenderContent() {
   if (!projectPath) {
     return (
       <PageChrome variant="empty">
-        <p className="text-sm opacity-60">No project open. Go to Launcher and open a project.</p>
+        <p className="vc-type-body text-(--text-2)">No project open. Go to Launcher and open a project.</p>
       </PageChrome>
     );
   }

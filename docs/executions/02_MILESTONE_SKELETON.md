@@ -572,23 +572,30 @@ Read `scripts/.env-detect` to determine the PyTorch index.
 $detect = Get-Content scripts/.env-detect | ConvertFrom-StringData
 $pytorchIndex = $detect.PYTORCH_INDEX
 
-cd apps/server
+# Create venv using system Python 3.11 (the only time bare python is correct — venv doesn't exist yet)
+Set-Location apps/server
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip wheel
+
+# All subsequent Python calls use the venv executable directly (never activate + bare python)
+$py = "$(Get-Location)\.venv\Scripts\python.exe"
+& $py -m pip install --upgrade pip wheel
 ```
 
 If `$pytorchIndex` is set (GPU path):
 ```powershell
-pip install --index-url $pytorchIndex torch torchaudio
-pip install -e ".[ml,dev]"
+& $py -m pip install --index-url $pytorchIndex torch torchaudio
+& $py -m pip install -e ".[ml,dev]"
 ```
 
 If no GPU (CPU path):
 ```powershell
-pip install -e ".[ml,dev]"
+& $py -m pip install -e ".[ml,dev]"
 ```
 (PyPI default index includes CPU torch wheels.)
+
+```powershell
+Set-Location ../..
+```
 
 #### 4. `apps/server/server/__init__.py`
 Empty file.
@@ -814,11 +821,8 @@ ruff.on("exit", (code) => {
 
 #### 15. Smoke test
 ```powershell
-.\apps\server\.venv\Scripts\Activate.ps1
-cd apps/server
-python -m pytest -q
-deactivate
-cd ../..
+# Use the venv Python directly — never activate + bare python (see CONVENTIONS.md §5.4)
+& apps/server/.venv/Scripts/python.exe -m pytest -q --rootdir=apps/server apps/server/tests
 ```
 Must show `1 passed`.
 
@@ -916,11 +920,9 @@ New-Item -ItemType Directory -Force -Path packages/shared-schemas/py
       }
     },
     "layers": {
-      "type": "object",
-      "properties": {
-        "auto_distribute": { "type": ["object", "null"] },
-        "foreground": { "type": "array", "items": { "type": "object" } }
-      }
+      "type": "array",
+      "description": "Ordered top→bottom in render stack: SUB first, BG last. Loose stub — T2.2 fills this in with full discriminated-union schema.",
+      "items": { "type": "object" }
     },
     "subtitles": { "type": ["object", "null"] },
     "watermark": { "type": ["object", "null"] }
@@ -928,7 +930,7 @@ New-Item -ItemType Directory -Force -Path packages/shared-schemas/py
 }
 ```
 
-This stub is intentionally loose. T2.2 fills it in fully.
+This stub is intentionally loose. T2.2 [fills](03_MILESTONE_PROJECT_IO.md) it in fully.
 
 #### 4. `scripts/gen-pydantic.mjs`
 ```js
@@ -976,11 +978,7 @@ Edit `apps/server/pyproject.toml`, add to `[project.optional-dependencies].dev`:
 ```
 Then re-install:
 ```powershell
-.\apps\server\.venv\Scripts\Activate.ps1
-cd apps/server
-pip install -e ".[ml,dev]"
-deactivate
-cd ../..
+& apps/server/.venv/Scripts/python.exe -m pip install -e ".[ml,dev]" --quiet
 ```
 
 #### 6. Generate

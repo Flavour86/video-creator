@@ -17,6 +17,7 @@ import { SubtitleToggle } from "@/components/subtitle-toggle/SubtitleToggle";
 import { Waveform } from "@/components/preview-player/Waveform";
 import { Timeline } from "@/components/timeline/Timeline";
 import { TranscriptPanel } from "@/components/transcript-panel/TranscriptPanel";
+import { Button } from "@/components/ui";
 import { WatermarkPanel } from "@/components/watermark-panel/WatermarkPanel";
 import { useAlignment } from "@/lib/hooks/useAlignment";
 import { useAssignModal } from "@/lib/hooks/useAssignModal";
@@ -166,7 +167,7 @@ function EditorContent() {
         setMedia((prev) => [...prev, ...(JSON.parse(xhr.responseText) as MediaItem[])]);
         patch({ progress: 100, done: true });
       } else {
-        let msg = "Upload failed";
+        let msg = "Add failed";
         try { msg = (JSON.parse(xhr.responseText) as { error?: { message?: string } }).error?.message ?? msg; } catch { /* keep */ }
         patch({ error: msg });
       }
@@ -181,28 +182,29 @@ function EditorContent() {
   if (!projectPath) {
     return (
       <PageChrome variant="empty">
-        <p className="text-sm opacity-60">No project open. Go to Launcher and open a project.</p>
+        <p className="vc-type-body text-(--text-2)">No project open. Go to Launcher and open a project.</p>
       </PageChrome>
     );
   }
 
   return (
     <PageChrome variant="workbench">
-      {/* ── Toolbar ── */}
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-2">
-        <p className="max-w-xs truncate font-mono text-xs opacity-40">{projectPath}</p>
-        <div className="flex items-center gap-2">
-          <button
-            className="inline-flex items-center gap-1.5 rounded bg-neutral-950 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      <div className="flex shrink-0 items-center justify-between border-b border-(--line) bg-(--bg-1) px-(--space-5) py-(--space-3)">
+        <p className="vc-type-mono-meta min-w-0 max-w-[42vw] truncate text-(--text-3)" title={projectPath}>
+          {projectPath}
+        </p>
+        <div className="flex shrink-0 items-center gap-(--space-2)">
+          <Button
             disabled={renderProgress.isActive}
             onClick={() => void renderProgress.startDraft()}
-            type="button"
+            size="extra-small"
+            variant="render"
           >
             <Clapperboard size={14} />
             {draftLabel}
-          </button>
+          </Button>
           <Link
-            className="inline-flex items-center gap-1.5 rounded border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50"
+            className="vc-type-caption inline-flex h-(--space-8) items-center gap-(--space-2) rounded-(--r-sm) border border-(--line) bg-(--bg-2) px-(--space-3) font-semibold text-(--text) transition-colors hover:bg-(--bg-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
             href={`/render?project=${encodeURIComponent(projectPath)}`}
           >
             <Film size={14} />
@@ -223,12 +225,9 @@ function EditorContent() {
             onSave={(layer) => void handleBgSave(layer as Extract<Layer, { kind: "bg" }>)}
             totalSentences={sentences.length}
           >
-            <button
-              className="rounded border border-neutral-200 px-3 py-1.5 text-xs font-medium hover:bg-neutral-50"
-              type="button"
-            >
+            <Button size="extra-small" variant="default">
               {existingBg ? "Change BG" : "Add BG"}
-            </button>
+            </Button>
           </BgModal>
         </div>
       </div>
@@ -281,36 +280,35 @@ function EditorContent() {
           />
 
           {/* Media drop zone (collapsed) */}
-          <details className="rounded-lg border border-neutral-200">
-            <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-widest opacity-40 hover:opacity-70">
+          <details className="rounded-(--r) border border-(--line)">
+            <summary className="vc-type-eyebrow cursor-pointer px-(--space-3) py-(--space-3) text-(--text-3) transition-colors hover:bg-(--bg-2) hover:text-(--text)">
               Media ({media.length})
             </summary>
-            <div className="p-3">
+            <div className="p-(--space-3)">
               <div
-                className={`flex min-h-24 cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed p-4 text-xs transition-colors ${
-                  dragging ? "border-neutral-600 bg-neutral-100" : "border-neutral-300 hover:border-neutral-400"
-                }`}
+                className="vc-drop-zone vc-type-caption flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-(--r) p-(--space-8) text-(--text-2)"
+                data-state={dragging ? "active" : "idle"}
                 onClick={() => inputRef.current?.click()}
                 onDragLeave={() => setDragging(false)}
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDrop={(e) => { e.preventDefault(); setDragging(false); enqueueFiles(e.dataTransfer.files); }}
               >
-                Drop images / video here · jpg png webp mp4 mov webm
+                Add images / video here - jpg png webp mp4 mov webm
               </div>
               <input accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" className="hidden" multiple onChange={(e) => enqueueFiles(e.target.files)} ref={inputRef} type="file" />
               {pendingUploads.map((u) => (
-                <div className="mt-2 flex items-center gap-2 text-xs" key={u.id}>
-                  <span className="w-32 truncate opacity-60">{u.name}</span>
-                  <div className="h-1 flex-1 overflow-hidden rounded-full bg-neutral-200">
-                    <div className="h-full rounded-full bg-neutral-900 transition-all" style={{ width: `${u.progress}%` }} />
+                <div className="mt-(--space-2) flex items-center gap-(--space-2)" key={u.id}>
+                  <span className="vc-type-caption w-32 truncate text-(--text-3)">{u.name}</span>
+                  <div className="h-(--space-1) flex-1 overflow-hidden rounded-(--r-pill) bg-(--bg-3)">
+                    <div className="h-full rounded-(--r-pill) bg-(--amber) transition-all" style={{ width: `${u.progress}%` }} />
                   </div>
                 </div>
               ))}
               {media.length > 0 && (
-                <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2">
+                <div className="mt-(--space-3) grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-(--space-2)">
                   {media.map((item) => (
-                    <div className="flex flex-col gap-0.5" key={item.filename}>
-                      <div className="aspect-video overflow-hidden rounded bg-neutral-100">
+                    <div className="flex flex-col gap-(--space-1)" key={item.filename}>
+                      <div className="aspect-video overflow-hidden rounded-(--r-sm) bg-(--bg-3)">
                         {item.thumb_url ? (
                           <img alt={item.filename} className="h-full w-full object-cover" src={`/api/server${item.thumb_url}`} />
                         ) : (

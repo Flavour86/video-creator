@@ -27,6 +27,17 @@
       "command": "command",
       "runtime": "Runtime",
       "version": "Version",
+      "runtimeStatus": {
+        "checking": "checking runtime",
+        "fetchFailed": "runtime unavailable",
+        "ready": "ready",
+        "unknown": "unknown",
+        "unavailable": "unavailable",
+        "sidecar": "sidecar {value}",
+        "ffmpeg": "ffmpeg {value}",
+        "cuda": "cuda {value}",
+        "renderCache": "renders {renders} · cache {cache}"
+      },
       "defaults": {
         "alignmentCached": "alignment cached",
         "cacheWarm": "cache {count} warm",
@@ -51,7 +62,7 @@
       "renderFinal": "Render Final",
       "chooseLocalFolder": "Choose a local folder",
       "assignMedia": "Assign media",
-      "uploadMedia": "Upload media"
+      "uploadMedia": "Add media"
     },
     "tooltips": {
       "toggleTheme": "Toggle theme",
@@ -82,7 +93,7 @@
     "requiredProjectName": "Project name is required",
     "requiredProjectFolder": "Project folder is required",
     "folderMissing": "Folder missing",
-    "uploadFailed": "Upload failed",
+    "uploadFailed": "Add failed",
     "renderFailed": "Render failed",
     "renderFailedToStart": "Render failed to start.",
     "renderProgressConnectionFailed": "Render progress connection failed.",
@@ -121,7 +132,7 @@
     },
     "editor": {
       "title": "Editor",
-      "dropHint": "Drop images / video here - jpg png webp mp4 mov webm",
+      "dropHint": "Add images / video here - jpg png webp mp4 mov webm",
       "draftActive": "Rendering Draft..."
     },
     "render": {
@@ -132,6 +143,7 @@
     "tokens": {
       "eyebrow": "Design Tokens",
       "title": "Tokens",
+      "summary": "Development reference for the CSS custom properties on :root in styles.css and the shared primitives that consume them.",
       "sections": {
         "colors": "Colors",
         "type": "Type",
@@ -140,6 +152,15 @@
         "shadows": "Shadows",
         "cinema": "Cinema",
         "components": "Components"
+      },
+      "descriptions": {
+        "colors": "Surfaces, text ramp, lines, and accent semantics used across the local workspace.",
+        "type": "The supported type roles and font families. Technical values use mono examples for timecodes and paths.",
+        "spacing": "The fixed spacing scale from space-1 through space-12 with pixel values.",
+        "radii": "Shared radius tokens plus the pill convention for tags, badges, and round icon controls.",
+        "shadows": "Inline elevation stays restrained; modal and popover surfaces use the deeper token.",
+        "cinema": "Video constants for canvas, preview, safe areas, picture-in-picture, timeline, playhead, and clips.",
+        "components": "Live samples render the same shared components used by application screens; components must reference tokens and primitives, not raw visual values."
       }
     }
   }

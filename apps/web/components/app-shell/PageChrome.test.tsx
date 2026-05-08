@@ -12,6 +12,7 @@ describe("PageChrome", () => {
     expect(main).toHaveTextContent("Content");
     expect(main.className).toContain("w-full");
     expect(main.className).toContain("bg-(--bg-0)");
+    expect(main.className).toContain("var(--space-10)");
     expect(main.className).toContain("px-(--space-8)");
     expect(main.className).not.toMatch(/mx-auto|max-w-/);
   });

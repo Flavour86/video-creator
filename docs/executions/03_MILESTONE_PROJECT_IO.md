@@ -12,7 +12,7 @@
 | T2.2 | Full `project.json` schema + JSON Schema validation | 90 min |
 | T2.3 | New project flow | 90 min |
 | T2.4 | Open project + Recent projects UI | 90 min |
-| T2.5 | Media ingest (drag-drop into project) | 60 min |
+| T2.5 | Media ingest (select project) | 60 min |
 
 ---
 
@@ -213,37 +213,62 @@ If True, skema is filled in → skip.
 ### Steps
 
 #### 1. Replace `packages/shared-schemas/project.schema.json`
-Write the **full** schema from `PHASE_1_DESIGN.md` §6. The schema must define:
+
+Write the **full** schema derived from the prototype data model (`docs/prototype/v1/data.jsx` `INITIAL_LAYERS` and `docs/prototype/v1/SPEC.md`). Do **not** reference `PHASE_1_DESIGN.md §6` for the layer structure — the prototype is the canonical source. The schema must define:
 
 - `version` (const 1)
 - `name`, `created_at`, `updated_at`
-- `audio` (string, file path)
-- `transcript` ({ kind, path })
-- `output` (full preset object: resolution, fps, codecs, bitrates, container, color_space)
-- `layers.auto_distribute`:
-  - `kind`: `"images" | "clips" | "single_image" | "none"`
-  - `items`: array of strings (paths)
-  - `transition`: `"crossfade" | "cut"`
-  - `transition_duration_s`: number
-- `layers.foreground[]`:
-  - `id`, `z`, `anchor` (transcript|time)
-  - For `anchor=transcript`: `sentences: integer[]`
-  - For `anchor=time`: `from`, `to` (HH:MM:SS.mmm)
-  - `media`: string (or null if Phase 2 generation)
-  - `compositing`: `"fullscreen"` OR object with `mode: "pip"`, `position`, `offset_x`, `offset_y`, `scale`, `border_radius`
-  - `motion`: `null` or `{ kind: "ken_burns", from: {scale, x, y}, to: {scale, x, y}, easing }`
-  - `transition_in`, `transition_out`: `null` or `{ kind: "cut" | "fade" | "slide", duration_s, [from] }`
-- `subtitles`: `null` or `{ generate_srt, burn_in, style }`
-- `watermark`: `null` or `{ image, position, offset_x, offset_y, scale, opacity }`
+- `audio` (string, file path relative to project root)
+- `transcript` (`{ kind: "plain_text" | "pre_segmented", path: string }`)
+- `output` (`{ preset: "draft" | "final" }` — full codec settings live in the server pipeline, not the project file)
+- `layers` — **array** of layer objects, ordered top-to-bottom in the render stack (index 0 is drawn on top). Each layer uses `oneOf` discriminated by `kind`:
 
-Use JSON Schema `oneOf` for the discriminated unions (foreground anchor; compositing). Mark `additionalProperties: false` everywhere.
+  **`kind: "sub"` — Subtitles layer (always at index 0)**
+  ```
+  { id, kind: "sub", name: "Subtitles",
+    items: [{ id, auto: true, label: string, style: "default" }] }
+  ```
+  Auto-generated from alignment; one item whose `label` reflects cue count.
 
-Reserve future-Phase-2 fields:
-- `ai`: `null` or object (loose for now).
-- `characters`: `null` or array.
-- Foreground item's `generate`: optional object.
+  **`kind: "fg"` — Foreground layer (one or more, stacked by z)**
+  ```
+  { id, kind: "fg", name: "Foreground · z<N>",
+    items: [{ id, mediaId, sentences: [lo, hi], start, end,
+              motion: { kind, easing }, transitions: { in, out } }] }
+  ```
 
-Do not invent content. Write each property exactly as specified in §6 of the design doc. If anything is ambiguous, note it in STATE.md and ask.
+  **`kind: "pip"` — Picture-in-picture layer (one or more)**
+  ```
+  { id, kind: "pip", name: "PiP · z<N>",
+    items: [{ id, mediaId, sentences: [lo, hi], start, end,
+              motion: { kind, easing }, transitions: { in, out },
+              pip: { posX, posY, size, radius, opacity } }] }
+  ```
+
+  **`kind: "bg"` — Background layer (at most one, always last in array)**
+  ```
+  { id, kind: "bg", name: "Background",
+    items: [{ id, mediaId, sentences: [1, total], start: 0, end: project_duration_s,
+              motion: { kind, easing }, transitions: { in, out }, crossfade: number }] }
+  ```
+
+  **Shared item field definitions:**
+  - `mediaId`: filename string (e.g. `"tokyo-skyline.jpg"`) referencing a file in the project's `media/` folder.
+  - `sentences: [lo, hi]`: 1-based inclusive sentence indices defining the anchor range. On alignment re-run, `start`/`end` are recomputed from these unless manually overridden.
+  - `start`, `end`: resolved seconds. May be fine-tuned by dragging clip edges in the timeline independently of `sentences`.
+  - `motion.kind`: `"none" | "ken_burns" | "ken_burns_strong" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right"`
+  - `motion.easing`: `"linear" | "ease_in" | "ease_out" | "ease_in_out"`. Ignored when `motion.kind` is `"none"`.
+  - `transitions.in` / `transitions.out`: `"cut" | "fade" | "slide_left" | "slide_right" | "dip_black"`
+  - `pip.posX`, `pip.posY`: 0–100 (% from left/top of canvas, where 98/2 = top-right corner).
+  - `pip.size`: % of canvas width (10–80).
+  - `pip.radius`: corner radius in px.
+  - `pip.opacity`: 0–100.
+  - `bg.crossfade`: seconds of crossfade between background slides (0 = cut).
+
+- `subtitles`: `null` or `{ burn_in: bool, style: { font: string, size: number, position: "bottom-center" | "top-center", max_chars_per_line: number, bg_style: "none" | "shadow" | "box" } }`
+- `watermark`: `null` or `{ mediaId: string, posX: number, posY: number, scale: number, opacity: number }`
+
+Use `oneOf` discriminated on `kind` for the layers array items. Mark `additionalProperties: false` on all objects. Reserve `ai: null | object` and `characters: null | array` as loose stubs for Phase 2.
 
 #### 2. Regenerate
 ```powershell
@@ -306,11 +331,42 @@ def test_minimal_valid(tmp_path: Path) -> None:
         "audio": "voice.wav",
         "transcript": {"kind": "plain_text", "path": "transcript.txt"},
         "output": {"preset": "draft"},
-        "layers": {"foreground": []},
+        "layers": [],  # empty; server adds sub layer after alignment
     })
     save_project(tmp_path, p)
     loaded = load_project(tmp_path)
     assert loaded.name == "test"
+    assert loaded.layers == []
+
+
+def test_fg_layer_round_trip(tmp_path: Path) -> None:
+    p = Project.model_validate({
+        "version": 1, "name": "test", "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": {"preset": "draft"},
+        "layers": [
+            {
+                "id": "L-sub", "kind": "sub", "name": "Subtitles",
+                "items": [{"id": "sub-all", "auto": True,
+                           "label": "auto from transcript · 0 cues", "style": "default"}],
+            },
+            {
+                "id": "L-fg-1", "kind": "fg", "name": "Foreground · z1",
+                "items": [
+                    {"id": "fg-001", "mediaId": "img.jpg", "sentences": [1, 3],
+                     "start": 0.3, "end": 19.5,
+                     "motion": {"kind": "ken_burns", "easing": "ease_in_out"},
+                     "transitions": {"in": "fade", "out": "cut"}},
+                ],
+            },
+        ],
+    })
+    save_project(tmp_path, p)
+    loaded = load_project(tmp_path)
+    assert len(loaded.layers) == 2
+    assert loaded.layers[0].kind == "sub"
+    assert loaded.layers[1].kind == "fg"
+    assert loaded.layers[1].items[0].media_id == "img.jpg"
 
 
 def test_invalid_version_rejected() -> None:
@@ -353,7 +409,22 @@ A user can pick (or type) a folder path; the server creates the project structur
 `POST /projects` — body: `{ path: string, name: string }`
 - Validates `path` is absolute, parent exists, `path` is empty or doesn't exist.
 - Creates `path/`, `path/media/`, `path/renders/`, `path/.vc/`.
-- Writes `project.json` with defaults (audio="", transcript stub, output preset draft, empty foreground).
+- Writes `project.json` with defaults:
+  ```json
+  {
+    "version": 1,
+    "name": "<name>",
+    "created_at": "<ISO-8601>",
+    "updated_at": "<ISO-8601>",
+    "audio": "",
+    "transcript": { "kind": "plain_text", "path": "transcript.txt" },
+    "output": { "preset": "draft" },
+    "layers": [],
+    "subtitles": null,
+    "watermark": null
+  }
+  ```
+  `layers` starts empty. The server appends a `"sub"` layer (with `auto: true`) when alignment first completes (T3.3). BG, FG, and PiP layers are added only when the user assigns media.
 - Calls `touch_recent(path, name)`.
 - Returns `200 { path, name }`.
 
@@ -404,19 +475,31 @@ Refs: T2.3
 
 ---
 
-## T2.4 — Open project + Recent projects UI
+## T2.4 — Launcher screen (recent projects + open/new)
 
 ### Goal
 - `GET /projects/recent` returns the recent projects list.
-- `POST /projects/open` body `{ path }` validates `project.json` exists and parses; touches recent.
-- The homepage (`apps/web/app/page.tsx`) shows a list of recent projects with a click-to-open action and a "New Project" button.
+- `POST /projects/open` body `{ path }` validates `project.json` exists and parses; touches recent. Returns project metadata.
+- The **Launcher screen** (`apps/web/app/launcher/page.tsx`) shows recent projects and a "New Project" button.
 
 ### Prerequisites
 - T2.3 complete.
 
+### UI — Launcher screen
+The Launcher is the app's home screen (the first tab in the top nav). It has two sections:
+
+**Recent projects list**: Each project card shows:
+- Project name (large), path (monospace small), voice duration, sentence count, media count, last-opened timestamp.
+- Thumbnail area (color gradient placeholder for now; real thumbnails in M6).
+- Clicking the card opens the project: calls `POST /projects/open`, then navigates to `/editor?project=<encoded-path>`.
+
+**"New Project" button**: Opens the new-project form (T2.3's page at `/projects/new`).
+
+The top nav bar is shared across all screens. Implement it as a layout component at `apps/web/app/(app)/layout.tsx` with tabs: **Launcher · Setup · Editor · Render · Tokens**. Each tab links to its respective route. The active tab is highlighted. This wrapping layout applies to all screens from M2 onward.
+
 ### Behavior
-- Clicking a recent project navigates to `/projects/<encoded-path>`. The page calls `POST /projects/open` and renders an empty editor placeholder ("Loaded: <name>").
-- If the project folder no longer exists, show an error and offer "Remove from recent" (calls `DELETE /projects/recent` body `{ path }`).
+- If the project folder no longer exists, show an inline error on the card and offer "Remove from recent" (calls `DELETE /projects/recent` body `{ path }`).
+- If no recent projects, show a centered empty state: "No projects yet — create one to get started."
 
 ### Verification
 1. Create two projects via T2.3.
@@ -434,10 +517,10 @@ Refs: T2.4
 
 ---
 
-## T2.5 — Media ingest (drag-drop)
+## T2.5 — Media ingest
 
 ### Goal
-On the editor page (`/projects/<path>`), the user drag-drops images/clips. The browser uploads them to the server, which writes them into the project's `media/` folder and returns the canonical filenames. Generate a 256×144 thumbnail for each image into `.vc/thumbs/`.
+On the editor page (`/projects/<path>`), the user uploads images/clips. The browser uploads them to the server, which writes them into the project's `media/` folder and returns the canonical filenames. Generate a 256×144 thumbnail for each image into `.vc/thumbs/`.
 
 ### API
 - `POST /projects/<id>/media` — multipart/form-data; saves files, generates thumbnails, returns `[{ filename, size, kind: "image"|"video", thumb_path }]`.
@@ -471,7 +554,7 @@ Automated in `apps/server/tests/test_media_upload.py` covers:
 
 ### Commit
 ```
-feat(web,server): drag-drop media ingest with thumbnail generation
+feat(web,server): select media ingest with thumbnail generation
 
 Refs: T2.5
 ```

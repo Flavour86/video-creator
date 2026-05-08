@@ -284,7 +284,7 @@ export function AssignModal({
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">Asset</p>
             {media.length === 0 ? (
-              <p className="text-sm opacity-50">No media uploaded yet.</p>
+              <p className="text-sm opacity-50">No media added yet.</p>
             ) : (
               <div className="grid max-h-40 grid-cols-5 gap-2 overflow-y-auto">
                 {media.map((item) => (

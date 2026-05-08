@@ -136,9 +136,25 @@ Per user policy: **never** add `Co-Authored-By`, `Signed-off-by`, or any other a
 - WhisperX correctness (relies on the model; verify by running the smoke project).
 
 ### 5.3 Test commands
-- TS: `pnpm -F web test` (Vitest).
-- Python: `pnpm -F server test` (pytest under uv-managed venv).
+- TS: `pnpm -F @vc/web test` (Vitest).
+- Python: `pnpm -F @vc/server test` (runs `apps/server/.venv/Scripts/python -m pytest` via `scripts/run-server-test.mjs`).
 - All: `pnpm test`.
+
+### 5.4 Python venv rule
+All Python execution — tests, linting, running the server, one-off scripts — **must** use the virtualenv Python at `apps/server/.venv/Scripts/python.exe` (Windows) or `apps/server/.venv/bin/python` (macOS/Linux). Never use a bare `python` or `python3` command in milestone steps, verification commands, or agent notes, because the system Python may differ from the venv Python and will be missing installed packages.
+
+In PowerShell:
+```powershell
+# Correct:
+& apps/server/.venv/Scripts/python -m pytest -q
+& apps/server/.venv/Scripts/python -c "import whisperx; print('ok')"
+
+# Wrong (do not use):
+python -m pytest          # resolves to system Python
+python3 -m pytest         # same problem
+```
+
+The `pnpm -F @vc/server dev/test/lint` commands are the preferred way to invoke Python operations because they use the venv path internally. Only use the explicit venv path for ad-hoc verification commands in milestone files.
 
 ### 5.4 Smoke project
 Each milestone defines a smoke test in its file. The smoke project lives at `tests/fixtures/smoke-project/` and contains a 30-second audio clip + matching transcript + 3 images. Used by milestone verification scripts.

@@ -1,6 +1,7 @@
 # UI Global Implementation Task List
 
 Source requirements: [UI_GLOBAL_REQUIREMENTS.md](./UI_GLOBAL_REQUIREMENTS.md)
+Visual audit: [UI_GLOBAL_VISUAL_AUDIT.md](./UI_GLOBAL_VISUAL_AUDIT.md)
 
 Execute these tasks in order. Each task lists the implementation surface:
 
@@ -17,27 +18,27 @@ at `1440x1000` first, then again near `950px` width.
 
 ## 0. Baseline And Guardrails
 
-1. `[QA]` Capture the current rejected implementation at `localhost:3000` for
+1. [x] `[QA]` Capture the current rejected implementation at `localhost:3000` for
    comparison before UI work starts.
    - Use at least `1440x1000`.
    - Save screenshots outside committed source or in a documented visual audit
      folder if the repo later adopts one.
 
-2. `[QA]` Capture the prototype global shell at `http://192.168.31.48/app.html`.
+2. [x] `[QA]` Capture the prototype global shell at `http://192.168.31.48/app.html`.
    - Capture dark Launcher, light Launcher, Tokens, and Editor shell.
    - Repeat one capture around `950px` width to verify the minimum desktop
      layout.
 
-3. `[DOC]` Record in the implementation notes that the current simple Next nav
+3. [x] `[DOC]` Record in the implementation notes that the current simple Next nav
    in `apps/web/app/layout.tsx` is not the target shell.
 
-4. `[FE]` Identify all frontend files that currently hardcode visual primitives.
+4. [x] `[FE]` Identify all frontend files that currently hardcode visual primitives.
    - Start with `apps/web/styles/globals.css`, `apps/web/app/layout.tsx`, and
      page-level Tailwind classes in `apps/web/app/**/page.tsx`.
    - Do not refactor screen content yet. Only list the files and plan the
      global migration path.
 
-5. `[BE]` Identify backend data already available for runtime and workspace
+5. [x] `[BE]` Identify backend data already available for runtime and workspace
    status.
    - Existing `/health` only returns `status` and `version`.
    - Existing recent-project metadata has path, name, last opened, sentence
@@ -290,74 +291,74 @@ at `1440x1000` first, then again near `950px` width.
     - Use polling or SWR-like refresh only if needed.
     - Avoid noisy UI updates.
 
-51. `[FE]` Wire Launcher and status bar to runtime data.
+51. [x] `[FE]` Wire Launcher and status bar to runtime data.
     - Use green for ready/healthy.
     - Use amber for pending/in-progress.
     - Use red for missing/failed.
 
-52. `[QA]` Add backend tests for runtime status responses.
+52. [x] `[QA]` Add backend tests for runtime status responses.
     - Mock unavailable ffmpeg/CUDA/WhisperX states.
     - Verify stable JSON schema.
 
-53. `[QA]` Add frontend tests for runtime status rendering.
+53. [x] `[QA]` Add frontend tests for runtime status rendering.
     - Verify healthy, warning, and error states.
 
 ## 7. Tokens Interface
 
-54. `[FE]` Implement `/tokens` page using real shared components.
+54. [x] `[FE]` Implement `/tokens` page using real shared components.
     - The page must not be a static mock disconnected from the app components.
     - It should render the same `Button`, `SegmentedControl`, `StatusTag`,
       `Kbd`, form fields, and `LayerChip` used elsewhere.
 
-55. `[FE]` Add Colors section.
+55. [x] `[FE]` Add Colors section.
     - Show surfaces, text ramp, lines, and accents.
     - Include token names and semantic descriptions.
 
-56. `[FE]` Add Type section.
+56. [x] `[FE]` Add Type section.
     - Show the two font families.
     - Show all type roles from the requirements.
     - Use mono examples for timecodes and paths.
 
-57. `[FE]` Add Spacing section.
+57. [x] `[FE]` Add Spacing section.
     - Show `space-1` through `space-12`.
     - Include numeric pixel values.
 
-58. `[FE]` Add Radii section.
+58. [x] `[FE]` Add Radii section.
     - Show `--r-sm`, `--r`, `--r-md`, `--r-lg`, and pill convention.
 
-59. `[FE]` Add Shadows section.
+59. [x] `[FE]` Add Shadows section.
     - Show inline elevation and modal/popover elevation.
 
-60. `[FE]` Add Cinema section.
+60. [x] `[FE]` Add Cinema section.
     - The currently inspected prototype Tokens page does not show a Cinema
       section, but the global requirements require it.
     - Include canvas, preview, safe area, PiP, timeline, playhead, and clip
       tokens.
 
-61. `[FE]` Add Components section.
+61. [x] `[FE]` Add Components section.
     - Buttons.
     - Tags/status.
     - Form fields.
     - Keyboard chips.
     - Layer chips.
 
-62. `[DOC]` Add a short note in the Tokens page or adjacent docs that components
+62. [x] `[DOC]` Add a short note in the Tokens page or adjacent docs that components
     must reference tokens and shared primitives, never raw values.
 
-63. `[QA]` Verify Tokens page in dark and light themes.
+63. [x] `[QA]` Verify Tokens page in dark and light themes.
     - It must update through tokens with no special-case color branches.
 
 ## 8. Global Layout And Responsive Rules
 
-64. `[FE]` Remove marketing-style max-width assumptions from global page wrappers.
+64. [x] `[FE]` Remove marketing-style max-width assumptions from global page wrappers.
     - Use workstation-style wide surfaces.
     - Keep content aligned with prototype margins.
 
-65. `[FE]` Define desktop breakpoint behavior.
+65. [x] `[FE]` Define desktop breakpoint behavior.
     - `950px` is the minimum required desktop fidelity width.
     - Header nav, theme control, and language control must remain visible.
 
-66. `[FE]` Define stable dimensions for fixed-format elements.
+66. [x] `[FE]` Define stable dimensions for fixed-format elements.
     - Header controls.
     - Status bar segments.
     - Preview stages.
@@ -365,41 +366,41 @@ at `1440x1000` first, then again near `950px` width.
     - Layer chips.
     - Icon buttons.
 
-67. `[FE]` Audit all text containers.
+67. [x] `[FE]` Audit all text containers.
     - Buttons, tags, cards, panels, and status segments must avoid clipping and
       overlap in English and Chinese.
 
-68. `[QA]` Screenshot compare global shell at `1440x1000` and around `950px`.
+68. [x] `[QA]` Screenshot compare global shell at `1440x1000` and around `950px`.
     - Compare prototype vs implementation.
     - Record differences before moving to screen-specific redesign.
 
 ## 9. Interaction And Accessibility
 
-69. `[FE]` Add focus-visible treatment to shared controls.
+69. [x] `[FE]` Add focus-visible treatment to shared controls.
     - Use tokens.
     - Keep it visible but restrained.
 
-70. `[FE]` Add hover and active treatment to shared controls.
+70. [x] `[FE]` Add hover and active treatment to shared controls.
     - Hover uses `--bg-4`.
     - Active/selected uses `--bg-5` or the relevant accent token.
 
-71. `[FE]` Add accessible names to icon-only controls.
+71. [x] `[FE]` Add accessible names to icon-only controls.
     - Theme toggle.
     - Header icon controls.
     - Timeline/transport icon controls as those screens are migrated.
 
-72. `[FE]` Add local workspace interaction language.
+72. [x] `[FE]` Add local workspace interaction language.
     - Folder and file actions should read as local operations.
     - Avoid cloud upload language unless a later phase explicitly adds it.
 
-73. `[FE]` Add drag/drop visual states where global surfaces support them.
+73. [x] `[FE]` Add drag/drop visual states where global surfaces support them.
     - Project folder drop.
     - Media assignment drop zones.
     - Timeline clip assignment zones.
     - Screen-specific behavior can be implemented later, but shared visual states
       should exist now.
 
-74. `[QA]` Keyboard test the global shell.
+74. [x] `[QA]` Keyboard test the global shell.
     - Tab order reaches nav, theme toggle, language buttons, primary page actions,
       and footer command affordance.
     - Enter/Space activates buttons.
@@ -407,81 +408,82 @@ at `1440x1000` first, then again near `950px` width.
 
 ## 10. Page Integration Pass
 
-75. `[FE]` Update Launcher to use the new shell and primitives only for global
+75. [x] `[FE]` Update Launcher to use the new shell and primitives only for global
     chrome compatibility.
     - Do not fully redesign Launcher screen content until its screen-specific
       spec is written.
     - Ensure old simple list styling no longer defines the global look.
 
-76. `[FE]` Update Setup to use the new shell and primitives only for global chrome
+76. [x] `[FE]` Update Setup to use the new shell and primitives only for global chrome
     compatibility.
 
-77. `[FE]` Update Editor to use the new shell and primitives only for global
+77. [x] `[FE]` Update Editor to use the new shell and primitives only for global
     chrome compatibility.
     - Ensure existing timeline/preview components do not break under the new
       token system.
 
-78. `[FE]` Update Render to use the new shell and primitives only for global
+78. [x] `[FE]` Update Render to use the new shell and primitives only for global
     chrome compatibility.
 
-79. `[QA]` Run the frontend test suite after the global integration pass.
+79. [x] `[QA]` Run the frontend test suite after the global integration pass.
     - `pnpm -F @vc/web test`
     - `pnpm -F @vc/web build`
 
-80. `[QA]` Run backend tests after runtime endpoint changes.
+80. [x] `[QA]` Run backend tests after runtime endpoint changes.
     - `pnpm -F @vc/server test` if available, otherwise the repo's existing
       Python test command.
 
 ## 11. Acceptance Gate Before Screen-Specific Work
 
-81. `[QA]` Open implementation in Chrome DevTools MCP at `1440x1000`.
+81. [x] `[QA]` Open implementation in Chrome DevTools MCP at `1440x1000`.
     - Check Launcher, Setup, Editor, Render, and Tokens.
     - Verify the same header, theme switch, language switch, tokenized surfaces,
       and footer/status treatment on every route.
 
-82. `[QA]` Repeat the visual pass near `950px` width.
+82. [x] `[QA]` Repeat the visual pass near `950px` width.
     - No header collapse unless a future mobile spec defines it.
     - No text overlap.
     - No clipped language controls.
 
-83. `[QA]` Toggle dark/light on every route.
+83. [x] `[QA]` Toggle dark/light on every route.
     - All colors must change by token.
     - No stale Tailwind neutral colors should remain in visible global chrome.
 
-84. `[QA]` Toggle English/Chinese on every route.
+84. [x] `[QA]` Toggle English/Chinese on every route.
     - Header and footer remain stable.
     - Global labels switch.
     - Technical metadata remains stable.
 
-85. `[QA]` Audit source for raw style values.
+85. [x] `[QA]` Audit source for raw style values.
     - Raw visual constants are allowed in token declarations only.
     - Component styles should reference semantic classes, tokens, or shared
       primitives.
 
-86. `[DOC]` Update the task status after implementation.
+86. [x] `[DOC]` Update the task status after implementation.
     - Mark completed tasks.
     - Link screenshots or visual audit notes.
     - List any remaining prototype differences explicitly.
+    - See [UI_GLOBAL_VISUAL_AUDIT.md](./UI_GLOBAL_VISUAL_AUDIT.md).
 
-87. `[QA]` Do not proceed to detailed Launcher, Setup, Editor, or Render redesign
+87. [x] `[QA]` Do not proceed to detailed Launcher, Setup, Editor, or Render redesign
     until this global acceptance gate passes.
 
 ## 12. Known Ambiguities To Resolve With Prototype MCP
 
-88. `[QA]` Confirm whether the production app should expose `Tokens` in the main
+88. [x] `[QA]` Confirm whether the production app should expose `Tokens` in the main
     nav or keep it as a development-only route.
     - The prototype exposes it.
     - The requirements keep it mandatory as an implementation reference.
 
-89. `[QA]` Confirm exact active tab surface between `--bg-4` and `--bg-5`.
+89. [x] `[QA]` Confirm exact active tab surface between `--bg-4` and `--bg-5`.
     - Prototype inspection should decide the final token.
 
-90. `[QA]` Confirm final footer positioning.
+90. [x] `[QA]` Confirm final footer positioning.
     - Prototype shows a persistent status bar.
     - Implementation must decide fixed, sticky, or layout-bottom behavior after
       checking each screen at `950px` and `1440px`.
 
-91. `[QA]` Confirm cinema token naming.
+91. [x] `[QA]` Confirm cinema token naming.
     - The requirement adds cinema tokens.
     - The inspected Tokens page currently lacks a Cinema section, so naming must
       be derived from actual preview/timeline needs and then documented in
