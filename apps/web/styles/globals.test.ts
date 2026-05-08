@@ -127,4 +127,18 @@ describe("global design tokens", () => {
     expect(globalsCss).toContain(".vc-radius-circle");
     expect(globalsCss.match(/border-radius: var\(--r-pill\);/g)?.length).toBeGreaterThanOrEqual(2);
   });
+
+  test("defines elevation tokens and shared elevation conventions", () => {
+    expect(globalsCss).toContain(
+      "--shadow-1: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 1px 2px oklch(0 0 0 / 0.4);",
+    );
+    expect(globalsCss).toContain("--shadow-2: 0 14px 40px oklch(0 0 0 / 0.5);");
+    expect(globalsCss).toContain(".vc-elevation-inline");
+    expect(globalsCss).toContain("box-shadow: none;");
+    expect(globalsCss).toContain("border-color: var(--line-soft);");
+    expect(globalsCss).toContain(".vc-elevation-raised");
+    expect(globalsCss).toContain("box-shadow: var(--shadow-1);");
+    expect(globalsCss).toContain(".vc-elevation-overlay");
+    expect(globalsCss).toContain("box-shadow: var(--shadow-2);");
+  });
 });

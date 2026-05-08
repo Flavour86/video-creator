@@ -85,7 +85,7 @@ at `1440x1000` first, then again near `950px` width.
     - `--r-lg: 14px`
     - Add a pill convention for status tags and circular controls.
 
-13. `[FE]` Add elevation tokens.
+13. [x] `[FE]` Add elevation tokens.
     - `--shadow-1` for subtle inline elevation.
     - `--shadow-2` for modal and popover elevation.
     - Keep inline cards mostly flat with borders.

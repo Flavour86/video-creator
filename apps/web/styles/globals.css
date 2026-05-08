@@ -113,4 +113,19 @@ body {
   .vc-radius-circle {
     border-radius: var(--r-pill);
   }
+
+  .vc-elevation-inline {
+    border-color: var(--line-soft);
+    border-style: solid;
+    border-width: 1px;
+    box-shadow: none;
+  }
+
+  .vc-elevation-raised {
+    box-shadow: var(--shadow-1);
+  }
+
+  .vc-elevation-overlay {
+    box-shadow: var(--shadow-2);
+  }
 }
