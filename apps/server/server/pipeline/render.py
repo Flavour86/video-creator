@@ -1,4 +1,5 @@
 """Render orchestration for draft and final compose jobs."""
+
 from __future__ import annotations
 
 import asyncio
@@ -27,6 +28,7 @@ from server.pipeline.filtergraph import (
     visual_items_bottom_to_top,
 )
 from server.pipeline.render_progress import RenderProgressEvent, RenderStage, publish_progress
+from server.pipeline.srt import write_srt
 
 
 @dataclass(frozen=True)
@@ -208,13 +210,16 @@ async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentRes
     if alignment_file.is_file() and hash_file.is_file():
         cached_hash = hash_file.read_text(encoding="utf-8").strip()
         if cached_hash == current_hash:
-            return AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
+            cached = AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
+            write_srt(project_dir, cached)
+            return cached
 
     from server.pipeline.transcribe import align  # lazy import keeps unit tests light
 
     result = await align(audio_path, segment(transcript_text))
     vc_dir.mkdir(parents=True, exist_ok=True)
     alignment_file.write_text(result.model_dump_json(), encoding="utf-8")
+    write_srt(project_dir, result)
     hash_file.write_text(current_hash, encoding="utf-8")
     return result
 

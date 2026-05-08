@@ -1,4 +1,5 @@
 """Forced alignment endpoint with content-hash cache."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,6 +12,7 @@ from server.domain.project import load_project
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
+from server.pipeline.srt import write_srt
 
 log = structlog.get_logger()
 router = APIRouter(tags=["alignment"])
@@ -45,16 +47,31 @@ async def run_alignment(
     proj = load_project(project_dir)
     audio_rel = getattr(proj, "audio", "")
     if not audio_rel:
-        return _error(404, "AUDIO_NOT_FOUND", "No audio file set in project.json.", {"project": project})
+        return _error(
+            404,
+            "AUDIO_NOT_FOUND",
+            "No audio file set in project.json.",
+            {"project": project},
+        )
 
     audio_path = project_dir / audio_rel
     if not audio_path.exists():
-        return _error(404, "AUDIO_NOT_FOUND", "Audio file not found on disk.", {"path": str(audio_path)})
+        return _error(
+            404,
+            "AUDIO_NOT_FOUND",
+            "Audio file not found on disk.",
+            {"path": str(audio_path)},
+        )
 
     transcript_rel = getattr(proj.transcript, "path", "transcript.txt")
     transcript_path = project_dir / transcript_rel
     if not transcript_path.exists():
-        return _error(404, "TRANSCRIPT_NOT_FOUND", "Transcript file not found.", {"path": str(transcript_path)})
+        return _error(
+            404,
+            "TRANSCRIPT_NOT_FOUND",
+            "Transcript file not found.",
+            {"path": str(transcript_path)},
+        )
 
     transcript_text = transcript_path.read_text(encoding="utf-8")
     vc_dir = project_dir / ".vc"
@@ -65,6 +82,7 @@ async def run_alignment(
         current_hash = compute_alignment_hash(audio_path, transcript_text)
         if hash_file.read_text(encoding="utf-8").strip() == current_hash:
             cached = AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
+            write_srt(project_dir, cached)
             return AlignmentResult(
                 sentences=cached.sentences,
                 words=cached.words,
@@ -73,13 +91,14 @@ async def run_alignment(
 
     _in_progress.add(project)
     try:
-        from server.pipeline.transcribe import align  # noqa: PLC0415 — lazy for test speed
+        from server.pipeline.transcribe import align
 
         sentences = segment(transcript_text)
         result = await align(audio_path, sentences)
 
         vc_dir.mkdir(parents=True, exist_ok=True)
         alignment_file.write_text(result.model_dump_json(), encoding="utf-8")
+        write_srt(project_dir, result)
         hash_file.write_text(
             compute_alignment_hash(audio_path, transcript_text),
             encoding="utf-8",
@@ -92,7 +111,10 @@ async def run_alignment(
                 return _error(
                     422,
                     "LOW_CONFIDENCE",
-                    f"Alignment confidence is very low ({avg_conf:.2f}). Verify transcript matches audio.",
+                    (
+                        f"Alignment confidence is very low ({avg_conf:.2f}). "
+                        "Verify transcript matches audio."
+                    ),
                     {"confidence": f"{avg_conf:.2f}"},
                 )
     finally:
@@ -105,5 +127,10 @@ async def run_alignment(
 async def get_alignment(project: str = Query(...)) -> AlignmentResult | JSONResponse:
     alignment_file = Path(project) / ".vc" / "alignment.json"
     if not alignment_file.exists():
-        return _error(404, "NO_ALIGNMENT", "No alignment found for this project.", {"project": project})
+        return _error(
+            404,
+            "NO_ALIGNMENT",
+            "No alignment found for this project.",
+            {"project": project},
+        )
     return AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
