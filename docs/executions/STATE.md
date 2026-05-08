@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 14 - add cinema tokens
-**Last commit**: current HEAD (UI global task 13)
-**Last updated**: 2026-05-08T09:35Z
+**Next task**: UI global task 15 - add a token audit check
+**Last commit**: current HEAD (UI global task 14)
+**Last updated**: 2026-05-08T09:37Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:37Z [agent: codex] UI global task 14:
+- What I changed: added failing-first coverage for cinema and render-surface constants, then
+  declared aspect, final/draft canvas, preview fit, safe-area, PiP, timeline, playhead, and clip
+  radius tokens plus aspect utilities.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation.
+- Next agent should: continue with UI global task 15 via TDD.
 
 2026-05-08T09:35Z [agent: codex] UI global task 13:
 - What I changed: added failing-first coverage for elevation token values and shared elevation

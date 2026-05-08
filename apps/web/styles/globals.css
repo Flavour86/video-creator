@@ -44,6 +44,29 @@
   --r-pill: 999px;
   --shadow-1: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 1px 2px oklch(0 0 0 / 0.4);
   --shadow-2: 0 14px 40px oklch(0 0 0 / 0.5);
+  --cinema-aspect-landscape: 16 / 9;
+  --cinema-aspect-portrait: 9 / 16;
+  --cinema-final-width: 1920px;
+  --cinema-final-height: 1080px;
+  --cinema-final-fps: 30;
+  --cinema-final-range: sdr;
+  --cinema-final-color-space: bt709;
+  --cinema-draft-width: 1280px;
+  --cinema-draft-height: 720px;
+  --cinema-draft-fps: 30;
+  --cinema-preview-fit: contain;
+  --cinema-subtitle-safe-x: 8%;
+  --cinema-subtitle-safe-y: 10%;
+  --cinema-watermark-safe-x: 5%;
+  --cinema-watermark-safe-y: 5%;
+  --cinema-pip-inset-x: 4%;
+  --cinema-pip-inset-y: 4%;
+  --cinema-pip-min-scale: 0.22;
+  --cinema-pip-max-scale: 0.36;
+  --cinema-timeline-track-height: 28px;
+  --cinema-timeline-layer-height: 36px;
+  --cinema-playhead-width: 2px;
+  --cinema-clip-radius: var(--r);
 }
 
 :root[data-theme="light"] {
@@ -127,5 +150,13 @@ body {
 
   .vc-elevation-overlay {
     box-shadow: var(--shadow-2);
+  }
+
+  .vc-cinema-landscape {
+    aspect-ratio: var(--cinema-aspect-landscape);
+  }
+
+  .vc-cinema-portrait {
+    aspect-ratio: var(--cinema-aspect-portrait);
   }
 }

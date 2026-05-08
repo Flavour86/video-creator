@@ -141,4 +141,41 @@ describe("global design tokens", () => {
     expect(globalsCss).toContain(".vc-elevation-overlay");
     expect(globalsCss).toContain("box-shadow: var(--shadow-2);");
   });
+
+  test("defines cinema tokens for preview and render surfaces", () => {
+    const cinemaTokens = new Map([
+      ["--cinema-aspect-landscape", "16 / 9"],
+      ["--cinema-aspect-portrait", "9 / 16"],
+      ["--cinema-final-width", "1920px"],
+      ["--cinema-final-height", "1080px"],
+      ["--cinema-final-fps", "30"],
+      ["--cinema-final-range", "sdr"],
+      ["--cinema-final-color-space", "bt709"],
+      ["--cinema-draft-width", "1280px"],
+      ["--cinema-draft-height", "720px"],
+      ["--cinema-draft-fps", "30"],
+      ["--cinema-preview-fit", "contain"],
+      ["--cinema-subtitle-safe-x", "8%"],
+      ["--cinema-subtitle-safe-y", "10%"],
+      ["--cinema-watermark-safe-x", "5%"],
+      ["--cinema-watermark-safe-y", "5%"],
+      ["--cinema-pip-inset-x", "4%"],
+      ["--cinema-pip-inset-y", "4%"],
+      ["--cinema-pip-min-scale", "0.22"],
+      ["--cinema-pip-max-scale", "0.36"],
+      ["--cinema-timeline-track-height", "28px"],
+      ["--cinema-timeline-layer-height", "36px"],
+      ["--cinema-playhead-width", "2px"],
+      ["--cinema-clip-radius", "var(--r)"],
+    ]);
+
+    for (const [token, value] of cinemaTokens) {
+      expect(globalsCss).toContain(`${token}: ${value};`);
+    }
+
+    expect(globalsCss).toContain(".vc-cinema-landscape");
+    expect(globalsCss).toContain("aspect-ratio: var(--cinema-aspect-landscape);");
+    expect(globalsCss).toContain(".vc-cinema-portrait");
+    expect(globalsCss).toContain("aspect-ratio: var(--cinema-aspect-portrait);");
+  });
 });

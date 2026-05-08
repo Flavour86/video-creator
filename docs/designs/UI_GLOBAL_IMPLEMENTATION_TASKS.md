@@ -90,7 +90,7 @@ at `1440x1000` first, then again near `950px` width.
     - `--shadow-2` for modal and popover elevation.
     - Keep inline cards mostly flat with borders.
 
-14. `[FE]` Add cinema tokens.
+14. [x] `[FE]` Add cinema tokens.
     - Aspect constants for `16:9` and `9:16`.
     - Final canvas constants for `1920x1080`, `30fps`, SDR, BT.709.
     - Draft canvas constants for `1280x720`, `30fps`.
