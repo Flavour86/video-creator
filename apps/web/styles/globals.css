@@ -1,20 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 222 47% 5%;
-    --foreground: 0 0% 100%;
-  }
+  --bg-0: oklch(0.16 0.005 60);
+  --bg-1: oklch(0.19 0.005 60);
+  --bg-2: oklch(0.22 0.005 60);
+  --bg-3: oklch(0.26 0.006 60);
+  --bg-4: oklch(0.31 0.007 60);
+  --bg-5: oklch(0.38 0.008 60);
+  --text: oklch(0.97 0.005 80);
+  --text-2: oklch(0.78 0.008 70);
+  --text-3: oklch(0.58 0.008 70);
+  --text-4: oklch(0.45 0.008 70);
+  --line: oklch(0.28 0.005 60);
+  --line-soft: oklch(0.24 0.004 60);
+  --amber: oklch(0.78 0.13 70);
+  --blue: oklch(0.72 0.13 250);
+  --green: oklch(0.74 0.13 155);
+  --red: oklch(0.7 0.16 25);
+  --violet: oklch(0.72 0.13 305);
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r-sm: 4px;
+  --r: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --shadow-1: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-2: 0 14px 40px oklch(0 0 0 / 0.5);
 }
 
 html,
 body {
   height: 100%;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: var(--font-sans);
 }

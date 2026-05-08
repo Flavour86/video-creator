@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: Phase 1 complete; awaiting user check
+**Next task**: UI global task 7 - add dark theme values as the default token set
 **Last commit**: da6a19d
-**Last updated**: 2026-05-08T05:00Z
+**Last updated**: 2026-05-08T08:35Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T08:35Z [agent: codex] UI global task 6:
+- What I changed: added a failing-first Vitest check for required global design token names,
+  then replaced the old HSL globals in `apps/web/styles/globals.css` with prototype-compatible
+  surface, text, line, accent, font, radius, and shadow CSS custom properties.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation. Localization work is blocked until the
+  `next-intl` dependency is approved/installed because `patterns.md` requires
+  `useTranslations()` from `next-intl`.
+- Next agent should: continue with UI global task 7 via TDD, or resolve the `next-intl`
+  dependency before app shell/localization tasks.
 
 2026-05-08T05:00Z [agent: codex] Phase 1 acceptance:
 - What I changed: fixed render compose duration and clip timestamp offsets,
