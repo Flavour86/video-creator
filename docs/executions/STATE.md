@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 50 - add frontend data hooks for runtime status
-**Last commit**: current HEAD (UI global task 49)
-**Last updated**: 2026-05-08T12:08Z
+**Next task**: UI global task 51 - wire Launcher and status bar to runtime data
+**Last commit**: current HEAD (UI global task 50)
+**Last updated**: 2026-05-08T12:13Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T12:13Z [agent: codex] UI global task 50:
+- What I changed: added a typed `useRuntimeStatus` hook backed by a shared
+  `getServerJson()` helper and the generated `RuntimeHealthResponse` type.
+- What works: the hook loads `/api/server/health` once through the Next proxy,
+  exposes manual `refresh()`, stores readable errors, and avoids polling/noisy
+  updates. `pnpm -F @vc/web test`, `pnpm -F @vc/web tokens:audit`,
+  `pnpm -F @vc/web build`, and `pnpm -F @vc/web lint` completed successfully
+  after running `pnpm install` to link the shared schema workspace package.
+- What is incomplete: Launcher/status bar still need to consume the hook in
+  task 51.
+- Next agent should: continue with UI global task 51 via TDD and
+  next-best-practices.
 
 2026-05-08T12:08Z [agent: codex] UI global task 49:
 - What I changed: added shared JSON Schema definitions for

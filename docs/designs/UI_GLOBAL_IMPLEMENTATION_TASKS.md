@@ -9,7 +9,7 @@ Execute these tasks in order. Each task lists the implementation surface:
 - `[SHARED]`: shared schemas/types in `packages/shared-schemas`
 - `[DOC]`: documentation or implementation notes
 - `[QA]`: tests, screenshots, manual verification
-| `[x]`: Done
+- `[x]`: Done
 
 The prototype at `http://192.168.31.48/app.html` remains the visual source of
 truth. When a detail is unclear, inspect the prototype with Chrome DevTools MCP
@@ -285,7 +285,7 @@ at `1440x1000` first, then again near `950px` width.
     metadata.
     - Keep frontend and backend response types aligned.
 
-50. `[FE]` Add frontend data hooks for runtime status.
+50. [x] `[FE]` Add frontend data hooks for runtime status.
     - Suggested hook: `useRuntimeStatus`.
     - Use polling or SWR-like refresh only if needed.
     - Avoid noisy UI updates.
