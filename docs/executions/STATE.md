@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 34 - add page chrome wrappers
-**Last commit**: current HEAD (UI global task 33)
-**Last updated**: 2026-05-08T10:44Z
+**Next task**: UI global task 35 - verify header geometry with Chrome DevTools
+**Last commit**: current HEAD (UI global task 34)
+**Last updated**: 2026-05-08T10:52Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:52Z [agent: codex] UI global task 34:
+- What I changed: added the shared `PageChrome` route wrapper and moved Launcher,
+  Setup, Render, New Project, Tokens, and Editor route-level page shells onto it.
+  The old route-level `mx-auto` / `max-w-*` page wrappers are covered by tests.
+- What works: `pnpm -F @vc/web test -- components/app-shell/PageChrome.test.tsx app/page-chrome.test.ts app/page.test.tsx app/setup/page.tsx app/render/page.test.tsx app/projects/new/page.test.tsx app/tokens/page.test.tsx app/editor/page.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: route internals still have older one-off component styling;
+  later UI tasks handle full token migration and per-screen fidelity. Existing
+  unrelated warnings remain from `<img>` usage and `next lint` deprecation.
+- Next agent should: continue with UI global task 35 using Chrome DevTools.
 
 2026-05-08T10:44Z [agent: codex] UI global task 33:
 - What I changed: added the fixed global status bar to `AppShell`, with command

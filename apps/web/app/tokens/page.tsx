@@ -1,8 +1,10 @@
+import { PageChrome } from "@/components/app-shell/PageChrome";
+
 const tokenGroups = ["Colors", "Typography", "Space", "Cinema"] as const;
 
 export default function TokensPage() {
   return (
-    <main className="flex w-full flex-col gap-(--space-8) px-(--space-8) py-(--space-8)">
+    <PageChrome>
       <header className="grid gap-(--space-2)">
         <p className="vc-type-eyebrow text-(--text-3)">Design Tokens</p>
         <h1 className="vc-type-h1 text-(--text)">Tokens</h1>
@@ -15,6 +17,6 @@ export default function TokensPage() {
           </article>
         ))}
       </section>
-    </main>
+    </PageChrome>
   );
 }

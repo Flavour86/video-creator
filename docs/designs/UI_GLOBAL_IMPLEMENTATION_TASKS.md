@@ -202,7 +202,7 @@ at `1440x1000` first, then again near `950px` width.
     - Right version segment.
     - Allow screen-specific status content.
 
-34. `[FE]` Add page chrome wrappers.
+34. [x] `[FE]` Add page chrome wrappers.
     - All pages should render inside the app shell.
     - Remove max-width marketing container assumptions from existing pages.
     - Ensure page top padding aligns with the prototype below the header.

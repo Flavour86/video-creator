@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Clapperboard, Film } from "lucide-react";
 
 import { AssignModal } from "@/components/assign-modal/AssignModal";
+import { PageChrome } from "@/components/app-shell/PageChrome";
 import { BgModal } from "@/components/bg-modal/BgModal";
 import { InspectorPanel } from "@/components/inspector/InspectorPanel";
 import { LayersPopover } from "@/components/layers-popover/LayersPopover";
@@ -179,14 +180,14 @@ function EditorContent() {
 
   if (!projectPath) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-6">
+      <PageChrome variant="empty">
         <p className="text-sm opacity-60">No project open. Go to Launcher and open a project.</p>
-      </main>
+      </PageChrome>
     );
   }
 
   return (
-    <main className="flex h-[calc(100vh-45px)] flex-col overflow-hidden">
+    <PageChrome variant="workbench">
       {/* ── Toolbar ── */}
       <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-2">
         <p className="max-w-xs truncate font-mono text-xs opacity-40">{projectPath}</p>
@@ -316,7 +317,7 @@ function EditorContent() {
                           <div className="flex h-full items-center justify-center text-xs opacity-20">{item.kind === "video" ? "▶" : "□"}</div>
                         )}
                       </div>
-                      <p className="truncate text-[10px] opacity-50" title={item.filename}>{item.filename}</p>
+                      <p className="vc-type-caption truncate opacity-50" title={item.filename}>{item.filename}</p>
                     </div>
                   ))}
                 </div>
@@ -421,7 +422,7 @@ function EditorContent() {
         sentences={sentences}
         toSentence={toSentence}
       />
-    </main>
+    </PageChrome>
   );
 }
 

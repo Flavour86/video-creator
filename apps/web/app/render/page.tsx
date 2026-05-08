@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { PageChrome } from "@/components/app-shell/PageChrome";
 import { RenderHistory } from "@/components/render-history/RenderHistory";
 import { RenderPipeline } from "@/components/render-pipeline/RenderPipeline";
 import { useRenderProgress } from "@/lib/hooks/useRenderProgress";
@@ -27,9 +28,9 @@ function RenderContent() {
 
   if (!projectPath) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-6">
+      <PageChrome variant="empty">
         <p className="text-sm opacity-60">No project open. Go to Launcher and open a project.</p>
-      </main>
+      </PageChrome>
     );
   }
 
@@ -39,14 +40,14 @@ function RenderContent() {
       : selectedRenderId;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-8">
+    <PageChrome>
       <RenderPipeline
         onCancel={() => void cancel()}
         projectPath={projectPath}
         state={state}
       />
       <RenderHistory projectPath={projectPath} refreshKey={refreshKey} />
-    </main>
+    </PageChrome>
   );
 }
 
