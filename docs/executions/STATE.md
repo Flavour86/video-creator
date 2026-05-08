@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 32 - implement right-side language selector
-**Last commit**: current HEAD (UI global task 31)
-**Last updated**: 2026-05-08T10:26Z
+**Next task**: UI global task 33 - implement global status bar
+**Last commit**: current HEAD (UI global task 32)
+**Last updated**: 2026-05-08T10:32Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:32Z [agent: codex] UI global task 32:
+- What I changed: added the right-side `EN` / `中文` segmented language selector
+  beside the theme toggle, with local active-state behavior and stable two-column layout.
+- What works: `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: persistent language state, dictionaries, and replacing shell
+  copy with dictionary lookups remain tasks 40-42. Existing unrelated warnings remain
+  from `<img>` usage and `next lint` deprecation.
+- Next agent should: continue with UI global task 33 via TDD.
 
 2026-05-08T10:26Z [agent: codex] UI global task 31:
 - What I changed: added the right-side icon-only theme toggle to `AppShell`,

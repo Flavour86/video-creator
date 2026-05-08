@@ -113,6 +113,28 @@ describe("AppShell", () => {
     expect(toggle.querySelector(".lucide-moon")).toBeInTheDocument();
   });
 
+  test("renders a stable right-side language selector", () => {
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    const selector = screen.getByRole("radiogroup", { name: "Language" });
+    const english = screen.getByRole("radio", { name: "EN" });
+    const chinese = screen.getByRole("radio", { name: "中文" });
+
+    expect(selector.className).toContain("grid-cols-2");
+    expect(english).toHaveAttribute("aria-checked", "true");
+    expect(chinese).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(chinese);
+
+    expect(english).toHaveAttribute("aria-checked", "false");
+    expect(chinese).toHaveAttribute("aria-checked", "true");
+    expect(chinese.className).toContain("bg-(--bg-4)");
+  });
+
   test("keeps RootLayout server-rendered while delegating shell UI to AppShell", () => {
     const layoutSource = readFileSync(join(process.cwd(), "app", "layout.tsx"), "utf8");
 

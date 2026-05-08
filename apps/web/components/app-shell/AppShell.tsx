@@ -18,8 +18,14 @@ const navItems = [
   { href: "/tokens", label: "Tokens", value: "tokens" },
 ] as const;
 
+const languageItems = [
+  { label: "EN", value: "en" },
+  { label: "中文", value: "zh" },
+] as const;
+
 type NavValue = (typeof navItems)[number]["value"];
 type ThemeMode = "dark" | "light";
+type LanguageMode = (typeof languageItems)[number]["value"];
 
 function valueForPathname(pathname: string | null): NavValue {
   const current = pathname ?? "/";
@@ -31,6 +37,7 @@ function valueForPathname(pathname: string | null): NavValue {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [language, setLanguage] = useState<LanguageMode>("en");
 
   useEffect(() => {
     const currentTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
@@ -88,6 +95,15 @@ export function AppShell({ children }: AppShellProps) {
               icon={ThemeIcon}
               label="Toggle theme"
               onClick={handleThemeToggle}
+            />
+            <SegmentedControl
+              ariaLabel="Language"
+              className="grid grid-cols-2"
+              items={[...languageItems]}
+              onValueChange={(value) => {
+                setLanguage(value as LanguageMode);
+              }}
+              value={language}
             />
           </div>
         </div>

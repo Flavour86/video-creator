@@ -189,7 +189,7 @@ at `1440x1000` first, then again near `950px` width.
     - Accessible name: `Toggle theme`.
     - Dark mode shows sun icon; light mode shows moon icon, matching prototype.
 
-32. `[FE]` Implement right-side language selector.
+32. [x] `[FE]` Implement right-side language selector.
     - Segmented control with `EN` and `中文`.
     - Selected language uses active pill.
     - It must not shift header layout when switching languages.
