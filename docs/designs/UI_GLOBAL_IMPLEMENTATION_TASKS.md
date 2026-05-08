@@ -267,7 +267,7 @@ at `1440x1000` first, then again near `950px` width.
       version.
     - Return unknown/unavailable states explicitly instead of omitting fields.
 
-46. `[BE]` Add active render count.
+46. [x] `[BE]` Add active render count.
     - Derive from render DB rows or active render manager.
     - Expose count for Launcher and status bar.
 

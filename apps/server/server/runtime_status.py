@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from server.pipeline.render import active_render_count
 from server.settings import Settings
 
 SERVER_VERSION = "0.1.0"
@@ -41,6 +42,7 @@ class WhisperXStatus(BaseModel):
 class RuntimeHealthResponse(BaseModel):
     status: Literal["ok"]
     version: str
+    active_renders: int
     sidecar: SidecarStatus
     python: VersionedRuntimeStatus
     ffmpeg: VersionedRuntimeStatus
@@ -52,6 +54,7 @@ def collect_runtime_health(settings: Settings) -> RuntimeHealthResponse:
     return RuntimeHealthResponse(
         status="ok",
         version=SERVER_VERSION,
+        active_renders=active_render_count(),
         sidecar=SidecarStatus(
             status="ready",
             address=f"http://{settings.host}:{settings.port}",

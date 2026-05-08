@@ -1,6 +1,7 @@
 import httpx
 import pytest
 
+import server.runtime_status as runtime_status
 from server.main import app
 
 
@@ -39,3 +40,15 @@ async def test_health_returns_runtime_dependency_status() -> None:
     assert set(body["whisperx"]) == {"status", "model"}
     assert body["whisperx"]["status"] in {"ready", "unavailable", "unknown"}
     assert body["whisperx"]["model"] == "large-v3"
+
+
+@pytest.mark.asyncio
+async def test_health_returns_active_render_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runtime_status, "active_render_count", lambda: 2, raising=False)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["active_renders"] == 2

@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 46 - add active render count
-**Last commit**: current HEAD (UI global task 45)
-**Last updated**: 2026-05-08T11:49Z
+**Next task**: UI global task 47 - add cached project count
+**Last commit**: current HEAD (UI global task 46)
+**Last updated**: 2026-05-08T11:51Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:51Z [agent: codex] UI global task 46:
+- What I changed: added `active_render_count()` to the render manager and
+  exposed its value as `/health.active_renders`.
+- What works: the count is derived from the active in-memory render job map and
+  can be consumed by Launcher/status UI in later tasks. `pnpm -F @vc/server test`,
+  `pnpm -F @vc/server lint`, and `pnpm -F @vc/server build` completed
+  successfully.
+- What is incomplete: cached project count remains task 47.
+- Next agent should: continue with UI global task 47 via TDD and backend skills.
 
 2026-05-08T11:49Z [agent: codex] UI global task 45:
 - What I changed: expanded `/health` with typed runtime data for sidecar,

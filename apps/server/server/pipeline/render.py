@@ -87,6 +87,10 @@ async def cancel_render(render_id: str) -> bool:
     return True
 
 
+def active_render_count() -> int:
+    return len(_active_jobs)
+
+
 def _create_job(*, project_dir: Path, preset: RenderPreset) -> RenderJob:
     project = load_project(project_dir)
     render_id = _new_render_id()
