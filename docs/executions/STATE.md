@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 39 - verify dark and light modes on Launcher, Editor, Render, and Tokens
-**Last commit**: current HEAD (UI global task 38)
-**Last updated**: 2026-05-08T11:05Z
+**Next task**: UI global task 40 - add global language state
+**Last commit**: current HEAD (UI global task 39)
+**Last updated**: 2026-05-08T11:11Z
 
 ---
 
@@ -81,6 +81,20 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:11Z [agent: codex] UI global task 39:
+- What I changed: fixed Launcher route-level token leaks found during dark/light
+  QA, then verified Launcher, Editor empty state, Render empty state, and Tokens
+  with Chrome DevTools in dark and light modes.
+- What works: body/main/header/footer token colors switch on all four routes.
+  Launcher button text and empty-state border now switch through tokens, and
+  Tokens cards switch surface/border/text tokens. `pnpm -F @vc/web test -- app/page.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: Editor and Render were verified in their no-project states
+  because the local sidecar was not running during this UI QA pass; deeper
+  project-loaded timeline/preview token fidelity remains for later screen tasks.
+- Next agent should: continue with UI global task 40 via TDD.
 
 2026-05-08T11:05Z [agent: codex] UI global task 38:
 - What I changed: added a regression guard over every `components/ui` shared

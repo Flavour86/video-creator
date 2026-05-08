@@ -20,7 +20,11 @@ describe("LauncherPage", () => {
   it("renders the title", async () => {
     render(<LauncherPage />);
     expect(screen.getByText("Video Creator")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "New Project" }).className).toContain("bg-(--blue)");
     await waitFor(() => expect(screen.getByText("No projects yet - create one to get started.")).toBeInTheDocument());
+    expect(screen.getByText("No projects yet - create one to get started.").closest("section")?.className).toContain(
+      "border-(--line)",
+    );
   });
 
   it("shows recent projects", async () => {
@@ -39,6 +43,8 @@ describe("LauncherPage", () => {
     });
     render(<LauncherPage />);
     await waitFor(() => expect(screen.getByText("Demo")).toBeInTheDocument());
+    expect(screen.getByText("Demo").closest("article")?.className).toContain("bg-(--bg-1)");
+    expect(screen.getByText("Demo").closest("article")?.className).toContain("border-(--line)");
     expect(screen.getByText(/3 media/)).toBeInTheDocument();
   });
 });

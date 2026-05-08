@@ -226,7 +226,7 @@ at `1440x1000` first, then again near `950px` width.
 38. [x] `[FE]` Wire every shared primitive to theme tokens.
     - No component-level dark-mode color branches unless they assign token names.
 
-39. `[QA]` Verify dark and light modes on Launcher, Editor, Render, and Tokens.
+39. [x] `[QA]` Verify dark and light modes on Launcher, Editor, Render, and Tokens.
     - Check surfaces, text, borders, tags, buttons, fields, timeline, and preview
       surfaces.
 

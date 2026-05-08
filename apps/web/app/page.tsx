@@ -59,7 +59,10 @@ export default function LauncherPage() {
           <h1 className="text-3xl font-semibold">Video Creator</h1>
           <p className="mt-1 text-sm opacity-70">Recent local projects</p>
         </div>
-        <Link className="rounded bg-neutral-950 px-4 py-2 text-sm font-semibold text-white" href="/projects/new">
+        <Link
+          className="rounded-(--r) border border-transparent bg-(--blue) px-(--space-5) py-(--space-2) text-sm font-semibold text-(--text) hover:brightness-110"
+          href="/projects/new"
+        >
           New Project
         </Link>
       </header>
@@ -67,7 +70,7 @@ export default function LauncherPage() {
       {isLoading ? <p className="text-sm opacity-70">Loading...</p> : null}
 
       {!isLoading && projects.length === 0 ? (
-        <section className="flex min-h-80 items-center justify-center rounded border border-dashed border-neutral-300">
+        <section className="flex min-h-80 items-center justify-center rounded-(--r) border border-dashed border-(--line)">
           <p className="text-sm opacity-70">No projects yet - create one to get started.</p>
         </section>
       ) : null}
@@ -75,10 +78,10 @@ export default function LauncherPage() {
       <section className="grid gap-3">
         {projects.map((project) => (
           <article
-            className="grid gap-4 rounded border border-neutral-200 p-4 sm:grid-cols-[96px_1fr_auto]"
+            className="grid gap-4 rounded-(--r) border border-(--line) bg-(--bg-1) p-(--space-5) sm:grid-cols-[96px_1fr_auto]"
             key={project.path}
           >
-            <div className="aspect-video rounded bg-neutral-200" />
+            <div className="aspect-video rounded-(--r-sm) bg-(--bg-3)" />
             <button className="text-left" onClick={() => void openProject(project)} type="button">
               <h2 className="text-lg font-semibold">{project.name}</h2>
               <p className="mt-1 break-all font-mono text-xs opacity-70">{project.path}</p>
@@ -87,11 +90,11 @@ export default function LauncherPage() {
                 {project.media_count} media · {project.last_opened_at}
               </p>
               {errorByPath[project.path] ? (
-                <p className="mt-2 text-sm text-red-600">{errorByPath[project.path]}</p>
+                <p className="mt-2 text-sm text-(--red)">{errorByPath[project.path]}</p>
               ) : null}
             </button>
             {errorByPath[project.path] ? (
-              <button className="text-sm font-medium text-red-700" onClick={() => void removeProject(project)} type="button">
+              <button className="text-sm font-medium text-(--red)" onClick={() => void removeProject(project)} type="button">
                 Remove
               </button>
             ) : null}
