@@ -8,3 +8,6 @@ export { StatusTag } from "./StatusTag";
 export type { StatusTagProps, StatusTagVariant } from "./StatusTag";
 export { Kbd } from "./Kbd";
 export type { KbdProps } from "./Kbd";
+
+export { Surface } from "./Surface";
+export type { SurfacePadding, SurfaceProps, SurfaceTone } from "./Surface";

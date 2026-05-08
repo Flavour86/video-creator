@@ -133,7 +133,7 @@ at `1440x1000` first, then again near `950px` width.
     - Support command chips such as `Ctrl+K`, `Cmd+K`, `Ctrl+F`, and `Space`.
     - Use mono or compact caption treatment.
 
-22. `[FE]` Implement `Panel`, `Surface`, or equivalent layout primitive.
+22. [x] `[FE]` Implement `Panel`, `Surface`, or equivalent layout primitive.
     - Must use tokenized background, border, radius, and padding.
     - Must not encourage card nesting.
 
