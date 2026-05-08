@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 8 - add light theme values
-**Last commit**: e107146
-**Last updated**: 2026-05-08T09:00Z
+**Next task**: UI global task 9 - add typography tokens
+**Last commit**: de65997
+**Last updated**: 2026-05-08T09:03Z
 
 ---
 
@@ -81,6 +81,15 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:03Z [agent: codex] UI global task 8:
+- What I changed: added a failing-first assertion for the light theme selector and prototype
+  light color ramp, then added `:root[data-theme="light"]` token overrides.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation.
+- Next agent should: continue with UI global task 9 via TDD.
 
 2026-05-08T09:00Z [agent: codex] UI global task 7:
 - What I changed: added a failing-first assertion that the document defaults to the dark

@@ -47,4 +47,15 @@ describe("global design tokens", () => {
     expect(globalsCss).toContain("background: var(--bg-0);");
     expect(globalsCss).toContain("color: var(--text);");
   });
+
+  test("defines the prototype light theme values behind the light theme selector", () => {
+    expect(globalsCss).toContain(':root[data-theme="light"]');
+    expect(globalsCss).toContain("color-scheme: light;");
+    expect(globalsCss).toContain("--bg-0: oklch(0.97 0.003 80);");
+    expect(globalsCss).toContain("--bg-5: oklch(0.85 0.006 70);");
+    expect(globalsCss).toContain("--text: oklch(0.2 0.01 70);");
+    expect(globalsCss).toContain("--text-4: oklch(0.62 0.01 70);");
+    expect(globalsCss).toContain("--line: oklch(0.88 0.005 70);");
+    expect(globalsCss).toContain("--line-soft: oklch(0.92 0.004 70);");
+  });
 });

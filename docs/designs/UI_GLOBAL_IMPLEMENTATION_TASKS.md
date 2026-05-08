@@ -58,7 +58,7 @@ at `1440x1000` first, then again near `950px` width.
    - Body background must use `--bg-0`.
    - Body text must use `--text`.
 
-8. `[FE]` Add light theme values under `:root[data-theme="light"]`.
+8. [x] `[FE]` Add light theme values under `:root[data-theme="light"]`.
    - Use the prototype light OKLCH ramp.
    - Keep semantic token names identical between themes.
 

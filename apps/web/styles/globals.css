@@ -30,6 +30,23 @@
   --shadow-2: 0 14px 40px oklch(0 0 0 / 0.5);
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-0: oklch(0.97 0.003 80);
+  --bg-1: oklch(0.99 0.002 80);
+  --bg-2: oklch(0.965 0.003 80);
+  --bg-3: oklch(0.94 0.004 70);
+  --bg-4: oklch(0.91 0.005 70);
+  --bg-5: oklch(0.85 0.006 70);
+  --text: oklch(0.2 0.01 70);
+  --text-2: oklch(0.36 0.01 70);
+  --text-3: oklch(0.5 0.01 70);
+  --text-4: oklch(0.62 0.01 70);
+  --line: oklch(0.88 0.005 70);
+  --line-soft: oklch(0.92 0.004 70);
+}
+
 html,
 body {
   height: 100%;
