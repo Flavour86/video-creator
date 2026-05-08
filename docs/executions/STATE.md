@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T6.9 (`07_MILESTONE_POLISH.md`)
-**Last commit**: f4fd756
-**Last updated**: 2026-05-08T01:49Z
+**Next task**: Phase 1 acceptance test (`07_MILESTONE_POLISH.md`)
+**Last commit**: 770fc5e
+**Last updated**: 2026-05-08T01:51Z
 
 ---
 
@@ -70,7 +70,7 @@
 - [x] T6.6 Watermark layer 閳?commit e51a751
 - [x] T6.7 Time-pinned override (anchor:"time") 閳?commit 3bb6608
 - [x] T6.8 PiP compositing mode 闁?commit f4fd756
-- [ ] T6.9 Configurable transitions (cut / fade / slide)
+- [x] T6.9 Configurable transitions (cut / fade / slide) 闁?commit 770fc5e
 
 ---
 
