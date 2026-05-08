@@ -14,14 +14,24 @@
     },
     "controls": {
       "globalNavLabel": "全局",
+      "primaryNavigationLabel": "主要导航",
       "languageLabel": "语言",
-      "themeLabel": "主题"
+      "themeLabel": "主题",
+      "languageOptions": {
+        "en": "EN",
+        "zh": "中文"
+      }
     },
     "statusBar": {
       "ariaLabel": "全局状态",
       "command": "命令",
       "runtime": "运行时",
-      "version": "版本"
+      "version": "版本",
+      "defaults": {
+        "alignmentCached": "对齐已缓存",
+        "cacheWarm": "缓存 {count} 已预热",
+        "autosaveAgo": "自动保存 · {seconds} 秒前"
+      }
     }
   },
   "globalControls": {

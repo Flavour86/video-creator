@@ -144,6 +144,42 @@ describe("AppShell", () => {
     expect(chinese.className).toContain("bg-(--bg-4)");
   });
 
+  test("hydrates global shell copy from the stored Chinese dictionary", async () => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "zh");
+
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    expect(await screen.findByRole("navigation", { name: "全局" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "主要导航" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "启动器" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "设置" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "编辑器" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "渲染" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "令牌" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "切换主题" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "语言" })).toBeInTheDocument();
+    expect(screen.getByRole("contentinfo", { name: "全局状态" })).toBeInTheDocument();
+    expect(screen.getByText("命令")).toBeInTheDocument();
+  });
+
+  test("switches global shell copy when the language changes", async () => {
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "中文" }));
+
+    expect(await screen.findByRole("radio", { name: "启动器" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "切换主题" })).toBeInTheDocument();
+    expect(screen.getByText("命令")).toBeInTheDocument();
+  });
+
   test("renders the global status bar", () => {
     render(
       <AppShell>

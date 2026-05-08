@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 42 - replace hardcoded global shell copy
-**Last commit**: current HEAD (UI global task 41)
-**Last updated**: 2026-05-08T11:21Z
+**Next task**: UI global task 43 - preserve technical metadata as language-neutral
+**Last commit**: current HEAD (UI global task 42)
+**Last updated**: 2026-05-08T11:32Z
 
 ---
 
@@ -81,6 +81,20 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:32Z [agent: codex] UI global task 42:
+- What I changed: installed and configured `next-intl`, wired AppShell through
+  `NextIntlClientProvider`, and replaced global shell labels, nav labels,
+  theme tooltip, language aria label/options, and status bar labels with
+  `useTranslations()` lookups.
+- What works: stored and live Chinese language changes now update the global
+  shell without changing technical metadata. `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx lib/i18n/messages.test.ts`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: task 43 should add an explicit guard that paths,
+  timecodes, codec names, version strings, GPU names, and counts remain
+  language-neutral.
+- Next agent should: continue with UI global task 43 via TDD.
 
 2026-05-08T11:21Z [agent: codex] UI global task 41:
 - What I changed: added `en` and `zh` frontend dictionaries under

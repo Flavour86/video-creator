@@ -14,14 +14,24 @@
     },
     "controls": {
       "globalNavLabel": "Global",
+      "primaryNavigationLabel": "Primary navigation",
       "languageLabel": "Language",
-      "themeLabel": "Theme"
+      "themeLabel": "Theme",
+      "languageOptions": {
+        "en": "EN",
+        "zh": "中文"
+      }
     },
     "statusBar": {
       "ariaLabel": "Global status",
-      "command": "Command",
+      "command": "command",
       "runtime": "Runtime",
-      "version": "Version"
+      "version": "Version",
+      "defaults": {
+        "alignmentCached": "alignment cached",
+        "cacheWarm": "cache {count} warm",
+        "autosaveAgo": "autosave · {seconds}s ago"
+      }
     }
   },
   "globalControls": {

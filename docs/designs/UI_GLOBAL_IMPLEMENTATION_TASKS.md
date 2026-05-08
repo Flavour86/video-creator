@@ -243,7 +243,7 @@ at `1440x1000` first, then again near `950px` width.
       validation messages, empty states, and page-level labels as screens are
       migrated.
 
-42. `[FE]` Replace hardcoded global shell copy with dictionary lookups.
+42. [x] `[FE]` Replace hardcoded global shell copy with dictionary lookups.
     - Navigation labels.
     - Theme tooltip.
     - Language control label.
