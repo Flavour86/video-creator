@@ -165,7 +165,7 @@ at `1440x1000` first, then again near `950px` width.
     - Surface uses `--bg-1`.
     - No floating card styling.
 
-28. `[FE]` Implement the left brand cluster.
+28. [x] `[FE]` Implement the left brand cluster.
     - Square `VC` mark.
     - Product name `Video Creator`.
     - Phase label `phase 1 - local` or the exact localized equivalent selected

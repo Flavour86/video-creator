@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 28 - implement left brand cluster
-**Last commit**: current HEAD (UI global task 27)
-**Last updated**: 2026-05-08T10:15Z
+**Next task**: UI global task 29 - implement centered navigation
+**Last commit**: current HEAD (UI global task 28)
+**Last updated**: 2026-05-08T10:17Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:17Z [agent: codex] UI global task 28:
+- What I changed: added the left app-shell brand cluster with square `VC` mark,
+  product name, and `phase 1 - local` caption using tokenized spacing/type.
+- What works: `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: centered segmented nav, `/tokens`, theme toggle, language selector,
+  and status bar remain for tasks 29-33. Existing unrelated warnings remain from
+  Radix dialog descriptions, `<img>` usage, `next lint` deprecation, and Git line-ending
+  notices for `AppShell` files.
+- Next agent should: continue with UI global task 29 via TDD.
 
 2026-05-08T10:15Z [agent: codex] UI global task 27:
 - What I changed: tightened `AppShell` to a compact `h-11` full-width header

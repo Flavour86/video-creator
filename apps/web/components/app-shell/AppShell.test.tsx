@@ -38,6 +38,27 @@ describe("AppShell", () => {
     expect(header.className).not.toMatch(/rounded|shadow/);
   });
 
+  test("renders the left brand cluster with mark, product name, and phase label", () => {
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    const brandCluster = screen.getByTestId("brand-cluster");
+    const mark = screen.getByText("VC");
+    const productName = screen.getByText("Video Creator");
+    const phase = screen.getByText("phase 1 - local");
+
+    expect(brandCluster.className).toContain("gap-(--space-3)");
+    expect(mark.className).toContain("h-7");
+    expect(mark.className).toContain("w-7");
+    expect(mark.className).toContain("rounded-(--r-sm)");
+    expect(productName.className).toContain("vc-type-body");
+    expect(phase.className).toContain("vc-type-caption");
+    expect(phase.className).toContain("text-(--text-3)");
+  });
+
   test("keeps RootLayout server-rendered while delegating shell UI to AppShell", () => {
     const layoutSource = readFileSync(join(process.cwd(), "app", "layout.tsx"), "utf8");
 
