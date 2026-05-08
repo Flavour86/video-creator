@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Query, UploadFile
@@ -13,7 +13,9 @@ from pydantic import BaseModel
 
 router = APIRouter(tags=["media"])
 
-ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".webm"})
+ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
+    {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".webm"}
+)
 IMAGE_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp"})
 
 
@@ -42,13 +44,27 @@ def _unique_name(dest: Path, name: str) -> str:
 
 async def _make_thumb(src: Path, thumb: Path) -> None:
     thumb.parent.mkdir(parents=True, exist_ok=True)
-    vf = "scale=256:144:force_original_aspect_ratio=decrease,pad=256:144:(ow-iw)/2:(oh-ih)/2:color=black"
+    vf = (
+        "scale=256:144:force_original_aspect_ratio=decrease,"
+        "pad=256:144:(ow-iw)/2:(oh-ih)/2:color=black"
+    )
     if src.suffix.lower() in IMAGE_EXTENSIONS:
         cmd = ["ffmpeg", "-y", "-i", str(src), "-vf", vf, "-q:v", "5", str(thumb)]
     else:
         cmd = [
-            "ffmpeg", "-y", "-ss", "0", "-i", str(src),
-            "-vframes", "1", "-vf", vf, "-q:v", "5", str(thumb),
+            "ffmpeg",
+            "-y",
+            "-ss",
+            "0",
+            "-i",
+            str(src),
+            "-vframes",
+            "1",
+            "-vf",
+            vf,
+            "-q:v",
+            "5",
+            str(thumb),
         ]
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -88,8 +104,8 @@ def _build_item(project_dir: Path, f: Path) -> MediaItem:
 
 @router.post("/projects/media", response_model=list[MediaItem])
 async def upload_media(
+    files: Annotated[list[UploadFile], File(...)],
     project: str = Query(...),
-    files: list[UploadFile] = File(...),
 ) -> list[MediaItem] | JSONResponse:
     result = _get_project(project)
     if isinstance(result, JSONResponse):
@@ -175,7 +191,11 @@ async def get_audio(
         return _error(404, "AUDIO_NOT_FOUND", "Audio file not found.", {"filename": filename})
 
     content_type = _AUDIO_CONTENT_TYPES.get(audio_path.suffix.lower(), "audio/wav")
-    return FileResponse(str(audio_path), media_type=content_type, headers={"Accept-Ranges": "bytes"})
+    return FileResponse(
+        str(audio_path),
+        media_type=content_type,
+        headers={"Accept-Ranges": "bytes"},
+    )
 
 
 @router.get("/projects/media-file", response_model=None)

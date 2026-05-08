@@ -6,12 +6,26 @@ import re
 from pathlib import Path
 from typing import cast
 
-import nltk
+import nltk  # type: ignore[import-untyped]
 
 from server.domain.timing import Sentence
 
 _NLTK_DIR = Path(os.environ.get("NLTK_DATA", str(Path.home() / ".videocreator" / "nltk_data")))
-_EXTRA_ABBREVS = {"mr", "mrs", "dr", "ms", "jr", "sr", "inc", "ltd", "co", "vs", "etc", "e.g", "i.e"}
+_EXTRA_ABBREVS = {
+    "mr",
+    "mrs",
+    "dr",
+    "ms",
+    "jr",
+    "sr",
+    "inc",
+    "ltd",
+    "co",
+    "vs",
+    "etc",
+    "e.g",
+    "i.e",
+}
 _tokenizer: nltk.tokenize.PunktSentenceTokenizer | None = None
 
 

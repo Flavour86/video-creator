@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from server.domain.project import Project
 from server.domain.timing import AlignedSentence, AlignmentResult
 from server.pipeline.cache import clip_cache_key, clip_cache_path
 from server.pipeline.clip_render import clip_cache_path_for_item
 from server.pipeline.filtergraph import build_compose_command
+
+
+@pytest.fixture(autouse=True)
+def _stub_audio_duration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("server.pipeline.filtergraph._probe_audio_duration_s", lambda path: 10.0)
 
 
 def _alignment(duration_s: float = 10.0) -> AlignmentResult:
@@ -115,6 +122,24 @@ def test_empty_foreground_uses_black_canvas_and_audio(tmp_path: Path) -> None:
     assert "[0:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]" in filtergraph
 
 
+def test_compose_duration_uses_audio_when_alignment_is_shorter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("server.pipeline.filtergraph._probe_audio_duration_s", lambda path: 300.3)
+    project = _project([])
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(duration_s=210.1),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert "color=black:s=1280x720:r=30:d=300.3[bg]" in _filtergraph(command)
+
+
 def test_one_foreground_item_adds_overlay_with_timestamps(tmp_path: Path) -> None:
     media_path = _write_media(tmp_path, "one.jpg", b"one")
     project = _project([_fg_layer("fg-z1", [_item("one.jpg", 1.5, 3.0)])])
@@ -130,7 +155,8 @@ def test_one_foreground_item_adds_overlay_with_timestamps(tmp_path: Path) -> Non
     filtergraph = _filtergraph(command)
     expected_clip = _expected_clip(tmp_path, media_path, 1.5)
     assert _input_paths(command) == [str(tmp_path / "voice.wav"), str(expected_clip)]
-    assert "overlay=enable='between(t,1.5,3)':eof_action=pass[v1]" in filtergraph
+    assert "[1:v]setpts=PTS+1.5/TB[clip1]" in filtergraph
+    assert "[bg][clip1]overlay=enable='between(t,1.5,3)':eof_action=pass[v1]" in filtergraph
     assert "[v1]format=yuv420p[vout]" in filtergraph
 
 
@@ -159,8 +185,10 @@ def test_two_items_add_two_overlays(tmp_path: Path) -> None:
 
     filtergraph = _filtergraph(command)
     assert filtergraph.count("overlay=enable=") == 2
-    assert "[bg][1:v]overlay=enable='between(t,1,2)':eof_action=pass[v1]" in filtergraph
-    assert "[v1][2:v]overlay=enable='between(t,4,6)':eof_action=pass[v2]" in filtergraph
+    assert "[1:v]setpts=PTS+1/TB[clip1]" in filtergraph
+    assert "[2:v]setpts=PTS+4/TB[clip2]" in filtergraph
+    assert "[bg][clip1]overlay=enable='between(t,1,2)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,4,6)':eof_action=pass[v2]" in filtergraph
 
 
 def test_layer_z_order_is_bottom_to_top(tmp_path: Path) -> None:
@@ -325,8 +353,9 @@ def test_pip_items_are_overlaid_after_foreground_before_subtitles(tmp_path: Path
         crf=28,
     )
     assert _input_paths(command) == [str(tmp_path / "voice.wav"), str(fg_clip), str(pip_clip)]
-    assert "[bg][1:v]overlay=enable='between(t,1,5)':eof_action=pass[v1]" in filtergraph
-    assert "[2:v]format=rgba,colorchannelmixer=aa=0.5[pip2]" in filtergraph
+    assert "[1:v]setpts=PTS+1/TB[clip1]" in filtergraph
+    assert "[bg][clip1]overlay=enable='between(t,1,5)':eof_action=pass[v1]" in filtergraph
+    assert "[2:v]setpts=PTS+2/TB,format=rgba,colorchannelmixer=aa=0.5[pip2]" in filtergraph
     assert (
         "[v1][pip2]overlay=x='(W-w)*0.98':y='(H-h)*0.02':"
         "enable='between(t,2,4)':eof_action=pass[v2]"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -53,6 +54,12 @@ def build_compose_command(
 ) -> list[str]:
     config = PRESETS[preset]
     items = visual_items_bottom_to_top(project)
+    duration_s = _duration_s(
+        project=project,
+        alignment=alignment,
+        audio_path=project_dir / project.audio,
+        items=items,
+    )
     cmd = ["ffmpeg", "-y", "-i", str(project_dir / project.audio)]
     for item in items:
         cmd.extend(
@@ -76,7 +83,7 @@ def build_compose_command(
         cmd.extend(["-loop", "1", "-i", str(watermark_path)])
 
     filtergraph = _build_filtergraph(
-        duration_s=_duration_s(project, alignment),
+        duration_s=duration_s,
         config=config,
         items=items,
         subtitles_path=project_dir / ".vc" / "subtitles.srt" if _burns_subtitles(project) else None,
@@ -141,13 +148,44 @@ def _pip_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
     return items
 
 
-def _duration_s(project: Project, alignment: AlignmentResult) -> float:
+def _duration_s(
+    *,
+    project: Project,
+    alignment: AlignmentResult,
+    audio_path: Path,
+    items: list[ClipRenderItem],
+) -> float:
+    durations = [_probe_audio_duration_s(audio_path)]
     if alignment.sentences:
-        return max(sentence.end_s for sentence in alignment.sentences)
-    item_ends = [_item_float(item, "end") for item in visual_items_bottom_to_top(project)]
+        durations.append(max(sentence.end_s for sentence in alignment.sentences))
+    item_ends = [_item_float(item, "end") for item in items]
     if item_ends:
-        return max(item_ends)
-    return 0.001
+        durations.append(max(item_ends))
+    return max(0.001, *durations)
+
+
+def _probe_audio_duration_s(audio_path: Path) -> float:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(audio_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe audio duration failed: {result.stderr.strip()}")
+    duration_s = float(result.stdout.strip())
+    if duration_s <= 0:
+        raise ValueError(f"Audio duration must be positive: {audio_path}")
+    return duration_s
 
 
 def _build_filtergraph(
@@ -167,6 +205,7 @@ def _build_filtergraph(
         next_label = f"v{input_index}"
         start_s = _fmt(_item_float(item, "start"))
         end_s = _fmt(_item_float(item, "end"))
+        timed_input = f"clip{input_index}"
         if _is_pip_item(item):
             pip = _pip_placement(item)
             opacity = _placement_float(pip, "opacity") / 100
@@ -175,7 +214,7 @@ def _build_filtergraph(
             x_expr = _slide_x_expr(item, base_x=pos_x)
             pip_label = f"pip{input_index}"
             segments.append(
-                f"[{input_index}:v]format=rgba,"
+                f"[{input_index}:v]setpts=PTS+{start_s}/TB,format=rgba,"
                 f"colorchannelmixer=aa={_fmt(opacity)}[{pip_label}]"
             )
             segments.append(
@@ -185,9 +224,10 @@ def _build_filtergraph(
                 f"[{next_label}]"
             )
         else:
+            segments.append(f"[{input_index}:v]setpts=PTS+{start_s}/TB[{timed_input}]")
             overlay_args = _fullscreen_overlay_args(item)
             segments.append(
-                f"[{current}][{input_index}:v]"
+                f"[{current}][{timed_input}]"
                 f"overlay={overlay_args}enable='between(t,{start_s},{end_s})':eof_action=pass"
                 f"[{next_label}]"
             )
@@ -211,8 +251,8 @@ def _build_filtergraph(
         width = int(config.resolution.split("x", maxsplit=1)[0])
         scale = _watermark_float(watermark, "scale")
         opacity = _watermark_float(watermark, "opacity") / 100
-        pos_x = _watermark_float(watermark, "pos_x")
-        pos_y = _watermark_float(watermark, "pos_y")
+        wm_pos_x = _watermark_float(watermark, "pos_x")
+        wm_pos_y = _watermark_float(watermark, "pos_y")
         segments.append(
             f"[{watermark_input_index}:v]"
             f"scale={_fmt(width * scale)}:-1,"
@@ -220,8 +260,8 @@ def _build_filtergraph(
         )
         segments.append(
             f"[{current}][wm]overlay="
-            f"x='(W-w)*{_fmt(pos_x / 100)}':"
-            f"y='(H-h)*{_fmt(pos_y / 100)}':eof_action=pass"
+            f"x='(W-w)*{_fmt(wm_pos_x / 100)}':"
+            f"y='(H-h)*{_fmt(wm_pos_y / 100)}':eof_action=pass"
             f"[{next_label}]"
         )
         current = next_label
