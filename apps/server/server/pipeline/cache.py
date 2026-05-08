@@ -13,7 +13,7 @@ from pydantic import BaseModel
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
 
-CLIP_CACHE_FORMAT_VERSION = 2
+CLIP_CACHE_FORMAT_VERSION = 3
 
 
 def compute_alignment_hash(audio_path: Path, transcript_text: str) -> str:
@@ -54,6 +54,7 @@ def clip_cache_components(
     fps: int,
     crf: int,
     crossfade_s: float | None = None,
+    pip: BaseModel | Mapping[str, JsonValue] | None = None,
 ) -> JsonObject:
     return {
         "media_sha256": _compute_file_sha256(media_path),
@@ -65,6 +66,7 @@ def clip_cache_components(
         "fps": fps,
         "crf": crf,
         "crossfade_s": round(crossfade_s, 6) if crossfade_s is not None else None,
+        "pip": _json_object(pip),
         "format_version": CLIP_CACHE_FORMAT_VERSION,
     }
 
@@ -85,6 +87,7 @@ def clip_cache_key(
     fps: int,
     crf: int,
     crossfade_s: float | None = None,
+    pip: BaseModel | Mapping[str, JsonValue] | None = None,
 ) -> str:
     return clip_cache_key_from_components(
         clip_cache_components(
@@ -97,6 +100,7 @@ def clip_cache_key(
             fps=fps,
             crf=crf,
             crossfade_s=crossfade_s,
+            pip=pip,
         )
     )
 

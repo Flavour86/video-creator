@@ -7,6 +7,7 @@ from pathlib import Path
 from server.domain.project import Project
 from server.domain.timing import AlignedSentence, AlignmentResult
 from server.pipeline.cache import clip_cache_key, clip_cache_path
+from server.pipeline.clip_render import clip_cache_path_for_item
 from server.pipeline.filtergraph import build_compose_command
 
 
@@ -40,6 +41,10 @@ def _item(media_id: str, start: float, end: float, item_id: str = "fg-1") -> dic
 
 def _fg_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object]:
     return {"id": layer_id, "kind": "fg", "name": layer_id, "items": items}
+
+
+def _pip_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object]:
+    return {"id": layer_id, "kind": "pip", "name": layer_id, "items": items}
 
 
 def _project(
@@ -266,3 +271,64 @@ def test_watermark_appends_topmost_overlay(tmp_path: Path) -> None:
     assert "[1:v]scale=102.4:-1,format=rgba,colorchannelmixer=aa=0.6[wm]" in filtergraph
     assert "[bg][wm]overlay=x='(W-w)*1':y='(H-h)*1':eof_action=pass[vwm]" in filtergraph
     assert "[vwm]format=yuv420p[vout]" in filtergraph
+
+
+def test_pip_items_are_overlaid_after_foreground_before_subtitles(tmp_path: Path) -> None:
+    fg_media = _write_media(tmp_path, "fg.jpg", b"fg")
+    _write_media(tmp_path, "pip.png", b"pip")
+    project = _project(
+        [
+            {
+                "id": "sub",
+                "kind": "sub",
+                "name": "Subtitles",
+                "items": [{"id": "sub-auto", "auto": True, "label": "Auto", "style": "default"}],
+            },
+            _pip_layer(
+                "pip-top",
+                [
+                    {
+                        **_item("pip.png", 2.0, 4.0, "pip-1"),
+                        "pip": {"posX": 98, "posY": 2, "size": 22, "radius": 16, "opacity": 50},
+                    }
+                ],
+            ),
+            _fg_layer("fg-z1", [_item("fg.jpg", 1.0, 5.0, "fg-1")]),
+        ],
+        subtitles={
+            "burn_in": True,
+            "style": {
+                "font": "Arial",
+                "size": 28,
+                "position": "bottom-center",
+                "max_chars_per_line": 42,
+                "bg_style": "shadow",
+            },
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    fg_clip = _expected_clip(tmp_path, fg_media, 4.0)
+    pip_clip = clip_cache_path_for_item(
+        item=project.layers[1].root.items[0],
+        project_dir=tmp_path,
+        resolution="1280x720",
+        fps=30,
+        crf=28,
+    )
+    assert _input_paths(command) == [str(tmp_path / "voice.wav"), str(fg_clip), str(pip_clip)]
+    assert "[bg][1:v]overlay=enable='between(t,1,5)':eof_action=pass[v1]" in filtergraph
+    assert "[2:v]format=rgba,colorchannelmixer=aa=0.5[pip2]" in filtergraph
+    assert (
+        "[v1][pip2]overlay=x='(W-w)*0.98':y='(H-h)*0.02':"
+        "enable='between(t,2,4)':eof_action=pass[v2]"
+    ) in filtergraph
+    assert "[v2]subtitles='" in filtergraph

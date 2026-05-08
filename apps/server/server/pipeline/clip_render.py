@@ -15,7 +15,6 @@ from server.pipeline.cache import (
     clip_cache_components,
     clip_cache_key_from_components,
     clip_cache_path,
-    is_cached,
 )
 
 IMAGE_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp"})
@@ -50,12 +49,13 @@ def render_clip_to_cache(
         fps=fps,
         crf=crf,
     )
-    if is_cached(project_dir, key):
-        return clip_cache_path(project_dir, key)
+    cached_path = _clip_cache_path_for_key(project_dir, key, item)
+    if cached_path.is_file() and cached_path.stat().st_size > 0:
+        return cached_path
     return render_clip(
         item=item,
         project_dir=project_dir,
-        output_path=clip_cache_path(project_dir, key),
+        output_path=cached_path,
         resolution=resolution,
         fps=fps,
         crf=crf,
@@ -77,7 +77,7 @@ def clip_cache_path_for_item(
         fps=fps,
         crf=crf,
     )
-    return clip_cache_path(project_dir, key)
+    return _clip_cache_path_for_key(project_dir, key, item)
 
 
 def clip_cache_key_for_item(
@@ -102,6 +102,7 @@ def clip_cache_key_for_item(
         fps=fps,
         crf=crf,
         crossfade_s=_crossfade_s(item),
+        pip=_pip_value(item),
     )
     return clip_cache_key_from_components(components)
 
@@ -131,6 +132,7 @@ def render_clip(
         transition_in=_transition_value(item, "in"),
         transition_out=_transition_value(item, "out"),
         fade_seconds=_fade_seconds(item),
+        pip=_pip_value(item),
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_name(f"{output_path.stem}.tmp{output_path.suffix}")
@@ -144,6 +146,7 @@ def render_clip(
         fps=fps,
         crf=crf,
         output_path=tmp_path,
+        has_alpha=_is_pip_item(item),
     )
     result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode != 0:
@@ -272,6 +275,22 @@ def _crossfade_s(item: ClipRenderItem) -> float | None:
     return float(value)
 
 
+def _pip_value(item: ClipRenderItem) -> BaseModel | Mapping[str, JsonValue] | None:
+    try:
+        value = _field(item, "pip")
+    except (AttributeError, KeyError):
+        return None
+    if value is None or isinstance(value, BaseModel):
+        return value
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, JsonValue], value)
+    raise TypeError("Clip item pip must be an object or null.")
+
+
+def _is_pip_item(item: ClipRenderItem) -> bool:
+    return _pip_value(item) is not None
+
+
 def _fade_seconds(item: ClipRenderItem) -> float:
     crossfade_s = _crossfade_s(item)
     if crossfade_s is None or crossfade_s <= 0:
@@ -333,15 +352,79 @@ def _build_clip_filter(
     transition_in: str | None,
     transition_out: str | None,
     fade_seconds: float,
+    pip: BaseModel | Mapping[str, JsonValue] | None,
 ) -> str:
-    filters = (
-        _image_motion_filters(width, height, duration_s, fps, motion_kind)
-        if media_path.suffix.lower() in IMAGE_EXTENSIONS
-        else _video_fit_filters(width, height, fps)
-    )
+    if pip is not None:
+        filters = _pip_clip_filters(
+            canvas_width=width,
+            duration_s=duration_s,
+            fps=fps,
+            motion_kind=motion_kind,
+            media_path=media_path,
+            pip=pip,
+        )
+    else:
+        filters = (
+            _image_motion_filters(width, height, duration_s, fps, motion_kind)
+            if media_path.suffix.lower() in IMAGE_EXTENSIONS
+            else _video_fit_filters(width, height, fps)
+        )
     filters.extend(_fade_filters(duration_s, transition_in, transition_out, fade_seconds))
-    filters.extend(["setsar=1", "format=yuv420p"])
+    filters.extend(["setsar=1", "format=yuva420p" if pip is not None else "format=yuv420p"])
     return f"[0:v]{','.join(filters)}[vout]"
+
+
+def _pip_clip_filters(
+    *,
+    canvas_width: int,
+    duration_s: float,
+    fps: int,
+    motion_kind: str,
+    media_path: Path,
+    pip: BaseModel | Mapping[str, JsonValue],
+) -> list[str]:
+    pip_width = max(1, round(canvas_width * _pip_object_float(pip, "size") / 100))
+    if media_path.suffix.lower() in IMAGE_EXTENSIONS:
+        filters = (
+            [
+                f"scale={pip_width}:-2:force_original_aspect_ratio=decrease",
+                f"fps={fps}",
+            ]
+            if motion_kind in {"none", "static"}
+            else _image_motion_filters(pip_width, pip_width, duration_s, fps, motion_kind)
+        )
+    else:
+        filters = [
+            f"scale={pip_width}:-2:force_original_aspect_ratio=decrease",
+            f"fps={fps}",
+        ]
+    radius = max(0.0, _pip_object_float(pip, "radius"))
+    filters.append("format=rgba")
+    if radius > 0:
+        filters.append(f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{_rounded_alpha_expr(radius)}'")
+    return filters
+
+
+def _pip_object_float(pip: BaseModel | Mapping[str, JsonValue], name: str) -> float:
+    if isinstance(pip, BaseModel):
+        value = getattr(pip, name)
+    else:
+        value = pip.get(name)
+        if value is None:
+            value = pip.get({"pos_x": "posX", "pos_y": "posY"}.get(name, name))
+    if not isinstance(value, int | float):
+        raise TypeError(f"PiP {name} must be numeric.")
+    return float(value)
+
+
+def _rounded_alpha_expr(radius: float) -> str:
+    r = _fmt(radius)
+    return (
+        f"if(lt(X,{r})*lt(Y,{r})*gt(hypot({r}-X,{r}-Y),{r})"
+        f"+gt(X,W-{r})*lt(Y,{r})*gt(hypot(X-(W-{r}),{r}-Y),{r})"
+        f"+lt(X,{r})*gt(Y,H-{r})*gt(hypot({r}-X,Y-(H-{r})),{r})"
+        f"+gt(X,W-{r})*gt(Y,H-{r})*gt(hypot(X-(W-{r}),Y-(H-{r})),{r}),0,255)"
+    )
 
 
 def _image_motion_filters(
@@ -398,6 +481,7 @@ def _ffmpeg_command(
     fps: int,
     crf: int,
     output_path: Path,
+    has_alpha: bool,
 ) -> list[str]:
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
     if media_path.suffix.lower() in IMAGE_EXTENSIONS:
@@ -413,24 +497,59 @@ def _ffmpeg_command(
             "-map",
             "[vout]",
             "-an",
-            "-c:v",
-            "libx264",
-            "-g",
-            "1",
-            "-keyint_min",
-            "1",
-            "-preset",
-            "ultrafast",
-            "-crf",
-            str(crf),
-            "-r",
-            str(fps),
-            "-movflags",
-            "+faststart",
-            str(output_path),
         ]
     )
+    if has_alpha:
+        cmd.extend(
+            [
+                "-c:v",
+                "libvpx-vp9",
+                "-pix_fmt",
+                "yuva420p",
+                "-auto-alt-ref",
+                "0",
+                "-deadline",
+                "realtime",
+                "-cpu-used",
+                "8",
+                "-crf",
+                str(crf),
+                "-b:v",
+                "0",
+                "-r",
+                str(fps),
+                "-frames:v",
+                str(_frame_count(duration_s, fps)),
+                str(output_path),
+            ]
+        )
+    else:
+        cmd.extend(
+            [
+                "-c:v",
+                "libx264",
+                "-g",
+                "1",
+                "-keyint_min",
+                "1",
+                "-preset",
+                "ultrafast",
+                "-crf",
+                str(crf),
+                "-r",
+                str(fps),
+                "-frames:v",
+                str(_frame_count(duration_s, fps)),
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
+        )
     return cmd
+
+
+def _frame_count(duration_s: float, fps: int) -> int:
+    return max(1, round(duration_s * fps))
 
 
 def _write_metadata(
@@ -454,6 +573,7 @@ def _write_metadata(
         fps=fps,
         crf=crf,
         crossfade_s=_crossfade_s(item),
+        pip=_pip_value(item),
     )
     metadata = {
         "key_components": components,
@@ -465,3 +585,10 @@ def _write_metadata(
         json.dumps(metadata, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+
+
+def _clip_cache_path_for_key(project_dir: Path, key: str, item: ClipRenderItem) -> Path:
+    path = clip_cache_path(project_dir, key)
+    if _is_pip_item(item):
+        return path.with_suffix(".webm")
+    return path

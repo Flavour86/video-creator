@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from server.pipeline.cache import clip_cache_key, clip_cache_path, is_cached
-from server.pipeline.clip_render import clip_cache_key_for_item, render_clip, render_clip_to_cache
+from server.pipeline.clip_render import (
+    clip_cache_key_for_item,
+    clip_cache_path_for_item,
+    render_clip,
+    render_clip_to_cache,
+)
 
 
 def _write_media(path: Path, data: bytes = b"media-bytes") -> Path:
@@ -164,6 +169,70 @@ def test_video_clip_cache_key_uses_probed_duration(
     )
 
     assert key == expected
+
+
+def test_pip_geometry_changes_cache_key_and_uses_alpha_container(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path / "media" / "image.png")
+    item = {
+        "id": "pip-1",
+        "media_id": media_path.name,
+        "start": 0.0,
+        "end": 4.0,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+        "pip": {"posX": 98, "posY": 2, "size": 22, "radius": 16, "opacity": 50},
+    }
+
+    key = clip_cache_key_for_item(item=item, project_dir=tmp_path)
+    changed_key = clip_cache_key_for_item(
+        item={**item, "pip": {**item["pip"], "size": 30}},
+        project_dir=tmp_path,
+    )
+
+    assert changed_key != key
+    assert clip_cache_path_for_item(item=item, project_dir=tmp_path).suffix == ".webm"
+
+
+def test_render_pip_clip_encodes_vp9_with_alpha(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "image.png")
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Result:
+        commands.append(cmd)
+        Path(cmd[-1]).write_bytes(b"webm")
+        return Result()
+
+    monkeypatch.setattr("server.pipeline.clip_render.subprocess.run", fake_run)
+
+    render_clip(
+        item={
+            "id": "pip-1",
+            "media_id": media_path.name,
+            "start": 0.0,
+            "end": 4.0,
+            "motion": {"kind": "none", "easing": "linear"},
+            "transitions": {"in": "cut", "out": "cut"},
+            "pip": {"posX": 98, "posY": 2, "size": 22, "radius": 16, "opacity": 50},
+        },
+        project_dir=tmp_path,
+        output_path=tmp_path / ".vc" / "clips" / "pip.webm",
+    )
+
+    ffmpeg_command = commands[0]
+    filtergraph = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
+    assert "scale=282:-2" in filtergraph
+    assert "format=rgba" in filtergraph
+    assert "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a=" in filtergraph
+    assert "libvpx-vp9" in ffmpeg_command
+    assert "yuva420p" in ffmpeg_command
 
 
 def test_render_video_clip_plays_once_without_looping(

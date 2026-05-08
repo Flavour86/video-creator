@@ -59,6 +59,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
             width: `${item.placement.size}%`,
             borderRadius: item.placement.radius,
             opacity: item.opacity * (item.placement.opacity / 100),
+            transform: `translate(${-item.placement.posX}%, ${-item.placement.posY}%)`,
           }}
         />
       ))}

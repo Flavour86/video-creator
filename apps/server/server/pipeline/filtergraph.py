@@ -109,11 +109,28 @@ def build_compose_command(
 
 
 def visual_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
+    return [*_fullscreen_items_bottom_to_top(project), *_pip_items_bottom_to_top(project)]
+
+
+def _fullscreen_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
     items: list[ClipRenderItem] = []
     for layer_container in reversed(project.layers):
         layer = getattr(layer_container, "root", layer_container)
         kind = getattr(layer, "kind", None)
         if kind not in {"bg", "fg"}:
+            continue
+        layer_items = getattr(layer, "items", [])
+        if not isinstance(layer_items, list):
+            continue
+        items.extend(layer_items)
+    return items
+
+
+def _pip_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
+    items: list[ClipRenderItem] = []
+    for layer_container in reversed(project.layers):
+        layer = getattr(layer_container, "root", layer_container)
+        if getattr(layer, "kind", None) != "pip":
             continue
         layer_items = getattr(layer, "items", [])
         if not isinstance(layer_items, list):
@@ -148,11 +165,28 @@ def _build_filtergraph(
         next_label = f"v{input_index}"
         start_s = _fmt(_item_float(item, "start"))
         end_s = _fmt(_item_float(item, "end"))
-        segments.append(
-            f"[{current}][{input_index}:v]"
-            f"overlay=enable='between(t,{start_s},{end_s})':eof_action=pass"
-            f"[{next_label}]"
-        )
+        if _is_pip_item(item):
+            pip = _pip_placement(item)
+            opacity = _placement_float(pip, "opacity") / 100
+            pos_x = _placement_float(pip, "pos_x") / 100
+            pos_y = _placement_float(pip, "pos_y") / 100
+            pip_label = f"pip{input_index}"
+            segments.append(
+                f"[{input_index}:v]format=rgba,"
+                f"colorchannelmixer=aa={_fmt(opacity)}[{pip_label}]"
+            )
+            segments.append(
+                f"[{current}][{pip_label}]"
+                f"overlay=x='(W-w)*{_fmt(pos_x)}':y='(H-h)*{_fmt(pos_y)}':"
+                f"enable='between(t,{start_s},{end_s})':eof_action=pass"
+                f"[{next_label}]"
+            )
+        else:
+            segments.append(
+                f"[{current}][{input_index}:v]"
+                f"overlay=enable='between(t,{start_s},{end_s})':eof_action=pass"
+                f"[{next_label}]"
+            )
         current = next_label
     if subtitles_path is not None:
         segments.append(
@@ -234,6 +268,32 @@ def _item_float(item: ClipRenderItem, name: str) -> float:
         value = getattr(item, name)
     if not isinstance(value, int | float):
         raise TypeError(f"Visual item {name} must be numeric.")
+    return float(value)
+
+
+def _is_pip_item(item: ClipRenderItem) -> bool:
+    try:
+        _pip_placement(item)
+    except (AttributeError, KeyError):
+        return False
+    return True
+
+
+def _pip_placement(item: ClipRenderItem) -> object:
+    if isinstance(item, Mapping):
+        return item["pip"]
+    return object.__getattribute__(item, "pip")
+
+
+def _placement_float(placement: object, name: str) -> float:
+    if isinstance(placement, Mapping):
+        value = placement.get(name)
+        if value is None:
+            value = placement.get({"pos_x": "posX", "pos_y": "posY"}.get(name, name))
+    else:
+        value = getattr(placement, name)
+    if not isinstance(value, int | float):
+        raise TypeError(f"PiP placement {name} must be numeric.")
     return float(value)
 
 
