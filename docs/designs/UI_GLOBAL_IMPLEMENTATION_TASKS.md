@@ -260,7 +260,7 @@ at `1440x1000` first, then again near `950px` width.
 
 ## 6. Runtime And Workspace Status Data
 
-45. `[BE]` Expand backend runtime health data.
+45. [x] `[BE]` Expand backend runtime health data.
     - Add a runtime endpoint or expand `/health`.
     - Include sidecar status, Python version, ffmpeg version, CUDA availability,
       GPU label when available, WhisperX model/status when available, and server

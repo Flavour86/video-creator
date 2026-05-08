@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8787
     debug: bool = False
+    whisperx_model: str = "large-v3"
     app_db_path: Path = Field(
         default_factory=_default_app_db_path,
         description="SQLite DB for global app state (recent projects, settings).",

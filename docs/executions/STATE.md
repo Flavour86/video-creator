@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 45 - expand backend runtime health data
-**Last commit**: current HEAD (UI global task 44)
-**Last updated**: 2026-05-08T11:43Z
+**Next task**: UI global task 46 - add active render count
+**Last commit**: current HEAD (UI global task 45)
+**Last updated**: 2026-05-08T11:49Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:49Z [agent: codex] UI global task 45:
+- What I changed: expanded `/health` with typed runtime data for sidecar,
+  Python, ffmpeg, CUDA, and WhisperX while preserving the top-level
+  `status`/`version` contract.
+- What works: ffmpeg, CUDA, and WhisperX return explicit `ready`,
+  `unavailable`, or `unknown` states instead of omitted fields. WhisperX model
+  naming is configurable through `VC_WHISPERX_MODEL` and defaults to
+  `large-v3`. `pnpm -F @vc/server test`, `pnpm -F @vc/server lint`, and
+  `pnpm -F @vc/server build` completed successfully.
+- What is incomplete: active render and cached project counts remain separate
+  tasks.
+- Next agent should: continue with UI global task 46 via TDD and backend skills.
 
 2026-05-08T11:43Z [agent: codex] UI global task 44:
 - What I changed: used Chrome DevTools at `1440x1000` and `950x1000` to

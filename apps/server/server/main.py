@@ -1,14 +1,15 @@
+import asyncio
 import logging
 
 import structlog
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 
 from server.routes.alignment import router as alignment_router
 from server.routes.media import router as media_router
 from server.routes.projects import router as projects_router
 from server.routes.render import router as render_router
 from server.routes.ws import router as ws_router
+from server.runtime_status import RuntimeHealthResponse, collect_runtime_health
 from server.settings import settings
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
@@ -31,9 +32,9 @@ app.include_router(render_router)
 app.include_router(ws_router)
 
 
-@app.get("/health")
-async def health() -> JSONResponse:
-    return JSONResponse({"status": "ok", "version": "0.1.0"})
+@app.get("/health", response_model=RuntimeHealthResponse)
+async def health() -> RuntimeHealthResponse:
+    return await asyncio.to_thread(collect_runtime_health, settings)
 
 
 @app.on_event("startup")
