@@ -146,7 +146,7 @@ at `1440x1000` first, then again near `950px` width.
     - Variants: subtitles, PiP, foreground, background.
     - Preserve layer semantics and z-order language.
 
-25. `[QA]` Add focused component tests for shared primitives.
+25. [x] `[QA]` Add focused component tests for shared primitives.
     - Verify class variants render.
     - Verify accessible names on icon buttons.
     - Verify disabled and active states.

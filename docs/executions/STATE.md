@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 25 - add focused component tests for shared primitives
-**Last commit**: current HEAD (UI global task 24)
-**Last updated**: 2026-05-08T10:07Z
+**Next task**: UI global task 26 - replace simple layout nav with global app shell
+**Last commit**: current HEAD (UI global task 25)
+**Last updated**: 2026-05-08T10:09Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:09Z [agent: codex] UI global task 25:
+- What I changed: added a focused shared-primitives QA spec covering representative
+  class variants, icon-only accessible names, disabled states, and active states.
+- What works: `pnpm -F @vc/web test -- components/ui/SharedPrimitives.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation.
+- Next agent should: continue with UI global task 26 via TDD.
 
 2026-05-08T10:07Z [agent: codex] UI global task 24:
 - What I changed: added a tested `LayerChip` primitive with subtitle, PiP,
