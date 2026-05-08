@@ -1,6 +1,8 @@
 import { create } from "zustand";
 
-export const THEME_STORAGE_KEY = "vc.theme";
+import { THEME_STORAGE_KEY } from "./theme-constants";
+
+export { THEME_STORAGE_KEY } from "./theme-constants";
 
 export type ThemeMode = "dark" | "light";
 

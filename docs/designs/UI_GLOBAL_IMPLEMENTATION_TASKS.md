@@ -219,7 +219,7 @@ at `1440x1000` first, then again near `950px` width.
     - Persist in `localStorage`.
     - Apply by setting `document.documentElement.dataset.theme`.
 
-37. `[FE]` Prevent theme flash where practical.
+37. [x] `[FE]` Prevent theme flash where practical.
     - Use a small pre-hydration script if needed.
     - Initial server output should not visibly flash white before dark mode.
 

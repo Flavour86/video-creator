@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 37 - prevent theme flash where practical
-**Last commit**: current HEAD (UI global task 36)
-**Last updated**: 2026-05-08T11:00Z
+**Next task**: UI global task 38 - wire every shared primitive to theme tokens
+**Last commit**: current HEAD (UI global task 37)
+**Last updated**: 2026-05-08T11:03Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:03Z [agent: codex] UI global task 37:
+- What I changed: added `ThemeInitScript` before `AppShell` in the root layout,
+  using the shared `vc.theme` storage key to apply a saved light theme before
+  React hydration.
+- What works: `pnpm -F @vc/web test -- components/app-shell/ThemeInitScript.test.tsx components/app-shell/AppShell.test.tsx lib/theme/theme-store.test.ts`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: this does not eliminate all possible paint differences from
+  route-level one-off styling; task 38 continues the token wiring pass.
+- Next agent should: continue with UI global task 38 via TDD.
 
 2026-05-08T11:00Z [agent: codex] UI global task 36:
 - What I changed: replaced the temporary AppShell theme state with a global

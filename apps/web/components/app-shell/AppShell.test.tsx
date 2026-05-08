@@ -176,6 +176,8 @@ describe("AppShell", () => {
     const layoutSource = readFileSync(join(process.cwd(), "app", "layout.tsx"), "utf8");
 
     expect(layoutSource).toContain("import { AppShell }");
+    expect(layoutSource).toContain("import { ThemeInitScript }");
+    expect(layoutSource.indexOf("<ThemeInitScript />")).toBeLessThan(layoutSource.indexOf("<AppShell>{children}</AppShell>"));
     expect(layoutSource).toContain("<AppShell>{children}</AppShell>");
     expect(layoutSource).not.toContain("from \"next/link\"");
   });
