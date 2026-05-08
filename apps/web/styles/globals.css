@@ -54,3 +54,37 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
 }
+
+@layer components {
+  .vc-type-display {
+    @apply text-[32px] font-bold leading-[1.1] tracking-[-0.02em] text-(--text);
+  }
+
+  .vc-type-h2 {
+    @apply text-2xl font-bold leading-[1.15] tracking-[-0.02em] text-(--text);
+  }
+
+  .vc-type-section {
+    @apply text-base font-semibold leading-[1.25] tracking-[-0.01em] text-(--text);
+  }
+
+  .vc-type-body {
+    @apply text-[13px] font-normal leading-[1.5] tracking-normal text-(--text-2);
+  }
+
+  .vc-type-caption {
+    @apply text-[11px] font-medium leading-[1.35] tracking-normal text-(--text-3);
+  }
+
+  .vc-type-eyebrow {
+    @apply text-[11px] font-semibold uppercase leading-[1.3] tracking-[0.06em] text-(--text-3);
+  }
+
+  .vc-type-mono-timecode {
+    @apply font-mono text-[13px] font-medium tracking-normal text-(--text);
+  }
+
+  .vc-type-mono-meta {
+    @apply font-mono text-[10.5px] font-normal tracking-normal text-(--text-3);
+  }
+}

@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 9 - add typography tokens
-**Last commit**: de65997
-**Last updated**: 2026-05-08T09:03Z
+**Next task**: UI global task 10 - declare or load the font strategy
+**Last commit**: 816a193
+**Last updated**: 2026-05-08T09:15Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:15Z [agent: codex] UI global task 9:
+- What I changed: added failing-first coverage for named typography utilities, then added
+  Tailwind `@apply` component utilities for display, H2, section, body, caption, eyebrow,
+  mono timecode, and mono metadata text roles.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from `<img>` usage and `next lint`
+  deprecation. The typography utilities include a regression guard that bans non-canonical
+  Tailwind variable forms such as `text-[var(--text)]`; use `text-(--text)` or canonical
+  utilities instead.
+- Next agent should: continue with UI global task 10 via TDD.
 
 2026-05-08T09:03Z [agent: codex] UI global task 8:
 - What I changed: added a failing-first assertion for the light theme selector and prototype

@@ -58,4 +58,30 @@ describe("global design tokens", () => {
     expect(globalsCss).toContain("--line: oklch(0.88 0.005 70);");
     expect(globalsCss).toContain("--line-soft: oklch(0.92 0.004 70);");
   });
+
+  test("defines named typography utilities for the prototype type scale", () => {
+    const requiredUtilities = [
+      ".vc-type-display",
+      ".vc-type-h2",
+      ".vc-type-section",
+      ".vc-type-body",
+      ".vc-type-caption",
+      ".vc-type-eyebrow",
+      ".vc-type-mono-timecode",
+      ".vc-type-mono-meta",
+    ];
+
+    for (const utility of requiredUtilities) {
+      expect(globalsCss).toContain(utility);
+    }
+
+    expect(globalsCss).toContain("text-[32px]");
+    expect(globalsCss).toContain("text-2xl");
+    expect(globalsCss).toContain("text-base");
+    expect(globalsCss).toContain("tracking-[-0.02em]");
+    expect(globalsCss).toContain("tracking-[0.06em]");
+    expect(globalsCss).toContain("font-mono");
+    expect(globalsCss).toContain("text-(--text)");
+    expect(globalsCss).not.toMatch(/\[[^\]]*var\(--/);
+  });
 });

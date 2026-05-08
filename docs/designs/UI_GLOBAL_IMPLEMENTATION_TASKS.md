@@ -62,7 +62,7 @@ at `1440x1000` first, then again near `950px` width.
    - Use the prototype light OKLCH ramp.
    - Keep semantic token names identical between themes.
 
-9. `[FE]` Add typography tokens.
+9. [x] `[FE]` Add typography tokens.
    - `--font-sans`: Inter Tight with system sans fallback.
    - `--font-mono`: JetBrains Mono with system mono fallback.
    - Add named CSS utility classes or component classes for display, H2, section
