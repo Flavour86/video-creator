@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T6.8 (`07_MILESTONE_POLISH.md`)
-**Last commit**: 3bb6608
-**Last updated**: 2026-05-08T01:23Z
+**Next task**: T6.9 (`07_MILESTONE_POLISH.md`)
+**Last commit**: f4fd756
+**Last updated**: 2026-05-08T01:49Z
 
 ---
 
@@ -69,7 +69,7 @@
 - [x] T6.5 Auto-distribute clips with black-tail fallback 閳?commit 58fd6ca
 - [x] T6.6 Watermark layer 閳?commit e51a751
 - [x] T6.7 Time-pinned override (anchor:"time") 閳?commit 3bb6608
-- [ ] T6.8 PiP compositing mode
+- [x] T6.8 PiP compositing mode 闁?commit f4fd756
 - [ ] T6.9 Configurable transitions (cut / fade / slide)
 
 ---
