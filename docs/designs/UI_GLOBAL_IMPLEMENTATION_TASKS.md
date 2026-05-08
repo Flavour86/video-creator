@@ -207,7 +207,7 @@ at `1440x1000` first, then again near `950px` width.
     - Remove max-width marketing container assumptions from existing pages.
     - Ensure page top padding aligns with the prototype below the header.
 
-35. `[QA]` Verify header geometry with Chrome DevTools.
+35. [x] `[QA]` Verify header geometry with Chrome DevTools.
     - At `1440x1000`, header height should be close to `44px`.
     - Navigation should remain centered.
     - Right controls should remain aligned to the right.

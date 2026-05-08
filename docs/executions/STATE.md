@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 35 - verify header geometry with Chrome DevTools
-**Last commit**: current HEAD (UI global task 34)
-**Last updated**: 2026-05-08T10:52Z
+**Next task**: UI global task 36 - add global theme state
+**Last commit**: current HEAD (UI global task 35)
+**Last updated**: 2026-05-08T10:56Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:56Z [agent: codex] UI global task 35:
+- What I changed: verified the implementation header with Chrome DevTools against
+  `http://localhost:3000` at `1440x1000` and `950x1000`.
+- What works: at `1440x1000`, header height is `44px`, nav center delta is `0px`,
+  and right controls have a `10px` right gap. At `950x1000`, header height remains
+  `44px`, nav center delta remains `0px`, right controls have a `10px` right gap,
+  and brand/nav/right-control overlap checks are false.
+- What is incomplete: this QA task did not compare full page visual fidelity; it
+  only covers the task 35 header geometry criteria.
+- Next agent should: continue with UI global task 36 via TDD.
 
 2026-05-08T10:52Z [agent: codex] UI global task 34:
 - What I changed: added the shared `PageChrome` route wrapper and moved Launcher,
