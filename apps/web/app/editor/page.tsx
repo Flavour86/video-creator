@@ -12,6 +12,7 @@ import { LayersPopover } from "@/components/layers-popover/LayersPopover";
 import { PreviewPlayer } from "@/components/preview-player/PreviewPlayer";
 import { RenderDraftBar } from "@/components/render-draft-bar/RenderDraftBar";
 import { RenderHistory } from "@/components/render-history/RenderHistory";
+import { SubtitleToggle } from "@/components/subtitle-toggle/SubtitleToggle";
 import { Waveform } from "@/components/preview-player/Waveform";
 import { Timeline } from "@/components/timeline/Timeline";
 import { TranscriptPanel } from "@/components/transcript-panel/TranscriptPanel";
@@ -38,9 +39,10 @@ function EditorContent() {
 
   // Project store
   const {
-    layers, sentences, duration,
+    layers, subtitles, sentences, duration,
     selectedLayerId, selectedItemId,
-    setProjectPath, setLayers, setSentences, setDuration, setSelectedItem, saveLayers,
+    setProjectPath, setLayers, setSubtitles, setSentences, setDuration, setSelectedItem,
+    saveLayers, saveSubtitles,
   } = useProject();
 
   // Assign modal store
@@ -87,8 +89,12 @@ function EditorContent() {
       `/api/server/projects/load?project=${encodeURIComponent(projectPath)}`,
     );
     if (r.ok) {
-      const data = (await r.json()) as { layers?: Layer[] };
+      const data = (await r.json()) as {
+        layers?: Layer[];
+        subtitles?: Parameters<typeof setSubtitles>[0];
+      };
       if (Array.isArray(data.layers)) setLayers(data.layers);
+      setSubtitles(data.subtitles);
     }
   }
 
@@ -333,6 +339,12 @@ function EditorContent() {
           <RenderHistory
             projectPath={projectPath}
             refreshKey={renderProgress.state.status === "done" ? renderProgress.state.renderId : ""}
+          />
+
+          <SubtitleToggle
+            burnIn={subtitles.burn_in}
+            disabled={renderProgress.isActive}
+            onChange={(burnIn) => void saveSubtitles(burnIn)}
           />
 
           <div className="flex items-center justify-between">

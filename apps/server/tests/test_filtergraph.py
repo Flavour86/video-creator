@@ -1,4 +1,5 @@
 """Filtergraph builder tests for T5.3."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -41,7 +42,10 @@ def _fg_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object
     return {"id": layer_id, "kind": "fg", "name": layer_id, "items": items}
 
 
-def _project(layers: list[dict[str, object]]) -> Project:
+def _project(
+    layers: list[dict[str, object]],
+    subtitles: dict[str, object] | None = None,
+) -> Project:
     return Project.model_validate(
         {
             "version": 1,
@@ -50,7 +54,7 @@ def _project(layers: list[dict[str, object]]) -> Project:
             "transcript": {"kind": "plain_text", "path": "transcript.txt"},
             "output": {"preset": "draft"},
             "layers": layers,
-            "subtitles": None,
+            "subtitles": subtitles,
             "watermark": None,
         }
     )
@@ -178,3 +182,58 @@ def test_layer_z_order_is_bottom_to_top(tmp_path: Path) -> None:
         str(bottom_clip),
         str(top_clip),
     ]
+
+
+def test_subtitle_burn_in_appends_subtitles_filter(tmp_path: Path) -> None:
+    project = _project(
+        [],
+        subtitles={
+            "burn_in": True,
+            "style": {
+                "font": "Arial",
+                "size": 28,
+                "position": "bottom-center",
+                "max_chars_per_line": 42,
+                "bg_style": "shadow",
+            },
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert "subtitles='" in filtergraph
+    assert "/.vc/subtitles.srt':force_style='Fontname=Arial,Fontsize=28" in filtergraph
+    assert "Alignment=2,MarginV=60'[vsub];[vsub]format=yuv420p[vout]" in filtergraph
+
+
+def test_subtitle_burn_in_false_skips_subtitles_filter(tmp_path: Path) -> None:
+    project = _project(
+        [],
+        subtitles={
+            "burn_in": False,
+            "style": {
+                "font": "Arial",
+                "size": 28,
+                "position": "bottom-center",
+                "max_chars_per_line": 42,
+                "bg_style": "shadow",
+            },
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert "subtitles=" not in _filtergraph(command)

@@ -1,4 +1,5 @@
 """Build ffmpeg compose commands from cached visual clips."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -71,6 +72,7 @@ def build_compose_command(
         duration_s=_duration_s(project, alignment),
         config=config,
         items=items,
+        subtitles_path=project_dir / ".vc" / "subtitles.srt" if _burns_subtitles(project) else None,
     )
     cmd.extend(
         [
@@ -127,6 +129,7 @@ def _build_filtergraph(
     duration_s: float,
     config: PresetConfig,
     items: list[ClipRenderItem],
+    subtitles_path: Path | None = None,
 ) -> str:
     segments = [
         f"color=black:s={config.resolution}:r={config.fps}:d={_fmt(duration_s)}[bg]",
@@ -142,9 +145,40 @@ def _build_filtergraph(
             f"[{next_label}]"
         )
         current = next_label
+    if subtitles_path is not None:
+        segments.append(
+            f"[{current}]subtitles='{_escape_subtitles_path(subtitles_path)}':"
+            f"force_style='{_subtitle_force_style()}'[vsub]"
+        )
+        current = "vsub"
     segments.append(f"[{current}]format=yuv420p[vout]")
     segments.append("[0:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]")
     return ";".join(segments)
+
+
+def _burns_subtitles(project: Project) -> bool:
+    subtitles = getattr(project, "subtitles", None)
+    return bool(getattr(subtitles, "burn_in", False))
+
+
+def _escape_subtitles_path(path: Path) -> str:
+    return path.resolve().as_posix().replace(":", r"\:").replace("'", r"\'")
+
+
+def _subtitle_force_style() -> str:
+    return ",".join(
+        [
+            "Fontname=Arial",
+            "Fontsize=28",
+            "PrimaryColour=&H00FFFFFF",
+            "OutlineColour=&H00000000",
+            "BorderStyle=1",
+            "Outline=2",
+            "Shadow=1",
+            "Alignment=2",
+            "MarginV=60",
+        ]
+    )
 
 
 def _item_float(item: ClipRenderItem, name: str) -> float:

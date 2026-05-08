@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useProject } from "./useProject";
+import { DEFAULT_SUBTITLES, useProject } from "./useProject";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
 const BG_LAYER: Layer = {
@@ -15,6 +15,7 @@ beforeEach(() => {
   useProject.setState({
     projectPath: "",
     layers: [],
+    subtitles: DEFAULT_SUBTITLES,
     sentences: [],
     duration: 0,
   });
@@ -42,6 +43,11 @@ describe("initial state", () => {
   it("has zero duration", () => {
     const { result } = renderHook(() => useProject());
     expect(result.current.duration).toBe(0);
+  });
+
+  it("defaults subtitles to burn-in off", () => {
+    const { result } = renderHook(() => useProject());
+    expect(result.current.subtitles.burn_in).toBe(false);
   });
 });
 
@@ -71,6 +77,12 @@ it("setDuration updates duration", () => {
   const { result } = renderHook(() => useProject());
   act(() => result.current.setDuration(42.5));
   expect(result.current.duration).toBe(42.5);
+});
+
+it("setSubtitles falls back to defaults for null project data", () => {
+  const { result } = renderHook(() => useProject());
+  act(() => result.current.setSubtitles(null));
+  expect(result.current.subtitles).toEqual(DEFAULT_SUBTITLES);
 });
 
 // ── saveLayers ────────────────────────────────────────────────────────────────
@@ -123,5 +135,49 @@ describe("saveLayers", () => {
     await act(async () => { await result.current.saveLayers([]); });
 
     expect(result.current.layers).toEqual([BG_LAYER]);
+  });
+});
+
+describe("saveSubtitles", () => {
+  it("does nothing when projectPath is empty", async () => {
+    const { result } = renderHook(() => useProject());
+    await act(async () => {
+      await result.current.saveSubtitles(true);
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends PUT to /projects/subtitles with correct body", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ subtitles: { ...DEFAULT_SUBTITLES, burn_in: true } }),
+    });
+
+    const { result } = renderHook(() => useProject());
+    act(() => result.current.setProjectPath("/my/proj"));
+    await act(async () => {
+      await result.current.saveSubtitles(true);
+    });
+
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain("/projects/subtitles");
+    expect((opts as RequestInit).method).toBe("PUT");
+    expect(JSON.parse((opts as RequestInit).body as string)).toEqual({ burn_in: true });
+  });
+
+  it("updates store subtitles on successful save", async () => {
+    const subtitles = { ...DEFAULT_SUBTITLES, burn_in: true };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ subtitles }),
+    });
+
+    const { result } = renderHook(() => useProject());
+    act(() => result.current.setProjectPath("/my/proj"));
+    await act(async () => {
+      await result.current.saveSubtitles(true);
+    });
+
+    expect(result.current.subtitles).toEqual(subtitles);
   });
 });

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from server.db.projects import list_recent, remove_recent, touch_recent
-from server.domain.project import Project, load_project
+from server.domain.project import Project, load_project, save_project
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -111,8 +111,7 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
 async def recent_projects() -> list[RecentProject]:
     rows = list_recent()
     return [
-        _project_metadata(Path(row["path"]), row["name"], row["last_opened_at"])
-        for row in rows
+        _project_metadata(Path(row["path"]), row["name"], row["last_opened_at"]) for row in rows
     ]
 
 
@@ -146,6 +145,14 @@ class PutLayersResponse(BaseModel):
     layers: list[Any]
 
 
+class PutSubtitlesRequest(BaseModel):
+    burn_in: bool
+
+
+class PutSubtitlesResponse(BaseModel):
+    subtitles: dict[str, Any]
+
+
 @router.get("/load", response_model=None)
 async def load_project_data(project: str = Query(...)) -> JSONResponse:
     project_json = Path(project) / "project.json"
@@ -170,3 +177,35 @@ async def put_layers(
     data["updated_at"] = datetime.now(UTC).isoformat()
     project_json.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return PutLayersResponse(layers=payload.layers)
+
+
+@router.put("/subtitles", response_model=None)
+async def put_subtitles(
+    payload: PutSubtitlesRequest,
+    project: str = Query(...),
+) -> PutSubtitlesResponse | JSONResponse:
+    project_dir = Path(project)
+    project_json = project_dir / "project.json"
+    if not project_json.exists():
+        return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
+
+    loaded = load_project(project_dir)
+    data = loaded.model_dump(mode="json", by_alias=True, exclude_none=False)
+    data["subtitles"] = _default_subtitles(payload.burn_in)
+    data["updated_at"] = datetime.now(UTC).isoformat()
+    updated = Project.model_validate(data)
+    save_project(project_dir, updated)
+    return PutSubtitlesResponse(subtitles=data["subtitles"])
+
+
+def _default_subtitles(burn_in: bool) -> dict[str, Any]:
+    return {
+        "burn_in": burn_in,
+        "style": {
+            "font": "Arial",
+            "size": 28,
+            "position": "bottom-center",
+            "max_chars_per_line": 42,
+            "bg_style": "shadow",
+        },
+    }

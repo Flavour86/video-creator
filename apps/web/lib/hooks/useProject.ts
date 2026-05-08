@@ -5,21 +5,47 @@ import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 type ProjectStore = {
   projectPath: string;
   layers: Layer[];
+  subtitles: SubtitlesSettings;
   sentences: AlignedSentence[];
   duration: number;
   selectedLayerId: string | null;
   selectedItemId: string | null;
   setProjectPath: (path: string) => void;
   setLayers: (layers: Layer[]) => void;
+  setSubtitles: (subtitles: SubtitlesSettings | null | undefined) => void;
   setSentences: (sentences: AlignedSentence[]) => void;
   setDuration: (duration: number) => void;
   setSelectedItem: (layerId: string | null, itemId: string | null) => void;
   saveLayers: (layers: Layer[]) => Promise<void>;
+  saveSubtitles: (burnIn: boolean) => Promise<void>;
+};
+
+export type SubtitlesSettings = {
+  burn_in: boolean;
+  style: {
+    font: string;
+    size: number;
+    position: "bottom-center" | "top-center";
+    max_chars_per_line: number;
+    bg_style: "none" | "shadow" | "box";
+  };
+};
+
+export const DEFAULT_SUBTITLES: SubtitlesSettings = {
+  burn_in: false,
+  style: {
+    font: "Arial",
+    size: 28,
+    position: "bottom-center",
+    max_chars_per_line: 42,
+    bg_style: "shadow",
+  },
 };
 
 export const useProject = create<ProjectStore>((set, get) => ({
   projectPath: "",
   layers: [],
+  subtitles: DEFAULT_SUBTITLES,
   sentences: [],
   duration: 0,
   selectedLayerId: null,
@@ -27,6 +53,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
 
   setProjectPath: (path) => set({ projectPath: path }),
   setLayers: (layers) => set({ layers }),
+  setSubtitles: (subtitles) => set({ subtitles: subtitles ?? DEFAULT_SUBTITLES }),
   setSentences: (sentences) => set({ sentences }),
   setDuration: (duration) => set({ duration }),
   setSelectedItem: (layerId, itemId) => set({ selectedLayerId: layerId, selectedItemId: itemId }),
@@ -45,6 +72,23 @@ export const useProject = create<ProjectStore>((set, get) => ({
     if (r.ok) {
       const data = (await r.json()) as { layers: Layer[] };
       set({ layers: data.layers });
+    }
+  },
+
+  saveSubtitles: async (burnIn) => {
+    const { projectPath } = get();
+    if (!projectPath) return;
+    const r = await fetch(
+      `/api/server/projects/subtitles?project=${encodeURIComponent(projectPath)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ burn_in: burnIn }),
+      },
+    );
+    if (r.ok) {
+      const data = (await r.json()) as { subtitles: SubtitlesSettings };
+      set({ subtitles: data.subtitles });
     }
   },
 }));
