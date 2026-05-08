@@ -332,3 +332,74 @@ def test_pip_items_are_overlaid_after_foreground_before_subtitles(tmp_path: Path
         "enable='between(t,2,4)':eof_action=pass[v2]"
     ) in filtergraph
     assert "[v2]subtitles='" in filtergraph
+
+
+def test_slide_transitions_use_compose_time_overlay_expressions(tmp_path: Path) -> None:
+    _write_media(tmp_path, "slide.jpg", b"slide")
+    item = {
+        **_item("slide.jpg", 1.0, 3.0, "fg-slide"),
+        "transitions": {"in": "slide_left", "out": "slide_right"},
+    }
+    project = _project([_fg_layer("fg-z1", [item])])
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert (
+        "overlay=x='if(gt(t,2.6),0+W*1*((t-2.6)/0.4),"
+        "if(lt(t-1,0.4),0+W*1*(1-(t-1)/0.4),0))':y='0':"
+        "enable='between(t,1,3)'"
+    ) in filtergraph
+
+
+def test_dip_black_adds_fading_black_overlay(tmp_path: Path) -> None:
+    _write_media(tmp_path, "dip.jpg", b"dip")
+    item = {
+        **_item("dip.jpg", 1.0, 3.0, "fg-dip"),
+        "transitions": {"in": "dip_black", "out": "dip_black"},
+    }
+    project = _project([_fg_layer("fg-z1", [item])])
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert "fade=t=out:st=1:d=0.4:alpha=1[dipin1]" in filtergraph
+    assert "[v1][dipin1]overlay=enable='between(t,1,1.4)':eof_action=pass[v1dipin]" in filtergraph
+    assert "fade=t=in:st=2.6:d=0.4:alpha=1[dipout1]" in filtergraph
+    assert "[v1dipin][dipout1]overlay=enable='between(t,2.6,3)':eof_action=pass" in filtergraph
+
+
+def test_pip_slide_uses_position_as_base_expression(tmp_path: Path) -> None:
+    _write_media(tmp_path, "pip.png", b"pip")
+    item = {
+        **_item("pip.png", 2.0, 4.0, "pip-slide"),
+        "transitions": {"in": "slide_right", "out": "cut"},
+        "pip": {"posX": 98, "posY": 2, "size": 22, "radius": 16, "opacity": 50},
+    }
+    project = _project([_pip_layer("pip-z1", [item])])
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert (
+        "overlay=x='if(lt(t-2,0.4),(W-w)*0.98+W*-1*(1-(t-2)/0.4),(W-w)*0.98)':"
+        "y='(H-h)*0.02':enable='between(t,2,4)'"
+    ) in filtergraph

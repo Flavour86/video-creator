@@ -42,8 +42,8 @@ export type PipPlacement = {
 
 export type DisplaySpec = {
   bg?: { mediaId: string; opacity: number };
-  fg: Array<{ mediaId: string; compositing: "fullscreen"; opacity: number }>;
-  pip: Array<{ mediaId: string; placement: PipPlacement; opacity: number }>;
+  fg: Array<{ mediaId: string; compositing: "fullscreen"; opacity: number; translateX: number }>;
+  pip: Array<{ mediaId: string; placement: PipPlacement; opacity: number; translateX: number }>;
   watermark?: { mediaId: string; posX: number; posY: number; scale: number; opacity: number };
   subtitle?: { text: string };
 };
@@ -59,6 +59,26 @@ function transitionOpacity(item: BaseItem, t: number): number {
     return (item.end - t) / fadeDuration;
   }
   return 1;
+}
+
+function transitionTranslateX(item: BaseItem, t: number): number {
+  const duration = bgCrossfade(item);
+  const elapsed = t - item.start;
+  const remaining = item.end - t;
+
+  if (item.transitions.in === "slide_left" && elapsed < duration) {
+    return (1 - elapsed / duration) * 100;
+  }
+  if (item.transitions.in === "slide_right" && elapsed < duration) {
+    return -(1 - elapsed / duration) * 100;
+  }
+  if (item.transitions.out === "slide_left" && remaining < duration) {
+    return -(1 - remaining / duration) * 100;
+  }
+  if (item.transitions.out === "slide_right" && remaining < duration) {
+    return (1 - remaining / duration) * 100;
+  }
+  return 0;
 }
 
 function bgCrossfade(item: BaseItem): number {
@@ -96,6 +116,7 @@ export function resolveDisplay(
           mediaId: item.mediaId,
           compositing: "fullscreen",
           opacity: transitionOpacity(item, currentTime),
+          translateX: transitionTranslateX(item, currentTime),
         });
       }
     } else if (layer.kind === "pip") {
@@ -111,6 +132,7 @@ export function resolveDisplay(
             opacity: item.pip.opacity,
           },
           opacity: transitionOpacity(item, currentTime),
+          translateX: transitionTranslateX(item, currentTime),
         });
       }
     }

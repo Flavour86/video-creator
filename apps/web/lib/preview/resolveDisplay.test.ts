@@ -146,4 +146,22 @@ describe("resolveDisplay", () => {
     expect(spec.pip[0].placement.posX).toBe(98);
     expect(spec.pip[0].placement.opacity).toBe(90);
   });
+
+  it("approximates slide transitions with translateX", () => {
+    const layer: Layer = {
+      ...FG_LAYER,
+      items: [
+        {
+          ...FG_LAYER.items[0],
+          start: 5,
+          end: 20,
+          transitions: { in: "slide_right", out: "slide_left" },
+        },
+      ],
+    };
+
+    expect(resolveDisplay([layer], [], 5).fg[0].translateX).toBe(-100);
+    expect(resolveDisplay([layer], [], 10).fg[0].translateX).toBe(0);
+    expect(resolveDisplay([layer], [], 19.75).fg[0].translateX).toBeLessThan(0);
+  });
 });

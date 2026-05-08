@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Literal
 
@@ -12,6 +13,7 @@ from server.domain.timing import AlignmentResult
 from server.pipeline.clip_render import ClipRenderItem, clip_cache_path_for_item
 
 RenderPreset = Literal["draft", "final"]
+TRANSITION_SECONDS = 0.4
 
 
 @dataclass(frozen=True)
@@ -168,8 +170,9 @@ def _build_filtergraph(
         if _is_pip_item(item):
             pip = _pip_placement(item)
             opacity = _placement_float(pip, "opacity") / 100
-            pos_x = _placement_float(pip, "pos_x") / 100
-            pos_y = _placement_float(pip, "pos_y") / 100
+            pos_x = f"(W-w)*{_fmt(_placement_float(pip, 'pos_x') / 100)}"
+            pos_y = f"(H-h)*{_fmt(_placement_float(pip, 'pos_y') / 100)}"
+            x_expr = _slide_x_expr(item, base_x=pos_x)
             pip_label = f"pip{input_index}"
             segments.append(
                 f"[{input_index}:v]format=rgba,"
@@ -177,17 +180,26 @@ def _build_filtergraph(
             )
             segments.append(
                 f"[{current}][{pip_label}]"
-                f"overlay=x='(W-w)*{_fmt(pos_x)}':y='(H-h)*{_fmt(pos_y)}':"
+                f"overlay=x='{x_expr}':y='{pos_y}':"
                 f"enable='between(t,{start_s},{end_s})':eof_action=pass"
                 f"[{next_label}]"
             )
         else:
+            overlay_args = _fullscreen_overlay_args(item)
             segments.append(
                 f"[{current}][{input_index}:v]"
-                f"overlay=enable='between(t,{start_s},{end_s})':eof_action=pass"
+                f"overlay={overlay_args}enable='between(t,{start_s},{end_s})':eof_action=pass"
                 f"[{next_label}]"
             )
         current = next_label
+        current = _append_dip_black_segments(
+            segments=segments,
+            current=current,
+            item=item,
+            input_index=input_index,
+            config=config,
+            duration_s=duration_s,
+        )
     if subtitles_path is not None:
         segments.append(
             f"[{current}]subtitles='{_escape_subtitles_path(subtitles_path)}':"
@@ -295,6 +307,128 @@ def _placement_float(placement: object, name: str) -> float:
     if not isinstance(value, int | float):
         raise TypeError(f"PiP placement {name} must be numeric.")
     return float(value)
+
+
+def _transition_value(item: ClipRenderItem, name: str) -> str | None:
+    if isinstance(item, Mapping):
+        transitions = item["transitions"]
+    else:
+        transitions = item.transitions
+    if isinstance(transitions, Mapping):
+        value = transitions.get(name)
+        if value is None and name == "in":
+            value = transitions.get("in_")
+    else:
+        value = getattr(transitions, "in_" if name == "in" else name)
+    if isinstance(value, Enum):
+        return str(value.value)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"Transition {name} must be a string.")
+    return value
+
+
+def _fullscreen_overlay_args(item: ClipRenderItem) -> str:
+    x_expr = _slide_x_expr(item, base_x="0")
+    if x_expr == "0":
+        return ""
+    return f"x='{x_expr}':y='0':"
+
+
+def _slide_x_expr(item: ClipRenderItem, *, base_x: str) -> str:
+    start_s = _item_float(item, "start")
+    end_s = _item_float(item, "end")
+    duration_s = end_s - start_s
+    if duration_s <= 0:
+        return base_x
+    transition_s = min(TRANSITION_SECONDS, duration_s / 2)
+    transition_in = _transition_value(item, "in")
+    transition_out = _transition_value(item, "out")
+    expr = base_x
+    if transition_in in {"slide_left", "slide_right"}:
+        sign = "1" if transition_in == "slide_left" else "-1"
+        expr = (
+            f"if(lt(t-{_fmt(start_s)},{_fmt(transition_s)}),"
+            f"{base_x}+W*{sign}*(1-(t-{_fmt(start_s)})/{_fmt(transition_s)}),{expr})"
+        )
+    if transition_out in {"slide_left", "slide_right"}:
+        sign = "-1" if transition_out == "slide_left" else "1"
+        out_start_s = max(start_s, end_s - transition_s)
+        expr = (
+            f"if(gt(t,{_fmt(out_start_s)}),"
+            f"{base_x}+W*{sign}*((t-{_fmt(out_start_s)})/{_fmt(transition_s)}),{expr})"
+        )
+    return expr
+
+
+def _append_dip_black_segments(
+    *,
+    segments: list[str],
+    current: str,
+    item: ClipRenderItem,
+    input_index: int,
+    config: PresetConfig,
+    duration_s: float,
+) -> str:
+    result = current
+    item_start_s = _item_float(item, "start")
+    item_end_s = _item_float(item, "end")
+    item_duration_s = item_end_s - item_start_s
+    if item_duration_s <= 0:
+        return result
+    transition_s = min(TRANSITION_SECONDS, item_duration_s / 2)
+    if _transition_value(item, "in") == "dip_black":
+        result = _append_black_fade_overlay(
+            segments=segments,
+            current=result,
+            label=f"dipin{input_index}",
+            output_label=f"v{input_index}dipin",
+            config=config,
+            duration_s=duration_s,
+            fade_kind="out",
+            start_s=item_start_s,
+            fade_s=transition_s,
+        )
+    if _transition_value(item, "out") == "dip_black":
+        out_start_s = max(item_start_s, item_end_s - transition_s)
+        result = _append_black_fade_overlay(
+            segments=segments,
+            current=result,
+            label=f"dipout{input_index}",
+            output_label=f"v{input_index}dipout",
+            config=config,
+            duration_s=duration_s,
+            fade_kind="in",
+            start_s=out_start_s,
+            fade_s=transition_s,
+        )
+    return result
+
+
+def _append_black_fade_overlay(
+    *,
+    segments: list[str],
+    current: str,
+    label: str,
+    output_label: str,
+    config: PresetConfig,
+    duration_s: float,
+    fade_kind: Literal["in", "out"],
+    start_s: float,
+    fade_s: float,
+) -> str:
+    end_s = start_s + fade_s
+    segments.append(
+        f"color=black@1:s={config.resolution}:r={config.fps}:d={_fmt(duration_s)},"
+        f"format=rgba,fade=t={fade_kind}:st={_fmt(start_s)}:d={_fmt(fade_s)}:"
+        f"alpha=1[{label}]"
+    )
+    segments.append(
+        f"[{current}][{label}]overlay=enable='between(t,{_fmt(start_s)},{_fmt(end_s)})':"
+        f"eof_action=pass[{output_label}]"
+    )
+    return output_label
 
 
 def _fmt(value: float) -> str:

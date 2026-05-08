@@ -42,7 +42,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
           className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
           key={item.mediaId}
           src={fileUrl(item.mediaId)}
-          style={{ opacity: item.opacity }}
+          style={{ opacity: item.opacity, transform: `translateX(${item.translateX}%)` }}
         />
       ))}
 
@@ -59,7 +59,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
             width: `${item.placement.size}%`,
             borderRadius: item.placement.radius,
             opacity: item.opacity * (item.placement.opacity / 100),
-            transform: `translate(${-item.placement.posX}%, ${-item.placement.posY}%)`,
+            transform: `translate(${-item.placement.posX}%, ${-item.placement.posY}%) translateX(${item.translateX}%)`,
           }}
         />
       ))}
