@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from server.pipeline.cache import clip_cache_key, clip_cache_path, is_cached
-from server.pipeline.clip_render import render_clip, render_clip_to_cache
+from server.pipeline.clip_render import clip_cache_key_for_item, render_clip, render_clip_to_cache
 
 
 def _write_media(path: Path, data: bytes = b"media-bytes") -> Path:
@@ -130,6 +130,78 @@ def test_render_clip_to_cache_reuses_existing_file(
     monkeypatch.setattr("server.pipeline.clip_render.render_clip", fail_render)
 
     assert render_clip_to_cache(item=item, project_dir=tmp_path) == cached_path
+
+
+def test_video_clip_cache_key_uses_probed_duration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "clip.mp4")
+    item = {
+        "id": "bg-1",
+        "media_id": media_path.name,
+        "start": 0.0,
+        "end": 10.0,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+    }
+
+    monkeypatch.setattr(
+        "server.pipeline.clip_render._probe_media_duration_s",
+        lambda path: 3.0,
+    )
+
+    key = clip_cache_key_for_item(item=item, project_dir=tmp_path)
+    expected = clip_cache_key(
+        media_path=media_path,
+        duration_s=3.0,
+        motion=item["motion"],
+        transition_in="cut",
+        transition_out="cut",
+        resolution="1280x720",
+        fps=30,
+        crf=28,
+    )
+
+    assert key == expected
+
+
+def test_render_video_clip_plays_once_without_looping(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "clip.mp4")
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = "3.0"
+        stderr = ""
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Result:
+        commands.append(cmd)
+        if cmd[0] == "ffmpeg":
+            Path(cmd[-1]).write_bytes(b"mp4")
+        return Result()
+
+    monkeypatch.setattr("server.pipeline.clip_render.subprocess.run", fake_run)
+
+    render_clip(
+        item={
+            "id": "bg-1",
+            "media_id": media_path.name,
+            "start": 0.0,
+            "end": 10.0,
+            "motion": {"kind": "none", "easing": "linear"},
+            "transitions": {"in": "cut", "out": "cut"},
+        },
+        project_dir=tmp_path,
+        output_path=tmp_path / ".vc" / "clips" / "video.mp4",
+    )
+
+    ffmpeg_command = next(command for command in commands if command[0] == "ffmpeg")
+    assert "-stream_loop" not in ffmpeg_command
+    assert ffmpeg_command[ffmpeg_command.index("-t") + 1] == "3"
 
 
 @pytest.mark.skipif(

@@ -89,7 +89,7 @@ def clip_cache_key_for_item(
     crf: int = 28,
 ) -> str:
     media_path = _resolve_media_path(project_dir, _media_id(item))
-    duration_s = _duration_s(item)
+    duration_s = _effective_duration_s(item, media_path)
     transition_in = _transition_value(item, "in")
     transition_out = _transition_value(item, "out")
     components = clip_cache_components(
@@ -119,7 +119,7 @@ def render_clip(
         return output_path
 
     media_path = _resolve_media_path(project_dir, _media_id(item))
-    duration_s = _duration_s(item)
+    duration_s = _effective_duration_s(item, media_path)
     width, height = _parse_resolution(resolution)
     filtergraph = _build_clip_filter(
         media_path=media_path,
@@ -193,6 +193,33 @@ def _duration_s(item: ClipRenderItem) -> float:
     duration_s = _float_field(item, "end") - _float_field(item, "start")
     if duration_s <= 0:
         raise ValueError("Clip item duration must be positive.")
+    return duration_s
+
+
+def _effective_duration_s(item: ClipRenderItem, media_path: Path) -> float:
+    requested_s = _duration_s(item)
+    if media_path.suffix.lower() not in VIDEO_EXTENSIONS:
+        return requested_s
+    return min(requested_s, _probe_media_duration_s(media_path))
+
+
+def _probe_media_duration_s(media_path: Path) -> float:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(media_path),
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe duration failed: {result.stderr.strip()}")
+    duration_s = float(result.stdout.strip())
+    if duration_s <= 0:
+        raise ValueError(f"Media duration must be positive: {media_path}")
     return duration_s
 
 
@@ -376,7 +403,7 @@ def _ffmpeg_command(
     if media_path.suffix.lower() in IMAGE_EXTENSIONS:
         cmd.extend(["-loop", "1", "-i", str(media_path)])
     else:
-        cmd.extend(["-stream_loop", "-1", "-i", str(media_path)])
+        cmd.extend(["-i", str(media_path)])
     cmd.extend(
         [
             "-t",
@@ -419,7 +446,7 @@ def _write_metadata(
 ) -> None:
     components = clip_cache_components(
         media_path=media_path,
-        duration_s=_duration_s(item),
+        duration_s=_effective_duration_s(item, media_path),
         motion=_motion_value(item),
         transition_in=_transition_value(item, "in"),
         transition_out=_transition_value(item, "out"),
