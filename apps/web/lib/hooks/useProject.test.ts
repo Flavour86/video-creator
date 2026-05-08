@@ -16,6 +16,7 @@ beforeEach(() => {
     projectPath: "",
     layers: [],
     subtitles: DEFAULT_SUBTITLES,
+    watermark: null,
     sentences: [],
     duration: 0,
   });
@@ -48,6 +49,11 @@ describe("initial state", () => {
   it("defaults subtitles to burn-in off", () => {
     const { result } = renderHook(() => useProject());
     expect(result.current.subtitles.burn_in).toBe(false);
+  });
+
+  it("has no watermark by default", () => {
+    const { result } = renderHook(() => useProject());
+    expect(result.current.watermark).toBeNull();
   });
 });
 
@@ -83,6 +89,13 @@ it("setSubtitles falls back to defaults for null project data", () => {
   const { result } = renderHook(() => useProject());
   act(() => result.current.setSubtitles(null));
   expect(result.current.subtitles).toEqual(DEFAULT_SUBTITLES);
+});
+
+it("setWatermark updates watermark", () => {
+  const { result } = renderHook(() => useProject());
+  const watermark = { mediaId: "logo.png", posX: 100, posY: 100, scale: 0.08, opacity: 60 };
+  act(() => result.current.setWatermark(watermark));
+  expect(result.current.watermark).toEqual(watermark);
 });
 
 // ── saveLayers ────────────────────────────────────────────────────────────────
@@ -179,5 +192,44 @@ describe("saveSubtitles", () => {
     });
 
     expect(result.current.subtitles).toEqual(subtitles);
+  });
+});
+
+describe("saveWatermark", () => {
+  it("sends PUT to /projects/watermark with correct body", async () => {
+    const watermark = { mediaId: "logo.png", posX: 100, posY: 100, scale: 0.08, opacity: 60 };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ watermark }),
+    });
+
+    const { result } = renderHook(() => useProject());
+    act(() => result.current.setProjectPath("/my/proj"));
+    await act(async () => {
+      await result.current.saveWatermark(watermark);
+    });
+
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain("/projects/watermark");
+    expect((opts as RequestInit).method).toBe("PUT");
+    expect(JSON.parse((opts as RequestInit).body as string)).toEqual(watermark);
+    expect(result.current.watermark).toEqual(watermark);
+  });
+
+  it("sends null mediaId when clearing watermark", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ watermark: null }),
+    });
+
+    const { result } = renderHook(() => useProject());
+    act(() => result.current.setProjectPath("/my/proj"));
+    await act(async () => {
+      await result.current.saveWatermark(null);
+    });
+
+    const [, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(JSON.parse((opts as RequestInit).body as string)).toEqual({ mediaId: null });
+    expect(result.current.watermark).toBeNull();
   });
 });

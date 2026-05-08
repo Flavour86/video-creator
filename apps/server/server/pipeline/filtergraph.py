@@ -67,12 +67,19 @@ def build_compose_command(
                 ),
             ]
         )
+    watermark_path = _watermark_path(project_dir, project)
+    watermark_input_index = None
+    if watermark_path is not None:
+        watermark_input_index = len(items) + 1
+        cmd.extend(["-loop", "1", "-i", str(watermark_path)])
 
     filtergraph = _build_filtergraph(
         duration_s=_duration_s(project, alignment),
         config=config,
         items=items,
         subtitles_path=project_dir / ".vc" / "subtitles.srt" if _burns_subtitles(project) else None,
+        watermark=project.watermark,
+        watermark_input_index=watermark_input_index,
     )
     cmd.extend(
         [
@@ -130,6 +137,8 @@ def _build_filtergraph(
     config: PresetConfig,
     items: list[ClipRenderItem],
     subtitles_path: Path | None = None,
+    watermark: object | None = None,
+    watermark_input_index: int | None = None,
 ) -> str:
     segments = [
         f"color=black:s={config.resolution}:r={config.fps}:d={_fmt(duration_s)}[bg]",
@@ -151,6 +160,25 @@ def _build_filtergraph(
             f"force_style='{_subtitle_force_style()}'[vsub]"
         )
         current = "vsub"
+    if watermark is not None and watermark_input_index is not None:
+        next_label = "vwm"
+        width = int(config.resolution.split("x", maxsplit=1)[0])
+        scale = _watermark_float(watermark, "scale")
+        opacity = _watermark_float(watermark, "opacity") / 100
+        pos_x = _watermark_float(watermark, "pos_x")
+        pos_y = _watermark_float(watermark, "pos_y")
+        segments.append(
+            f"[{watermark_input_index}:v]"
+            f"scale={_fmt(width * scale)}:-1,"
+            f"format=rgba,colorchannelmixer=aa={_fmt(opacity)}[wm]"
+        )
+        segments.append(
+            f"[{current}][wm]overlay="
+            f"x='(W-w)*{_fmt(pos_x / 100)}':"
+            f"y='(H-h)*{_fmt(pos_y / 100)}':eof_action=pass"
+            f"[{next_label}]"
+        )
+        current = next_label
     segments.append(f"[{current}]format=yuv420p[vout]")
     segments.append("[0:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]")
     return ";".join(segments)
@@ -179,6 +207,24 @@ def _subtitle_force_style() -> str:
             "MarginV=60",
         ]
     )
+
+
+def _watermark_path(project_dir: Path, project: Project) -> Path | None:
+    watermark = getattr(project, "watermark", None)
+    if watermark is None:
+        return None
+    media_id = getattr(watermark, "media_id", "")
+    safe_name = Path(media_id).name
+    if not media_id or safe_name != media_id or ".." in media_id:
+        raise ValueError(f"Invalid watermark mediaId: {media_id}")
+    return project_dir / "media" / safe_name
+
+
+def _watermark_float(watermark: object, name: str) -> float:
+    value = getattr(watermark, name)
+    if not isinstance(value, int | float):
+        raise TypeError(f"Watermark {name} must be numeric.")
+    return float(value)
 
 
 def _item_float(item: ClipRenderItem, name: str) -> float:

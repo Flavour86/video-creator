@@ -16,6 +16,7 @@ import { SubtitleToggle } from "@/components/subtitle-toggle/SubtitleToggle";
 import { Waveform } from "@/components/preview-player/Waveform";
 import { Timeline } from "@/components/timeline/Timeline";
 import { TranscriptPanel } from "@/components/transcript-panel/TranscriptPanel";
+import { WatermarkPanel } from "@/components/watermark-panel/WatermarkPanel";
 import { useAlignment } from "@/lib/hooks/useAlignment";
 import { useAssignModal } from "@/lib/hooks/useAssignModal";
 import { useProject } from "@/lib/hooks/useProject";
@@ -39,10 +40,10 @@ function EditorContent() {
 
   // Project store
   const {
-    layers, subtitles, sentences, duration,
+    layers, subtitles, watermark, sentences, duration,
     selectedLayerId, selectedItemId,
-    setProjectPath, setLayers, setSubtitles, setSentences, setDuration, setSelectedItem,
-    saveLayers, saveSubtitles,
+    setProjectPath, setLayers, setSubtitles, setWatermark, setSentences, setDuration,
+    setSelectedItem, saveLayers, saveSubtitles, saveWatermark,
   } = useProject();
 
   // Assign modal store
@@ -92,9 +93,11 @@ function EditorContent() {
       const data = (await r.json()) as {
         layers?: Layer[];
         subtitles?: Parameters<typeof setSubtitles>[0];
+        watermark?: Parameters<typeof setWatermark>[0];
       };
       if (Array.isArray(data.layers)) setLayers(data.layers);
       setSubtitles(data.subtitles);
+      setWatermark(data.watermark);
     }
   }
 
@@ -244,6 +247,7 @@ function EditorContent() {
             layers={layers}
             projectPath={projectPath}
             sentences={sentences}
+            watermark={watermark}
           />
 
           {/* Waveform */}
@@ -345,6 +349,12 @@ function EditorContent() {
             burnIn={subtitles.burn_in}
             disabled={renderProgress.isActive}
             onChange={(burnIn) => void saveSubtitles(burnIn)}
+          />
+
+          <WatermarkPanel
+            media={media}
+            onChange={(next) => void saveWatermark(next)}
+            value={watermark}
           />
 
           <div className="flex items-center justify-between">

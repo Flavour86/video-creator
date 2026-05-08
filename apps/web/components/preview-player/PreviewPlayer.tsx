@@ -2,6 +2,7 @@
 
 import { resolveDisplay } from "@/lib/preview/resolveDisplay";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+import type { WatermarkSettings } from "@/lib/hooks/useProject";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 
 type Props = {
@@ -9,9 +10,10 @@ type Props = {
   layers: Layer[];
   sentences: AlignedSentence[];
   currentTime: number;
+  watermark?: WatermarkSettings | null;
 };
 
-export function PreviewPlayer({ projectPath, layers, sentences, currentTime }: Props) {
+export function PreviewPlayer({ projectPath, layers, sentences, currentTime, watermark }: Props) {
   const spec = resolveDisplay(layers, sentences, currentTime);
 
   function fileUrl(mediaId: string) {
@@ -70,8 +72,23 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime }: P
         </div>
       )}
 
+      {watermark && (
+        <img
+          alt=""
+          className="absolute object-contain"
+          src={fileUrl(watermark.mediaId)}
+          style={{
+            left: `${watermark.posX}%`,
+            top: `${watermark.posY}%`,
+            width: `${watermark.scale * 100}%`,
+            opacity: watermark.opacity / 100,
+            transform: `translate(${-watermark.posX}%, ${-watermark.posY}%)`,
+          }}
+        />
+      )}
+
       {/* Empty state */}
-      {!spec.bg && spec.fg.length === 0 && (
+      {!spec.bg && spec.fg.length === 0 && !watermark && (
         <div className="absolute inset-0 flex items-center justify-center text-xs text-white/30">
           No media assigned
         </div>

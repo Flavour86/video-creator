@@ -153,6 +153,18 @@ class PutSubtitlesResponse(BaseModel):
     subtitles: dict[str, Any]
 
 
+class PutWatermarkRequest(BaseModel):
+    media_id: str | None = Field(default=None, alias="mediaId")
+    pos_x: float = Field(default=100, alias="posX", ge=0, le=100)
+    pos_y: float = Field(default=100, alias="posY", ge=0, le=100)
+    scale: float = Field(default=0.08, ge=0.05, le=0.3)
+    opacity: float = Field(default=60, ge=0, le=100)
+
+
+class PutWatermarkResponse(BaseModel):
+    watermark: dict[str, Any] | None
+
+
 @router.get("/load", response_model=None)
 async def load_project_data(project: str = Query(...)) -> JSONResponse:
     project_json = Path(project) / "project.json"
@@ -209,3 +221,22 @@ def _default_subtitles(burn_in: bool) -> dict[str, Any]:
             "bg_style": "shadow",
         },
     }
+
+
+@router.put("/watermark", response_model=None)
+async def put_watermark(
+    payload: PutWatermarkRequest,
+    project: str = Query(...),
+) -> PutWatermarkResponse | JSONResponse:
+    project_dir = Path(project)
+    project_json = project_dir / "project.json"
+    if not project_json.exists():
+        return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
+
+    loaded = load_project(project_dir)
+    data = loaded.model_dump(mode="json", by_alias=True, exclude_none=False)
+    data["watermark"] = None if payload.media_id is None else payload.model_dump(by_alias=True)
+    data["updated_at"] = datetime.now(UTC).isoformat()
+    updated = Project.model_validate(data)
+    save_project(project_dir, updated)
+    return PutWatermarkResponse(watermark=data["watermark"])

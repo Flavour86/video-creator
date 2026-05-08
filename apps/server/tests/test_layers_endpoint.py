@@ -117,3 +117,52 @@ async def test_put_subtitles_project_not_found(tmp_path: Path) -> None:
         )
 
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_put_watermark_saves_setting(tmp_path: Path) -> None:
+    (tmp_path / "project.json").write_text(json.dumps(_BASE_PROJECT))
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.put(
+            "/projects/watermark",
+            params={"project": str(tmp_path)},
+            json={
+                "mediaId": "logo.png",
+                "posX": 100,
+                "posY": 100,
+                "scale": 0.08,
+                "opacity": 60,
+            },
+        )
+
+    assert r.status_code == 200
+    saved = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
+    assert saved["watermark"]["mediaId"] == "logo.png"
+    assert saved["watermark"]["opacity"] == 60
+
+
+@pytest.mark.asyncio
+async def test_put_watermark_clears_setting(tmp_path: Path) -> None:
+    project = dict(_BASE_PROJECT)
+    project["watermark"] = {
+        "mediaId": "logo.png",
+        "posX": 100,
+        "posY": 100,
+        "scale": 0.08,
+        "opacity": 60,
+    }
+    (tmp_path / "project.json").write_text(json.dumps(project))
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.put(
+            "/projects/watermark",
+            params={"project": str(tmp_path)},
+            json={"mediaId": None},
+        )
+
+    assert r.status_code == 200
+    saved = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
+    assert saved["watermark"] is None

@@ -45,6 +45,7 @@ def _fg_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object
 def _project(
     layers: list[dict[str, object]],
     subtitles: dict[str, object] | None = None,
+    watermark: dict[str, object] | None = None,
 ) -> Project:
     return Project.model_validate(
         {
@@ -55,7 +56,7 @@ def _project(
             "output": {"preset": "draft"},
             "layers": layers,
             "subtitles": subtitles,
-            "watermark": None,
+            "watermark": watermark,
         }
     )
 
@@ -237,3 +238,31 @@ def test_subtitle_burn_in_false_skips_subtitles_filter(tmp_path: Path) -> None:
     )
 
     assert "subtitles=" not in _filtergraph(command)
+
+
+def test_watermark_appends_topmost_overlay(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path, "logo.png", b"logo")
+    project = _project(
+        [],
+        watermark={
+            "mediaId": "logo.png",
+            "posX": 100,
+            "posY": 100,
+            "scale": 0.08,
+            "opacity": 60,
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert _input_paths(command) == [str(tmp_path / "voice.wav"), str(media_path)]
+    assert "[1:v]scale=102.4:-1,format=rgba,colorchannelmixer=aa=0.6[wm]" in filtergraph
+    assert "[bg][wm]overlay=x='(W-w)*1':y='(H-h)*1':eof_action=pass[vwm]" in filtergraph
+    assert "[vwm]format=yuv420p[vout]" in filtergraph

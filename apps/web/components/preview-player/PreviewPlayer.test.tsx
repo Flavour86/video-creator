@@ -32,6 +32,21 @@ it("renders empty state when no layers", () => {
   expect(screen.getByText(/No media/i)).toBeInTheDocument();
 });
 
+it("renders watermark above the preview", () => {
+  render(
+    <PreviewPlayer
+      currentTime={0}
+      layers={[]}
+      projectPath="E:/project"
+      sentences={[]}
+      watermark={{ mediaId: "logo.png", posX: 100, posY: 100, scale: 0.08, opacity: 60 }}
+    />,
+  );
+
+  const images = document.querySelectorAll("img");
+  expect(images[0]?.getAttribute("src")).toContain("logo.png");
+});
+
 it("renders bg image when bg layer is present", () => {
   const { container } = render(
     <PreviewPlayer
