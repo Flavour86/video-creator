@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AppShell } from "./AppShell";
@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => ({
 describe("AppShell", () => {
   beforeEach(() => {
     mockPathname = "/";
+    delete document.documentElement.dataset.theme;
   });
 
   test("renders the global shell navigation and page content", () => {
@@ -90,6 +91,26 @@ describe("AppShell", () => {
     expect(productName.className).toContain("vc-type-body");
     expect(phase.className).toContain("vc-type-caption");
     expect(phase.className).toContain("text-(--text-3)");
+  });
+
+  test("renders an icon-only theme toggle on the right side", () => {
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    const controls = screen.getByTestId("shell-right-controls");
+    const toggle = screen.getByRole("button", { name: "Toggle theme" });
+
+    expect(controls.className).toContain("ml-auto");
+    expect(toggle).toHaveTextContent("");
+    expect(toggle.querySelector(".lucide-sun")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(toggle.querySelector(".lucide-moon")).toBeInTheDocument();
   });
 
   test("keeps RootLayout server-rendered while delegating shell UI to AppShell", () => {

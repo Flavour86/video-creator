@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { Moon, Sun } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { SegmentedControl } from "@/components/ui";
+import { IconButton, SegmentedControl } from "@/components/ui";
 
 export type AppShellProps = {
   children: ReactNode;
@@ -17,6 +19,7 @@ const navItems = [
 ] as const;
 
 type NavValue = (typeof navItems)[number]["value"];
+type ThemeMode = "dark" | "light";
 
 function valueForPathname(pathname: string | null): NavValue {
   const current = pathname ?? "/";
@@ -27,6 +30,29 @@ function valueForPathname(pathname: string | null): NavValue {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const [theme, setTheme] = useState<ThemeMode>("dark");
+
+  useEffect(() => {
+    const currentTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+
+    setTheme(currentTheme);
+  }, []);
+
+  const ThemeIcon = theme === "light" ? Moon : Sun;
+
+  function handleThemeToggle() {
+    setTheme((currentTheme) => {
+      const nextTheme = currentTheme === "light" ? "dark" : "light";
+
+      if (nextTheme === "light") {
+        document.documentElement.dataset.theme = "light";
+      } else {
+        delete document.documentElement.dataset.theme;
+      }
+
+      return nextTheme;
+    });
+  }
 
   return (
     <div className="min-h-screen bg-(--bg-0) text-(--text)">
@@ -56,6 +82,14 @@ export function AppShell({ children }: AppShellProps) {
               value={valueForPathname(pathname)}
             />
           </nav>
+          <div className="ml-auto flex shrink-0 items-center gap-(--space-2)" data-testid="shell-right-controls">
+            <IconButton
+              className="h-8 w-8 rounded-(--r-sm)"
+              icon={ThemeIcon}
+              label="Toggle theme"
+              onClick={handleThemeToggle}
+            />
+          </div>
         </div>
       </header>
       {children}

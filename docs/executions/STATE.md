@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 31 - implement right-side theme toggle
-**Last commit**: current HEAD (UI global task 30)
-**Last updated**: 2026-05-08T10:23Z
+**Next task**: UI global task 32 - implement right-side language selector
+**Last commit**: current HEAD (UI global task 31)
+**Last updated**: 2026-05-08T10:26Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:26Z [agent: codex] UI global task 31:
+- What I changed: added the right-side icon-only theme toggle to `AppShell`,
+  with dark-state sun icon, light-state moon icon, and tokenized stable sizing.
+- What works: `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: persistent global theme state and flash prevention remain
+  tasks 36-37. Existing unrelated warnings remain from `<img>` usage and
+  `next lint` deprecation.
+- Next agent should: continue with UI global task 32 via TDD.
 
 2026-05-08T10:23Z [agent: codex] UI global task 30:
 - What I changed: added a developer-visible `/tokens` route with top-level token

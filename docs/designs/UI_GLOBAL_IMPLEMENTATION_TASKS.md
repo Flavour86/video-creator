@@ -184,7 +184,7 @@ at `1440x1000` first, then again near `950px` width.
     - Keep it visible while implementing UI fidelity.
     - If production later hides it, keep the route accessible to developers.
 
-31. `[FE]` Implement right-side theme toggle.
+31. [x] `[FE]` Implement right-side theme toggle.
     - Icon-only button.
     - Accessible name: `Toggle theme`.
     - Dark mode shows sun icon; light mode shows moon icon, matching prototype.
