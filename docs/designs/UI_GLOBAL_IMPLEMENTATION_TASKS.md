@@ -114,7 +114,7 @@ at `1440x1000` first, then again near `950px` width.
     - Use tokenized height, padding, radius, border, hover, active, disabled, and
       focus states.
 
-18. `[FE]` Implement `IconButton`.
+18. [x] `[FE]` Implement `IconButton`.
     - Use `lucide-react` icons where available.
     - Require an accessible label.
     - Support tooltip/title text for unfamiliar icons.
