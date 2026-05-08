@@ -9,6 +9,7 @@ Execute these tasks in order. Each task lists the implementation surface:
 - `[SHARED]`: shared schemas/types in `packages/shared-schemas`
 - `[DOC]`: documentation or implementation notes
 - `[QA]`: tests, screenshots, manual verification
+| `[x]`: Done
 
 The prototype at `http://192.168.31.48/app.html` remains the visual source of
 truth. When a detail is unclear, inspect the prototype with Chrome DevTools MCP
@@ -194,7 +195,7 @@ at `1440x1000` first, then again near `950px` width.
     - Selected language uses active pill.
     - It must not shift header layout when switching languages.
 
-33. `[FE]` Implement global status bar.
+33. [x] `[FE]` Implement global status bar.
     - Fixed or sticky bottom treatment matching prototype behavior.
     - Left command segment.
     - Center runtime/status segments.

@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 33 - implement global status bar
-**Last commit**: current HEAD (UI global task 32)
-**Last updated**: 2026-05-08T10:32Z
+**Next task**: UI global task 34 - add page chrome wrappers
+**Last commit**: current HEAD (UI global task 33)
+**Last updated**: 2026-05-08T10:44Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:44Z [agent: codex] UI global task 33:
+- What I changed: added the fixed global status bar to `AppShell`, with command
+  affordance, default runtime/status chips, project metadata, prototype version,
+  and a `statusContent` slot for screen-specific status.
+- What works: `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: status content is static until runtime/backend data hooks
+  land in tasks 45-53. Existing unrelated warnings remain from `<img>` usage and
+  `next lint` deprecation.
+- Next agent should: continue with UI global task 34 via TDD.
 
 2026-05-08T10:32Z [agent: codex] UI global task 32:
 - What I changed: added the right-side `EN` / `中文` segmented language selector

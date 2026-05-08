@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { IconButton, SegmentedControl } from "@/components/ui";
+import { IconButton, Kbd, SegmentedControl, StatusTag } from "@/components/ui";
 
 export type AppShellProps = {
   children: ReactNode;
+  statusContent?: ReactNode;
 };
 
 const navItems = [
@@ -34,7 +35,17 @@ function valueForPathname(pathname: string | null): NavValue {
   return match?.value ?? "launcher";
 }
 
-export function AppShell({ children }: AppShellProps) {
+function DefaultStatusContent() {
+  return (
+    <>
+      <StatusTag variant="aligned">alignment cached</StatusTag>
+      <StatusTag variant="cached">cache 24/24 warm</StatusTag>
+      <StatusTag variant="idle">autosave · 02s ago</StatusTag>
+    </>
+  );
+}
+
+export function AppShell({ children, statusContent }: AppShellProps) {
   const pathname = usePathname();
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [language, setLanguage] = useState<LanguageMode>("en");
@@ -62,7 +73,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-(--bg-0) text-(--text)">
+    <div className="min-h-screen bg-(--bg-0) pb-(--space-9) text-(--text)">
       <header className="relative h-11 w-full border-b border-(--line) bg-(--bg-1)">
         <div className="flex h-full items-center px-(--space-4)">
           <div className="flex shrink-0 items-center gap-(--space-3)" data-testid="brand-cluster">
@@ -109,6 +120,27 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </header>
       {children}
+      <footer
+        aria-label="Global status"
+        className="fixed bottom-0 left-0 right-0 z-40 h-(--space-9) border-t border-(--line) bg-(--bg-1)"
+      >
+        <div className="grid h-full grid-cols-3 items-center px-(--space-4)">
+          <div className="flex min-w-0 items-center gap-(--space-2)">
+            <Kbd>⌘K</Kbd>
+            <span className="vc-type-caption text-(--text-3)">command</span>
+          </div>
+          <div
+            className="flex min-w-0 items-center justify-center gap-(--space-2) overflow-hidden"
+            data-testid="status-center"
+          >
+            {statusContent ?? <DefaultStatusContent />}
+          </div>
+          <div className="flex min-w-0 items-center justify-end gap-(--space-4)">
+            <span className="vc-type-mono-meta min-w-0 truncate text-(--text-3)">tokyo-essay/project.json</span>
+            <span className="vc-type-mono-meta shrink-0 text-(--text-3)">v0.1.0-prototype</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

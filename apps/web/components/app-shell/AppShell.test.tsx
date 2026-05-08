@@ -135,6 +135,39 @@ describe("AppShell", () => {
     expect(chinese.className).toContain("bg-(--bg-4)");
   });
 
+  test("renders the global status bar", () => {
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    const statusBar = screen.getByRole("contentinfo", { name: "Global status" });
+
+    expect(statusBar.className).toContain("fixed");
+    expect(statusBar.className).toContain("bottom-0");
+    expect(screen.getByText("⌘K")).toBeInTheDocument();
+    expect(screen.getByText("command")).toBeInTheDocument();
+    expect(screen.getByText("alignment cached")).toBeInTheDocument();
+    expect(screen.getByText("cache 24/24 warm")).toBeInTheDocument();
+    expect(screen.getByText("autosave · 02s ago")).toBeInTheDocument();
+    expect(screen.getByText("tokyo-essay/project.json")).toBeInTheDocument();
+    expect(screen.getByText("v0.1.0-prototype")).toBeInTheDocument();
+  });
+
+  test("allows screen-specific status content", () => {
+    render(
+      <AppShell statusContent={<span>render queued</span>}>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    const center = screen.getByTestId("status-center");
+
+    expect(center).toHaveTextContent("render queued");
+    expect(screen.queryByText("alignment cached")).not.toBeInTheDocument();
+  });
+
   test("keeps RootLayout server-rendered while delegating shell UI to AppShell", () => {
     const layoutSource = readFileSync(join(process.cwd(), "app", "layout.tsx"), "utf8");
 
