@@ -179,7 +179,7 @@ at `1440x1000` first, then again near `950px` width.
     - Inactive item text uses `--text-2`.
     - Active item uses `--bg-4` or `--bg-5` according to prototype inspection.
 
-30. `[FE]` Add route for `/tokens`.
+30. [x] `[FE]` Add route for `/tokens`.
     - The prototype has Tokens in the nav.
     - Keep it visible while implementing UI fidelity.
     - If production later hides it, keep the route accessible to developers.

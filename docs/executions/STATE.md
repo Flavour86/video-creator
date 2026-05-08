@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 30 - add route for /tokens
-**Last commit**: current HEAD (UI global task 29)
-**Last updated**: 2026-05-08T10:20Z
+**Next task**: UI global task 31 - implement right-side theme toggle
+**Last commit**: current HEAD (UI global task 30)
+**Last updated**: 2026-05-08T10:23Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:23Z [agent: codex] UI global task 30:
+- What I changed: added a developer-visible `/tokens` route with top-level token
+  groups for Colors, Typography, Space, and Cinema, plus route coverage.
+- What works: `pnpm -F @vc/web test -- app/tokens/page.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web lint`, and
+  `pnpm -F @vc/web build` completed successfully.
+- What is incomplete: the full token reference UI remains task 54. Existing unrelated
+  warnings remain from Radix dialog descriptions, `<img>` usage, and `next lint`
+  deprecation.
+- Next agent should: continue with UI global task 31 via TDD.
 
 2026-05-08T10:20Z [agent: codex] UI global task 29:
 - What I changed: replaced loose app-shell nav links with centered `SegmentedControl`
