@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: T6.5 (`07_MILESTONE_POLISH.md`)
-**Last commit**: b77b21d
-**Last updated**: 2026-05-08T01:12Z
+**Next task**: T6.6 (`07_MILESTONE_POLISH.md`)
+**Last commit**: 58fd6ca
+**Last updated**: 2026-05-08T01:14Z
 
 ---
 
@@ -66,7 +66,7 @@
 - [x] T6.2 Subtitle SRT generation 閳?commit de2c829
 - [x] T6.3 Subtitle burn-in toggle 閳?commit 89f1bc4
 - [x] T6.4 Auto-distribute multi-image 閳?commit b77b21d
-- [ ] T6.5 Auto-distribute clips with black-tail fallback
+- [x] T6.5 Auto-distribute clips with black-tail fallback 閳?commit 58fd6ca
 - [ ] T6.6 Watermark layer
 - [ ] T6.7 Time-pinned override (anchor:"time")
 - [ ] T6.8 PiP compositing mode
