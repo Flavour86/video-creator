@@ -119,7 +119,7 @@ at `1440x1000` first, then again near `950px` width.
     - Require an accessible label.
     - Support tooltip/title text for unfamiliar icons.
 
-19. `[FE]` Implement `SegmentedControl`.
+19. [x] `[FE]` Implement `SegmentedControl`.
     - Use it for the top nav, language selector, resolution selector, preview
       scale, and mode controls.
     - Active item uses active surface or accent where specified.
