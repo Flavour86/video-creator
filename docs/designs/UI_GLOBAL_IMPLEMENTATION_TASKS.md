@@ -172,7 +172,7 @@ at `1440x1000` first, then again near `950px` width.
       during copy review.
     - Use tokenized typography and spacing.
 
-29. `[FE]` Implement centered navigation.
+29. [x] `[FE]` Implement centered navigation.
     - Items: Launcher, Setup, Editor, Render, Tokens.
     - Use `SegmentedControl`.
     - Active item must follow the current route.

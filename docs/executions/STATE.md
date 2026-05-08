@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 29 - implement centered navigation
-**Last commit**: current HEAD (UI global task 28)
-**Last updated**: 2026-05-08T10:17Z
+**Next task**: UI global task 30 - add route for /tokens
+**Last commit**: current HEAD (UI global task 29)
+**Last updated**: 2026-05-08T10:20Z
 
 ---
 
@@ -81,6 +81,18 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:20Z [agent: codex] UI global task 29:
+- What I changed: replaced loose app-shell nav links with centered `SegmentedControl`
+  navigation, added the visible Tokens item, and derived active state from `usePathname()`.
+- What works: `pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: the `/tokens` page route is intentionally still task 30; the
+  Tokens nav item is visible but will not land on a real page until that task. Existing
+  unrelated warnings remain from Radix dialog descriptions, `<img>` usage, `next lint`
+  deprecation, and Git line-ending notices for `AppShell` files.
+- Next agent should: continue with UI global task 30 via TDD.
 
 2026-05-08T10:17Z [agent: codex] UI global task 28:
 - What I changed: added the left app-shell brand cluster with square `VC` mark,

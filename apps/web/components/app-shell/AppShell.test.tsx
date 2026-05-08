@@ -2,11 +2,21 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AppShell } from "./AppShell";
 
+let mockPathname = "/";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => mockPathname,
+}));
+
 describe("AppShell", () => {
+  beforeEach(() => {
+    mockPathname = "/";
+  });
+
   test("renders the global shell navigation and page content", () => {
     render(
       <AppShell>
@@ -15,11 +25,34 @@ describe("AppShell", () => {
     );
 
     expect(screen.getByRole("navigation", { name: "Global" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Launcher" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Setup" })).toHaveAttribute("href", "/setup");
-    expect(screen.getByRole("link", { name: "Editor" })).toHaveAttribute("href", "/editor");
-    expect(screen.getByRole("link", { name: "Render" })).toHaveAttribute("href", "/render");
+    expect(screen.getByRole("radiogroup", { name: "Primary navigation" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Launcher" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Setup" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Editor" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Render" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Tokens" })).toBeInTheDocument();
     expect(screen.getByText("Page content")).toBeInTheDocument();
+  });
+
+  test("centers navigation and follows the current route", () => {
+    mockPathname = "/editor";
+
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    const navigation = screen.getByRole("navigation", { name: "Global" });
+    const editor = screen.getByRole("radio", { name: "Editor" });
+    const launcher = screen.getByRole("radio", { name: "Launcher" });
+
+    expect(navigation.className).toContain("left-1/2");
+    expect(navigation.className).toContain("-translate-x-1/2");
+    expect(editor).toHaveAttribute("aria-checked", "true");
+    expect(editor.className).toContain("bg-(--bg-4)");
+    expect(launcher).toHaveAttribute("aria-checked", "false");
+    expect(launcher.className).toContain("text-(--text-2)");
   });
 
   test("renders a compact full-width tokenized header surface", () => {

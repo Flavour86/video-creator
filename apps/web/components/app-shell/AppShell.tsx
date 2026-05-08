@@ -1,24 +1,37 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { SegmentedControl } from "@/components/ui";
 
 export type AppShellProps = {
   children: ReactNode;
 };
 
 const navItems = [
-  { href: "/", label: "Launcher" },
-  { href: "/setup", label: "Setup" },
-  { href: "/editor", label: "Editor" },
-  { href: "/render", label: "Render" },
+  { href: "/", label: "Launcher", value: "launcher" },
+  { href: "/setup", label: "Setup", value: "setup" },
+  { href: "/editor", label: "Editor", value: "editor" },
+  { href: "/render", label: "Render", value: "render" },
+  { href: "/tokens", label: "Tokens", value: "tokens" },
 ] as const;
 
+type NavValue = (typeof navItems)[number]["value"];
+
+function valueForPathname(pathname: string | null): NavValue {
+  const current = pathname ?? "/";
+  const match = navItems.find((item) => item.href === current || (item.href !== "/" && current.startsWith(item.href)));
+
+  return match?.value ?? "launcher";
+}
+
 export function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname();
+
   return (
     <div className="min-h-screen bg-(--bg-0) text-(--text)">
-      <header className="h-11 w-full border-b border-(--line) bg-(--bg-1)">
-        <div className="flex h-full items-center gap-(--space-6) px-(--space-4)">
+      <header className="relative h-11 w-full border-b border-(--line) bg-(--bg-1)">
+        <div className="flex h-full items-center px-(--space-4)">
           <div className="flex shrink-0 items-center gap-(--space-3)" data-testid="brand-cluster">
             <span
               aria-hidden="true"
@@ -29,12 +42,19 @@ export function AppShell({ children }: AppShellProps) {
             <span className="vc-type-body font-bold text-(--text)">Video Creator</span>
             <span className="vc-type-caption text-(--text-3)">phase 1 - local</span>
           </div>
-          <nav aria-label="Global" className="flex h-full items-center gap-(--space-4) vc-type-body">
-            {navItems.map((item) => (
-              <Link className="text-(--text-2) transition-colors hover:text-(--text)" href={item.href} key={item.href}>
-                {item.label}
-              </Link>
-            ))}
+          <nav aria-label="Global" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <SegmentedControl
+              ariaLabel="Primary navigation"
+              items={navItems.map((item) => ({ label: item.label, value: item.value }))}
+              onValueChange={(value) => {
+                const target = navItems.find((item) => item.value === value);
+
+                if (target && target.href !== pathname) {
+                  window.location.assign(target.href);
+                }
+              }}
+              value={valueForPathname(pathname)}
+            />
           </nav>
         </div>
       </header>
