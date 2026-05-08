@@ -124,7 +124,7 @@ at `1440x1000` first, then again near `950px` width.
       scale, and mode controls.
     - Active item uses active surface or accent where specified.
 
-20. `[FE]` Implement `StatusTag`.
+20. [x] `[FE]` Implement `StatusTag`.
     - Variants: idle, cached, aligned, composing, missing asset, ready, warning,
       info, error.
     - Map variants to green, amber, blue, red, violet, or neutral tokens.
