@@ -39,4 +39,12 @@ describe("global design tokens", () => {
       expect(globalsCss).toContain(`${token}:`);
     }
   });
+
+  test("uses the dark token set as the default document theme", () => {
+    expect(globalsCss).toContain("color-scheme: dark;");
+    expect(globalsCss).toContain("--bg-0: oklch(0.16 0.005 60);");
+    expect(globalsCss).toContain("--text: oklch(0.97 0.005 80);");
+    expect(globalsCss).toContain("background: var(--bg-0);");
+    expect(globalsCss).toContain("color: var(--text);");
+  });
 });

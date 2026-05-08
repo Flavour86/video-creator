@@ -53,7 +53,7 @@ at `1440x1000` first, then again near `950px` width.
    - Include accent tokens for amber, blue, green, red, and violet.
    - Include font, radius, and shadow tokens.
 
-7. `[FE]` Add dark theme values as the default token set on `:root`.
+7. [x] `[FE]` Add dark theme values as the default token set on `:root`.
    - Match the observed OKLCH dark values from `UI_GLOBAL_REQUIREMENTS.md`.
    - Body background must use `--bg-0`.
    - Body text must use `--text`.

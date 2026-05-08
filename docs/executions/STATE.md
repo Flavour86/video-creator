@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 7 - add dark theme values as the default token set
-**Last commit**: da6a19d
-**Last updated**: 2026-05-08T08:35Z
+**Next task**: UI global task 8 - add light theme values
+**Last commit**: e107146
+**Last updated**: 2026-05-08T09:00Z
 
 ---
 
@@ -81,6 +81,15 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:00Z [agent: codex] UI global task 7:
+- What I changed: added a failing-first assertion that the document defaults to the dark
+  token theme, then added `color-scheme: dark` to the root token block.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation.
+- Next agent should: continue with UI global task 8 via TDD.
 
 2026-05-08T08:35Z [agent: codex] UI global task 6:
 - What I changed: added a failing-first Vitest check for required global design token names,
