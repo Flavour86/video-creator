@@ -137,7 +137,7 @@ at `1440x1000` first, then again near `950px` width.
     - Must use tokenized background, border, radius, and padding.
     - Must not encourage card nesting.
 
-23. `[FE]` Implement form primitives.
+23. [x] `[FE]` Implement form primitives.
     - Text input, search input, select, spinbutton-like numeric input, checkbox or
       toggle where needed.
     - Labels use eyebrow/caption tokens.

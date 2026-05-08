@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 23 - implement form primitives
-**Last commit**: current HEAD (UI global task 22)
-**Last updated**: 2026-05-08T10:00Z
+**Next task**: UI global task 24 - implement LayerChip
+**Last commit**: current HEAD (UI global task 23)
+**Last updated**: 2026-05-08T10:03Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:03Z [agent: codex] UI global task 23:
+- What I changed: added tested form primitives for eyebrow-labeled fields,
+  text input, search input, select, numeric spinbutton input, and checkbox.
+- What works: `pnpm -F @vc/web test -- components/ui/Form.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, `next lint` deprecation, and a Git line-ending notice for
+  `apps/web/components/ui/index.ts`.
+- Next agent should: continue with UI global task 24 via TDD.
 
 2026-05-08T10:00Z [agent: codex] UI global task 22:
 - What I changed: added a tested `Surface` layout primitive with panel, raised,

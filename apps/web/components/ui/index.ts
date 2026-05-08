@@ -11,3 +11,6 @@ export type { KbdProps } from "./Kbd";
 
 export { Surface } from "./Surface";
 export type { SurfacePadding, SurfaceProps, SurfaceTone } from "./Surface";
+
+export { Checkbox, Field, NumberInput, SearchInput, Select, TextInput } from "./Form";
+export type { CheckboxProps, FieldProps, NumberInputProps, SearchInputProps, SelectProps, TextInputProps } from "./Form";
