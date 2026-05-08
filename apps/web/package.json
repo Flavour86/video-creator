@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "next lint",
+    "tokens:audit": "node scripts/token-audit.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 15 - add a token audit check
-**Last commit**: current HEAD (UI global task 14)
-**Last updated**: 2026-05-08T09:37Z
+**Next task**: UI global task 16 - create design-system component folder
+**Last commit**: current HEAD (UI global task 15)
+**Last updated**: 2026-05-08T09:41Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:41Z [agent: codex] UI global task 15:
+- What I changed: added a tested `tokens:audit` package command that scans changed frontend
+  implementation files under `app`, `components`, and `styles` for raw colors, pixel font
+  sizes, and pixel radii outside token declarations.
+- What works: `pnpm -F @vc/web test -- scripts/token-audit.test.mjs`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and `pnpm -F @vc/web lint`
+  completed successfully.
+- What is incomplete: the audit intentionally scopes to changed implementation files so it
+  can coexist with older screens until they are migrated. Existing unrelated warnings remain
+  from Radix dialog descriptions, `<img>` usage, `next lint` deprecation, and a Git line-ending
+  notice for `apps/web/package.json`.
+- Next agent should: continue with UI global task 16 via TDD where practical.
 
 2026-05-08T09:37Z [agent: codex] UI global task 14:
 - What I changed: added failing-first coverage for cinema and render-surface constants, then

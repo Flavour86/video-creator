@@ -97,7 +97,7 @@ at `1440x1000` first, then again near `950px` width.
     - Preview fit, subtitle safe area, watermark safe area, PiP bounds, timeline
       track heights, playhead width, and clip radius.
 
-15. `[QA]` Add a token audit check.
+15. [x] `[QA]` Add a token audit check.
     - Search changed frontend files for raw `oklch`, `hsl`, hex colors, one-off
       pixel radii, and one-off font sizes.
     - Raw values are allowed only inside token declarations.
