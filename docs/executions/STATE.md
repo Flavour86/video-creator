@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 41 - add frontend dictionaries
-**Last commit**: current HEAD (UI global task 40)
-**Last updated**: 2026-05-08T11:14Z
+**Next task**: UI global task 42 - replace hardcoded global shell copy
+**Last commit**: current HEAD (UI global task 41)
+**Last updated**: 2026-05-08T11:21Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:21Z [agent: codex] UI global task 41:
+- What I changed: added `en` and `zh` frontend dictionaries under
+  `apps/web/lib/i18n/messages`, plus a typed `messages.ts` export for future
+  lookup wiring.
+- What works: dictionary parity covers app shell labels, shared controls,
+  status labels, validation messages, empty states, and page labels for the
+  currently migrated global screens. `pnpm -F @vc/web test -- lib/i18n/messages.test.ts`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: task 42 still needs to wire visible global shell copy to
+  dictionary lookups, preferably through `next-intl` / `useTranslations()`.
+- Next agent should: continue with UI global task 42 via TDD.
 
 2026-05-08T11:14Z [agent: codex] UI global task 40:
 - What I changed: added a global language store with `en` / `zh`, persisted

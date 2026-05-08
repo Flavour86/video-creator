@@ -1,0 +1,136 @@
+{
+  "appShell": {
+    "brand": {
+      "mark": "VC",
+      "productName": "Video Creator",
+      "phaseLabel": "phase 1 - local"
+    },
+    "nav": {
+      "launcher": "Launcher",
+      "setup": "Setup",
+      "editor": "Editor",
+      "render": "Render",
+      "tokens": "Tokens"
+    },
+    "controls": {
+      "globalNavLabel": "Global",
+      "languageLabel": "Language",
+      "themeLabel": "Theme"
+    },
+    "statusBar": {
+      "ariaLabel": "Global status",
+      "command": "Command",
+      "runtime": "Runtime",
+      "version": "Version"
+    }
+  },
+  "globalControls": {
+    "buttons": {
+      "openFolder": "Open folder",
+      "newProject": "New project",
+      "createProject": "Create project",
+      "createAnotherProject": "Create another project",
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "refresh": "Refresh",
+      "play": "Play",
+      "open": "Open",
+      "remove": "Remove",
+      "renderDraft": "Render Draft",
+      "renderFinal": "Render Final",
+      "chooseLocalFolder": "Choose a local folder",
+      "assignMedia": "Assign media",
+      "uploadMedia": "Upload media"
+    },
+    "tooltips": {
+      "toggleTheme": "Toggle theme",
+      "refreshRenders": "Refresh renders",
+      "assignMediaToSentence": "Assign media to this sentence",
+      "deleteItem": "Delete item",
+      "deleteLayer": "Delete layer",
+      "removeWatermark": "Remove watermark",
+      "changeMedia": "Click to change media"
+    }
+  },
+  "status": {
+    "ready": "Ready",
+    "idle": "Idle",
+    "cached": "Cached",
+    "aligned": "Aligned",
+    "composing": "Composing",
+    "missingAsset": "Missing asset",
+    "warning": "Warning",
+    "info": "Info",
+    "error": "Error",
+    "activeRenders": "Active renders",
+    "cachedProjects": "Cached projects",
+    "runtimeUnavailable": "Unavailable",
+    "runtimeUnknown": "Unknown"
+  },
+  "validation": {
+    "requiredProjectName": "Project name is required",
+    "requiredProjectFolder": "Project folder is required",
+    "folderMissing": "Folder missing",
+    "uploadFailed": "Upload failed",
+    "renderFailed": "Render failed",
+    "renderFailedToStart": "Render failed to start.",
+    "renderProgressConnectionFailed": "Render progress connection failed.",
+    "layerOverlap": "Overlaps with existing item in this layer",
+    "invalidSentenceRange": "Start sentence must be before end sentence",
+    "missingMedia": "Select media before confirming",
+    "unsupportedFile": "Unsupported file type"
+  },
+  "emptyStates": {
+    "noProjectOpen": "No project open. Go to Launcher and open a project.",
+    "noProjectsYet": "No projects yet - create one to get started.",
+    "noLayersYet": "No layers yet",
+    "noRendersYet": "No renders yet",
+    "noMediaYet": "No media yet",
+    "noProjectSelected": "No project selected"
+  },
+  "pages": {
+    "launcher": {
+      "eyebrow": "Local workspace",
+      "title": "Recent projects",
+      "legacyTitle": "Video Creator",
+      "subtitle": "Recent local projects",
+      "voice": "voice",
+      "sentences": "sentences",
+      "media": "media",
+      "opened": "opened",
+      "tipsTitle": "Tips",
+      "tips": {
+        "dropFolder": "Drop a folder anywhere - same project.",
+        "reRecord": "Re-record voice; keep your assignments.",
+        "phaseTwo": "Phase 2 hooks AI gen via Fal / Modal."
+      }
+    },
+    "setup": {
+      "title": "Setup"
+    },
+    "editor": {
+      "title": "Editor",
+      "dropHint": "Drop images / video here - jpg png webp mp4 mov webm",
+      "draftActive": "Rendering Draft..."
+    },
+    "render": {
+      "title": "Final Render",
+      "renderReady": "Render ready",
+      "renderFailed": "Render failed"
+    },
+    "tokens": {
+      "eyebrow": "Design Tokens",
+      "title": "Tokens",
+      "sections": {
+        "colors": "Colors",
+        "type": "Type",
+        "spacing": "Spacing",
+        "radii": "Radii",
+        "shadows": "Shadows",
+        "cinema": "Cinema",
+        "components": "Components"
+      }
+    }
+  }
+}

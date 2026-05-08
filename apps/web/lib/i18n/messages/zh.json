@@ -1,0 +1,136 @@
+{
+  "appShell": {
+    "brand": {
+      "mark": "VC",
+      "productName": "Video Creator",
+      "phaseLabel": "第 1 阶段 - 本地"
+    },
+    "nav": {
+      "launcher": "启动器",
+      "setup": "设置",
+      "editor": "编辑器",
+      "render": "渲染",
+      "tokens": "令牌"
+    },
+    "controls": {
+      "globalNavLabel": "全局",
+      "languageLabel": "语言",
+      "themeLabel": "主题"
+    },
+    "statusBar": {
+      "ariaLabel": "全局状态",
+      "command": "命令",
+      "runtime": "运行时",
+      "version": "版本"
+    }
+  },
+  "globalControls": {
+    "buttons": {
+      "openFolder": "打开文件夹",
+      "newProject": "新建项目",
+      "createProject": "创建项目",
+      "createAnotherProject": "再创建一个项目",
+      "save": "保存",
+      "cancel": "取消",
+      "delete": "删除",
+      "refresh": "刷新",
+      "play": "播放",
+      "open": "打开",
+      "remove": "移除",
+      "renderDraft": "渲染草稿",
+      "renderFinal": "渲染最终版",
+      "chooseLocalFolder": "选择本地文件夹",
+      "assignMedia": "分配媒体",
+      "uploadMedia": "上传媒体"
+    },
+    "tooltips": {
+      "toggleTheme": "切换主题",
+      "refreshRenders": "刷新渲染",
+      "assignMediaToSentence": "为这句分配媒体",
+      "deleteItem": "删除项目",
+      "deleteLayer": "删除图层",
+      "removeWatermark": "移除水印",
+      "changeMedia": "点击更换媒体"
+    }
+  },
+  "status": {
+    "ready": "就绪",
+    "idle": "空闲",
+    "cached": "已缓存",
+    "aligned": "已对齐",
+    "composing": "合成中",
+    "missingAsset": "缺少素材",
+    "warning": "警告",
+    "info": "信息",
+    "error": "错误",
+    "activeRenders": "活动渲染",
+    "cachedProjects": "缓存项目",
+    "runtimeUnavailable": "不可用",
+    "runtimeUnknown": "未知"
+  },
+  "validation": {
+    "requiredProjectName": "项目名称为必填项",
+    "requiredProjectFolder": "项目文件夹为必填项",
+    "folderMissing": "文件夹缺失",
+    "uploadFailed": "上传失败",
+    "renderFailed": "渲染失败",
+    "renderFailedToStart": "渲染启动失败。",
+    "renderProgressConnectionFailed": "渲染进度连接失败。",
+    "layerOverlap": "与此图层中的现有项目重叠",
+    "invalidSentenceRange": "起始句必须早于结束句",
+    "missingMedia": "确认前请选择媒体",
+    "unsupportedFile": "不支持的文件类型"
+  },
+  "emptyStates": {
+    "noProjectOpen": "未打开项目。请前往启动器并打开一个项目。",
+    "noProjectsYet": "还没有项目 - 创建一个项目开始。",
+    "noLayersYet": "还没有图层",
+    "noRendersYet": "还没有渲染",
+    "noMediaYet": "还没有媒体",
+    "noProjectSelected": "未选择项目"
+  },
+  "pages": {
+    "launcher": {
+      "eyebrow": "本地工作区",
+      "title": "最近项目",
+      "legacyTitle": "Video Creator",
+      "subtitle": "最近的本地项目",
+      "voice": "语音",
+      "sentences": "句子",
+      "media": "媒体",
+      "opened": "打开于",
+      "tipsTitle": "提示",
+      "tips": {
+        "dropFolder": "把文件夹拖到任意位置 - 仍是同一个项目。",
+        "reRecord": "重新录制语音；保留已分配内容。",
+        "phaseTwo": "第 2 阶段将通过 Fal / Modal 接入 AI 生成。"
+      }
+    },
+    "setup": {
+      "title": "设置"
+    },
+    "editor": {
+      "title": "编辑器",
+      "dropHint": "拖入图片 / 视频 - jpg png webp mp4 mov webm",
+      "draftActive": "正在渲染草稿..."
+    },
+    "render": {
+      "title": "最终渲染",
+      "renderReady": "渲染就绪",
+      "renderFailed": "渲染失败"
+    },
+    "tokens": {
+      "eyebrow": "设计令牌",
+      "title": "令牌",
+      "sections": {
+        "colors": "颜色",
+        "type": "字体",
+        "spacing": "间距",
+        "radii": "圆角",
+        "shadows": "阴影",
+        "cinema": "影像",
+        "components": "组件"
+      }
+    }
+  }
+}

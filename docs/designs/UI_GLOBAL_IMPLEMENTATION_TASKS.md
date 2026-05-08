@@ -237,7 +237,7 @@ at `1440x1000` first, then again near `950px` width.
     - Persist in `localStorage`.
     - Apply `lang` attribute to the `<html>` element.
 
-41. `[FE]` Add frontend dictionaries.
+41. [x] `[FE]` Add frontend dictionaries.
     - Suggested path: `apps/web/lib/i18n`.
     - Include app shell, global controls, status labels, buttons, tooltips,
       validation messages, empty states, and page-level labels as screens are
