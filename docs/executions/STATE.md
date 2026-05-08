@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 12 - add radius tokens
-**Last commit**: current HEAD (UI global task 11)
-**Last updated**: 2026-05-08T09:31Z
+**Next task**: UI global task 13 - add elevation tokens
+**Last commit**: current HEAD (UI global task 12)
+**Last updated**: 2026-05-08T09:33Z
 
 ---
 
@@ -81,6 +81,16 @@
 ---
 
 ## Notes log
+
+2026-05-08T09:33Z [agent: codex] UI global task 12:
+- What I changed: added failing-first coverage for the observed radius tokens and shared
+  pill/circle convention, then declared `--r-pill` and utility classes for pill tags and
+  circular controls.
+- What works: `pnpm -F @vc/web test -- styles/globals.test.ts`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, and `next lint` deprecation.
+- Next agent should: continue with UI global task 13 via TDD.
 
 2026-05-08T09:31Z [agent: codex] UI global task 11:
 - What I changed: added failing-first coverage for the prototype spacing token scale, then

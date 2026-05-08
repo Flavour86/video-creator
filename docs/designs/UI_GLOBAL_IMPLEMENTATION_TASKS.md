@@ -78,7 +78,7 @@ at `1440x1000` first, then again near `950px` width.
     - Use these tokens in new shared components instead of arbitrary Tailwind
       spacing values.
 
-12. `[FE]` Add radius tokens.
+12. [x] `[FE]` Add radius tokens.
     - `--r-sm: 4px`
     - `--r: 6px`
     - `--r-md: 10px`

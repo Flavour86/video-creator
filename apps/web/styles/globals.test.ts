@@ -116,4 +116,15 @@ describe("global design tokens", () => {
       expect(globalsCss).toContain(`${token}: ${value};`);
     }
   });
+
+  test("defines radius tokens and shared pill conventions", () => {
+    expect(globalsCss).toContain("--r-sm: 4px;");
+    expect(globalsCss).toContain("--r: 6px;");
+    expect(globalsCss).toContain("--r-md: 10px;");
+    expect(globalsCss).toContain("--r-lg: 14px;");
+    expect(globalsCss).toContain("--r-pill: 999px;");
+    expect(globalsCss).toContain(".vc-radius-pill");
+    expect(globalsCss).toContain(".vc-radius-circle");
+    expect(globalsCss.match(/border-radius: var\(--r-pill\);/g)?.length).toBeGreaterThanOrEqual(2);
+  });
 });
