@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 24 - implement LayerChip
-**Last commit**: current HEAD (UI global task 23)
-**Last updated**: 2026-05-08T10:03Z
+**Next task**: UI global task 25 - add focused component tests for shared primitives
+**Last commit**: current HEAD (UI global task 24)
+**Last updated**: 2026-05-08T10:07Z
 
 ---
 
@@ -81,6 +81,17 @@
 ---
 
 ## Notes log
+
+2026-05-08T10:07Z [agent: codex] UI global task 24:
+- What I changed: added a tested `LayerChip` primitive with subtitle, PiP,
+  foreground, and background variants plus optional `zN` z-order labels.
+- What works: `pnpm -F @vc/web test -- components/ui/LayerChip.test.tsx`,
+  `pnpm -F @vc/web tokens:audit`, `pnpm -F @vc/web build`, and
+  `pnpm -F @vc/web lint` completed successfully.
+- What is incomplete: existing unrelated warnings remain from Radix dialog descriptions,
+  `<img>` usage, `next lint` deprecation, and a Git line-ending notice for
+  `apps/web/components/ui/index.ts`.
+- Next agent should: continue with UI global task 25 via TDD.
 
 2026-05-08T10:03Z [agent: codex] UI global task 23:
 - What I changed: added tested form primitives for eyebrow-labeled fields,

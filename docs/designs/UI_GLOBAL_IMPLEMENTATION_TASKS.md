@@ -142,7 +142,7 @@ at `1440x1000` first, then again near `950px` width.
       toggle where needed.
     - Labels use eyebrow/caption tokens.
 
-24. `[FE]` Implement `LayerChip`.
+24. [x] `[FE]` Implement `LayerChip`.
     - Variants: subtitles, PiP, foreground, background.
     - Preserve layer semantics and z-order language.
 

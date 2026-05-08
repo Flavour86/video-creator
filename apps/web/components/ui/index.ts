@@ -14,3 +14,6 @@ export type { SurfacePadding, SurfaceProps, SurfaceTone } from "./Surface";
 
 export { Checkbox, Field, NumberInput, SearchInput, Select, TextInput } from "./Form";
 export type { CheckboxProps, FieldProps, NumberInputProps, SearchInputProps, SelectProps, TextInputProps } from "./Form";
+
+export { LayerChip } from "./LayerChip";
+export type { LayerChipProps, LayerChipVariant } from "./LayerChip";
