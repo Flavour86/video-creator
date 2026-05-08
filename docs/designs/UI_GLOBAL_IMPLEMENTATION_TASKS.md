@@ -275,7 +275,7 @@ at `1440x1000` first, then again near `950px` width.
     - Count recent projects with cache metadata, or return a conservative count.
     - Document exact definition in the endpoint schema.
 
-48. `[BE]` Improve recent project metadata.
+48. [x] `[BE]` Improve recent project metadata.
     - Voice duration should be populated when audio metadata exists.
     - Sentence count should reflect transcript/alignment data.
     - Media count should include media folder assets.

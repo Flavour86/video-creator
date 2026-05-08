@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 48 - improve recent project metadata
-**Last commit**: current HEAD (UI global task 47)
-**Last updated**: 2026-05-08T11:54Z
+**Next task**: UI global task 49 - add shared runtime and recent project schemas
+**Last commit**: current HEAD (UI global task 48)
+**Last updated**: 2026-05-08T11:59Z
 
 ---
 
@@ -81,6 +81,19 @@
 ---
 
 ## Notes log
+
+2026-05-08T11:59Z [agent: codex] UI global task 48:
+- What I changed: enriched recent project responses with voice duration,
+  transcript/alignment sentence count, media asset count, and `alignment_state`
+  values of `aligned`, `pending`, or `missing`.
+- What works: `/projects/recent` and `/projects/open` now derive duration from
+  audio metadata, count direct files in `media/`, use current alignment data
+  when the alignment hash matches, and fall back to transcript segmentation
+  when alignment is pending. `pnpm -F @vc/server test`,
+  `pnpm -F @vc/server lint`, and `pnpm -F @vc/server build` completed
+  successfully.
+- What is incomplete: shared frontend/backend schema alignment remains task 49.
+- Next agent should: continue with UI global task 49 via TDD.
 
 2026-05-08T11:54Z [agent: codex] UI global task 47:
 - What I changed: added `/health.cached_projects` and documented the schema

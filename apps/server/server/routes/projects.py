@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import importlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from server.db.projects import list_recent, remove_recent, touch_recent
 from server.domain.project import Project, load_project, save_project
+from server.domain.timing import AlignmentResult
+from server.pipeline.cache import compute_alignment_hash
+from server.pipeline.chunker import segment
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+AlignmentState = Literal["aligned", "pending", "missing"]
 
 
 class CreateProjectRequest(BaseModel):
@@ -32,6 +37,7 @@ class RecentProject(BaseModel):
     voice_duration: str = ""
     sentence_count: int = 0
     media_count: int = 0
+    alignment_state: AlignmentState = "missing"
 
 
 class OpenProjectRequest(BaseModel):
@@ -46,18 +52,118 @@ def _error(status_code: int, code: str, message: str, details: dict[str, str]) -
 
 
 def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") -> RecentProject:
+    project = _load_recent_project(project_dir)
     media_dir = project_dir / "media"
     media_count = (
         len([entry for entry in media_dir.iterdir() if entry.is_file()])
         if media_dir.exists()
         else 0
     )
+    audio_path = _audio_path(project_dir, project)
+    transcript_path = _transcript_path(project_dir, project)
+    transcript_text = _read_text(transcript_path)
+    alignment = _load_current_alignment(project_dir, audio_path, transcript_text)
+    alignment_state = _alignment_state(audio_path, transcript_path, transcript_text, alignment)
     return RecentProject(
         path=str(project_dir),
         name=name,
         last_opened_at=last_opened_at,
+        voice_duration=_voice_duration(audio_path),
+        sentence_count=_sentence_count(transcript_text, alignment, alignment_state),
         media_count=media_count,
+        alignment_state=alignment_state,
     )
+
+
+def _load_recent_project(project_dir: Path) -> Project | None:
+    try:
+        return load_project(project_dir)
+    except (OSError, json.JSONDecodeError, ValidationError):
+        return None
+
+
+def _audio_path(project_dir: Path, project: Project | None) -> Path:
+    if project is None or not project.audio:
+        return project_dir / "voice.wav"
+    return project_dir / str(project.audio)
+
+
+def _transcript_path(project_dir: Path, project: Project | None) -> Path:
+    if project is None:
+        return project_dir / "transcript.txt"
+    return project_dir / str(getattr(project.transcript, "path", "transcript.txt"))
+
+
+def _read_text(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    return path.read_text(encoding="utf-8")
+
+
+def _load_current_alignment(
+    project_dir: Path,
+    audio_path: Path,
+    transcript_text: str | None,
+) -> AlignmentResult | None:
+    alignment_file = project_dir / ".vc" / "alignment.json"
+    if not alignment_file.is_file():
+        return None
+
+    hash_file = project_dir / ".vc" / "alignment.hash"
+    if hash_file.is_file() and audio_path.is_file() and transcript_text is not None:
+        current_hash = compute_alignment_hash(audio_path, transcript_text)
+        if hash_file.read_text(encoding="utf-8").strip() != current_hash:
+            return None
+
+    try:
+        return AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
+    except (OSError, ValidationError, ValueError):
+        return None
+
+
+def _alignment_state(
+    audio_path: Path,
+    transcript_path: Path,
+    transcript_text: str | None,
+    alignment: AlignmentResult | None,
+) -> AlignmentState:
+    if not audio_path.is_file() or not transcript_path.is_file() or transcript_text is None:
+        return "missing"
+    if alignment is not None:
+        return "aligned"
+    return "pending"
+
+
+def _voice_duration(audio_path: Path) -> str:
+    if not audio_path.is_file():
+        return ""
+    try:
+        soundfile = importlib.import_module("soundfile")
+        info = soundfile.info(str(audio_path))
+        duration_s = float(getattr(info, "duration", 0.0))
+    except Exception:
+        return ""
+    if duration_s <= 0:
+        return ""
+    return _format_duration(duration_s)
+
+
+def _format_duration(duration_s: float) -> str:
+    total_seconds = max(0, round(duration_s))
+    minutes, seconds = divmod(total_seconds, 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def _sentence_count(
+    transcript_text: str | None,
+    alignment: AlignmentResult | None,
+    alignment_state: AlignmentState,
+) -> int:
+    if alignment_state == "aligned" and alignment is not None:
+        return len(alignment.sentences)
+    if transcript_text is None:
+        return 0
+    return len(segment(transcript_text))
 
 
 @router.post("", response_model=ProjectResponse)
