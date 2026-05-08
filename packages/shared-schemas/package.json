@@ -6,7 +6,7 @@
   "main": "./ts/index.ts",
   "types": "./ts/index.ts",
   "scripts": {
-    "gen:ts": "json2ts -i project.schema.json -o ts/index.ts",
+    "gen:ts": "json2ts --unreachableDefinitions -i project.schema.json -o ts/index.ts",
     "gen:py": "node ../../scripts/gen-pydantic.mjs"
   },
   "devDependencies": {

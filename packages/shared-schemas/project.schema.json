@@ -43,6 +43,107 @@
     }
   },
   "$defs": {
+    "RuntimeState": {
+      "title": "RuntimeState",
+      "enum": ["ready", "unavailable", "unknown"]
+    },
+    "AlignmentState": {
+      "title": "AlignmentState",
+      "enum": ["aligned", "pending", "missing"]
+    },
+    "SidecarStatus": {
+      "title": "SidecarStatus",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "address", "version"],
+      "properties": {
+        "status": { "$ref": "#/$defs/RuntimeState" },
+        "address": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "VersionedRuntimeStatus": {
+      "title": "VersionedRuntimeStatus",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version"],
+      "properties": {
+        "status": { "$ref": "#/$defs/RuntimeState" },
+        "version": { "type": "string" }
+      }
+    },
+    "CudaStatus": {
+      "title": "CudaStatus",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "available", "version", "gpu_label"],
+      "properties": {
+        "status": { "$ref": "#/$defs/RuntimeState" },
+        "available": { "oneOf": [{ "type": "boolean" }, { "type": "null" }] },
+        "version": { "type": "string" },
+        "gpu_label": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
+      }
+    },
+    "WhisperXStatus": {
+      "title": "WhisperXStatus",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "model"],
+      "properties": {
+        "status": { "$ref": "#/$defs/RuntimeState" },
+        "model": { "type": "string" }
+      }
+    },
+    "RuntimeHealthResponse": {
+      "title": "RuntimeHealthResponse",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "version",
+        "active_renders",
+        "cached_projects",
+        "sidecar",
+        "python",
+        "ffmpeg",
+        "cuda",
+        "whisperx"
+      ],
+      "properties": {
+        "status": { "const": "ok" },
+        "version": { "type": "string" },
+        "active_renders": { "type": "integer", "minimum": 0 },
+        "cached_projects": { "type": "integer", "minimum": 0 },
+        "sidecar": { "$ref": "#/$defs/SidecarStatus" },
+        "python": { "$ref": "#/$defs/VersionedRuntimeStatus" },
+        "ffmpeg": { "$ref": "#/$defs/VersionedRuntimeStatus" },
+        "cuda": { "$ref": "#/$defs/CudaStatus" },
+        "whisperx": { "$ref": "#/$defs/WhisperXStatus" }
+      }
+    },
+    "RecentProject": {
+      "title": "RecentProject",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "name",
+        "last_opened_at",
+        "voice_duration",
+        "sentence_count",
+        "media_count",
+        "alignment_state"
+      ],
+      "properties": {
+        "path": { "type": "string" },
+        "name": { "type": "string" },
+        "last_opened_at": { "type": "string" },
+        "voice_duration": { "type": "string" },
+        "sentence_count": { "type": "integer", "minimum": 0 },
+        "media_count": { "type": "integer", "minimum": 0 },
+        "alignment_state": { "$ref": "#/$defs/AlignmentState" }
+      }
+    },
     "Transcript": {
       "title": "Transcript",
       "type": "object",

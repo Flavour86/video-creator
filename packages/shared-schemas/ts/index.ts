@@ -5,18 +5,43 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "ForegroundItem".
+ */
 export type ForegroundItem = VisualItemBase;
 /**
  * @minItems 2
  * @maxItems 2
+ *
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SentenceRange".
  */
 export type SentenceRange = [number, number];
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "PipItem".
+ */
 export type PipItem = VisualItemBase & {
   pip: PipPlacement;
 };
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "BackgroundItem".
+ */
 export type BackgroundItem = VisualItemBase & {
   crossfade: number;
 };
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RuntimeState".
+ */
+export type RuntimeState = "ready" | "unavailable" | "unknown";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "AlignmentState".
+ */
+export type AlignmentState = "aligned" | "pending" | "missing";
 
 export interface Project {
   version: 1;
@@ -41,31 +66,55 @@ export interface Project {
         [k: string]: unknown;
       }[];
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Transcript".
+ */
 export interface Transcript {
   kind: "plain_text" | "pre_segmented";
   path: string;
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Output".
+ */
 export interface Output {
   preset: "draft" | "final";
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SubtitlesLayer".
+ */
 export interface SubtitlesLayer {
   id: string;
   kind: "sub";
   name: string;
   items: SubtitlesItem[];
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SubtitlesItem".
+ */
 export interface SubtitlesItem {
   id: string;
   auto: true;
   label: string;
   style: "default";
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "ForegroundLayer".
+ */
 export interface ForegroundLayer {
   id: string;
   kind: "fg";
   name: string;
   items: ForegroundItem[];
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "VisualItemBase".
+ */
 export interface VisualItemBase {
   id: string;
   mediaId: string;
@@ -78,20 +127,36 @@ export interface VisualItemBase {
   motion: Motion;
   transitions: Transitions;
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Motion".
+ */
 export interface Motion {
   kind: "none" | "static" | "ken_burns" | "ken_burns_strong" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
   easing: "linear" | "ease_in" | "ease_out" | "ease_in_out";
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Transitions".
+ */
 export interface Transitions {
   in: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
   out: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "PipLayer".
+ */
 export interface PipLayer {
   id: string;
   kind: "pip";
   name: string;
   items: PipItem[];
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "PipPlacement".
+ */
 export interface PipPlacement {
   posX: number;
   posY: number;
@@ -99,16 +164,28 @@ export interface PipPlacement {
   radius: number;
   opacity: number;
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "BackgroundLayer".
+ */
 export interface BackgroundLayer {
   id: string;
   kind: "bg";
   name: string;
   items: BackgroundItem[];
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SubtitlesSettings".
+ */
 export interface SubtitlesSettings {
   burn_in: boolean;
   style: SubtitleStyle;
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SubtitleStyle".
+ */
 export interface SubtitleStyle {
   font: string;
   size: number;
@@ -116,10 +193,77 @@ export interface SubtitleStyle {
   max_chars_per_line: number;
   bg_style: "none" | "shadow" | "box";
 }
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Watermark".
+ */
 export interface Watermark {
   mediaId: string;
   posX: number;
   posY: number;
   scale: number;
   opacity: number;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SidecarStatus".
+ */
+export interface SidecarStatus {
+  status: RuntimeState;
+  address: string;
+  version: string;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "VersionedRuntimeStatus".
+ */
+export interface VersionedRuntimeStatus {
+  status: RuntimeState;
+  version: string;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "CudaStatus".
+ */
+export interface CudaStatus {
+  status: RuntimeState;
+  available: boolean | null;
+  version: string;
+  gpu_label: string | null;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "WhisperXStatus".
+ */
+export interface WhisperXStatus {
+  status: RuntimeState;
+  model: string;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RuntimeHealthResponse".
+ */
+export interface RuntimeHealthResponse {
+  status: "ok";
+  version: string;
+  active_renders: number;
+  cached_projects: number;
+  sidecar: SidecarStatus;
+  python: VersionedRuntimeStatus;
+  ffmpeg: VersionedRuntimeStatus;
+  cuda: CudaStatus;
+  whisperx: WhisperXStatus;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RecentProject".
+ */
+export interface RecentProject {
+  path: string;
+  name: string;
+  last_opened_at: string;
+  voice_duration: string;
+  sentence_count: number;
+  media_count: number;
+  alignment_state: AlignmentState;
 }

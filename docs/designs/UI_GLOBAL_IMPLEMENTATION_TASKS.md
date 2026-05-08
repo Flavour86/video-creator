@@ -281,7 +281,7 @@ at `1440x1000` first, then again near `950px` width.
     - Media count should include media folder assets.
     - Alignment state should be derivable as `aligned`, `pending`, or `missing`.
 
-49. `[SHARED]` Add shared schemas for runtime status and enriched recent project
+49. [x] `[SHARED]` Add shared schemas for runtime status and enriched recent project
     metadata.
     - Keep frontend and backend response types aligned.
 

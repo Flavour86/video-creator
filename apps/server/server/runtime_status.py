@@ -6,60 +6,20 @@ import platform
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Literal
-
-from pydantic import BaseModel, Field
+from typing import Any
 
 from server.db.projects import list_recent
+from server.domain.project import (
+    CudaStatus,
+    RuntimeHealthResponse,
+    VersionedRuntimeStatus,
+    WhisperXStatus,
+)
 from server.pipeline.render import active_render_count
 from server.settings import Settings
 
 SERVER_VERSION = "0.1.0"
-RuntimeState = Literal["ready", "unavailable", "unknown"]
-
-
-class SidecarStatus(BaseModel):
-    status: RuntimeState
-    address: str
-    version: str
-
-
-class VersionedRuntimeStatus(BaseModel):
-    status: RuntimeState
-    version: str
-
-
-class CudaStatus(BaseModel):
-    status: RuntimeState
-    available: bool | None
-    version: str
-    gpu_label: str | None
-
-
-class WhisperXStatus(BaseModel):
-    status: RuntimeState
-    model: str
-
-
-class RuntimeHealthResponse(BaseModel):
-    status: Literal["ok"]
-    version: str
-    active_renders: int = Field(
-        ge=0,
-        description="Number of render jobs currently tracked by the active render manager.",
-    )
-    cached_projects: int = Field(
-        ge=0,
-        description=(
-            "Count of the latest 500 recent projects whose project folder contains a .vc "
-            "cache directory."
-        ),
-    )
-    sidecar: SidecarStatus
-    python: VersionedRuntimeStatus
-    ffmpeg: VersionedRuntimeStatus
-    cuda: CudaStatus
-    whisperx: WhisperXStatus
+__all__ = ["RuntimeHealthResponse", "collect_runtime_health", "count_cached_projects"]
 
 
 def collect_runtime_health(settings: Settings) -> RuntimeHealthResponse:
@@ -68,11 +28,11 @@ def collect_runtime_health(settings: Settings) -> RuntimeHealthResponse:
         version=SERVER_VERSION,
         active_renders=active_render_count(),
         cached_projects=count_cached_projects(),
-        sidecar=SidecarStatus(
-            status="ready",
-            address=f"http://{settings.host}:{settings.port}",
-            version=SERVER_VERSION,
-        ),
+        sidecar={
+            "status": "ready",
+            "address": f"http://{settings.host}:{settings.port}",
+            "version": SERVER_VERSION,
+        },
         python=VersionedRuntimeStatus(status="ready", version=platform.python_version()),
         ffmpeg=_detect_ffmpeg_status(),
         cuda=_detect_cuda_status(),

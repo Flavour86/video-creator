@@ -8,9 +8,9 @@
 
 ## Current focus
 
-**Next task**: UI global task 49 - add shared runtime and recent project schemas
-**Last commit**: current HEAD (UI global task 48)
-**Last updated**: 2026-05-08T11:59Z
+**Next task**: UI global task 50 - add frontend data hooks for runtime status
+**Last commit**: current HEAD (UI global task 49)
+**Last updated**: 2026-05-08T12:08Z
 
 ---
 
@@ -81,6 +81,21 @@
 ---
 
 ## Notes log
+
+2026-05-08T12:08Z [agent: codex] UI global task 49:
+- What I changed: added shared JSON Schema definitions for
+  `RuntimeHealthResponse` and `RecentProject`, regenerated TypeScript and
+  Python models, and wired the backend response models to the generated
+  Pydantic classes.
+- What works: `packages/shared-schemas/ts/index.ts` now exports runtime/recent
+  project types for frontend hooks, and server tests verify backend models use
+  those generated classes. `pnpm gen:types`, `pnpm gen:py`,
+  `pnpm -F @vc/server test`, `pnpm -F @vc/server lint`,
+  `pnpm -F @vc/server build`, and `pnpm -F @vc/web build` completed
+  successfully.
+- What is incomplete: frontend runtime hooks remain task 50.
+- Next agent should: continue with UI global task 50 via TDD and
+  next-best-practices.
 
 2026-05-08T11:59Z [agent: codex] UI global task 48:
 - What I changed: enriched recent project responses with voice duration,

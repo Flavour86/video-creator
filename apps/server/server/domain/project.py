@@ -9,9 +9,27 @@ from typing import Any
 
 _REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(_REPO / "packages" / "shared-schemas" / "py"))
-from schemas import Project  # type: ignore[import-not-found]  # noqa: E402
+from schemas import (  # type: ignore[import-not-found]  # noqa: E402
+    AlignmentState,
+    CudaStatus,
+    Project,
+    RecentProject,
+    RuntimeHealthResponse,
+    VersionedRuntimeStatus,
+    WhisperXStatus,
+)
 
-__all__ = ["Project", "load_project", "save_project"]
+__all__ = [
+    "AlignmentState",
+    "CudaStatus",
+    "Project",
+    "RecentProject",
+    "RuntimeHealthResponse",
+    "VersionedRuntimeStatus",
+    "WhisperXStatus",
+    "load_project",
+    "save_project",
+]
 
 
 def load_project(project_dir: Path) -> Project:

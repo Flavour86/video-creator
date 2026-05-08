@@ -4,20 +4,19 @@ import importlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from server.db.projects import list_recent, remove_recent, touch_recent
-from server.domain.project import Project, load_project, save_project
+from server.domain.project import AlignmentState, Project, RecentProject, load_project, save_project
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-AlignmentState = Literal["aligned", "pending", "missing"]
 
 
 class CreateProjectRequest(BaseModel):
@@ -28,16 +27,6 @@ class CreateProjectRequest(BaseModel):
 class ProjectResponse(BaseModel):
     path: str
     name: str
-
-
-class RecentProject(BaseModel):
-    path: str
-    name: str
-    last_opened_at: str
-    voice_duration: str = ""
-    sentence_count: int = 0
-    media_count: int = 0
-    alignment_state: AlignmentState = "missing"
 
 
 class OpenProjectRequest(BaseModel):
@@ -128,10 +117,10 @@ def _alignment_state(
     alignment: AlignmentResult | None,
 ) -> AlignmentState:
     if not audio_path.is_file() or not transcript_path.is_file() or transcript_text is None:
-        return "missing"
+        return AlignmentState.missing
     if alignment is not None:
-        return "aligned"
-    return "pending"
+        return AlignmentState.aligned
+    return AlignmentState.pending
 
 
 def _voice_duration(audio_path: Path) -> str:
@@ -159,7 +148,7 @@ def _sentence_count(
     alignment: AlignmentResult | None,
     alignment_state: AlignmentState,
 ) -> int:
-    if alignment_state == "aligned" and alignment is not None:
+    if alignment_state == AlignmentState.aligned and alignment is not None:
         return len(alignment.sentences)
     if transcript_text is None:
         return 0
