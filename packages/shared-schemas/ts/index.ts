@@ -69,6 +69,9 @@ export interface ForegroundLayer {
 export interface VisualItemBase {
   id: string;
   mediaId: string;
+  anchor?: "sentences" | "time";
+  from?: string;
+  to?: string;
   sentences: SentenceRange;
   start: number;
   end: number;

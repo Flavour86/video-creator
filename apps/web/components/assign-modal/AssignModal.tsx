@@ -53,6 +53,21 @@ function fmtTime(s: number) {
   return `${m}:${sec}`;
 }
 
+function fmtClock(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const millis = Math.round((seconds - Math.floor(seconds)) * 1000);
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+}
+
+function parseClock(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2}):(\d{2})\.(\d{3})$/.exec(value);
+  if (!match) return null;
+  const [, hours, minutes, seconds, millis] = match;
+  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds) + Number(millis) / 1000;
+}
+
 export function AssignModal({
   open,
   fromSentence,
@@ -68,6 +83,9 @@ export function AssignModal({
   const [selectedMedia, setSelectedMedia] = useState("");
   const [from, setFrom] = useState(fromSentence);
   const [to, setTo] = useState(toSentence);
+  const [anchorMode, setAnchorMode] = useState<"sentences" | "time">("sentences");
+  const [fromTime, setFromTime] = useState("0:00:00.000");
+  const [toTime, setToTime] = useState("0:00:05.000");
   const [compositing, setCompositing] = useState<"fg" | "pip">("fg");
   const [layerId, setLayerId] = useState<string>("new");
   const [motion, setMotion] = useState("ken_burns");
@@ -91,6 +109,9 @@ export function AssignModal({
         | {
             id: string;
             mediaId: string;
+            anchor?: "sentences" | "time";
+            from?: string;
+            to?: string;
             sentences: [number, number];
             motion: { kind: string; easing: string };
             transitions: { in: string; out: string };
@@ -99,6 +120,9 @@ export function AssignModal({
 
       if (item) {
         setSelectedMedia(item.mediaId);
+        setAnchorMode(item.anchor ?? "sentences");
+        setFromTime(item.from ?? fmtClock(fromSentence));
+        setToTime(item.to ?? fmtClock(toSentence));
         setMotion(item.motion.kind);
         setEasing(item.motion.easing);
         setTransIn(item.transitions.in);
@@ -108,6 +132,9 @@ export function AssignModal({
       }
     } else {
       setSelectedMedia("");
+      setAnchorMode("sentences");
+      setFromTime(fmtClock(sentences.find((s) => s.index === fromSentence)?.start_s ?? 0));
+      setToTime(fmtClock(sentences.find((s) => s.index === toSentence)?.end_s ?? 5));
       setMotion("ken_burns");
       setEasing("ease_in_out");
       setTransIn("fade");
@@ -135,11 +162,27 @@ export function AssignModal({
   const fromSentObj = sentences.find((s) => s.index === from);
   const toSentObj = sentences.find((s) => s.index === to);
   const rangePreview =
-    fromSentObj && toSentObj
-      ? `s${from}–s${to} · ${fmtTime(fromSentObj.start_s)}–${fmtTime(toSentObj.end_s)} · ${(toSentObj.end_s - fromSentObj.start_s).toFixed(1)}s`
-      : `s${from}–s${to}`;
+    anchorMode === "time"
+      ? `${fromTime}–${toTime}`
+      : fromSentObj && toSentObj
+        ? `s${from}–s${to} · ${fmtTime(fromSentObj.start_s)}–${fmtTime(toSentObj.end_s)} · ${(toSentObj.end_s - fromSentObj.start_s).toFixed(1)}s`
+        : `s${from}–s${to}`;
 
-  const rangeError = from > to ? '"From" must be ≤ "To"' : null;
+  const parsedFromTime = parseClock(fromTime);
+  const parsedToTime = parseClock(toTime);
+  const audioDuration = Math.max(0, ...sentences.map((sentence) => sentence.end_s));
+  const rangeError =
+    anchorMode === "time"
+      ? parsedFromTime === null || parsedToTime === null
+        ? "Use HH:MM:SS.mmm time format"
+        : parsedFromTime >= parsedToTime
+          ? '"From" must be before "To"'
+          : parsedToTime > audioDuration
+            ? '"To" must be within audio duration'
+          : null
+      : from > to
+        ? '"From" must be ≤ "To"'
+        : null;
 
   function handleConfirm() {
     if (rangeError) return;
@@ -161,8 +204,8 @@ export function AssignModal({
       }
     }
 
-    const startTime = fromSentObj?.start_s ?? 0;
-    const endTime = toSentObj?.end_s ?? 0;
+    const startTime = anchorMode === "time" ? parsedFromTime! : fromSentObj?.start_s ?? 0;
+    const endTime = anchorMode === "time" ? parsedToTime! : toSentObj?.end_s ?? 0;
     const newItemId = editItemId ?? `item-${Date.now()}`;
 
     const newItem = buildFgItem({
@@ -172,6 +215,9 @@ export function AssignModal({
       to,
       startTime,
       endTime,
+      anchor: anchorMode,
+      fromTime: anchorMode === "time" ? fromTime : undefined,
+      toTime: anchorMode === "time" ? toTime : undefined,
       motion,
       easing,
       transIn,
@@ -272,8 +318,26 @@ export function AssignModal({
           {/* ── Sentence range ── */}
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">
-              Sentence range
+              Anchor
             </p>
+            <div className="mb-3 flex gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  checked={anchorMode === "sentences"}
+                  onChange={() => setAnchorMode("sentences")}
+                  type="radio"
+                />
+                Sentences
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  checked={anchorMode === "time"}
+                  onChange={() => setAnchorMode("time")}
+                  type="radio"
+                />
+                Time range
+              </label>
+            </div>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-1 text-sm">
                 From
@@ -296,6 +360,26 @@ export function AssignModal({
                 />
               </label>
             </div>
+            {anchorMode === "time" && (
+              <div className="mt-2 flex items-center gap-3">
+                <label className="flex items-center gap-1 text-sm">
+                  From
+                  <input
+                    className="w-28 rounded border border-neutral-200 px-2 py-1 font-mono text-sm"
+                    onChange={(e) => setFromTime(e.target.value)}
+                    value={fromTime}
+                  />
+                </label>
+                <label className="flex items-center gap-1 text-sm">
+                  To
+                  <input
+                    className="w-28 rounded border border-neutral-200 px-2 py-1 font-mono text-sm"
+                    onChange={(e) => setToTime(e.target.value)}
+                    value={toTime}
+                  />
+                </label>
+              </div>
+            )}
             <p className="mt-1 font-mono text-xs opacity-50">{rangePreview}</p>
           </div>
 

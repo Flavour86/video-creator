@@ -8,6 +8,9 @@ type Transitions = { in: string; out: string };
 type BaseItem = {
   id: string;
   mediaId: string;
+  anchor?: "sentences" | "time";
+  from?: string;
+  to?: string;
   sentences: [number, number];
   start: number;
   end: number;

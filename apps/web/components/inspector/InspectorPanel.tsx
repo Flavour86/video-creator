@@ -8,6 +8,9 @@ type MediaItem = { filename: string; kind: "image" | "video"; thumb_url: string 
 type VisualItem = {
   id: string;
   mediaId: string;
+  anchor?: "sentences" | "time";
+  from?: string;
+  to?: string;
   sentences: [number, number];
   start: number;
   end: number;

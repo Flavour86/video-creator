@@ -24,6 +24,9 @@ export type FgItemParams = {
   to: number;
   startTime: number;
   endTime: number;
+  anchor?: "sentences" | "time";
+  fromTime?: string;
+  toTime?: string;
   motion: string;
   easing: string;
   transIn: string;
@@ -31,7 +34,7 @@ export type FgItemParams = {
 };
 
 export function buildFgItem(p: FgItemParams) {
-  return {
+  const item = {
     id: p.id,
     mediaId: p.mediaId,
     sentences: [p.from, p.to] as [number, number],
@@ -39,5 +42,12 @@ export function buildFgItem(p: FgItemParams) {
     end: p.endTime,
     motion: { kind: p.motion, easing: p.easing },
     transitions: { in: p.transIn, out: p.transOut },
+  };
+  if (p.anchor !== "time") return item;
+  return {
+    ...item,
+    anchor: "time" as const,
+    from: p.fromTime,
+    to: p.toTime,
   };
 }

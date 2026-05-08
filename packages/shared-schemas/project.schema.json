@@ -108,6 +108,9 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "mediaId": { "type": "string", "minLength": 1 },
+        "anchor": { "enum": ["sentences", "time"] },
+        "from": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}:\\d{2}\\.\\d{3}$" },
+        "to": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}:\\d{2}\\.\\d{3}$" },
         "sentences": { "$ref": "#/$defs/SentenceRange" },
         "start": { "type": "number", "minimum": 0 },
         "end": { "type": "number", "minimum": 0 },

@@ -121,4 +121,30 @@ describe("buildFgItem", () => {
       transitions: { in: "fade", out: "cut" },
     });
   });
+
+  it("includes time anchor metadata when requested", () => {
+    const item = buildFgItem({
+      id: "item-1",
+      mediaId: "img.jpg",
+      from: 1,
+      to: 1,
+      startTime: 60,
+      endTime: 75,
+      anchor: "time",
+      fromTime: "0:01:00.000",
+      toTime: "0:01:15.000",
+      motion: "none",
+      easing: "linear",
+      transIn: "cut",
+      transOut: "cut",
+    });
+
+    expect(item).toMatchObject({
+      anchor: "time",
+      from: "0:01:00.000",
+      to: "0:01:15.000",
+      start: 60,
+      end: 75,
+    });
+  });
 });
