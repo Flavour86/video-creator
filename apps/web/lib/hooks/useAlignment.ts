@@ -44,7 +44,7 @@ export function useAlignment(projectPath: string) {
         `/api/server/projects/align?project=${encodeURIComponent(projectPath)}`,
       );
       if (r.ok) {
-        setState({ status: "done", result: (await r.json()) as AlignmentResult });
+        setState({ status: "done", result: normalizeAlignmentResult((await r.json()) as AlignmentResult) });
       }
     } catch {
       // no cached alignment — stay idle
@@ -64,7 +64,7 @@ export function useAlignment(projectPath: string) {
           setState({ status: "error", message: body.error?.message ?? "Alignment failed." });
           return;
         }
-        setState({ status: "done", result: (await r.json()) as AlignmentResult });
+        setState({ status: "done", result: normalizeAlignmentResult((await r.json()) as AlignmentResult) });
       } catch (err) {
         setState({ status: "error", message: String(err) });
       }
@@ -95,4 +95,24 @@ export function useAlignment(projectPath: string) {
   );
 
   return { state, selected, runAlignment, selectSentence };
+}
+
+function normalizeAlignmentResult(result: AlignmentResult): AlignmentResult {
+  const sentences = result.sentences
+    .map((sentence) => ({ ...sentence, text: cleanSentenceText(sentence.text) }))
+    .filter((sentence) => sentence.text.length > 0)
+    .map((sentence, index) => ({ ...sentence, index: index + 1 }));
+
+  return {
+    ...result,
+    sentences,
+  };
+}
+
+function cleanSentenceText(text: string): string {
+  const cleaned = text
+    .replace(/\*\*/g, "")
+    .replace(/^[\s*_`~-]+|[\s*_`~-]+$/g, "")
+    .trim();
+  return /^[-*_]{3,}$/.test(cleaned) ? "" : cleaned;
 }

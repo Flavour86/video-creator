@@ -3,6 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import type { Project } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditorModal } from "@/components/editor/EditorModal";
@@ -15,14 +16,8 @@ import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
 import { Button } from "@/components/ui";
 import { request } from "@/lib/api/server";
-import { formatRelativeTime } from "@/lib/format";
 import { useAlignment } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
-
-type ProjectPayload = {
-  layers?: Layer[];
-  name?: string;
-};
 
 function EditorContent() {
   const t = useTranslations("pages.editor");
@@ -31,6 +26,7 @@ function EditorContent() {
   const projectPath = params.get("project") ?? "";
   const { state: alignmentState } = useAlignment(projectPath);
   const [projectName, setProjectName] = useState("test01");
+  const [audioFile, setAudioFile] = useState("");
   const [layers, setLayers] = useState<Layer[]>([]);
   const [media, setMedia] = useState<EditorMediaItem[]>([]);
   const [selected, setSelected] = useState<EditorSelection>(null);
@@ -44,10 +40,16 @@ function EditorContent() {
   const [query, setQuery] = useState("");
   const [currentMatch, setCurrentMatch] = useState(0);
   const [renderJob, setRenderJob] = useState<EditorRenderJob>({ phase: "", progress: 0, running: false });
+  const [assignRange, setAssignRange] = useState<[number, number]>([1, 1]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const sentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
   const duration = sentences.at(-1)?.end_s ?? 0;
+  const visualClipCount = useMemo(() => {
+    return layers.reduce((total, layer) => total + (layer.kind === "sub" ? 0 : layer.items.length), 0);
+  }, [layers]);
+  const cacheLabel = `cache ${visualClipCount}/${visualClipCount}`;
   const activeRange = useMemo<[number, number]>(() => {
     const active = sentences.find((sentence) => currentTime >= sentence.start_s && currentTime < sentence.end_s);
     return active ? [active.index, active.index] : [sentences[0]?.index ?? 1, sentences[0]?.index ?? 1];
@@ -56,11 +58,12 @@ function EditorContent() {
   const loadProject = useCallback(async (path: string) => {
     try {
       const [project, mediaItems] = await Promise.all([
-        request<ProjectPayload>(`/projects/load?project=${encodeURIComponent(path)}` as `/${string}`),
+        request<Project>(`/projects/load?project=${encodeURIComponent(path)}` as `/${string}`),
         request<EditorMediaItem[]>(`/projects/media?project=${encodeURIComponent(path)}` as `/${string}`),
       ]);
       setProjectName(project.name ?? path.split(/[\\/]/).pop() ?? "Project");
-      setLayers(project.layers ?? []);
+      setAudioFile(project.audio ?? "");
+      setLayers((project.layers ?? []) as Layer[]);
       setMedia(mediaItems);
       const firstSelectable = (project.layers ?? []).flatMap((layer) => layer.kind === "sub" ? [] : layer.items.map((item) => ({ item, layer }))).find(({ item }) => "id" in item);
       if (firstSelectable && "id" in firstSelectable.item) {
@@ -68,6 +71,14 @@ function EditorContent() {
       }
     } catch {
       setProjectName(path.split(/[\\/]/).pop() ?? "Project");
+    }
+  }, []);
+
+  const seekTo = useCallback((time: number) => {
+    const nextTime = Math.max(0, time);
+    setCurrentTime(nextTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = nextTime;
     }
   }, []);
 
@@ -79,16 +90,26 @@ function EditorContent() {
   useEffect(() => {
     const firstSentence = sentences[0];
     if (firstSentence && currentTime === 0) {
-      setCurrentTime(firstSentence.start_s);
+      seekTo(firstSentence.start_s);
     }
-  }, [currentTime, sentences]);
+  }, [currentTime, seekTo, sentences]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) {
+      void audio.play().catch(() => setPlaying(false));
+      return;
+    }
+    audio.pause();
+  }, [playing]);
 
   const seekSentence = useCallback((direction: -1 | 1) => {
     if (sentences.length === 0) return;
     const activeIndex = sentences.findIndex((sentence) => currentTime >= sentence.start_s && currentTime < sentence.end_s);
     const nextIndex = Math.min(sentences.length - 1, Math.max(0, activeIndex + direction));
-    setCurrentTime(sentences[nextIndex]?.start_s ?? 0);
-  }, [currentTime, sentences]);
+    seekTo(sentences[nextIndex]?.start_s ?? 0);
+  }, [currentTime, seekTo, sentences]);
 
   const saveNow = useCallback(async () => {
     setSaving(true);
@@ -102,7 +123,8 @@ function EditorContent() {
   const renderDraft = useCallback(async () => {
     setRenderJob({ phase: "verifying cache", progress: 12, running: true });
     try {
-      await request(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "draft" } });
+      const result = await request<{ render_id: string }>(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "draft" } });
+      setRenderJob({ phase: result.render_id, progress: 100, running: false });
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false });
     }
@@ -135,7 +157,7 @@ function EditorContent() {
       setCurrentMatch(next);
       const match = matches[next];
       if (match) {
-        setCurrentTime(match.start_s);
+        seekTo(match.start_s);
       }
     }
   }
@@ -152,7 +174,7 @@ function EditorContent() {
   return (
     <PageChrome className="grid h-[calc(100vh-44px-40px)] grid-rows-[48px_1fr] overflow-hidden">
       <EditorBar
-        cacheLabel="cache 24/24"
+        cacheLabel={cacheLabel}
         onChangeBackground={() => setModal("background")}
         onOpenFolder={() => void request("/system/reveal", { method: "POST", body: { path: projectPath } })}
         onRenderDraft={renderDraft}
@@ -169,17 +191,18 @@ function EditorContent() {
           activeRange={activeRange}
           currentMatch={currentMatch}
           onAssign={(index) => {
-            setCurrentTime(sentences.find((sentence) => sentence.index === index)?.start_s ?? currentTime);
+            seekTo(sentences.find((sentence) => sentence.index === index)?.start_s ?? currentTime);
+            setAssignRange([index, index]);
             setModal("upload");
           }}
           onQueryChange={(value) => {
             setQuery(value);
             setCurrentMatch(0);
             const first = sentences.find((sentence) => sentence.text.toLowerCase().includes(value.toLowerCase()));
-            if (first && value.trim()) setCurrentTime(first.start_s);
+            if (first && value.trim()) seekTo(first.start_s);
           }}
           onSearchKeyDown={onSearchKeyDown}
-          onSeek={setCurrentTime}
+          onSeek={seekTo}
           query={query}
           renderJob={renderJob}
           searchInputRef={searchInputRef}
@@ -208,11 +231,21 @@ function EditorContent() {
             />
             <LayersPopover layers={layers} onAdd={() => setModal("upload")} open={layersOpen} />
           </div>
-          <Timeline currentTime={currentTime} duration={duration} layers={layers} onSeek={setCurrentTime} onSelect={setSelected} selected={selected} />
+          <Timeline cacheLabel={cacheLabel} currentTime={currentTime} duration={duration} fps={30} layers={layers} onSeek={seekTo} onSelect={setSelected} selected={selected} />
         </main>
-        <Inspector layers={layers} media={media} onOpenBackground={() => setModal("background")} onOpenUpload={() => setModal("upload")} selected={selected} />
+        <Inspector layers={layers} media={media} onOpenBackground={() => setModal("background")} onOpenUpload={() => setModal("upload")} projectPath={projectPath} selected={selected} />
       </div>
-      <EditorModal media={media} modal={modal} onClose={() => setModal(null)} />
+      {audioFile ? (
+        <audio
+          data-testid="editor-audio"
+          onEnded={() => setPlaying(false)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          preload="metadata"
+          ref={audioRef}
+          src={`/api/server/projects/audio?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(audioFile)}`}
+        />
+      ) : null}
+      <EditorModal assignRange={assignRange} media={media} modal={modal} onClose={() => setModal(null)} projectPath={projectPath} />
     </PageChrome>
   );
 }

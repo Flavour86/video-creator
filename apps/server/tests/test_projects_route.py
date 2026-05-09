@@ -196,7 +196,7 @@ async def test_recent_projects_detect_test01_raw_ingredients(
 
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     project_dir = tmp_path / "test01"
-    shutil.copytree(source, project_dir)
+    shutil.copytree(source, project_dir, ignore=shutil.ignore_patterns(".vc", "renders"))
     touch_recent(project_dir, "test01")
 
     transport = httpx.ASGITransport(app=app)

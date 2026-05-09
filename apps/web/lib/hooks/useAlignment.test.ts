@@ -140,3 +140,25 @@ it("loads cached alignment on mount when projectPath is non-empty", async () => 
   const { result } = renderHook(() => useAlignment("some/project"));
   await waitFor(() => expect(result.current.state.status).toBe("done"));
 });
+
+it("strips cached transcript markdown noise before exposing sentences", async () => {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      ...MOCK_RESULT,
+      sentences: [
+        { index: 1, text: "Hello.", start_s: 0, end_s: 1, confidence_avg: 0.9 },
+        { index: 2, text: "---", start_s: 1, end_s: 2, confidence_avg: 0.9 },
+        { index: 3, text: "**World.**", start_s: 2, end_s: 3, confidence_avg: 0.9 },
+      ],
+    }),
+  });
+
+  const { result } = renderHook(() => useAlignment("some/project"));
+  await waitFor(() => expect(result.current.state.status).toBe("done"));
+
+  if (result.current.state.status === "done") {
+    expect(result.current.state.result.sentences.map((sentence) => sentence.text)).toEqual(["Hello.", "World."]);
+    expect(result.current.state.result.sentences.map((sentence) => sentence.index)).toEqual([1, 2]);
+  }
+});

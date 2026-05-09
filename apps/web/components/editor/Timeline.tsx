@@ -5,8 +5,10 @@ import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { EditorSelection } from "./types";
 
 type TimelineProps = {
+  cacheLabel: string;
   currentTime: number;
   duration: number;
+  fps: number;
   layers: Layer[];
   onSeek: (time: number) => void;
   onSelect: (selection: EditorSelection) => void;
@@ -19,10 +21,11 @@ type TimelineItem = {
   end: number;
   id: string;
   mediaId: string;
+  sentences?: [number, number];
   start: number;
 };
 
-export function Timeline({ currentTime, duration, layers, onSeek, onSelect, selected }: TimelineProps) {
+export function Timeline({ cacheLabel, currentTime, duration, fps, layers, onSeek, onSelect, selected }: TimelineProps) {
   const t = useTranslations("pages.editor");
   const sorted = [...layers].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   const clips = layers.reduce((total, layer) => total + layer.items.length, 0);
@@ -32,7 +35,7 @@ export function Timeline({ currentTime, duration, layers, onSeek, onSelect, sele
     <section className="relative flex h-[302px] shrink-0 flex-col border-t border-(--line) bg-(--bg-1)">
       <div className="flex items-center justify-between px-4 py-2 font-mono text-[11px] text-(--text-3)">
         <h3 className="text-[11px] font-semibold">{t("timeline.head")}</h3>
-        <span>30 fps · {clips} clips · cache 24/24</span>
+        <span>{fps} fps · {clips} clips · {cacheLabel}</span>
       </div>
       <button className="relative h-[22px] border-y border-(--line-soft)" onClick={(event) => onSeek(timeFromEvent(event, duration))} type="button">
         {Array.from({ length: 8 }, (_, index) => (
@@ -66,15 +69,15 @@ function TrackRow({ duration, layer, onSelect, selected }: { duration: number; l
       <div className="truncate px-3 font-mono text-[11px] uppercase text-(--text-3)">
         {labelFor(layer)}
       </div>
-      <button className="relative h-full" onClick={() => onSelect(null)} type="button">
+      <div className="relative h-full" onClick={() => onSelect(null)}>
         {layer.items.map((item) => {
           if (!isTimelineItem(item)) return null;
           const left = `${(item.start / Math.max(duration, 1)) * 100}%`;
           const width = `${Math.max(1, ((item.end - item.start) / Math.max(duration, 1)) * 100)}%`;
           const isSelected = selected?.layerId === layer.id && selected.itemId === item.id;
           return (
-            <span
-              aria-label={item.mediaId}
+            <button
+              aria-label={clipLabel(item)}
               className={`absolute top-1/2 h-6 -translate-y-1/2 rounded-sm border text-left font-mono text-[11px] text-(--text) ${clipClass(layer.kind)} ${isSelected ? "outline outline-2 outline-(--amber)" : ""}`}
               key={item.id}
               onClick={(event) => {
@@ -82,12 +85,13 @@ function TrackRow({ duration, layer, onSelect, selected }: { duration: number; l
                 if (layer.kind !== "sub") onSelect({ layerId: layer.id, itemId: item.id });
               }}
               style={{ left, width }}
+              type="button"
             >
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 truncate">{item.mediaId}</span>
-            </span>
+              <span className="absolute left-2 top-1/2 max-w-[calc(100%-16px)] -translate-y-1/2 truncate">{clipLabel(item)}</span>
+            </button>
           );
         })}
-      </button>
+      </div>
     </div>
   );
 }
@@ -100,7 +104,19 @@ function clipClass(kind: Layer["kind"]): string {
 }
 
 function labelFor(layer: Layer): string {
-  return `${layer.name} · ${layer.items.length}`;
+  if (layer.kind === "sub") return `${layer.name} · ${layer.items.length}`;
+  if (layer.kind === "bg") return `${layer.name} · ${layer.items.length} ${layer.items.length === 1 ? "strip" : "strips"}`;
+
+  const zone = layer.name.match(/z\d+/i)?.[0];
+  const kind = layer.kind === "pip" ? "PiP" : "Foreground";
+  return zone ? `${kind} · ${zone}` : `${kind} · ${layer.items.length}`;
+}
+
+function clipLabel(item: TimelineItem): string {
+  if (!item.sentences) return item.mediaId;
+  const [from, to] = item.sentences;
+  const range = from === to ? `s${from}` : `s${from}-s${to}`;
+  return `${item.mediaId} over ${range}`;
 }
 
 function timeFromEvent(event: MouseEvent<HTMLElement>, duration: number): number {

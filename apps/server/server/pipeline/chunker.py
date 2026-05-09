@@ -29,7 +29,7 @@ _EXTRA_ABBREVS = {
 _tokenizer: nltk.tokenize.PunktSentenceTokenizer | None = None
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff]")
 _CJK_SENTENCE_RE = re.compile(r"[^。！？；…\n]+(?:[。！？；…]+|(?=\n|$))")
-_NOISE_LINE_RE = re.compile(r"^\s*(#{1,3}\s|\d+\.\s)")
+_NOISE_LINE_RE = re.compile(r"^\s*(?:#{1,6}\s|\d+\.\s|[-*_]{3,}\s*$)")
 _QUOTE_CHARS = "\"“”「」『』"
 
 
@@ -110,8 +110,9 @@ def _clean_transcript(text: str) -> tuple[str, list[int]]:
     cursor = 0
 
     for line in text.splitlines(keepends=True):
-        body = line.rstrip("\r\n")
-        newline = line[len(body) :]
+        raw_body = line.rstrip("\r\n")
+        newline = line[len(raw_body) :]
+        body = raw_body
         if body.strip() and not _NOISE_LINE_RE.match(body):
             start = len(body) - len(body.lstrip())
             end = len(body.rstrip())
@@ -120,6 +121,8 @@ def _clean_transcript(text: str) -> tuple[str, list[int]]:
             while end > start and body[end - 1] in _QUOTE_CHARS:
                 end -= 1
             for local_index in range(start, end):
+                if body[local_index] == "*":
+                    continue
                 cleaned.append(body[local_index])
                 offsets.append(cursor + local_index)
         if newline and cleaned and cleaned[-1] != "\n":

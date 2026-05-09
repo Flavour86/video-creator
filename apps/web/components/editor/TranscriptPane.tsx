@@ -1,6 +1,6 @@
-import { Search } from "lucide-react";
+import { ImagePlus, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { KeyboardEvent, RefObject, useMemo } from "react";
+import { KeyboardEvent, RefObject, useEffect, useMemo, useRef } from "react";
 import { Kbd, StatusTag } from "@/components/ui";
 import { formatDuration, formatRangeLabel } from "@/lib/format";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
@@ -38,6 +38,12 @@ export function TranscriptPane({
     if (!normalized) return sentences;
     return sentences.filter((sentence) => sentence.text.toLowerCase().includes(normalized) || `s${sentence.index}`.includes(normalized));
   }, [query, sentences]);
+  const activeMatchRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!query.trim()) return;
+    activeMatchRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [currentMatch, query, visibleSentences]);
 
   return (
     <aside className="flex min-h-0 flex-col bg-(--bg-1)">
@@ -69,24 +75,42 @@ export function TranscriptPane({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visibleSentences.map((sentence, index) => {
           const active = sentence.index >= activeRange[0] && sentence.index <= activeRange[1];
+          const currentSearchMatch = query.trim() ? index === currentMatch : false;
           return (
-            <button
-              className={`grid w-full grid-cols-[28px_44px_minmax(0,1fr)] items-start gap-2 border-l-2 px-3 py-2 text-left text-sm leading-snug hover:bg-(--bg-2) ${
-                active ? "border-l-(--amber) bg-(--amber-bg) text-(--text)" : index === currentMatch ? "border-transparent bg-(--amber-bg)" : "border-transparent"
+            <div
+              className={`group grid w-full grid-cols-[minmax(0,1fr)_32px] items-stretch border-l-2 text-sm leading-snug hover:bg-(--bg-2) ${
+                active ? "border-l-(--amber) bg-(--amber-bg) text-(--text)" : currentSearchMatch ? "border-transparent bg-(--amber-bg)" : "border-transparent"
               }`}
               key={sentence.index}
-              onClick={() => onSeek(sentence.start_s)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                onSeek(sentence.start_s);
-                onAssign(sentence.index);
-              }}
-              type="button"
+              ref={currentSearchMatch ? activeMatchRef : undefined}
             >
-              <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">{sentence.index}</span>
-              <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">{formatDuration(sentence.start_s)}</span>
-              <span className="text-(--text-2)">{highlight(sentence.text, query)}</span>
-            </button>
+              <button
+                className="grid w-full grid-cols-[28px_44px_minmax(0,1fr)] items-start gap-2 px-3 py-2 text-left"
+                onClick={() => onSeek(sentence.start_s)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  onSeek(sentence.start_s);
+                  onAssign(sentence.index);
+                }}
+                type="button"
+              >
+                <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">{sentence.index}</span>
+                <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">{formatDuration(sentence.start_s)}</span>
+                <span className="text-(--text-2)">{highlight(sentence.text, query)}</span>
+              </button>
+              <button
+                aria-label={`Assign media to sentence ${sentence.index}`}
+                className="flex items-center justify-center text-(--text-3) opacity-0 hover:text-(--amber) focus-visible:opacity-100 group-hover:opacity-100"
+                onClick={() => {
+                  onSeek(sentence.start_s);
+                  onAssign(sentence.index);
+                }}
+                title={`Assign media to sentence ${sentence.index}`}
+                type="button"
+              >
+                <ImagePlus aria-hidden="true" className="h-4 w-4" />
+              </button>
+            </div>
           );
         })}
       </div>

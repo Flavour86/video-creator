@@ -291,6 +291,8 @@
         "out": "Out",
         "deleteItem": "Delete item",
         "removeBg": "Remove background",
+        "pipPlacement": "PiP placement",
+        "backgroundCycle": "Background cycle",
         "empty": "Select a clip on the timeline to edit it.",
         "emptyHint": "Right-click a sentence to add new media."
       },

@@ -48,6 +48,12 @@ def test_cjk_transcripts_strip_markdown_noise_and_segment_sentences():
     assert all(not s.text.startswith(("#", "1.")) for s in sents)
 
 
+def test_cjk_transcripts_strip_markdown_rules_and_emphasis():
+    sents = segment("第一句。\n---\n**第二句。**\n")
+
+    assert [s.text for s in sents] == ["第一句。", "第二句。"]
+
+
 def test_test01_transcript_segments_into_real_sentences():
     fixture = Path(__file__).resolve().parents[3] / "projects" / "test01" / "transcript.txt"
     if not fixture.is_file():
@@ -57,3 +63,4 @@ def test_test01_transcript_segments_into_real_sentences():
 
     assert len(sents) >= 20
     assert all(not s.text.startswith(("##", "###", "1. ", "2. ", "3. ")) for s in sents)
+    assert all("---" not in s.text and "**" not in s.text for s in sents)
