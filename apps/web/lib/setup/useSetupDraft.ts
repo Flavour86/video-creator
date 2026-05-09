@@ -4,37 +4,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DetectedInputs, SetupAlignmentState, SetupDraft } from "@vc/shared-schemas";
 import { request } from "@/lib/api/server";
 
-export const defaultSetupPath = "E:\\video-projects\\tokyo-essay";
+export const defaultSetupPath = "E:\\claude\\video-creator\\projects\\test01";
 
-const fallbackDetectedInputs: DetectedInputs = {
+const emptyDetectedInputs: DetectedInputs = {
   path: defaultSetupPath,
-  name: "Tokyo Essay",
-  voice: {
-    path: `${defaultSetupPath}\\voice.wav`,
-    duration: 942,
-    sample_rate: 48000,
-    channels: 2,
-    codec: "pcm_s16le",
-    state: "copied",
-  },
-  transcript: {
-    path: `${defaultSetupPath}\\transcript.txt`,
-    sentence_count: 164,
-    state: "parsed",
-  },
+  name: "test01",
+  voice: null,
+  transcript: null,
   alignment: {
     status: "pending",
-    hash: "8a3f2c1df91c44c9a66ff2d83bd91a0d",
+    hash: "",
     device: "cuda · fp16",
     model: "large-v3",
-    audio_duration: 942,
+    audio_duration: 0,
     cache_hit: false,
   },
 };
-
-function isEmptyDefaultInspection(result: DetectedInputs): boolean {
-  return result.path === defaultSetupPath && !result.voice && !result.transcript && !result.alignment.hash;
-}
 
 export type UseSetupDraftState = {
   canContinue: boolean;
@@ -48,23 +33,22 @@ export type UseSetupDraftState = {
 
 export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftState {
   const [path, setPath] = useState(initialPath);
-  const [name, setName] = useState("Tokyo Essay");
+  const [name, setName] = useState("test01");
   const [outputPreset, setOutputPreset] = useState("final");
-  const [detected, setDetected] = useState<DetectedInputs>(fallbackDetectedInputs);
-  const [alignmentStatus, setAlignmentStatus] = useState<SetupAlignmentState>(fallbackDetectedInputs.alignment.status);
+  const [detected, setDetected] = useState<DetectedInputs>({ ...emptyDetectedInputs, path: initialPath });
+  const [alignmentStatus, setAlignmentStatus] = useState<SetupAlignmentState>("pending");
 
   const inspect = useCallback(async () => {
     try {
       const result = await request<DetectedInputs>(`/setup/inspect?path=${encodeURIComponent(path)}` as `/${string}`);
-      const nextDetected = isEmptyDefaultInspection(result) ? fallbackDetectedInputs : result;
-      setDetected(nextDetected);
-      setName(nextDetected.name);
-      setAlignmentStatus(nextDetected.alignment.status);
+      setDetected(result);
+      setName(result.name);
+      setAlignmentStatus(result.alignment.status);
     } catch {
-      setDetected({ ...fallbackDetectedInputs, path });
-      setAlignmentStatus(fallbackDetectedInputs.alignment.status);
+      setDetected({ ...emptyDetectedInputs, path, name });
+      setAlignmentStatus("pending");
     }
-  }, [path]);
+  }, [name, path]);
 
   useEffect(() => {
     void inspect();
@@ -91,15 +75,16 @@ export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftStat
     }
     setAlignmentStatus("running");
     try {
-      await request(`/projects/align?project=${encodeURIComponent(draft.path)}` as `/${string}`, {
+      await request("/setup/scaffold", {
         method: "POST",
+        body: { path: draft.path, name: draft.name, output_preset: draft.output_preset, force: true },
       });
-      setAlignmentStatus("aligned");
+      await request(`/projects/align?project=${encodeURIComponent(draft.path)}` as `/${string}`, { method: "POST" });
       await inspect();
     } catch {
       setAlignmentStatus("failed");
     }
-  }, [detected.transcript, detected.voice, draft.path, inspect]);
+  }, [detected.transcript, detected.voice, draft.name, draft.output_preset, draft.path, inspect]);
 
   return {
     canContinue: alignmentStatus === "aligned",

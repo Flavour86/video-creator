@@ -82,6 +82,7 @@ export default function SetupPage() {
           <p className="mb-(--space-5) text-xs leading-relaxed text-(--text-3)">{t("inputs.body")}</p>
           <div className="grid grid-cols-2 gap-2.5">
             <StatusTile
+              filename={fileName(draft.voice?.path)}
               kind="voice"
               meta={
                 draft.voice
@@ -91,6 +92,7 @@ export default function SetupPage() {
               state={voiceTileState(draft.voice?.state)}
             />
             <StatusTile
+              filename={fileName(draft.transcript?.path)}
               kind="transcript"
               meta={draft.transcript ? t("inputs.transcriptDetected", { count: draft.transcript.sentence_count }) : undefined}
               state={transcriptTileState(draft.transcript?.state)}
@@ -130,4 +132,8 @@ function channelLabel(channels: number): string {
     return "mono";
   }
   return channels === 2 ? "stereo" : `${channels}ch`;
+}
+
+function fileName(path: string | undefined): string | undefined {
+  return path?.split(/[\\/]/).pop();
 }

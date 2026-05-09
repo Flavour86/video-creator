@@ -5,20 +5,21 @@ import { StatusTag, type StatusTagVariant } from "@/components/ui";
 export type StatusTileState = "pending" | "copying" | "detected" | "invalid";
 
 type StatusTileProps = {
+  filename?: string;
   kind: "voice" | "transcript";
   meta?: string;
   state: StatusTileState;
 };
 
-export function StatusTile({ kind, meta, state }: StatusTileProps) {
+export function StatusTile({ filename, kind, meta, state }: StatusTileProps) {
   const t = useTranslations("pages.setup.inputs");
   const Icon = iconFor(kind, state);
-  const filename = kind === "voice" ? "voice.wav" : "transcript.txt";
+  const displayName = filename ?? (kind === "voice" ? "voice.wav" : "transcript.txt");
 
   return (
     <div className={`flex flex-col items-center gap-(--space-3) rounded-(--r-sm) border px-(--space-6) py-(--space-8) text-center transition-[border-color,background] duration-150 ${tileClass(state)}`}>
       <Icon aria-hidden="true" className={`h-(--space-8) w-(--space-8) ${iconClass(state)}`} />
-      <strong className="text-sm font-semibold text-(--text)">{filename}</strong>
+      <strong className="text-sm font-semibold text-(--text)">{displayName}</strong>
       <span className="font-mono text-[11px] text-(--text-3)">{meta ?? t(`${kind}Pending`)}</span>
       <StatusTag variant={tagVariant(state)}>{t(stateLabel(kind, state))}</StatusTag>
     </div>

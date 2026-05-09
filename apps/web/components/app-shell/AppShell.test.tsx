@@ -118,7 +118,7 @@ describe("AppShell", () => {
     const brandCluster = screen.getByTestId("brand-cluster");
     const mark = screen.getByText("VC");
     const productName = screen.getByText("Video Creator");
-    const phase = screen.getByText("phase 1 - local");
+    const phase = screen.getByText("phase 1 · local");
 
     expect(brandCluster.className).toContain("gap-(--space-3)");
     expect(mark.className).toContain("h-7");

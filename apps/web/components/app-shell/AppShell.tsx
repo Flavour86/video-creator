@@ -50,7 +50,7 @@ function DefaultStatusContent() {
         <StatusTag variant="ready">{routeStatus("setupSidecar")}</StatusTag>
         <StatusTag variant="warning">{routeStatus("setupAlignment")}</StatusTag>
         <StatusTag variant="ready">{routeStatus("setupDisk")}</StatusTag>
-        <StatusTag variant="info">{"E:\\video-projects\\tokyo-essay"}</StatusTag>
+        <StatusTag variant="info">{"E:\\claude\\video-creator\\projects\\test01"}</StatusTag>
       </>
     );
   }
@@ -154,6 +154,9 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
   ] as const;
   const themeLabel = globalControls("tooltips.toggleTheme");
   const ThemeIcon = theme === "light" ? Moon : Sun;
+  const projectMetadata = pathname?.startsWith("/setup") || pathname?.startsWith("/editor")
+    ? "test01/project.json"
+    : "tokyo-essay/project.json";
 
   return (
     <div className="min-h-screen bg-(--bg-0) pb-(--space-10) text-(--text)">
@@ -228,7 +231,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
               data-i18n-neutral="true"
               data-testid="shell-technical-metadata"
             >
-              tokyo-essay/project.json
+              {projectMetadata}
             </span>
             <span
               className="vc-type-mono-meta shrink-0 text-(--text-3)"

@@ -49,7 +49,7 @@
         "launcherCuda": "cuda 12.8 ? rtx 5070 ti",
         "launcherNodePython": "node 22.4 ? python 3.11.7",
         "setupSidecar": "sidecar",
-        "setupAlignment": "?????",
+        "setupAlignment": "alignment cached",
         "setupDisk": "?? 412 GB ??"
       }
     }
@@ -221,7 +221,9 @@
           "duration": "????"
         },
         "run": "????",
-        "running": "??? ? {eta}"
+        "running": "??? ? {eta}",
+        "introDynamic": "WhisperX timestamps the provided transcript against <mono></mono>. The text is the reference; ASR never runs.",
+        "hashDynamic": "sha256({voice} + {transcript}) = {hash}"
       },
       "checks": {
         "transcriptReadable": "???? ? {count} ?",
@@ -231,9 +233,86 @@
       }
     },
     "editor": {
-      "title": "编辑器",
+      "title": "Editor",
       "dropHint": "添加图片 / 视频 - jpg png webp mp4 mov webm",
-      "draftActive": "正在渲染草稿..."
+      "draftActive": "正在渲染草稿...",
+      "noProject": "No project open. Go to Launcher and open a project.",
+      "goLauncher": "Open Launcher",
+      "openFolder": "Open project folder",
+      "subtitles": "Subtitles",
+      "changeBg": "Change BG",
+      "changeBgAria": "Add or change background asset",
+      "save": "Save",
+      "saving": "Saving",
+      "renderDraft": "Render Draft",
+      "renderFinal": "Render Final",
+      "drafting": "Drafting · {progress}%",
+      "renderStripDraft": "Rendering draft : {phase}",
+      "searchPlaceholder": "Search transcript… (⌘F)",
+      "transcriptHead": "Transcript · {count} aligned",
+      "resolution": "Resolution",
+      "fitMode": "Fit mode",
+      "fit": "Fit",
+      "actual": "Actual",
+      "layersButton": "Layers · {count}",
+      "timeline": {
+        "head": "TIMELINE"
+      },
+      "transport": {
+        "prev": "Previous sentence",
+        "play": "Play",
+        "pause": "Pause",
+        "next": "Next sentence"
+      },
+      "inspector": {
+        "title": "Inspector",
+        "background": "Background",
+        "change": "CHANGE",
+        "bgHint": "Plays underneath all other layers. When the foreground covers the screen, BG is hidden.",
+        "range": "Range",
+        "from": "From",
+        "to": "To",
+        "stretch": "Stretch",
+        "stretchHint": "drag clip edges in the timeline ↗",
+        "motion": "Motion",
+        "kind": "Kind",
+        "easing": "Easing",
+        "transitions": "Transitions",
+        "in": "In",
+        "out": "Out",
+        "deleteItem": "Delete item",
+        "removeBg": "Remove background",
+        "empty": "Select a clip on the timeline to edit it.",
+        "emptyHint": "Right-click a sentence to add new media."
+      },
+      "layers": {
+        "head": "Layer order · top renders on top",
+        "delete": "Delete layer",
+        "add": "+ Add layer item"
+      },
+      "modals": {
+        "subtitlesTitle": "Subtitles",
+        "subtitlesSubtitle": "Subtitles are auto-generated from the transcript via WhisperX alignment. Style and burn-in below.",
+        "backgroundTitle": "Change background",
+        "backgroundSubtitle": "Choose the background asset that plays beneath all other layers.",
+        "uploadTitle": "Assign media to range",
+        "uploadSubtitle": "Place a media asset over a span of sentences. The timeline is computed automatically.",
+        "close": "Close",
+        "cancel": "Cancel",
+        "apply": "Apply",
+        "addToProject": "Add to project",
+        "background": "Background",
+        "position": "Position",
+        "font": "Font",
+        "maxChars": "Max chars / line",
+        "burnIn": "Burn-in",
+        "previewText": "Subtitle preview over current frame",
+        "asset": "Asset",
+        "from": "From",
+        "to": "To",
+        "compositing": "Compositing",
+        "motion": "Motion"
+      }
     },
     "render": {
       "title": "最终渲染",

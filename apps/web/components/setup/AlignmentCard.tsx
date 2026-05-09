@@ -18,6 +18,8 @@ export function AlignmentCard({ alignment, onRun, transcript, voice }: Alignment
   const canRun = Boolean(voice && transcript && alignment.status !== "running");
   const running = alignment.status === "running";
   const ActionIcon = running ? Loader2 : Play;
+  const voiceFile = fileName(voice?.path) ?? "voice.wav";
+  const transcriptFile = fileName(transcript?.path) ?? "transcript.txt";
 
   return (
     <aside className="rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-7)">
@@ -26,7 +28,9 @@ export function AlignmentCard({ alignment, onRun, transcript, voice }: Alignment
         <StatusTag variant={alignmentVariant(alignment.status)}>{t(`state.${alignment.status}`)}</StatusTag>
       </div>
       <p className="text-xs leading-relaxed text-(--text-3)">
-        {t.rich("intro", { mono: (chunks) => <span className="font-mono text-(--text-2)">{chunks}</span> })}
+        {t.rich("introDynamic", {
+          mono: () => <span className="font-mono text-(--text-2)">{voiceFile}</span>,
+        })}
       </p>
       <div className="mt-(--space-5) flex flex-col gap-2.5 rounded-(--r-sm) border border-(--line) bg-(--bg-1) p-(--space-5)">
         <div className="flex items-center justify-between gap-(--space-4)">
@@ -36,7 +40,7 @@ export function AlignmentCard({ alignment, onRun, transcript, voice }: Alignment
           </StatusTag>
         </div>
         <p className="break-all font-mono text-[10.5px] text-(--text-4)">
-          {t("hash", { hash: truncateHash(alignment.hash, 8) })}
+          {t("hashDynamic", { hash: truncateHash(alignment.hash, 8), transcript: transcriptFile, voice: voiceFile })}
         </p>
         <div className="grid grid-cols-2 gap-x-(--space-8)">
           <KV label={t("kv.device")} value={alignment.device} />
@@ -63,6 +67,10 @@ export function AlignmentCard({ alignment, onRun, transcript, voice }: Alignment
       </ul>
     </aside>
   );
+}
+
+function fileName(path: string | undefined): string | undefined {
+  return path?.split(/[\\/]/).pop();
 }
 
 function KV({ label, value }: { label: string; value: string }) {

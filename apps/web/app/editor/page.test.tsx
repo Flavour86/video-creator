@@ -1,28 +1,14 @@
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { Suspense } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
-
-// Mock all heavy child components
-vi.mock("@/components/preview-player/PreviewPlayer", () => ({
-  PreviewPlayer: () => <div data-testid="preview-player" />,
-}));
-vi.mock("@/components/preview-player/Waveform", () => ({
-  Waveform: () => <div data-testid="waveform" />,
-}));
-vi.mock("@/components/timeline/Timeline", () => ({
-  Timeline: () => <div data-testid="timeline" />,
-}));
-vi.mock("@/components/transcript-panel/TranscriptPanel", () => ({
-  TranscriptPanel: () => <div data-testid="transcript-panel" />,
-}));
-vi.mock("@/components/bg-modal/BgModal", () => ({
-  BgModal: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
+import messages from "@/lib/i18n/messages/en.json";
 
 // Mutable so individual tests can override the "project" param value
 let _projectParam: string | null = null;
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => ({ get: (k: string) => (k === "project" ? _projectParam : null) }),
 }));
 
@@ -34,26 +20,25 @@ beforeEach(() => {
 // EditorPage wraps EditorContent in Suspense internally
 import EditorPage from "./page";
 
-it("shows no-project message when project param is absent", () => {
-  render(
-    <Suspense fallback={null}>
-      <EditorPage />
-    </Suspense>,
+function renderEditor() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <Suspense fallback={null}>
+        <EditorPage />
+      </Suspense>
+    </NextIntlClientProvider>,
   );
+}
+
+it("shows no-project message when project param is absent", () => {
+  renderEditor();
   expect(screen.getByText(/No project open/i)).toBeInTheDocument();
 });
 
 it("shows project path in toolbar when project param is present", () => {
   _projectParam = "E:/projects/demo";
-  render(
-    <Suspense fallback={null}>
-      <EditorPage />
-    </Suspense>,
-  );
+  renderEditor();
   expect(screen.getByText("E:/projects/demo")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /render final/i })).toHaveAttribute(
-    "href",
-    "/render?project=E%3A%2Fprojects%2Fdemo",
-  );
+  expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
 });
