@@ -38,6 +38,15 @@
         "cuda": "cuda {value}",
         "renderCache": "renders {renders} · cache {cache}"
       },
+      "routeStatus": {
+        "launcherSidecar": "sidecar 127.0.0.1:8787",
+        "launcherFfmpeg": "ffmpeg 6.1",
+        "launcherCuda": "cuda 12.8 · rtx 5070 ti",
+        "launcherNodePython": "node 22.4 · python 3.11.7",
+        "setupSidecar": "sidecar",
+        "setupAlignment": "alignment pending",
+        "setupDisk": "disk 412 GB free"
+      },
       "defaults": {
         "alignmentCached": "alignment cached",
         "cacheWarm": "cache {count} warm",
@@ -51,6 +60,7 @@
       "newProject": "New project",
       "createProject": "Create project",
       "createAnotherProject": "Create another project",
+      "change": "Change…",
       "save": "Save",
       "cancel": "Cancel",
       "delete": "Delete",
@@ -114,21 +124,111 @@
     "launcher": {
       "eyebrow": "Local workspace",
       "title": "Recent projects",
+      "openFolder": "Open folder…",
+      "newProject": "New project",
+      "createAnother": "Create another project",
       "legacyTitle": "Video Creator",
       "subtitle": "Recent local projects",
       "voice": "voice",
       "sentences": "sentences",
       "media": "media",
       "opened": "opened",
+      "status": {
+        "aligned": "aligned",
+        "pending": "pending",
+        "missing": "missing"
+      },
+      "runtime": {
+        "title": "Local runtime",
+        "ready": "ready",
+        "node": "Node.js",
+        "python": "Python",
+        "ffmpeg": "ffmpeg",
+        "cuda": "CUDA",
+        "whisperx": "WhisperX"
+      },
+      "metrics": {
+        "activeRenders": "Active renders",
+        "cachedProjects": "Cached projects"
+      },
       "tipsTitle": "Tips",
       "tips": {
+        "title": "Tips",
+        "folder": "Drop a folder anywhere — same project.",
+        "rerecord": "Re-record voice; keep your assignments.",
+        "phase2": "Phase 2 hooks AI gen via Fal / Modal.",
         "dropFolder": "Drop a folder anywhere - same project.",
         "reRecord": "Re-record voice; keep your assignments.",
         "phaseTwo": "Phase 2 hooks AI gen via Fal / Modal."
       }
     },
     "setup": {
-      "title": "Setup"
+      "eyebrow": "New project",
+      "title": "Create project folder",
+      "continueToEditor": "Continue → Editor",
+      "steps": {
+        "folder": "Folder",
+        "voiceTranscript": "Voice + transcript",
+        "voiceTranscriptSub": "two required inputs",
+        "alignment": "Alignment",
+        "alignmentSub": "WhisperX forced align"
+      },
+      "fields": {
+        "projectName": "Project name",
+        "outputPreset": "Output preset"
+      },
+      "presets": {
+        "final": "Final · 1080p · CRF 18",
+        "draft": "Draft · 720p · ultrafast",
+        "vertical": "Vertical · 9:16 · 1080w"
+      },
+      "path": {
+        "willBeCreated": "project.json · media/ · renders/ · .vc/ will be created here"
+      },
+      "inputs": {
+        "title": "Inputs",
+        "body": "Voice and transcript are the only inputs needed up front. Add media later from the Editor — assets are imported the moment you assign them to a sentence.",
+        "voicePending": "Place voice.wav in the project folder",
+        "transcriptPending": "Place transcript.txt in the project folder",
+        "transcriptDetected": "{count} sentences detected",
+        "copied": "copied",
+        "parsed": "parsed",
+        "pending": "pending",
+        "copying": "copying",
+        "invalid": "invalid",
+        "empty": "empty"
+      },
+      "alignment": {
+        "title": "Alignment",
+        "state": {
+          "pending": "pending",
+          "running": "running",
+          "aligned": "aligned",
+          "failed": "failed"
+        },
+        "intro": "WhisperX timestamps the provided transcript against <mono>voice.wav</mono>. The text is the reference; ASR never runs.",
+        "forced": "Forced alignment",
+        "cache": {
+          "miss": "cache miss",
+          "hit": "cache hit",
+          "running": "running"
+        },
+        "hash": "sha256(voice.wav + transcript.txt) = {hash}",
+        "kv": {
+          "device": "device",
+          "model": "model",
+          "estimated": "est. time",
+          "duration": "audio dur"
+        },
+        "run": "Run alignment",
+        "running": "Running · {eta}"
+      },
+      "checks": {
+        "transcriptReadable": "Transcript readable · {count} sentences",
+        "audioValid": "Audio stream valid · {codec} · {sampleRate}",
+        "mediaLater": "Media is added later from the Editor",
+        "cacheTarget": "Cache will write to <mono>.vc/alignment.json</mono>"
+      }
     },
     "editor": {
       "title": "Editor",

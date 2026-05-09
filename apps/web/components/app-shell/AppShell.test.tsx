@@ -305,6 +305,7 @@ describe("AppShell", () => {
   });
 
   test("renders runtime fetch failures in red", () => {
+    mockPathname = "/editor";
     mockRuntimeStatus = null;
     mockRuntimeError = "Runtime status unavailable";
 

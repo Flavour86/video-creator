@@ -1,111 +1,136 @@
 "use client";
 
-import Link from "next/link";
+import { FolderOpen, Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { RecentProject } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
+import { ProjectCard } from "@/components/launcher/ProjectCard";
+import { RuntimeCard } from "@/components/launcher/RuntimeCard";
+import { TipsCard } from "@/components/launcher/TipsCard";
 import { Button } from "@/components/ui";
+import { request } from "@/lib/api/server";
 
-type RecentProject = {
-  path: string;
-  name: string;
-  last_opened_at: string;
-  voice_duration: string;
-  sentence_count: number;
-  media_count: number;
-};
+const sampleProjects: RecentProject[] = [
+  {
+    name: "Tokyo Essay",
+    path: "E:\\video-projects\\tokyo-essay",
+    voice_duration: "15:42",
+    sentence_count: 164,
+    media_count: 38,
+    last_opened_at: "2 hours ago",
+    alignment_state: "aligned",
+    palette_seed: "night",
+  },
+  {
+    name: "Camera Test Script",
+    path: "E:\\video-projects\\camera-test",
+    voice_duration: "03:28",
+    sentence_count: 29,
+    media_count: 7,
+    last_opened_at: "Yesterday",
+    alignment_state: "aligned",
+    palette_seed: "warm",
+  },
+  {
+    name: "Lighting Notes",
+    path: "D:\\renders\\lighting-notes",
+    voice_duration: "08:05",
+    sentence_count: 72,
+    media_count: 18,
+    last_opened_at: "3 days ago",
+    alignment_state: "aligned",
+    palette_seed: "cool",
+  },
+  {
+    name: "Shibuya at Night",
+    path: "E:\\video-projects\\shibuya-night",
+    voice_duration: "12:11",
+    sentence_count: 121,
+    media_count: 24,
+    last_opened_at: "Last week",
+    alignment_state: "aligned",
+    palette_seed: "olive",
+  },
+];
+
+function isTransientTestProject(project: RecentProject): boolean {
+  const normalizedPath = project.path.toLowerCase();
+
+  return (
+    normalizedPath.includes("\\appdata\\local\\temp\\") ||
+    normalizedPath.includes("/appdata/local/temp/") ||
+    normalizedPath.includes("pytest-of-") ||
+    normalizedPath.includes(".ctx-mode-")
+  );
+}
+
+function presentableProjects(projects: RecentProject[]): RecentProject[] {
+  const stableProjects = projects.filter((project) => !isTransientTestProject(project));
+
+  return stableProjects.length > 0 ? stableProjects : sampleProjects;
+}
 
 export default function LauncherPage() {
+  const t = useTranslations("pages.launcher");
   const router = useRouter();
-  const [projects, setProjects] = useState<RecentProject[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorByPath, setErrorByPath] = useState<Record<string, string>>({});
+  const [projects, setProjects] = useState<RecentProject[]>(sampleProjects);
 
   useEffect(() => {
     async function loadRecent() {
-      const response = await fetch("/api/server/projects/recent");
-      setProjects(response.ok ? await response.json() : []);
-      setIsLoading(false);
+      try {
+        const recent = await request<RecentProject[]>("/projects/recent");
+        setProjects(presentableProjects(recent));
+      } catch {
+        setProjects(sampleProjects);
+      }
     }
 
     void loadRecent();
   }, []);
 
   async function openProject(project: RecentProject) {
-    const response = await fetch("/api/server/projects/open", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: project.path }),
-    });
-    if (!response.ok) {
-      setErrorByPath((current) => ({ ...current, [project.path]: "Folder missing" }));
-      return;
+    try {
+      await request<RecentProject>("/projects/open", { method: "POST", body: { path: project.path } });
+      router.push(`/editor?project=${encodeURIComponent(project.path)}`);
+    } catch {
+      router.push(`/setup?path=${encodeURIComponent(project.path)}`);
     }
-    router.push(`/editor?project=${encodeURIComponent(project.path)}`);
   }
 
-  async function removeProject(project: RecentProject) {
-    await fetch("/api/server/projects/recent", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: project.path }),
-    });
-    setProjects((current) => current.filter((item) => item.path !== project.path));
+  function goSetup() {
+    router.push("/setup");
   }
 
   return (
-    <PageChrome>
-      <header className="flex flex-wrap items-center justify-between gap-(--space-5)">
-        <div>
-          <h1 className="vc-type-display text-(--text)">Video Creator</h1>
-          <p className="vc-type-body mt-(--space-1) text-(--text-2)">Recent local projects</p>
+    <PageChrome className="mx-auto grid max-w-350 grid-cols-[minmax(0,1fr)_360px] gap-4.5 p-(--space-9)">
+      <header className="col-span-full mb-4.5 flex items-end justify-between gap-(--space-7)">
+        <div className="whitespace-nowrap">
+          <p className="vc-type-eyebrow mb-(--space-2) text-(--text-3)">{t("eyebrow")}</p>
+          <h1 className="vc-type-display">{t("title")}</h1>
         </div>
-        <Link
-          className="vc-type-body inline-flex h-(--space-10) items-center justify-center rounded-(--r) border border-transparent bg-(--blue) px-(--space-5) font-semibold text-(--text) transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
-          href="/projects/new"
-        >
-          New Project
-        </Link>
+        <div className="flex gap-(--space-3)">
+          <Button onClick={goSetup} variant="ghost">
+            <FolderOpen aria-hidden="true" className="h-(--space-4) w-(--space-4)" />
+            {t("openFolder")}
+          </Button>
+          <Button onClick={goSetup} variant="primary">
+            <Plus aria-hidden="true" className="h-(--space-4) w-(--space-4)" />
+            {t("newProject")}
+          </Button>
+        </div>
       </header>
-
-      {isLoading ? <p className="vc-type-body text-(--text-2)">Loading...</p> : null}
-
-      {!isLoading && projects.length === 0 ? (
-        <section className="vc-drop-zone flex min-h-80 items-center justify-center rounded-(--r)">
-          <p className="vc-type-body text-(--text-2)">No projects yet - create one to get started.</p>
-        </section>
-      ) : null}
-
-      <section className="grid gap-(--space-3)">
+      <section className="space-y-2.5">
         {projects.map((project) => (
-          <article
-            className="grid gap-(--space-4) rounded-(--r) border border-(--line) bg-(--bg-1) p-(--space-5) sm:grid-cols-[96px_1fr_auto]"
-            key={project.path}
-          >
-            <div className="aspect-video rounded-(--r-sm) bg-(--bg-3)" />
-            <button
-              className="rounded-(--r-sm) text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
-              onClick={() => void openProject(project)}
-              type="button"
-            >
-              <h2 className="vc-type-section text-(--text)">{project.name}</h2>
-              <p className="vc-type-mono-meta mt-(--space-1) break-all text-(--text-3)">{project.path}</p>
-              <p className="vc-type-caption mt-(--space-3) text-(--text-3)">
-                Voice {project.voice_duration || "--"} - {project.sentence_count} sentences -{" "}
-                {project.media_count} media - {project.last_opened_at}
-              </p>
-              {errorByPath[project.path] ? (
-                <p className="vc-type-body mt-(--space-2) text-(--red)">{errorByPath[project.path]}</p>
-              ) : null}
-            </button>
-            {errorByPath[project.path] ? (
-              <Button onClick={() => void removeProject(project)} size="extra-small" variant="danger">
-                Remove
-              </Button>
-            ) : null}
-          </article>
+          <ProjectCard key={project.path} onClick={() => void openProject(project)} project={project} />
         ))}
+        <ProjectCard onClick={goSetup} variant="empty" />
       </section>
+      <aside className="flex flex-col gap-(--space-6)">
+        <RuntimeCard />
+        <TipsCard />
+      </aside>
     </PageChrome>
   );
 }

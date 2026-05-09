@@ -42,6 +42,21 @@ export type RuntimeState = "ready" | "unavailable" | "unknown";
  * via the `definition` "AlignmentState".
  */
 export type AlignmentState = "aligned" | "pending" | "missing";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SetupAlignmentState".
+ */
+export type SetupAlignmentState = "pending" | "running" | "aligned" | "failed";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "DetectedVoiceState".
+ */
+export type DetectedVoiceState = "copied" | "copying" | "invalid";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "DetectedTranscriptState".
+ */
+export type DetectedTranscriptState = "parsed" | "empty" | "invalid";
 
 export interface Project {
   version: 1;
@@ -266,4 +281,62 @@ export interface RecentProject {
   sentence_count: number;
   media_count: number;
   alignment_state: AlignmentState;
+  palette_seed: string;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "DetectedVoice".
+ */
+export interface DetectedVoice {
+  path: string;
+  duration: number;
+  sample_rate: number;
+  channels: number;
+  codec: string;
+  state: DetectedVoiceState;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "DetectedTranscript".
+ */
+export interface DetectedTranscript {
+  path: string;
+  sentence_count: number;
+  state: DetectedTranscriptState;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SetupAlignment".
+ */
+export interface SetupAlignment {
+  status: SetupAlignmentState;
+  hash: string;
+  device: string;
+  model: string;
+  audio_duration: number;
+  cache_hit: boolean;
+  error?: string;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "DetectedInputs".
+ */
+export interface DetectedInputs {
+  path: string;
+  name: string;
+  voice: null | DetectedVoice;
+  transcript: null | DetectedTranscript;
+  alignment: SetupAlignment;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SetupDraft".
+ */
+export interface SetupDraft {
+  path: string;
+  name: string;
+  output_preset: string;
+  voice: null | DetectedVoice;
+  transcript: null | DetectedTranscript;
+  alignment: SetupAlignment;
 }

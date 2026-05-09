@@ -51,6 +51,18 @@
       "title": "AlignmentState",
       "enum": ["aligned", "pending", "missing"]
     },
+    "SetupAlignmentState": {
+      "title": "SetupAlignmentState",
+      "enum": ["pending", "running", "aligned", "failed"]
+    },
+    "DetectedVoiceState": {
+      "title": "DetectedVoiceState",
+      "enum": ["copied", "copying", "invalid"]
+    },
+    "DetectedTranscriptState": {
+      "title": "DetectedTranscriptState",
+      "enum": ["parsed", "empty", "invalid"]
+    },
     "SidecarStatus": {
       "title": "SidecarStatus",
       "type": "object",
@@ -132,7 +144,8 @@
         "voice_duration",
         "sentence_count",
         "media_count",
-        "alignment_state"
+        "alignment_state",
+        "palette_seed"
       ],
       "properties": {
         "path": { "type": "string" },
@@ -141,7 +154,75 @@
         "voice_duration": { "type": "string" },
         "sentence_count": { "type": "integer", "minimum": 0 },
         "media_count": { "type": "integer", "minimum": 0 },
-        "alignment_state": { "$ref": "#/$defs/AlignmentState" }
+        "alignment_state": { "$ref": "#/$defs/AlignmentState" },
+        "palette_seed": { "type": "string" }
+      }
+    },
+    "DetectedVoice": {
+      "title": "DetectedVoice",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "duration", "sample_rate", "channels", "codec", "state"],
+      "properties": {
+        "path": { "type": "string" },
+        "duration": { "type": "number", "minimum": 0 },
+        "sample_rate": { "type": "integer", "minimum": 0 },
+        "channels": { "type": "integer", "minimum": 0 },
+        "codec": { "type": "string" },
+        "state": { "$ref": "#/$defs/DetectedVoiceState" }
+      }
+    },
+    "DetectedTranscript": {
+      "title": "DetectedTranscript",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sentence_count", "state"],
+      "properties": {
+        "path": { "type": "string" },
+        "sentence_count": { "type": "integer", "minimum": 0 },
+        "state": { "$ref": "#/$defs/DetectedTranscriptState" }
+      }
+    },
+    "SetupAlignment": {
+      "title": "SetupAlignment",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "hash", "device", "model", "audio_duration", "cache_hit"],
+      "properties": {
+        "status": { "$ref": "#/$defs/SetupAlignmentState" },
+        "hash": { "type": "string" },
+        "device": { "type": "string" },
+        "model": { "type": "string" },
+        "audio_duration": { "type": "number", "minimum": 0 },
+        "cache_hit": { "type": "boolean" },
+        "error": { "type": "string" }
+      }
+    },
+    "DetectedInputs": {
+      "title": "DetectedInputs",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "name", "voice", "transcript", "alignment"],
+      "properties": {
+        "path": { "type": "string" },
+        "name": { "type": "string" },
+        "voice": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedVoice" }] },
+        "transcript": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedTranscript" }] },
+        "alignment": { "$ref": "#/$defs/SetupAlignment" }
+      }
+    },
+    "SetupDraft": {
+      "title": "SetupDraft",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "name", "output_preset", "voice", "transcript", "alignment"],
+      "properties": {
+        "path": { "type": "string" },
+        "name": { "type": "string" },
+        "output_preset": { "type": "string" },
+        "voice": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedVoice" }] },
+        "transcript": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedTranscript" }] },
+        "alignment": { "$ref": "#/$defs/SetupAlignment" }
       }
     },
     "Transcript": {

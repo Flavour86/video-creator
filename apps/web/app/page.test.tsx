@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { dictionaries } from "@/lib/i18n/messages";
 import LauncherPage from "./page";
 
 const push = vi.fn();
@@ -7,6 +9,14 @@ const push = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
+
+function renderLauncher() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={dictionaries.en} timeZone="UTC">
+      <LauncherPage />
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("LauncherPage", () => {
   beforeEach(() => {
@@ -17,17 +27,15 @@ describe("LauncherPage", () => {
     });
   });
 
-  it("renders the title", async () => {
-    render(<LauncherPage />);
-    expect(screen.getByText("Video Creator")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "New Project" }).className).toContain("bg-(--blue)");
-    await waitFor(() => expect(screen.getByText("No projects yet - create one to get started.")).toBeInTheDocument());
-    expect(screen.getByText("No projects yet - create one to get started.").closest("section")?.className).toContain(
-      "vc-drop-zone",
-    );
+  it("renders the launcher head and prototype fallback projects", async () => {
+    renderLauncher();
+    expect(screen.getByRole("heading", { name: "Recent projects" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /New project/ }).className).toContain("bg-(--blue)");
+    await waitFor(() => expect(screen.getByText("Tokyo Essay")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Create another project" })).toBeInTheDocument();
   });
 
-  it("shows recent projects", async () => {
+  it("shows recent projects from the sidecar", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => [
@@ -38,13 +46,16 @@ describe("LauncherPage", () => {
           voice_duration: "",
           sentence_count: 0,
           media_count: 3,
+          alignment_state: "pending",
+          palette_seed: "demo",
         },
       ],
     });
-    render(<LauncherPage />);
+    renderLauncher();
     await waitFor(() => expect(screen.getByText("Demo")).toBeInTheDocument());
-    expect(screen.getByText("Demo").closest("article")?.className).toContain("bg-(--bg-1)");
-    expect(screen.getByText("Demo").closest("article")?.className).toContain("border-(--line)");
-    expect(screen.getByText(/3 media/)).toBeInTheDocument();
+    const card = screen.getByText("Demo").closest("button");
+    expect(card?.className).toContain("bg-(--bg-2)");
+    expect(card).toHaveTextContent("3 media");
+    expect(screen.getByText("pending")).toBeInTheDocument();
   });
 });

@@ -12,6 +12,7 @@ sys.path.insert(0, str(_REPO / "packages" / "shared-schemas" / "py"))
 from schemas import (  # type: ignore[import-not-found]  # noqa: E402
     AlignmentState,
     CudaStatus,
+    DetectedInputs,
     Project,
     RecentProject,
     RuntimeHealthResponse,
@@ -22,6 +23,7 @@ from schemas import (  # type: ignore[import-not-found]  # noqa: E402
 __all__ = [
     "AlignmentState",
     "CudaStatus",
+    "DetectedInputs",
     "Project",
     "RecentProject",
     "RuntimeHealthResponse",

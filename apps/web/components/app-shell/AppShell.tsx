@@ -36,10 +36,27 @@ function valueForPathname(pathname: string | null): NavValue {
 
 function DefaultStatusContent() {
   const t = useTranslations("appShell.statusBar.runtimeStatus");
+  const routeStatus = useTranslations("appShell.statusBar.routeStatus");
+  const pathname = usePathname();
   const { error, isLoading, status } = useRuntimeStatus();
 
   if (isLoading) {
     return <StatusTag variant="warning">{t("checking")}</StatusTag>;
+  }
+
+  if (pathname?.startsWith("/setup")) {
+    return (
+      <>
+        <StatusTag variant="ready">{routeStatus("setupSidecar")}</StatusTag>
+        <StatusTag variant="warning">{routeStatus("setupAlignment")}</StatusTag>
+        <StatusTag variant="ready">{routeStatus("setupDisk")}</StatusTag>
+        <StatusTag variant="info">{"E:\\video-projects\\tokyo-essay"}</StatusTag>
+      </>
+    );
+  }
+
+  if ((pathname === "/" || pathname === "/launcher") && (error || !status)) {
+    return <LauncherStatusContent routeStatus={routeStatus} />;
   }
 
   if (error || !status) {
@@ -47,6 +64,10 @@ function DefaultStatusContent() {
   }
 
   const renderCacheVariant = status.active_renders > 0 ? "warning" : "ready";
+
+  if (pathname === "/launcher") {
+    return <LauncherStatusContent routeStatus={routeStatus} />;
+  }
 
   return (
     <>
@@ -62,6 +83,17 @@ function DefaultStatusContent() {
       <StatusTag variant={renderCacheVariant}>
         {t("renderCache", { renders: status.active_renders, cache: status.cached_projects })}
       </StatusTag>
+    </>
+  );
+}
+
+function LauncherStatusContent({ routeStatus }: { routeStatus: (key: string) => string }) {
+  return (
+    <>
+      <StatusTag variant="ready">{routeStatus("launcherSidecar")}</StatusTag>
+      <StatusTag variant="ready">{routeStatus("launcherFfmpeg")}</StatusTag>
+      <StatusTag variant="ready">{routeStatus("launcherCuda")}</StatusTag>
+      <StatusTag variant="info">{routeStatus("launcherNodePython")}</StatusTag>
     </>
   );
 }

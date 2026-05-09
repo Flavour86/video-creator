@@ -61,6 +61,7 @@ def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") ->
         sentence_count=_sentence_count(transcript_text, alignment, alignment_state),
         media_count=media_count,
         alignment_state=alignment_state,
+        palette_seed=name,
     )
 
 
@@ -200,6 +201,11 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
     )
     touch_recent(project_dir, payload.name)
     return ProjectResponse(path=str(project_dir), name=payload.name)
+
+
+@router.post("/new", response_model=ProjectResponse)
+async def new_project(payload: CreateProjectRequest) -> ProjectResponse | JSONResponse:
+    return await create_project(payload)
 
 
 @router.get("/recent", response_model=list[RecentProject])

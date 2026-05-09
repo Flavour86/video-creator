@@ -42,6 +42,15 @@
         "alignmentCached": "对齐已缓存",
         "cacheWarm": "缓存 {count} 已预热",
         "autosaveAgo": "自动保存 · {seconds} 秒前"
+      },
+      "routeStatus": {
+        "launcherSidecar": "sidecar 127.0.0.1:8787",
+        "launcherFfmpeg": "ffmpeg 6.1",
+        "launcherCuda": "cuda 12.8 ? rtx 5070 ti",
+        "launcherNodePython": "node 22.4 ? python 3.11.7",
+        "setupSidecar": "sidecar",
+        "setupAlignment": "?????",
+        "setupDisk": "?? 412 GB ??"
       }
     }
   },
@@ -62,7 +71,8 @@
       "renderFinal": "渲染最终版",
       "chooseLocalFolder": "选择本地文件夹",
       "assignMedia": "分配媒体",
-      "uploadMedia": "添加媒体"
+      "uploadMedia": "添加媒体",
+      "change": "???"
     },
     "tooltips": {
       "toggleTheme": "切换主题",
@@ -124,11 +134,101 @@
       "tips": {
         "dropFolder": "把文件夹拖到任意位置 - 仍是同一个项目。",
         "reRecord": "重新录制语音；保留已分配内容。",
-        "phaseTwo": "第 2 阶段将通过 Fal / Modal 接入 AI 生成。"
+        "phaseTwo": "第 2 阶段将通过 Fal / Modal 接入 AI 生成。",
+        "title": "??",
+        "folder": "?????????? ? ????????",
+        "rerecord": "???????????????",
+        "phase2": "? 2 ???? Fal / Modal ?? AI ???"
+      },
+      "openFolder": "??????",
+      "newProject": "????",
+      "createAnother": "???????",
+      "status": {
+        "aligned": "???",
+        "pending": "???",
+        "missing": "??"
+      },
+      "runtime": {
+        "title": "?????",
+        "ready": "??",
+        "node": "Node.js",
+        "python": "Python",
+        "ffmpeg": "ffmpeg",
+        "cuda": "CUDA",
+        "whisperx": "WhisperX"
+      },
+      "metrics": {
+        "activeRenders": "????",
+        "cachedProjects": "????"
       }
     },
     "setup": {
-      "title": "设置"
+      "eyebrow": "????",
+      "title": "???????",
+      "continueToEditor": "?? ? ???",
+      "steps": {
+        "folder": "???",
+        "voiceTranscript": "?? + ??",
+        "voiceTranscriptSub": "??????",
+        "alignment": "??",
+        "alignmentSub": "WhisperX ????"
+      },
+      "fields": {
+        "projectName": "????",
+        "outputPreset": "????"
+      },
+      "presets": {
+        "final": "??? ? 1080p ? CRF 18",
+        "draft": "?? ? 720p ? ultrafast",
+        "vertical": "?? ? 9:16 ? 1080w"
+      },
+      "path": {
+        "willBeCreated": "project.json ? media/ ? renders/ ? .vc/ ??????"
+      },
+      "inputs": {
+        "title": "??",
+        "body": "?????????????????????????????????????????",
+        "voicePending": "? voice.wav ???????",
+        "transcriptPending": "? transcript.txt ???????",
+        "copied": "???",
+        "parsed": "???",
+        "pending": "???",
+        "copying": "???",
+        "invalid": "??",
+        "empty": "?",
+        "transcriptDetected": "{count} ????"
+      },
+      "alignment": {
+        "title": "??",
+        "state": {
+          "pending": "???",
+          "running": "???",
+          "aligned": "???",
+          "failed": "??"
+        },
+        "intro": "WhisperX ?? <mono>voice.wav</mono> ????????????????????? ASR?",
+        "forced": "????",
+        "cache": {
+          "miss": "?????",
+          "hit": "????",
+          "running": "???"
+        },
+        "hash": "sha256(voice.wav + transcript.txt) = {hash}",
+        "kv": {
+          "device": "??",
+          "model": "??",
+          "estimated": "????",
+          "duration": "????"
+        },
+        "run": "????",
+        "running": "??? ? {eta}"
+      },
+      "checks": {
+        "transcriptReadable": "???? ? {count} ?",
+        "audioValid": "????? ? {codec} ? {sampleRate}",
+        "mediaLater": "??????????",
+        "cacheTarget": "????? <mono>.vc/alignment.json</mono>"
+      }
     },
     "editor": {
       "title": "编辑器",
