@@ -104,13 +104,15 @@ function EditorContent() {
     try {
       await request(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "draft" } });
     } catch {
-      window.setTimeout(() => setRenderJob({ phase: "composing filtergraph", progress: 43, running: true }), 250);
+      setRenderJob({ phase: "failed", progress: 0, running: false });
     }
   }, [projectPath]);
 
   const renderFinal = useCallback(async () => {
     try {
-      await request(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "final" } });
+      const result = await request<{ render_id: string }>(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "final" } });
+      router.push(`/render?project=${encodeURIComponent(projectPath)}&job=${encodeURIComponent(result.render_id)}`);
+      return;
     } catch {
       // Render screen shows final status.
     }

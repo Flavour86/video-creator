@@ -3,6 +3,17 @@
 @theme inline {
   --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --animate-pulse-amber: pulse-amber 1.4s ease-in-out infinite;
+
+  @keyframes pulse-amber {
+    0%, 100% {
+      box-shadow: 0 0 0 0 var(--amber-bg);
+    }
+
+    50% {
+      box-shadow: 0 0 0 6px transparent;
+    }
+  }
 }
 
 :root {
@@ -21,6 +32,7 @@
   --line: oklch(0.28 0.005 60);
   --line-soft: oklch(0.24 0.004 60);
   --amber: oklch(0.78 0.13 70);
+  --amber-light: oklch(0.85 0.13 80);
   --amber-2: oklch(0.55 0.13 70);
   --amber-bg: oklch(0.78 0.13 70 / 0.12);
   --amber-line: oklch(0.78 0.13 70 / 0.32);

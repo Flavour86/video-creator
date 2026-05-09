@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import secrets
 import subprocess
 import sys
+import threading
 import time
 from contextlib import suppress
 from dataclasses import dataclass
@@ -15,7 +17,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from server.db.renders import insert_render, mark_render_failed, mark_render_finished
+from server.db.renders import insert_render, mark_render_cancelled, mark_render_failed, mark_render_finished
 from server.domain.project import Project, load_project
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
@@ -27,7 +29,7 @@ from server.pipeline.filtergraph import (
     build_compose_command,
     visual_items_bottom_to_top,
 )
-from server.pipeline.render_progress import RenderProgressEvent, RenderStage, publish_progress
+from server.pipeline.render_progress import RenderLogEvent, RenderProgressEvent, RenderStage, publish_log, publish_progress
 from server.pipeline.srt import write_srt
 
 
@@ -44,6 +46,11 @@ class RenderJob:
 class RenderResult(BaseModel):
     render_id: str
     output_path: Path
+
+
+@dataclass
+class _SyncProcessState:
+    proc: subprocess.Popen[str] | None = None
 
 
 class RenderError(Exception):
@@ -146,13 +153,13 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
     except asyncio.CancelledError:
         message = "Render canceled."
         partial_path = _preserve_partial(job.output_path)
-        mark_render_failed(
+        mark_render_cancelled(
             render_id=job.render_id,
             finished_at=datetime.now(UTC),
             message=message,
             output_path=partial_path,
         )
-        await _emit(job.render_id, "error", 0.0, message=message)
+        await _emit(job.render_id, "cancelled", 0.0, message=message)
         if raise_errors:
             raise RenderError(409, "RENDER_CANCELED", message) from None
     except RenderError as exc:
@@ -264,15 +271,20 @@ async def _run_ffmpeg(
     total_s: float,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    proc = await asyncio.create_subprocess_exec(
-        *command,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except NotImplementedError:
+        await _run_ffmpeg_threaded(command, output_path, render_id=render_id, total_s=total_s)
+        return
     if proc.stdout is None or proc.stderr is None:
         raise RenderError(500, "FFMPEG_FAILED", "ffmpeg progress pipes were not available.")
 
-    stderr_task = asyncio.create_task(proc.stderr.read())
+    stderr_lines: list[str] = []
+    stderr_task = asyncio.create_task(_relay_stderr(proc.stderr, render_id, stderr_lines))
     progress: dict[str, str] = {}
     try:
         while True:
@@ -288,7 +300,8 @@ async def _run_ffmpeg(
                 await _emit_ffmpeg_progress(render_id, progress, total_s)
 
         await proc.wait()
-        stderr = await stderr_task
+        with suppress(asyncio.CancelledError):
+            await stderr_task
     except asyncio.CancelledError:
         if proc.returncode is None:
             proc.terminate()
@@ -302,10 +315,92 @@ async def _run_ffmpeg(
             await stderr_task
         raise
     if proc.returncode != 0:
-        detail = stderr.decode(errors="replace").strip()
+        detail = "\n".join(stderr_lines[-20:]).strip()
         raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
     if not output_path.is_file() or output_path.stat().st_size == 0:
         raise RenderError(500, "OUTPUT_MISSING", "ffmpeg did not produce an output file.")
+
+
+async def _run_ffmpeg_threaded(
+    command: list[str],
+    output_path: Path,
+    *,
+    render_id: str,
+    total_s: float,
+) -> None:
+    loop = asyncio.get_running_loop()
+    state = _SyncProcessState()
+    task = asyncio.create_task(
+        asyncio.to_thread(_run_ffmpeg_sync, command, output_path, render_id, total_s, loop, state)
+    )
+    try:
+        await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await asyncio.to_thread(_terminate_sync_process, state.proc)
+        with suppress(Exception):
+            await asyncio.shield(task)
+        raise
+
+
+def _run_ffmpeg_sync(
+    command: list[str],
+    output_path: Path,
+    render_id: str,
+    total_s: float,
+    loop: asyncio.AbstractEventLoop,
+    state: _SyncProcessState,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    state.proc = proc
+    if proc.stdout is None or proc.stderr is None:
+        raise RenderError(500, "FFMPEG_FAILED", "ffmpeg progress pipes were not available.")
+
+    stderr_lines: list[str] = []
+    stderr_thread = threading.Thread(
+        target=_relay_stderr_sync,
+        args=(proc.stderr, render_id, stderr_lines, loop),
+        daemon=True,
+    )
+    stderr_thread.start()
+
+    progress: dict[str, str] = {}
+    try:
+        for raw_line in proc.stdout:
+            line = raw_line.strip()
+            if not line or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            progress[key] = value
+            if key == "progress":
+                _publish_from_thread(loop, _emit_ffmpeg_progress(render_id, progress, total_s))
+        proc.wait()
+    finally:
+        stderr_thread.join(timeout=5)
+
+    if proc.returncode != 0:
+        detail = "\n".join(stderr_lines[-20:]).strip()
+        raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
+    if not output_path.is_file() or output_path.stat().st_size == 0:
+        raise RenderError(500, "OUTPUT_MISSING", "ffmpeg did not produce an output file.")
+
+
+def _terminate_sync_process(proc: subprocess.Popen[str] | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
 
 
 def _with_progress(command: list[str]) -> list[str]:
@@ -335,6 +430,54 @@ async def _emit(
             output_path=output_path,
         )
     )
+
+
+async def _emit_log(render_id: str, line: str) -> None:
+    await publish_log(RenderLogEvent(render_id=render_id, line=line))
+
+
+async def _relay_stderr(
+    stream: asyncio.StreamReader,
+    render_id: str,
+    sink: list[str],
+) -> None:
+    while True:
+        line_bytes = await stream.readline()
+        if not line_bytes:
+            break
+        line = _strip_ansi(line_bytes.decode(errors="replace").rstrip())
+        if not line:
+            continue
+        sink.append(line)
+        if len(sink) > 200:
+            del sink[: len(sink) - 200]
+        await _emit_log(render_id, line)
+
+
+def _relay_stderr_sync(
+    stream: object,
+    render_id: str,
+    sink: list[str],
+    loop: asyncio.AbstractEventLoop,
+) -> None:
+    for raw_line in stream:
+        line = _strip_ansi(str(raw_line).rstrip())
+        if not line:
+            continue
+        sink.append(line)
+        if len(sink) > 200:
+            del sink[: len(sink) - 200]
+        _publish_from_thread(loop, _emit_log(render_id, line))
+
+
+def _publish_from_thread(loop: asyncio.AbstractEventLoop, coro: object) -> None:
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    with suppress(Exception):
+        future.result(timeout=2)
+
+
+def _strip_ansi(value: str) -> str:
+    return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
 
 
 async def _emit_ffmpeg_progress(

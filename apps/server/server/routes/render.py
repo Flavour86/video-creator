@@ -7,7 +7,14 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from server.db.renders import get_render_for_project, list_renders_for_project
+from server.db.renders import (
+    delete_render,
+    delete_renders,
+    get_render,
+    get_render_for_project,
+    list_renders as list_all_renders,
+    list_renders_for_project,
+)
 from server.pipeline import render as render_pipeline
 from server.pipeline.filtergraph import RenderPreset
 from server.pipeline.render import RenderError
@@ -36,6 +43,15 @@ class RenderHistoryResponse(BaseModel):
     file_size: int
 
 
+class RenderCancelRequest(BaseModel):
+    jobId: str | None = None
+    render_id: str | None = None
+
+
+class SystemPathRequest(BaseModel):
+    path: str
+
+
 def _error(status_code: int, code: str, message: str, details: dict[str, str]) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -61,6 +77,74 @@ async def render_project(
         return _error(exc.status_code, exc.code, exc.message, {"project": project})
 
     return RenderResponse(render_id=result.render_id, output_path=str(result.output_path))
+
+
+@router.get("/render/job/{render_id}", response_model=RenderHistoryResponse)
+async def get_render_job(render_id: str) -> RenderHistoryResponse | JSONResponse:
+    row = get_render(render_id)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    return _render_history_response(row)
+
+
+@router.post("/render/cancel", response_model=None)
+async def cancel_render_job(payload: RenderCancelRequest) -> dict[str, bool] | JSONResponse:
+    render_id = payload.jobId or payload.render_id
+    if not render_id:
+        return _error(422, "RENDER_ID_REQUIRED", "Render id is required.", {})
+    canceled = await render_pipeline.cancel_render(render_id)
+    if not canceled:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    return {"ok": True}
+
+
+@router.get("/render/history", response_model=list[RenderHistoryResponse])
+async def list_render_history(
+    include: str = Query("all"),
+    limit: int = Query(50, ge=1, le=500),
+) -> list[RenderHistoryResponse]:
+    rows = list_all_renders(limit=limit, include_excluded=include == "excluded" or include == "all")
+    return [_render_history_response(row) for row in rows]
+
+
+@router.delete("/render/history/{render_id}", response_model=None)
+async def delete_render_history(render_id: str) -> dict[str, bool] | JSONResponse:
+    row = delete_render(render_id)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    _delete_output_file(_resolve_stored_path(str(row["output_path"])))
+    return {"ok": True}
+
+
+@router.delete("/render/history", response_model=None)
+async def purge_render_history() -> dict[str, bool]:
+    for row in delete_renders():
+        _delete_output_file(_resolve_stored_path(str(row["output_path"])))
+    return {"ok": True}
+
+
+@router.post("/system/reveal", response_model=None)
+async def reveal_path(payload: SystemPathRequest) -> dict[str, bool] | JSONResponse:
+    try:
+        path = _safe_workspace_path(payload.path)
+    except ValueError:
+        return _error(403, "PATH_NOT_ALLOWED", "Path is outside the workspace.", {"path": payload.path})
+    if not path.exists():
+        return _error(404, "PATH_NOT_FOUND", "Path not found.", {"path": str(path)})
+    render_pipeline.reveal_in_file_browser(path)
+    return {"ok": True}
+
+
+@router.post("/system/open", response_model=None)
+async def open_path(payload: SystemPathRequest) -> dict[str, bool] | JSONResponse:
+    try:
+        path = _safe_workspace_path(payload.path)
+    except ValueError:
+        return _error(403, "PATH_NOT_ALLOWED", "Path is outside the workspace.", {"path": payload.path})
+    if not path.is_file():
+        return _error(404, "PATH_NOT_FOUND", "File not found.", {"path": str(path)})
+    render_pipeline.open_in_default_player(path)
+    return {"ok": True}
 
 
 @router.get("/projects/renders", response_model=list[RenderHistoryResponse])
@@ -103,7 +187,7 @@ async def reveal_render(
     if row is None:
         return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
 
-    output_path = Path(str(row["output_path"]))
+    output_path = _resolve_stored_path(str(row["output_path"]))
     if not output_path.is_file():
         return _error(
             404,
@@ -136,7 +220,7 @@ async def play_render(
             {"render_id": render_id},
         )
 
-    output_path = Path(str(row["output_path"]))
+    output_path = _resolve_stored_path(str(row["output_path"]))
     if not output_path.is_file():
         return _error(
             404,
@@ -150,7 +234,7 @@ async def play_render(
 
 
 def _render_history_response(row: dict[str, str | float | None]) -> RenderHistoryResponse:
-    output_path = Path(str(row["output_path"]))
+    output_path = _resolve_stored_path(str(row["output_path"]))
     return RenderHistoryResponse(
         id=str(row["id"]),
         output_path=str(output_path),
@@ -162,3 +246,34 @@ def _render_history_response(row: dict[str, str | float | None]) -> RenderHistor
         message=str(row["message"]) if row["message"] is not None else None,
         file_size=output_path.stat().st_size if output_path.is_file() else 0,
     )
+
+
+def _workspace_root() -> Path:
+    cwd = Path.cwd().resolve()
+    if cwd.name == "server" and cwd.parent.name == "apps":
+        return cwd.parent.parent
+    return cwd
+
+
+def _resolve_stored_path(raw_path: str) -> Path:
+    path = Path(raw_path)
+    if path.is_absolute():
+        return path
+    return _workspace_root() / path
+
+
+def _safe_workspace_path(raw_path: str) -> Path:
+    path = _resolve_stored_path(raw_path).resolve()
+    root = _workspace_root()
+    if path != root and root not in path.parents:
+        raise ValueError(raw_path)
+    return path
+
+
+def _delete_output_file(path: Path) -> None:
+    try:
+        safe_path = _safe_workspace_path(str(path))
+    except ValueError:
+        return
+    if safe_path.is_file():
+        safe_path.unlink()

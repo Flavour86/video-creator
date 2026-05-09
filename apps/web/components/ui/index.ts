@@ -17,3 +17,5 @@ export type { CheckboxProps, FieldProps, NumberInputProps, SearchInputProps, Sel
 
 export { LayerChip } from "./LayerChip";
 export type { LayerChipProps, LayerChipVariant } from "./LayerChip";
+export { ConfirmDialog } from "./ConfirmDialog";
+export type { ConfirmDialogProps } from "./ConfirmDialog";

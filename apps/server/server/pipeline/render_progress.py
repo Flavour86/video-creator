@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-RenderStage = Literal["cache_warm", "compose", "muxing", "done", "error"]
+RenderStage = Literal["cache_warm", "compose", "muxing", "done", "error", "cancelled"]
 
 
 class RenderProgressEvent(BaseModel):
@@ -22,8 +22,16 @@ class RenderProgressEvent(BaseModel):
     output_path: str | None = None
 
 
+class RenderLogEvent(BaseModel):
+    type: Literal["log"] = "log"
+    render_id: str
+    line: str
+
+
+RenderEvent = RenderProgressEvent | RenderLogEvent
+
 _latest: dict[str, RenderProgressEvent] = {}
-_subscribers: dict[str, set[asyncio.Queue[RenderProgressEvent]]] = {}
+_subscribers: dict[str, set[asyncio.Queue[RenderEvent]]] = {}
 
 
 async def publish_progress(event: RenderProgressEvent) -> None:
@@ -32,8 +40,13 @@ async def publish_progress(event: RenderProgressEvent) -> None:
         queue.put_nowait(event)
 
 
-async def subscribe_progress(render_id: str) -> AsyncIterator[RenderProgressEvent]:
-    queue: asyncio.Queue[RenderProgressEvent] = asyncio.Queue()
+async def publish_log(event: RenderLogEvent) -> None:
+    for queue in list(_subscribers.get(event.render_id, set())):
+        queue.put_nowait(event)
+
+
+async def subscribe_progress(render_id: str) -> AsyncIterator[RenderEvent]:
+    queue: asyncio.Queue[RenderEvent] = asyncio.Queue()
     latest = _latest.get(render_id)
     if latest is not None:
         queue.put_nowait(latest)

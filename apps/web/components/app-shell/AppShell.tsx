@@ -154,7 +154,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
   ] as const;
   const themeLabel = globalControls("tooltips.toggleTheme");
   const ThemeIcon = theme === "light" ? Moon : Sun;
-  const projectMetadata = pathname?.startsWith("/setup") || pathname?.startsWith("/editor")
+  const projectMetadata = pathname?.startsWith("/setup") || pathname?.startsWith("/editor") || pathname?.startsWith("/render")
     ? "test01/project.json"
     : "tokyo-essay/project.json";
 
@@ -169,10 +169,13 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
             >
               {t("brand.mark")}
             </span>
-            <span className="vc-type-body font-bold text-(--text)">{t("brand.productName")}</span>
-            <span className="vc-type-caption text-(--text-3)">{t("brand.phaseLabel")}</span>
+            <span className="vc-type-body hidden font-bold text-(--text) lg:inline">{t("brand.productName")}</span>
+            <span className="vc-type-caption hidden text-(--text-3) xl:inline">{t("brand.phaseLabel")}</span>
           </div>
-          <nav aria-label={t("controls.globalNavLabel")} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <nav
+            aria-label={t("controls.globalNavLabel")}
+            className="absolute left-[72px] right-[94px] top-1/2 -translate-y-1/2 overflow-x-auto lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:overflow-visible"
+          >
             <SegmentedControl
               ariaLabel={t("controls.primaryNavigationLabel")}
               items={localizedNavItems}
@@ -188,7 +191,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-(--space-2)" data-testid="shell-right-controls">
             <IconButton
-              className="h-8 w-8 rounded-(--r-sm)"
+              className="hidden h-8 w-8 rounded-(--r-sm) sm:grid"
               icon={ThemeIcon}
               label={themeLabel}
               onClick={toggleTheme}
@@ -210,7 +213,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
         aria-label={t("statusBar.ariaLabel")}
         className="fixed bottom-0 left-0 right-0 z-40 h-(--space-10) border-t border-(--line) bg-(--bg-1)"
       >
-        <div className="grid h-full grid-cols-3 items-center px-(--space-4)">
+        <div className="grid h-full grid-cols-[auto_minmax(0,1fr)] items-center px-(--space-4) sm:grid-cols-3">
           <div
             aria-label={t("statusBar.command")}
             className="flex min-w-0 items-center gap-(--space-2) rounded-(--r-sm) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
@@ -220,7 +223,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
             <span className="vc-type-caption text-(--text-3)">{t("statusBar.command")}</span>
           </div>
           <div
-            className="flex min-w-0 items-center justify-center gap-(--space-2) overflow-hidden"
+            className="hidden min-w-0 items-center justify-center gap-(--space-2) overflow-hidden sm:flex"
             data-testid="status-center"
           >
             {statusContent ?? <DefaultStatusContent />}

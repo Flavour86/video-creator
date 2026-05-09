@@ -315,9 +315,109 @@
       }
     },
     "render": {
-      "title": "Final Render",
-      "renderReady": "Render ready",
-      "renderFailed": "Render failed"
+      "noProject": "No project open. Go to Launcher and open a project.",
+      "goLauncher": "Open Launcher",
+      "idleFilename": "no-render.mp4",
+      "idleSpecs": "No active render",
+      "backToEditor": "Back to editor",
+      "cancel": "Cancel render",
+      "revealOutput": "Reveal in Explorer",
+      "retry": "Retry render",
+      "startAgain": "Start again",
+      "errorHint": "Check the ffmpeg log and render history for details.",
+      "eyebrow": {
+        "final": "Final render",
+        "draft": "Draft render",
+        "idle": "Render"
+      },
+      "title": {
+        "idle": "No render in progress",
+        "verifying": "Verifying alignment cache",
+        "prerender": "Pre-rendering clips",
+        "subtitles": "Building subtitles",
+        "composing": "Composing {resolution} MP4",
+        "muxing": "Muxing {resolution} MP4",
+        "done": "Final render ready",
+        "doneDraft": "Draft render ready",
+        "error": "Render failed",
+        "cancelled": "Render cancelled"
+      },
+      "tag": {
+        "preparing": "preparing",
+        "composing": "composing",
+        "muxing": "muxing",
+        "done": "done",
+        "failed": "failed",
+        "cancelled": "cancelled"
+      },
+      "stats": {
+        "complete": "complete",
+        "encodeSpeed": "encode speed",
+        "eta": "eta",
+        "framesWritten": "frames written"
+      },
+      "stage": {
+        "verifyAlignment": "Verify alignment cache",
+        "prerender": "Pre-render cached clips",
+        "subtitles": "Build subtitles.srt",
+        "compose": "Compose filtergraph",
+        "mux": "Mux MP4 with +faststart",
+        "history": "Append render history",
+        "running": "running...",
+        "queued": "queued",
+        "failedAt": "failed"
+      },
+      "log": {
+        "head": "ffmpeg log",
+        "meta": "tail · live",
+        "metaPaused": "tail · paused ↘",
+        "metaFinished": "tail · finished",
+        "metaStopped": "tail · stopped",
+        "metaCancelled": "tail · cancelled",
+        "resume": "Resume tail"
+      },
+      "out": {
+        "head": "Output",
+        "file": "file",
+        "resolution": "resolution",
+        "framerate": "framerate",
+        "video": "video",
+        "audio": "audio",
+        "color": "color",
+        "estSize": "est. size",
+        "size": "size"
+      },
+      "history": {
+        "head": "Render history",
+        "empty": "No renders yet.",
+        "delete": "Delete",
+        "reveal": "Reveal",
+        "cancel": "Cancel",
+        "deleteTitle": "Delete this render?",
+        "deleteBody": "The file and its history entry will be removed. Cached clips are kept.",
+        "settings": {
+          "label": "History settings",
+          "keepCancelled": "Keep cancelled",
+          "maxEntries": "Max entries",
+          "purgeAll": "Purge all",
+          "purgeTitle": "Purge render history?",
+          "purgeBody": "All render history rows and output files will be removed.",
+          "cancel": "Cancel"
+        }
+      },
+      "after": {
+        "head": "After render",
+        "reveal": "Reveal in Explorer",
+        "playLocally": "Play locally",
+        "uploadYouTube": "Upload to YouTube",
+        "hint": "Available when render completes."
+      },
+      "cancelConfirm": {
+        "title": "Cancel this render?",
+        "body": "The partial output will be marked excluded and ffmpeg will be stopped. Cached clips are preserved.",
+        "keep": "Keep rendering",
+        "confirm": "Cancel render"
+      }
     },
     "tokens": {
       "eyebrow": "Design Tokens",
