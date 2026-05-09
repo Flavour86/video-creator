@@ -18,7 +18,7 @@ export function AlignmentCard({ alignment, onRun, transcript, voice }: Alignment
   const canRun = Boolean(voice && transcript && alignment.status !== "running");
   const running = alignment.status === "running";
   const ActionIcon = running ? Loader2 : Play;
-  const voiceFile = fileName(voice?.path) ?? "voice.wav";
+  const voiceFile = fileName(voice?.path) ?? t("voiceFile");
   const transcriptFile = fileName(transcript?.path) ?? "transcript.txt";
 
   return (
@@ -46,7 +46,7 @@ export function AlignmentCard({ alignment, onRun, transcript, voice }: Alignment
           <KV label={t("kv.device")} value={alignment.device} />
           <KV label={t("kv.model")} value={alignment.model} />
           <KV label={t("kv.estimated")} value="~52s" />
-          <KV label={t("kv.duration")} value={formatDuration(alignment.audio_duration)} />
+          <KV label={t("kv.duration")} value={voice ? formatDuration(alignment.audio_duration) : t("kv.pending")} />
         </div>
         <Button className="w-full" disabled={!canRun} onClick={onRun} variant="render">
           <ActionIcon aria-hidden="true" className={`h-(--space-4) w-(--space-4) ${running ? "animate-spin" : ""}`} />
@@ -55,10 +55,10 @@ export function AlignmentCard({ alignment, onRun, transcript, voice }: Alignment
       </div>
       <ul className="mt-(--space-6) m-0 flex list-none flex-col gap-(--space-3) p-0">
         <CheckItem tone={transcript ? "ready" : "warning"}>
-          {checks("transcriptReadable", { count: transcript?.sentence_count ?? 0 })}
+          {transcript ? checks("transcriptReadable", { count: transcript.sentence_count }) : checks("transcriptMissing")}
         </CheckItem>
         <CheckItem tone={voice ? "ready" : "warning"}>
-          {checks("audioValid", { codec: voice?.codec ?? "unknown", sampleRate: voice ? `${voice.sample_rate / 1000}kHz` : "--" })}
+          {voice ? checks("audioValid", { codec: voice.codec, sampleRate: `${voice.sample_rate / 1000}kHz` }) : checks("audioMissing")}
         </CheckItem>
         <CheckItem tone="info">{checks("mediaLater")}</CheckItem>
         <CheckItem tone="info">

@@ -33,6 +33,7 @@ def collect_runtime_health(settings: Settings) -> RuntimeHealthResponse:
             "address": f"http://{settings.host}:{settings.port}",
             "version": SERVER_VERSION,
         },
+        node=_detect_node_status(),
         python=VersionedRuntimeStatus(status="ready", version=platform.python_version()),
         ffmpeg=_detect_ffmpeg_status(),
         cuda=_detect_cuda_status(),
@@ -42,6 +43,25 @@ def collect_runtime_health(settings: Settings) -> RuntimeHealthResponse:
 
 def count_cached_projects() -> int:
     return sum(1 for row in list_recent(limit=500) if (Path(row["path"]) / ".vc").is_dir())
+
+
+def _detect_node_status() -> VersionedRuntimeStatus:
+    try:
+        result = subprocess.run(
+            ["node", "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return VersionedRuntimeStatus(status="unavailable", version="unknown")
+
+    if result.returncode != 0:
+        return VersionedRuntimeStatus(status="unavailable", version="unknown")
+
+    version = result.stdout.strip().removeprefix("v")
+    return VersionedRuntimeStatus(status="ready", version=version or "unknown")
 
 
 def _detect_ffmpeg_status() -> VersionedRuntimeStatus:

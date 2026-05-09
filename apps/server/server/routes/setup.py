@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -307,6 +308,16 @@ def _detect_voice(path: Path) -> DetectedVoice | None:
 
         info = soundfile.info(str(path))
     except Exception:
+        probed = _ffprobe_audio(path)
+        if probed is not None:
+            return DetectedVoice(
+                path=str(path),
+                duration=probed["duration"],
+                sample_rate=int(probed["sample_rate"]),
+                channels=int(probed["channels"]),
+                codec=probed["codec"],
+                state="copied",
+            )
         return DetectedVoice(
             path=str(path),
             duration=0,
@@ -324,6 +335,50 @@ def _detect_voice(path: Path) -> DetectedVoice | None:
         codec=str(getattr(info, "subtype", "unknown")).lower(),
         state="copied",
     )
+
+
+def _ffprobe_audio(path: Path) -> dict[str, float | int | str] | None:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_name,sample_rate,channels",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                str(path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    try:
+        payload = json.loads(result.stdout)
+        stream = next(
+            (item for item in payload.get("streams", []) if item.get("codec_name")),
+            None,
+        )
+        if stream is None:
+            return None
+        return {
+            "duration": float(payload.get("format", {}).get("duration", 0.0)),
+            "sample_rate": int(stream.get("sample_rate", 0)),
+            "channels": int(stream.get("channels", 0)),
+            "codec": str(stream.get("codec_name", "unknown")).lower(),
+        }
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
 
 
 def _detect_transcript(path: Path) -> DetectedTranscript | None:

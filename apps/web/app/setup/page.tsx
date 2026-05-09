@@ -1,8 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useRef } from "react";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AlignmentCard } from "@/components/setup/AlignmentCard";
 import { PathCard } from "@/components/setup/PathCard";
@@ -15,11 +15,20 @@ import { defaultSetupPath, useSetupDraft } from "@/lib/setup/useSetupDraft";
 const outputPresets = ["final", "draft", "vertical"] as const;
 
 export default function SetupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SetupScreen />
+    </Suspense>
+  );
+}
+
+function SetupScreen() {
   const t = useTranslations("pages.setup");
   const common = useTranslations("globalControls.buttons");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const inputsRef = useRef<HTMLDivElement>(null);
-  const setup = useSetupDraft(defaultSetupPath);
+  const setup = useSetupDraft(searchParams.get("path") ?? defaultSetupPath);
   const { draft } = setup;
 
   return (

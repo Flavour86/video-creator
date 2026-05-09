@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -42,12 +43,6 @@ def _error(status_code: int, code: str, message: str, details: dict[str, str]) -
 
 def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") -> RecentProject:
     project = _load_recent_project(project_dir)
-    media_dir = project_dir / "media"
-    media_count = (
-        len([entry for entry in media_dir.iterdir() if entry.is_file()])
-        if media_dir.exists()
-        else 0
-    )
     audio_path = _audio_path(project_dir, project)
     transcript_path = _transcript_path(project_dir, project)
     transcript_text = _read_text(transcript_path)
@@ -59,7 +54,7 @@ def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") ->
         last_opened_at=last_opened_at,
         voice_duration=_voice_duration(audio_path),
         sentence_count=_sentence_count(transcript_text, alignment, alignment_state),
-        media_count=media_count,
+        media_count=_media_count(project_dir),
         alignment_state=alignment_state,
         palette_seed=name,
     )
@@ -73,9 +68,12 @@ def _load_recent_project(project_dir: Path) -> Project | None:
 
 
 def _audio_path(project_dir: Path, project: Project | None) -> Path:
-    if project is None or not project.audio:
-        return project_dir / "voice.wav"
-    return project_dir / str(project.audio)
+    if project is not None and project.audio:
+        configured = project_dir / str(project.audio)
+        if configured.is_file():
+            return configured
+    found = _find_voice_file(project_dir)
+    return found if found is not None else project_dir / "voice.wav"
 
 
 def _transcript_path(project_dir: Path, project: Project | None) -> Path:
@@ -88,6 +86,30 @@ def _read_text(path: Path) -> str | None:
     if not path.is_file():
         return None
     return path.read_text(encoding="utf-8")
+
+
+def _find_voice_file(project_dir: Path) -> Path | None:
+    for name in ("voice.wav", "voice.mp3", "voice.m4a", "voice.flac", "voice.ogg"):
+        path = project_dir / name
+        if path.is_file():
+            return path
+    return None
+
+
+def _media_count(project_dir: Path) -> int:
+    if not project_dir.exists():
+        return 0
+    media_dir = project_dir / "media"
+    if media_dir.exists():
+        return len([entry for entry in media_dir.iterdir() if entry.is_file()])
+    return len(
+        [
+            entry
+            for entry in project_dir.iterdir()
+            if entry.is_file()
+            and entry.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".webm"}
+        ]
+    )
 
 
 def _load_current_alignment(
@@ -132,10 +154,38 @@ def _voice_duration(audio_path: Path) -> str:
         info = soundfile.info(str(audio_path))
         duration_s = float(getattr(info, "duration", 0.0))
     except Exception:
-        return ""
+        duration_s = _ffprobe_duration(audio_path)
     if duration_s <= 0:
         return ""
     return _format_duration(duration_s)
+
+
+def _ffprobe_duration(audio_path: Path) -> float:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(audio_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return 0.0
+    if result.returncode != 0:
+        return 0.0
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return 0.0
 
 
 def _format_duration(duration_s: float) -> str:

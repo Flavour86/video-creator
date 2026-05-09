@@ -24,4 +24,22 @@ describe("StatusTile", () => {
       expectedClass,
     );
   });
+
+  test("describes accepted voice file types instead of hardcoding wav", () => {
+    renderTile("pending");
+
+    expect(screen.getByText("voice file")).toBeInTheDocument();
+    expect(screen.getByText("Place voice.wav, voice.mp3, voice.m4a, voice.flac or voice.ogg in the project folder")).toBeInTheDocument();
+  });
+
+  test("uses the detected voice filename", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={dictionaries.en} timeZone="UTC">
+        <StatusTile filename="voice.mp3" kind="voice" meta="04:00 · 48kHz · stereo" state="detected" />
+      </NextIntlClientProvider>,
+    );
+
+    expect(screen.getByText("voice.mp3")).toBeInTheDocument();
+    expect(screen.getByText("04:00 · 48kHz · stereo")).toBeInTheDocument();
+  });
 });

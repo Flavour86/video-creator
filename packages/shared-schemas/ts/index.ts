@@ -264,6 +264,7 @@ export interface RuntimeHealthResponse {
   active_renders: number;
   cached_projects: number;
   sidecar: SidecarStatus;
+  node: VersionedRuntimeStatus;
   python: VersionedRuntimeStatus;
   ffmpeg: VersionedRuntimeStatus;
   cuda: CudaStatus;

@@ -37,6 +37,8 @@ async def test_health_returns_runtime_dependency_status() -> None:
     }
     assert body["python"]["status"] == "ready"
     assert body["python"]["version"].startswith("3.11")
+    assert set(body["node"]) == {"status", "version"}
+    assert body["node"]["status"] in {"ready", "unavailable", "unknown"}
     assert set(body["ffmpeg"]) == {"status", "version"}
     assert body["ffmpeg"]["status"] in {"ready", "unavailable", "unknown"}
     assert set(body["cuda"]) == {"status", "available", "version", "gpu_label"}
@@ -56,6 +58,11 @@ async def test_health_returns_stable_json_when_runtime_dependencies_are_unavaila
     monkeypatch.setattr(
         runtime_status,
         "_detect_ffmpeg_status",
+        lambda: VersionedRuntimeStatus(status="unavailable", version="unknown"),
+    )
+    monkeypatch.setattr(
+        runtime_status,
+        "_detect_node_status",
         lambda: VersionedRuntimeStatus(status="unavailable", version="unknown"),
     )
     monkeypatch.setattr(
@@ -95,6 +102,7 @@ async def test_health_returns_stable_json_when_runtime_dependencies_are_unavaila
             "status": "ready",
             "version": body["python"]["version"],
         },
+        "node": {"status": "unavailable", "version": "unknown"},
         "ffmpeg": {"status": "unavailable", "version": "unknown"},
         "cuda": {
             "status": "unavailable",

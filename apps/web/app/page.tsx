@@ -12,49 +12,6 @@ import { TipsCard } from "@/components/launcher/TipsCard";
 import { Button } from "@/components/ui";
 import { request } from "@/lib/api/server";
 
-const sampleProjects: RecentProject[] = [
-  {
-    name: "Tokyo Essay",
-    path: "E:\\video-projects\\tokyo-essay",
-    voice_duration: "15:42",
-    sentence_count: 164,
-    media_count: 38,
-    last_opened_at: "2 hours ago",
-    alignment_state: "aligned",
-    palette_seed: "night",
-  },
-  {
-    name: "Camera Test Script",
-    path: "E:\\video-projects\\camera-test",
-    voice_duration: "03:28",
-    sentence_count: 29,
-    media_count: 7,
-    last_opened_at: "Yesterday",
-    alignment_state: "aligned",
-    palette_seed: "warm",
-  },
-  {
-    name: "Lighting Notes",
-    path: "D:\\renders\\lighting-notes",
-    voice_duration: "08:05",
-    sentence_count: 72,
-    media_count: 18,
-    last_opened_at: "3 days ago",
-    alignment_state: "aligned",
-    palette_seed: "cool",
-  },
-  {
-    name: "Shibuya at Night",
-    path: "E:\\video-projects\\shibuya-night",
-    voice_duration: "12:11",
-    sentence_count: 121,
-    media_count: 24,
-    last_opened_at: "Last week",
-    alignment_state: "aligned",
-    palette_seed: "olive",
-  },
-];
-
 function isTransientTestProject(project: RecentProject): boolean {
   const normalizedPath = project.path.toLowerCase();
 
@@ -67,23 +24,24 @@ function isTransientTestProject(project: RecentProject): boolean {
 }
 
 function presentableProjects(projects: RecentProject[]): RecentProject[] {
-  const stableProjects = projects.filter((project) => !isTransientTestProject(project));
-
-  return stableProjects.length > 0 ? stableProjects : sampleProjects;
+  return projects.filter((project) => !isTransientTestProject(project));
 }
 
 export default function LauncherPage() {
   const t = useTranslations("pages.launcher");
   const router = useRouter();
-  const [projects, setProjects] = useState<RecentProject[]>(sampleProjects);
+  const [projects, setProjects] = useState<RecentProject[]>([]);
+  const [recentError, setRecentError] = useState(false);
 
   useEffect(() => {
     async function loadRecent() {
       try {
         const recent = await request<RecentProject[]>("/projects/recent");
         setProjects(presentableProjects(recent));
+        setRecentError(false);
       } catch {
-        setProjects(sampleProjects);
+        setProjects([]);
+        setRecentError(true);
       }
     }
 
@@ -122,6 +80,11 @@ export default function LauncherPage() {
         </div>
       </header>
       <section className="space-y-2.5">
+        {recentError ? (
+          <div className="rounded-(--r) border border-(--amber-line) bg-(--amber-bg) px-(--space-5) py-(--space-4) text-xs text-(--text-2)">
+            {t("recentUnavailable")}
+          </div>
+        ) : null}
         {projects.map((project) => (
           <ProjectCard key={project.path} onClick={() => void openProject(project)} project={project} />
         ))}

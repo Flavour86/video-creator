@@ -32,10 +32,14 @@ export type UseSetupDraftState = {
 };
 
 export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftState {
-  const [path, setPath] = useState(initialPath);
-  const [name, setName] = useState("test01");
+  const [path, setPathState] = useState(initialPath);
+  const [name, setName] = useState(() => nameFromPath(initialPath));
   const [outputPreset, setOutputPreset] = useState("final");
-  const [detected, setDetected] = useState<DetectedInputs>({ ...emptyDetectedInputs, path: initialPath });
+  const [detected, setDetected] = useState<DetectedInputs>({
+    ...emptyDetectedInputs,
+    path: initialPath,
+    name: nameFromPath(initialPath),
+  });
   const [alignmentStatus, setAlignmentStatus] = useState<SetupAlignmentState>("pending");
 
   const inspect = useCallback(async () => {
@@ -45,7 +49,7 @@ export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftStat
       setName(result.name);
       setAlignmentStatus(result.alignment.status);
     } catch {
-      setDetected({ ...emptyDetectedInputs, path, name });
+      setDetected({ ...emptyDetectedInputs, path, name: name || nameFromPath(path) });
       setAlignmentStatus("pending");
     }
   }, [name, path]);
@@ -93,6 +97,13 @@ export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftStat
     runAlignment,
     setName,
     setOutputPreset,
-    setPath,
+    setPath: (nextPath: string) => {
+      setPathState(nextPath);
+      setName(nameFromPath(nextPath));
+    },
   };
+}
+
+function nameFromPath(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? "Untitled Project";
 }

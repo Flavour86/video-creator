@@ -7,37 +7,38 @@ import { StatusTag } from "@/components/ui";
 import { useRuntimeStatus } from "@/lib/hooks/useRuntimeStatus";
 import { MetricGrid } from "./MetricGrid";
 
-const sampleRuntime: RuntimeHealthResponse = {
-  status: "ok",
-  version: "0.1.0",
-  active_renders: 0,
-  cached_projects: 4,
-  sidecar: { status: "ready", address: "http://127.0.0.1:8787", version: "0.1.0" },
-  python: { status: "ready", version: "3.11.7" },
-  ffmpeg: { status: "ready", version: "6.1.1 · libx264" },
-  cuda: { status: "ready", available: true, version: "12.8", gpu_label: "sm_120" },
-  whisperx: { status: "ready", model: "large-v3" },
+type RuntimeRowData = {
+  label: string;
+  state: RuntimeState;
+  value: string;
 };
+
+type RuntimeLabels = Record<"node" | "python" | "ffmpeg" | "cuda" | "whisperx", string>;
 
 export function RuntimeCard() {
   const t = useTranslations("pages.launcher.runtime");
   const metrics = useTranslations("pages.launcher.metrics");
-  const { status } = useRuntimeStatus();
-  const runtime = status?.python && status.ffmpeg && status.cuda && status.whisperx ? status : sampleRuntime;
-
-  const rows = [
-    { label: t("node"), state: "ready" as RuntimeState, value: "22.4.1" },
-    { label: t("python"), state: runtime.python.status, value: runtime.python.version },
-    { label: t("ffmpeg"), state: runtime.ffmpeg.status, value: runtime.ffmpeg.version },
-    { label: t("cuda"), state: runtime.cuda.status, value: cudaValue(runtime) },
-    { label: t("whisperx"), state: runtime.whisperx.status, value: runtime.whisperx.model },
-  ];
+  const { error, isLoading, status } = useRuntimeStatus();
+  const unavailable = t("unavailable");
+  const unknown = t("unknown");
+  const runtime = status && !error ? status : null;
+  const labels: RuntimeLabels = {
+    node: t("node"),
+    python: t("python"),
+    ffmpeg: t("ffmpeg"),
+    cuda: t("cuda"),
+    whisperx: t("whisperx"),
+  };
+  const rows: RuntimeRowData[] = runtime
+    ? runtimeRows(runtime, labels, unavailable, unknown)
+    : unavailableRows(labels, unavailable);
+  const headerLabel = isLoading ? t("checking") : runtime ? t("ready") : unavailable;
 
   return (
     <section className="rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-7)">
       <div className="mb-(--space-4) flex items-center justify-between gap-(--space-4)">
         <h3 className="vc-type-eyebrow text-(--text-2)">{t("title")}</h3>
-        <StatusTag variant="ready">{t("ready")}</StatusTag>
+        <StatusTag variant={runtime ? "ready" : "warning"}>{headerLabel}</StatusTag>
       </div>
       <div>
         {rows.map((row, index) => (
@@ -45,17 +46,55 @@ export function RuntimeCard() {
         ))}
       </div>
       <MetricGrid
-        activeRenders={runtime.active_renders}
-        cachedProjects={runtime.cached_projects}
+        activeRenders={status?.active_renders ?? 0}
+        cachedProjects={status?.cached_projects ?? 0}
         labels={{ activeRenders: metrics("activeRenders"), cachedProjects: metrics("cachedProjects") }}
       />
     </section>
   );
 }
 
-function RuntimeRow({ index, label, state, value }: { index: number; label: string; state: RuntimeState; value: string }) {
-  const stateClass =
-    state === "ready" ? "text-(--green)" : state === "unknown" ? "text-(--amber)" : "text-(--red)";
+function runtimeRows(
+  runtime: RuntimeHealthResponse,
+  labels: RuntimeLabels,
+  unavailable: string,
+  unknown: string,
+): RuntimeRowData[] {
+  return [
+    {
+      label: labels.node,
+      state: runtime.node.status,
+      value: versionValue(runtime.node.status, runtime.node.version, unavailable, unknown),
+    },
+    {
+      label: labels.python,
+      state: runtime.python.status,
+      value: versionValue(runtime.python.status, runtime.python.version, unavailable, unknown),
+    },
+    {
+      label: labels.ffmpeg,
+      state: runtime.ffmpeg.status,
+      value: versionValue(runtime.ffmpeg.status, runtime.ffmpeg.version, unavailable, unknown),
+    },
+    { label: labels.cuda, state: runtime.cuda.status, value: cudaValue(runtime, unavailable, unknown) },
+    {
+      label: labels.whisperx,
+      state: runtime.whisperx.status,
+      value: runtime.whisperx.status === "ready" ? runtime.whisperx.model : unavailable,
+    },
+  ];
+}
+
+function unavailableRows(labels: RuntimeLabels, unavailable: string): RuntimeRowData[] {
+  return Object.values(labels).map((label) => ({
+    label,
+    state: "unavailable",
+    value: unavailable,
+  }));
+}
+
+function RuntimeRow({ index, label, state, value }: RuntimeRowData & { index: number }) {
+  const stateClass = state === "ready" ? "text-(--green)" : "text-(--amber)";
 
   return (
     <div
@@ -70,7 +109,17 @@ function RuntimeRow({ index, label, state, value }: { index: number; label: stri
   );
 }
 
-function cudaValue(runtime: RuntimeHealthResponse): string {
+function versionValue(state: RuntimeState, version: string, unavailable: string, unknown: string): string {
+  if (state === "ready" && version !== "unknown") {
+    return version;
+  }
+  return state === "unknown" ? unknown : unavailable;
+}
+
+function cudaValue(runtime: RuntimeHealthResponse, unavailable: string, unknown: string): string {
+  if (runtime.cuda.status !== "ready") {
+    return versionValue(runtime.cuda.status, runtime.cuda.version, unavailable, unknown);
+  }
   const values = [runtime.cuda.version, runtime.cuda.gpu_label].filter((value): value is string => Boolean(value));
-  return values.length > 0 ? values.join(" · ") : "unknown";
+  return values.length > 0 ? values.join(" · ") : unknown;
 }

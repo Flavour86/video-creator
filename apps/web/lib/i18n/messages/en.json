@@ -127,6 +127,7 @@
       "openFolder": "Open folder…",
       "newProject": "New project",
       "createAnother": "Create another project",
+      "recentUnavailable": "Recent projects unavailable",
       "legacyTitle": "Video Creator",
       "subtitle": "Recent local projects",
       "voice": "voice",
@@ -141,6 +142,9 @@
       "runtime": {
         "title": "Local runtime",
         "ready": "ready",
+        "checking": "checking",
+        "unavailable": "unavailable",
+        "unknown": "unknown",
         "node": "Node.js",
         "python": "Python",
         "ffmpeg": "ffmpeg",
@@ -188,7 +192,8 @@
       "inputs": {
         "title": "Inputs",
         "body": "Voice and transcript are the only inputs needed up front. Add media later from the Editor — assets are imported the moment you assign them to a sentence.",
-        "voicePending": "Place voice.wav in the project folder",
+        "voiceFile": "voice file",
+        "voicePending": "Place voice.wav, voice.mp3, voice.m4a, voice.flac or voice.ogg in the project folder",
         "transcriptPending": "Place transcript.txt in the project folder",
         "transcriptDetected": "{count} sentences detected",
         "copied": "copied",
@@ -218,16 +223,20 @@
           "device": "device",
           "model": "model",
           "estimated": "est. time",
-          "duration": "audio dur"
+          "duration": "audio dur",
+          "pending": "pending"
         },
         "run": "Run alignment",
         "running": "Running · {eta}",
         "introDynamic": "WhisperX timestamps the provided transcript against <mono></mono>. The text is the reference; ASR never runs.",
-        "hashDynamic": "sha256({voice} + {transcript}) = {hash}"
+        "hashDynamic": "sha256({voice} + {transcript}) = {hash}",
+        "voiceFile": "voice file"
       },
       "checks": {
         "transcriptReadable": "Transcript readable · {count} sentences",
+        "transcriptMissing": "Transcript not detected yet",
         "audioValid": "Audio stream valid · {codec} · {sampleRate}",
+        "audioMissing": "Audio file not detected yet",
         "mediaLater": "Media is added later from the Editor",
         "cacheTarget": "Cache will write to <mono>.vc/alignment.json</mono>"
       }

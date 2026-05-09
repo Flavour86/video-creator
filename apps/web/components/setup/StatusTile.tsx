@@ -14,7 +14,7 @@ type StatusTileProps = {
 export function StatusTile({ filename, kind, meta, state }: StatusTileProps) {
   const t = useTranslations("pages.setup.inputs");
   const Icon = iconFor(kind, state);
-  const displayName = filename ?? (kind === "voice" ? "voice.wav" : "transcript.txt");
+  const displayName = filename ?? (kind === "voice" ? t("voiceFile") : "transcript.txt");
 
   return (
     <div className={`flex flex-col items-center gap-(--space-3) rounded-(--r-sm) border px-(--space-6) py-(--space-8) text-center transition-[border-color,background] duration-150 ${tileClass(state)}`}>

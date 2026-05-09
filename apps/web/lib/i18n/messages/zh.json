@@ -143,6 +143,7 @@
       "openFolder": "??????",
       "newProject": "????",
       "createAnother": "???????",
+      "recentUnavailable": "Recent projects unavailable",
       "status": {
         "aligned": "???",
         "pending": "???",
@@ -151,6 +152,9 @@
       "runtime": {
         "title": "?????",
         "ready": "??",
+        "checking": "checking",
+        "unavailable": "unavailable",
+        "unknown": "unknown",
         "node": "Node.js",
         "python": "Python",
         "ffmpeg": "ffmpeg",
@@ -188,7 +192,8 @@
       "inputs": {
         "title": "??",
         "body": "?????????????????????????????????????????",
-        "voicePending": "? voice.wav ???????",
+        "voiceFile": "voice file",
+        "voicePending": "Place voice.wav, voice.mp3, voice.m4a, voice.flac or voice.ogg in the project folder",
         "transcriptPending": "? transcript.txt ???????",
         "copied": "???",
         "parsed": "???",
@@ -218,16 +223,20 @@
           "device": "??",
           "model": "??",
           "estimated": "????",
-          "duration": "????"
+          "duration": "????",
+          "pending": "pending"
         },
         "run": "????",
         "running": "??? ? {eta}",
         "introDynamic": "WhisperX timestamps the provided transcript against <mono></mono>. The text is the reference; ASR never runs.",
-        "hashDynamic": "sha256({voice} + {transcript}) = {hash}"
+        "hashDynamic": "sha256({voice} + {transcript}) = {hash}",
+        "voiceFile": "voice file"
       },
       "checks": {
         "transcriptReadable": "???? ? {count} ?",
+        "transcriptMissing": "Transcript not detected yet",
         "audioValid": "????? ? {codec} ? {sampleRate}",
+        "audioMissing": "Audio file not detected yet",
         "mediaLater": "??????????",
         "cacheTarget": "????? <mono>.vc/alignment.json</mono>"
       }

@@ -50,4 +50,13 @@ describe("useSetupDraft", () => {
     const { result } = renderHook(() => useSetupDraft());
     await waitFor(() => expect(result.current.canContinue).toBe(true));
   });
+
+  test("uses the selected folder basename while inspection is unavailable", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false });
+
+    const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\existing-video"));
+
+    await waitFor(() => expect(result.current.draft.path).toBe("E:\\video-projects\\existing-video"));
+    expect(result.current.draft.name).toBe("existing-video");
+  });
 });

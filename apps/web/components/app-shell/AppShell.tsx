@@ -45,12 +45,15 @@ function DefaultStatusContent() {
   }
 
   if (pathname?.startsWith("/setup")) {
+    if (error || !status) {
+      return <StatusTag variant="error">{t("fetchFailed")}</StatusTag>;
+    }
+
     return (
       <>
-        <StatusTag variant="ready">{routeStatus("setupSidecar")}</StatusTag>
-        <StatusTag variant="warning">{routeStatus("setupAlignment")}</StatusTag>
-        <StatusTag variant="ready">{routeStatus("setupDisk")}</StatusTag>
-        <StatusTag variant="info">{"E:\\claude\\video-creator\\projects\\test01"}</StatusTag>
+        <StatusTag variant={variantForRuntimeState(status.sidecar.status)}>
+          {t("sidecar", { value: sidecarValue(status, (state) => t(state)) })}
+        </StatusTag>
       </>
     );
   }

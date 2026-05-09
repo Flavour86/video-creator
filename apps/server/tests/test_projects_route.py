@@ -1,4 +1,5 @@
 import json
+import shutil
 import struct
 import wave
 from pathlib import Path
@@ -121,6 +122,27 @@ async def test_recent_projects_include_voice_transcript_media_metadata(
 
 
 @pytest.mark.asyncio
+async def test_recent_projects_keep_missing_paths_as_missing_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    missing = tmp_path / "missing"
+    touch_recent(missing, "Missing")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects/recent")
+
+    assert response.status_code == 200
+    project = response.json()[0]
+    assert project["voice_duration"] == ""
+    assert project["sentence_count"] == 0
+    assert project["media_count"] == 0
+    assert project["alignment_state"] == "missing"
+
+
+@pytest.mark.asyncio
 async def test_recent_projects_use_current_alignment_metadata(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -161,3 +183,29 @@ async def test_recent_projects_use_current_alignment_metadata(
     project = response.json()[0]
     assert project["sentence_count"] == 1
     assert project["alignment_state"] == "aligned"
+
+
+@pytest.mark.asyncio
+async def test_recent_projects_detect_test01_raw_ingredients(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = Path(__file__).resolve().parents[3] / "projects" / "test01"
+    if not source.is_dir():
+        pytest.skip("projects/test01 fixture is not available in this checkout")
+
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "test01"
+    shutil.copytree(source, project_dir)
+    touch_recent(project_dir, "test01")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects/recent")
+
+    assert response.status_code == 200
+    project = response.json()[0]
+    assert project["voice_duration"]
+    assert project["sentence_count"] >= 20
+    assert project["media_count"] == 5
+    assert project["alignment_state"] == "pending"

@@ -34,6 +34,7 @@ function readyRuntimeStatus(): RuntimeHealthResponse {
     active_renders: 0,
     cached_projects: 4,
     sidecar: { status: "ready", address: "http://127.0.0.1:8787", version: "0.1.0" },
+    node: { status: "ready", version: "22.4.1" },
     python: { status: "ready", version: "3.11.9" },
     ffmpeg: { status: "ready", version: "6.1.1" },
     cuda: { status: "ready", available: true, version: "12.8", gpu_label: "NVIDIA RTX" },

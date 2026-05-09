@@ -35,4 +35,28 @@ describe("AlignmentCard", () => {
     renderCard(status);
     expect(screen.getAllByText(status)[0]?.className).toContain(expectedClass);
   });
+
+  test("does not show fake zero-count checks before inputs are detected", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={dictionaries.en} timeZone="UTC">
+        <AlignmentCard
+          alignment={{
+            status: "pending",
+            hash: "",
+            device: "cuda 路 fp16",
+            model: "large-v3",
+            audio_duration: 0,
+            cache_hit: false,
+          }}
+          onRun={vi.fn()}
+          transcript={null}
+          voice={null}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    expect(screen.getByText("Transcript not detected yet")).toBeInTheDocument();
+    expect(screen.getByText("Audio file not detected yet")).toBeInTheDocument();
+    expect(screen.queryByText("Transcript readable 路 0 sentences")).not.toBeInTheDocument();
+  });
 });
