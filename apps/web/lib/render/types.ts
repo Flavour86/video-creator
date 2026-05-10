@@ -13,7 +13,7 @@ export type RenderStageView = {
 };
 
 export type RenderJob = {
-  bytes: number;
+  bytes: number | null;
   durationSec: number | null;
   etaSec: number | null;
   filename: string;
@@ -22,6 +22,7 @@ export type RenderJob = {
   id: string;
   manifest: RenderManifest;
   outputPath: string;
+  outputExists: boolean;
   phase: RenderPhase;
   preset: RenderPreset;
   progress: number;
@@ -31,12 +32,13 @@ export type RenderJob = {
 };
 
 export type RenderHistoryEntry = {
-  bytes: number;
+  bytes: number | null;
   durationSec: number | null;
   filename: string;
   finishedAt: string | null;
   id: string;
   outputPath: string;
+  outputExists: boolean;
   preset: RenderPreset;
   status: string;
 };

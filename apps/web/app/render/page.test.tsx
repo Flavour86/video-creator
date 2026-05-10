@@ -61,6 +61,7 @@ vi.mock("@/lib/render/useRenderJob", () => ({
             width: 1920,
           },
           outputPath: "E:/projects/demo/renders/final.mp4",
+          outputExists: true,
           phase: "verifying",
           preset: "final",
           progress: 1,

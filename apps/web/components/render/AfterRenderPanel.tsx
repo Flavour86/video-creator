@@ -12,7 +12,7 @@ type AfterRenderPanelProps = {
 
 export function AfterRenderPanel({ job, onPlay, onReveal }: AfterRenderPanelProps) {
   const t = useTranslations("pages.render.after");
-  const enabled = job?.phase === "done" && job.bytes > 0;
+  const enabled = job?.phase === "done" && job.outputExists;
 
   return (
     <section className="flex flex-col overflow-hidden rounded-[10px] border border-(--line) bg-(--bg-2)">

@@ -38,7 +38,7 @@ export function RenderHead({ job, onBack, onCancel, onReveal, onRetry }: RenderH
             {t("cancel")}
           </Button>
         ) : null}
-        {phase === "done" ? (
+        {phase === "done" && job?.outputExists ? (
           <Button onClick={onReveal} size="extra-small" variant="ghost">
             <Folder aria-hidden="true" className="h-4 w-4" />
             {t("revealOutput")}

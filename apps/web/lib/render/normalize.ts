@@ -3,11 +3,12 @@ import type { RenderHistoryEntry, RenderJob, RenderPhase, RenderProgressEvent, R
 
 export type RenderHistoryResponse = {
   duration_s: number | null;
-  file_size: number;
+  file_size: number | null;
   finished_at: string | null;
   id: string;
   message: string | null;
   output_path: string;
+  output_exists?: boolean;
   preset: string;
   started_at: string;
   status: string;
@@ -32,6 +33,7 @@ export function normalizeJob(row: RenderHistoryResponse, progress?: Partial<Rend
     id: row.id,
     manifest: manifestForPreset(preset),
     outputPath,
+    outputExists: row.output_exists ?? (row.file_size ?? 0) > 0,
     phase,
     preset,
     progress: Math.min(100, Math.max(0, progress?.percent ?? (row.status === "done" ? 100 : 0))),
@@ -50,6 +52,7 @@ export function normalizeHistory(row: RenderHistoryResponse): RenderHistoryEntry
     finishedAt: row.finished_at,
     id: row.id,
     outputPath: row.output_path,
+    outputExists: row.output_exists ?? (row.file_size ?? 0) > 0,
     preset,
     status: row.status,
   };

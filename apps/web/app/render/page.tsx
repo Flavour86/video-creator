@@ -40,12 +40,12 @@ function RenderContent() {
 
   const revealOutput = useCallback((path?: string) => {
     const target = path ?? job?.outputPath;
-    if (target) void reveal(target);
-  }, [job?.outputPath, reveal]);
+    if (target && job?.outputExists) void reveal(target);
+  }, [job?.outputExists, job?.outputPath, reveal]);
 
   const playOutput = useCallback(() => {
-    if (job?.outputPath) void open(job.outputPath);
-  }, [job?.outputPath, open]);
+    if (job?.outputPath && job.outputExists) void open(job.outputPath);
+  }, [job?.outputExists, job?.outputPath, open]);
 
   const startFinal = useCallback(async () => {
     const id = await startRender("final");

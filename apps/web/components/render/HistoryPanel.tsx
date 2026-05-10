@@ -26,7 +26,7 @@ export function HistoryPanel({ activeId, entries, onDelete, onPurge, onReveal, o
       <div className="flex max-h-[300px] flex-col overflow-y-auto p-[6px]">
         {entries.length === 0 ? <p className="px-2 py-3 text-xs text-(--text-3)">{t("empty")}</p> : null}
         {entries.map((entry) => {
-          const excluded = entry.status !== "done";
+          const excluded = entry.status !== "done" || !entry.outputExists;
           return (
             <div
               className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-[8px] rounded-[6px] hover:bg-(--bg-3) data-[active=true]:bg-(--bg-3)"

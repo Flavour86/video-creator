@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
@@ -146,6 +146,24 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
   const t = useTranslations("appShell");
   const globalControls = useTranslations("globalControls");
   const pathname = usePathname();
+  const [projectMetadata, setProjectMetadata] = useState("project.json");
+
+  useEffect(() => {
+    if (!(pathname?.startsWith("/setup") || pathname?.startsWith("/editor") || pathname?.startsWith("/render"))) {
+      setProjectMetadata("tokyo-essay/project.json");
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      setProjectMetadata("project.json");
+      return;
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const projectParam = searchParams.get("project") ?? searchParams.get("path");
+    const projectName = projectParam ? projectParam.split(/[\\/]/).filter(Boolean).pop() ?? projectParam : "";
+    setProjectMetadata(projectName ? `${projectName}/project.json` : "project.json");
+  }, [pathname]);
 
   const localizedNavItems = navItems.map((item) => ({
     label: t(`nav.${item.key}`),
@@ -157,9 +175,6 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
   ] as const;
   const themeLabel = globalControls("tooltips.toggleTheme");
   const ThemeIcon = theme === "light" ? Moon : Sun;
-  const projectMetadata = pathname?.startsWith("/setup") || pathname?.startsWith("/editor") || pathname?.startsWith("/render")
-    ? "test01/project.json"
-    : "tokyo-essay/project.json";
 
   return (
     <div className="min-h-screen bg-(--bg-0) pb-(--space-10) text-(--text)">
@@ -177,7 +192,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
           </div>
           <nav
             aria-label={t("controls.globalNavLabel")}
-            className="absolute left-[72px] right-[94px] top-1/2 -translate-y-1/2 overflow-x-auto lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:overflow-visible"
+            className="absolute left-18 right-23.5 top-1/2 -translate-y-1/2 overflow-x-auto lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:overflow-visible"
           >
             <SegmentedControl
               ariaLabel={t("controls.primaryNavigationLabel")}
@@ -219,7 +234,7 @@ function AppShellChrome({ children, language, setLanguage, statusContent, theme,
         <div className="grid h-full grid-cols-[auto_minmax(0,1fr)] items-center px-(--space-4) sm:grid-cols-3">
           <div
             aria-label={t("statusBar.command")}
-            className="flex min-w-0 items-center gap-(--space-2) rounded-(--r-sm) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
+            className="flex min-w-0 items-center gap-(--space-2) rounded-(--r-sm) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
             tabIndex={0}
           >
             <Kbd>⌘K</Kbd>

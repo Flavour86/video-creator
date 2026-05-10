@@ -47,7 +47,7 @@ const fmtTC = (s, withMs = true) => {
 };
 
 const PROJECTS = [
-  { name: "Tokyo Essay", path: "E:\\video-projects\\tokyo-essay", voice: "15:42", sentences: 164, media: 38, thumb: "night", lastOpened: "2 hours ago" },
+  { name: "Tokyo Essay", path: "E:\\video-projects\\tokyo-essay", voice: "15:42", sentences: 164, media: 38, thumb: "night", lastOpened: "2 hours ago", rendered: true, renderFile: "final-2026-05-06-1530.mp4" },
   { name: "Camera Test Script", path: "E:\\video-projects\\camera-test", voice: "03:28", sentences: 29, media: 7, thumb: "warm", lastOpened: "Yesterday" },
   { name: "Lighting Notes", path: "D:\\renders\\lighting-notes", voice: "08:05", sentences: 72, media: 18, thumb: "cool", lastOpened: "3 days ago" },
   { name: "Shibuya at Night", path: "E:\\video-projects\\shibuya-night", voice: "12:11", sentences: 121, media: 24, thumb: "olive", lastOpened: "Last week" },
@@ -92,11 +92,11 @@ const INITIAL_LAYERS = [
     id: "L-pip-2", kind: "pip", name: "PiP · z4",
     items: [
       { id: "pip-002", mediaId: "m4", sentences: [10,11], start: 60.5, end: 70.0,
-        pip: { posX: 98, posY: 2, size: 22, radius: 16, opacity: 90 },
+        pip: { posX: 2, posY: 2, size: 22, radius: 16, opacity: 90 },
         motion: { kind: "static", easing: "linear" },
         transitions: { in: "fade", out: "fade" } },
       { id: "pip-003", mediaId: "m5", sentences: [14,15], start: 88.0, end: 96.5,
-        pip: { posX: 98, posY: 2, size: 22, radius: 16, opacity: 90 },
+        pip: { posX: 2, posY: 2, size: 22, radius: 16, opacity: 90 },
         motion: { kind: "static", easing: "linear" },
         transitions: { in: "fade", out: "fade" } },
     ],
@@ -127,7 +127,7 @@ const INITIAL_LAYERS = [
   {
     id: "L-bg", kind: "bg", name: "Background",
     items: [
-      { id: "bg-001", mediaId: "m6", sentences: [1,21], start: 0, end: 942,
+      { id: "bg-001", mediaId: "m6", mediaIds: ["m6", "m8", "m5"], sentences: [1,21], start: 0, end: 942,
         motion: { kind: "ken_burns", easing: "linear" },
         transitions: { in: "cut", out: "cut" },
         crossfade: 0.6 },

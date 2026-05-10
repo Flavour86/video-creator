@@ -16,7 +16,7 @@ const ACCENT_PALETTES = {
 };
 
 const App = () => {
-  const [screen, setScreen] = React.useState("editor");
+  const [screen, setScreen] = React.useState("launcher");
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   React.useEffect(() => {
@@ -40,20 +40,14 @@ const App = () => {
     <div className="app">
       <header className="titlebar">
         <Logo />
-        <nav className="nav">
-          <button onClick={() => setScreen("launcher")} aria-current={screen === "launcher" ? "page" : null}>Launcher</button>
-          <button onClick={() => setScreen("setup")} aria-current={screen === "setup" ? "page" : null}>Setup</button>
-          <button onClick={() => setScreen("editor")} aria-current={screen === "editor" ? "page" : null}>Editor</button>
-          <button onClick={() => setScreen("render")} aria-current={screen === "render" ? "page" : null}>Render</button>
-          <button onClick={() => setScreen("tokens")} aria-current={screen === "tokens" ? "page" : null}>Tokens</button>
-        </nav>
+        <div />
         <div className="right">
           <button className="iconbtn" onClick={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} title="Toggle theme">
             <Icon name={t.theme === "dark" ? "sun" : "moon"} size={14} />
           </button>
           <div className="seg sm lang-seg" title="Interface language">
             <button className={t.lang === "en" ? "on" : ""} onClick={() => setTweak("lang", "en")}>EN</button>
-            <button className={t.lang === "zh" ? "on" : ""} onClick={() => setTweak("lang", "zh")}>中文</button>
+            <button className={t.lang === "zh" ? "on" : ""} onClick={() => setTweak("lang", "zh")}>ZH</button>
           </div>
         </div>
       </header>
@@ -62,7 +56,6 @@ const App = () => {
       {screen === "setup" && <SetupScreen go={setScreen} />}
       {screen === "editor" && <EditorScreen go={setScreen} />}
       {screen === "render" && <RenderScreen go={setScreen} />}
-      {screen === "tokens" && <TokensScreen />}
 
       {t.showStatusbar !== false && <StatusBar screen={screen} />}
 

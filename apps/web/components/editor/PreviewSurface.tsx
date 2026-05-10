@@ -6,43 +6,69 @@ import { resolveDisplay } from "@/lib/preview/resolveDisplay";
 import type { EditorStateProps } from "./types";
 
 type PreviewSurfaceProps = Pick<EditorStateProps, "currentTime" | "duration" | "layers" | "projectPath" | "sentences"> & {
+  fitMode: string;
   onNext: () => void;
   onPrevious: () => void;
   onTogglePlay: () => void;
   playing: boolean;
+  resolution: string;
 };
 
-export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevious, onTogglePlay, playing, projectPath, sentences }: PreviewSurfaceProps) {
+export function PreviewSurface({ currentTime, duration, fitMode, layers, onNext, onPrevious, onTogglePlay, playing, projectPath, resolution, sentences }: PreviewSurfaceProps) {
   const t = useTranslations("pages.editor.transport");
   const display = resolveDisplay(layers, sentences, currentTime);
-  const background = display.bg?.mediaId;
-  const foreground = display.fg[0]?.mediaId;
-  const pip = display.pip[0];
-  const image = foreground ?? background;
+  const baseImage = display.bg?.mediaId ?? display.fg[0]?.mediaId;
+  const baseOpacity = display.bg?.opacity ?? display.fg[0]?.opacity ?? 1;
+  const baseTranslateX = display.bg ? 0 : display.fg[0]?.translateX ?? 0;
+  const overlayForegrounds = display.bg ? display.fg : display.fg.slice(1);
+  const aspectClass = resolution === "9:16" ? "aspect-[9/16]" : "aspect-video";
+  const objectClass = fitMode === "actual" ? "object-scale-down" : "object-contain";
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-(--bg-0)">
-        <div className="relative aspect-video h-full max-h-full w-auto max-w-full overflow-hidden rounded-md bg-(--bg-2)">
-          {image ? (
-            <img alt="" className="h-full w-full object-cover" src={mediaUrl(projectPath, image)} />
+        <div className={`relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-md bg-(--bg-2) ${aspectClass}`}>
+          {baseImage ? (
+            <img
+              alt=""
+              className={`absolute inset-0 h-full w-full ${objectClass}`}
+              src={mediaUrl(projectPath, baseImage)}
+              style={{
+                opacity: baseOpacity,
+                transform: `translateX(${baseTranslateX}%)`,
+              }}
+            />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-(--text-3)">No media assigned</div>
+            <div className="flex h-full items-center justify-center px-6 text-sm text-(--text-3)">No media assigned</div>
           )}
-          {pip ? (
+          {overlayForegrounds.map((layer, index) => (
+            <img
+              alt=""
+              className={`absolute inset-0 h-full w-full ${objectClass}`}
+              key={`${layer.mediaId}-${index}`}
+              src={mediaUrl(projectPath, layer.mediaId)}
+              style={{
+                opacity: layer.opacity,
+                transform: `translateX(${layer.translateX}%)`,
+              }}
+            />
+          ))}
+          {display.pip.map((layer, index) => (
             <img
               alt=""
               className="absolute object-cover shadow-(--shadow-2)"
-              src={mediaUrl(projectPath, pip.mediaId)}
+              key={`${layer.mediaId}-${index}`}
+              src={mediaUrl(projectPath, layer.mediaId)}
               style={{
-                borderRadius: `${pip.placement.radius}px`,
-                left: `${pip.placement.posX}%`,
-                opacity: pip.opacity / 100,
-                top: `${pip.placement.posY}%`,
-                width: `${pip.placement.size}%`,
+                borderRadius: `${layer.placement.radius}px`,
+                left: `${layer.placement.posX}%`,
+                opacity: layer.opacity / 100,
+                top: `${layer.placement.posY}%`,
+                transform: `translateX(${layer.translateX}%)`,
+                width: `${layer.placement.size}%`,
               }}
             />
-          ) : null}
+          ))}
           {display.subtitle ? (
             <div className="absolute inset-x-0 bottom-[7%] px-[8%] text-center text-[clamp(14px,2vw,28px)] font-semibold text-white drop-shadow-md">
               {display.subtitle.text}

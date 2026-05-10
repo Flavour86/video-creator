@@ -132,9 +132,12 @@ export function formatRenderSpecs(manifest: RenderManifest): string {
   ].join(" · ");
 }
 
-export function formatHistoryMeta(entry: { bytes: number; durationSec: number | null; preset: RenderPreset; status: string }): string {
+export function formatHistoryMeta(entry: { bytes: number | null; durationSec: number | null; outputExists: boolean; preset: RenderPreset; status: string }): string {
   if (entry.status !== "done") {
     return `${entry.status} · excluded`;
+  }
+  if (!entry.outputExists) {
+    return `${formatRenderResolution(entry.preset)} · missing output`;
   }
   return [formatRenderResolution(entry.preset), formatDuration(entry.durationSec), formatBytes(entry.bytes)].join(" · ");
 }

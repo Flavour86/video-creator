@@ -84,7 +84,7 @@ const BGModal = ({ open, onClose, onApply, bgItem }) => {
                   </button>);
               })}
             </div>
-            {mediaIds.length > 1 && <p className="hint">{mediaIds.length} {lockedKind === "video" ? "clips" : "images"} will play in sequence and loop. Reorder by clicking to deselect, then re-select in the desired order.</p>}
+            {mediaIds.length > 1 && <p className="hint">{lockedKind === "video" ? `${mediaIds.length} clips play in sequence. Short video leaves black fallback; long video is cut.` : `${mediaIds.length} images split the full duration evenly.`} Reorder by clicking to deselect, then re-select in the desired order.</p>}
           </div>
 
           <div className="field-row two">

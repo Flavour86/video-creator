@@ -280,6 +280,7 @@ def _find_voice_file(project_dir: Path) -> Path | None:
 
 def _import_root_media(project_dir: Path) -> None:
     media_dir = project_dir / "media"
+    thumb_dir = project_dir / ".vc" / "thumbs"
     media_dir.mkdir(exist_ok=True)
     for path in project_dir.iterdir():
         if not path.is_file() or path.name in {"project.json", "transcript.txt"} or path.name.startswith("voice."):
@@ -289,6 +290,33 @@ def _import_root_media(project_dir: Path) -> None:
         target = media_dir / path.name
         if not target.exists():
             shutil.copy2(path, target)
+        thumb = thumb_dir / f"{path.stem}.jpg"
+        if not thumb.exists():
+            _make_thumb(target, thumb)
+
+
+def _make_thumb(src: Path, thumb: Path) -> None:
+    thumb.parent.mkdir(parents=True, exist_ok=True)
+    vf = (
+        "scale=256:144:force_original_aspect_ratio=decrease,"
+        "pad=256:144:(ow-iw)/2:(oh-ih)/2:color=black"
+    )
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-ss",
+        "0",
+        "-i",
+        str(src),
+        "-vframes",
+        "1",
+        "-vf",
+        vf,
+        "-q:v",
+        "5",
+        str(thumb),
+    ]
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
 
 def _detect_voice(path: Path) -> DetectedVoice | None:

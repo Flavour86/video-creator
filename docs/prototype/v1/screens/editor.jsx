@@ -55,9 +55,63 @@ const Transcript = ({ sentences, selection, currentSentence, onSelect, onContext
 
 };
 
+const WatermarkModal = ({ open, onClose, assetId, onSelect, enabled, onEnabledChange }) => {
+  const [uploadedName, setUploadedName] = React.useState(null);
+  if (!open) return null;
+  const selected = MEDIA_BY_ID[assetId];
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal narrow" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <h2>Watermark asset</h2>
+            <p>Pick an image or video watermark. Video watermarks loop over the render.</p>
+          </div>
+          <button className="iconbtn" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="modal-body">
+          <label className="switch-row">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!enabled}
+              className={"switch " + (enabled ? "on" : "")}
+              onClick={() => onEnabledChange(!enabled)}>
+              <span className="knob" />
+            </button>
+            <span className="switch-label">{enabled ? "Watermark enabled" : "Watermark disabled"}</span>
+          </label>
+          <label className="upload-strip">
+            <input type="file" accept="image/*,video/*" onChange={(e) => setUploadedName(e.target.files?.[0]?.name || null)} />
+            <Icon name="upload" size={14}/>
+            <span>Upload image or video watermark...</span>
+            <em>{uploadedName || "PNG / JPG / MP4"}</em>
+          </label>
+          <div className="asset-grid">
+            {MEDIA.map((m) => (
+              <button key={m.id} className={"asset-card " + (m.id === assetId ? "on" : "")} onClick={() => onSelect(m.id)}>
+                <div className="thumb" style={{background: thumbGrad(m.thumb)}}>
+                  <span className="badge">{m.kind === "video" ? "MP4" : "IMG"}</span>
+                </div>
+                <div className="name">{m.name}</div>
+              </button>
+            ))}
+          </div>
+          {selected &&
+          <p className="hint">Current watermark: {selected.name} / {selected.kind === "video" ? "video loop" : "image overlay"}.</p>
+          }
+        </div>
+        <div className="modal-foot">
+          <button className="btn primary" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ───────── Preview ─────────
 
-const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, fit, subtitleText, onAddBG, onOpenSubtitles }) => {
+const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, subtitleText, showWatermark, watermarkAsset }) => {
   // Find the topmost active fullscreen item (PiP and BG are always on)
   const fgItem = (() => {
     for (const L of layers.filter((l) => l.kind === "fg")) {
@@ -75,14 +129,13 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
   const bgMedia = bgItem ? MEDIA_BY_ID[bgItem.mediaId] : null;
 
   const stageStyle = { aspectRatio: `${resolution.w} / ${resolution.h}`, maxHeight: "100%" };
-  if (fit === "actual") {stageStyle.width = `${resolution.w / 2}px`;}
 
   return (
     <div className="preview-wrap">
       <div className="preview-stage" style={stageStyle}>
         <div className="preview-canvas">
           {bgMedia && <div className="scene bg-scene" style={{ background: thumbGrad(bgMedia.thumb) }} />}
-          {!bgMedia && <div className="scene empty"><span>No background — <button className="link" onClick={onAddBG}>add one</button></span></div>}
+          {!bgMedia && <div className="scene empty"><span>No background</span></div>}
           {showFG && <div className="scene fg-scene" style={{ background: thumbGrad(fgMedia.thumb) }} />}
           {pipItems.map(({ item, layer }) => {
             const m = MEDIA_BY_ID[item.mediaId];
@@ -100,7 +153,11 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
             return <div key={item.id} className="pip-overlay" style={style} />;
           })}
           <div className="subtitles">{subtitleText}</div>
-          <div className="watermark">VC</div>
+          {showWatermark && watermarkAsset &&
+          <div className="watermark-asset" style={{background: thumbGrad(watermarkAsset.thumb)}}>
+              <span>{watermarkAsset.kind === "video" ? "MP4" : "IMG"}</span>
+            </div>
+          }
         </div>
       </div>
       <div className="preview-meta">
@@ -180,7 +237,8 @@ const TimelineRow = ({ layer, selection, onSelect, onResize, onDelete, onClickHe
           const width = dur / PROJECT_DURATION * 100;
           const sel = selection?.layerId === layer.id && selection?.itemId === it.id;
           const m = MEDIA_BY_ID[it.mediaId];
-          const label = layer.kind === "bg" ? `auto · ${m?.name || "background"}` : m?.name || "item";
+          const bgCount = it.mediaIds?.length || 1;
+          const label = layer.kind === "bg" ? (bgCount > 1 ? `auto / ${bgCount} assets` : `auto / ${m?.name || "background"}`) : m?.name || "item";
           return (
             <Clip key={it.id} left={left} width={width} kind={layer.kind} label={label}
             selected={sel}
@@ -252,10 +310,11 @@ const EditorScreen = ({ go }) => {
   const [selItem, setSelItem] = React.useState({ layerId: "L-fg-1", itemId: "fg-002" });
   const [modal, setModal] = React.useState(null); // {kind:"assign", range, edit?} | {kind:"subtitles"}
   const [resolutionKey, setResolutionKey] = React.useState("1080p");
-  const [fit, setFit] = React.useState("fit");
   const [showLayersMenu, setShowLayersMenu] = React.useState(false);
   const [contextMenu, setContextMenu] = React.useState(null); // {x,y,sentenceIdx}
   const [subSettings, setSubSettings] = React.useState({ burnin: true, pos: "bottom", font: "Inter", size: 44, bg: "shadow", maxChars: 42 });
+  const [watermarkOn, setWatermarkOn] = React.useState(true);
+  const [watermarkAssetId, setWatermarkAssetId] = React.useState("m3");
   const [draft, setDraft] = React.useState(null); // null | { progress: 0..100, stage, done?: boolean }
 
   // Simulated draft render — drives the progress bar under the editor toolbar.
@@ -334,6 +393,15 @@ const EditorScreen = ({ go }) => {
     setContextMenu({ x: e.clientX, y: e.clientY, sentenceIdx: idx });
   };
 
+  const sentenceRangeForTimes = (start, end) => {
+    const overlapping = SENTENCES.filter((s) => s.end > start && s.start < end);
+    if (overlapping.length === 0) {
+      const nearest = SENTENCES.reduce((best, s) => Math.abs(s.start - start) < Math.abs(best.start - start) ? s : best, SENTENCES[0]);
+      return [nearest.idx, nearest.idx];
+    }
+    return [overlapping[0].idx, overlapping[overlapping.length - 1].idx];
+  };
+
   // ── layer mutations ──
   const patchItem = (layerId, itemId, patch) => {
     setLayers((ls) => ls.map((L) => L.id !== layerId ? L : {
@@ -356,8 +424,9 @@ const EditorScreen = ({ go }) => {
     setLayers((ls) => ls.map((L) => L.id !== layerId ? L : {
       ...L, items: L.items.map((it) => {
         if (it.id !== itemId) return it;
-        if (side === "l") return { ...it, start: Math.max(0, Math.min(it.end - 0.5, it.start + dt)) };
-        return { ...it, end: Math.min(PROJECT_DURATION, Math.max(it.start + 0.5, it.end + dt)) };
+        const start = side === "l" ? Math.max(0, Math.min(it.end - 0.5, it.start + dt)) : it.start;
+        const end = side === "r" ? Math.min(PROJECT_DURATION, Math.max(it.start + 0.5, it.end + dt)) : it.end;
+        return { ...it, start, end, sentences: sentenceRangeForTimes(start, end) };
       })
     }));
   };
@@ -436,6 +505,7 @@ const EditorScreen = ({ go }) => {
 
   const resolution = RESOLUTIONS[resolutionKey];
   const subtitleText = SENTENCES[currentSentence - 1]?.text || "";
+  const watermarkAsset = MEDIA_BY_ID[watermarkAssetId];
 
   const layerCounts = {
     fg: layers.filter((L) => L.kind === "fg").length,
@@ -449,16 +519,9 @@ const EditorScreen = ({ go }) => {
           <div className="title">
             <button className="iconbtn" onClick={() => go("launcher")}><Icon name="folderOpen" /></button>
             <h2>Tokyo Essay</h2>
-            <span className="crumb">E:\video-projects\tokyo-essay</span>
+            <span className="crumb">projectId: prj_tokyo_essay</span>
           </div>
-          <div className="center">
-            <button className="btn sm ghost" onClick={() => setModal({ kind: "subtitles" })}>
-              <Icon name="type" size={13} /> Subtitles
-            </button>
-            <button className="btn sm ghost" onClick={() => setModal({ kind: "bg" })} title="Add or change background asset">
-              <Icon name="image" size={13} /> {layers.find((L) => L.kind === "bg") ? "Change BG" : "Add BG"}
-            </button>
-          </div>
+          <div className="center"></div>
           <div className="right">
             <span className="tag info"><span className="dot info" />cache 24/24</span>
             <button className="btn"><Icon name="save" size={13} /> Save</button>
@@ -502,10 +565,9 @@ const EditorScreen = ({ go }) => {
               currentSentence={currentSentence}
               layers={layers}
               resolution={resolution}
-              fit={fit}
               subtitleText={subtitleText}
-              onAddBG={addBackground}
-              onOpenSubtitles={() => setModal({ kind: "subtitles" })} />
+              showWatermark={watermarkOn}
+              watermarkAsset={watermarkAsset} />
             
             {/* Preview controls strip */}
             <div className="preview-controls">
@@ -514,10 +576,6 @@ const EditorScreen = ({ go }) => {
                   <button className={resolutionKey === "1080p" ? "on" : ""} onClick={() => setResolutionKey("1080p")}>1080p</button>
                   <button className={resolutionKey === "720p" ? "on" : ""} onClick={() => setResolutionKey("720p")}>720p</button>
                   <button className={resolutionKey === "vert" ? "on" : ""} onClick={() => setResolutionKey("vert")}>9:16</button>
-                </div>
-                <div className="seg sm">
-                  <button className={fit === "fit" ? "on" : ""} onClick={() => setFit("fit")}>Fit</button>
-                  <button className={fit === "actual" ? "on" : ""} onClick={() => setFit("actual")}>Actual</button>
                 </div>
               </div>
               <div className="pc-right">
@@ -537,9 +595,6 @@ const EditorScreen = ({ go }) => {
                           {L.kind === "bg" && <button className="iconbtn xs" onClick={(e) => {e.stopPropagation();removeBackground();}} title="Remove BG"><Icon name="trash" size={11} /></button>}
                         </div>
                       )}
-                      </div>
-                      <div className="lp-foot">
-                        <button className="btn sm ghost" onClick={(e) => {e.stopPropagation();setShowLayersMenu(false);setContextMenu(null);setModal({ kind: "assign", range: [currentSentence, currentSentence] });}}>+ Add layer item</button>
                       </div>
                     </div>
                   }
@@ -561,6 +616,20 @@ const EditorScreen = ({ go }) => {
               <button className="on">Inspector</button>
             </div>
             <div className="rail-body">
+              <div className="global-config">
+                <div className="gc-head">
+                  <span>Global video config</span>
+                  <span className="tag info">SQLite</span>
+                </div>
+                <button className={"gc-row " + (watermarkOn ? "on" : "")} onClick={() => setModal({ kind: "watermark" })}>
+                  <span><Icon name="image" size={13}/> Watermark</span>
+                  <span>{watermarkAsset?.name || "Choose"}</span>
+                </button>
+                <button className="gc-row" onClick={() => setModal({ kind: "subtitles" })}>
+                  <span><Icon name="type" size={13}/> Subtitles</span>
+                  <span>{subSettings.burnin ? "Burn-in" : "Sidecar"}</span>
+                </button>
+              </div>
               <Inspector selection={selItem} layers={layers}
               onPatch={patchItem} onDelete={deleteItem}
               onChangeAsset={(layer, item) => setModal({
@@ -587,8 +656,6 @@ const EditorScreen = ({ go }) => {
           <button onClick={() => {setSelection([contextMenu.sentenceIdx]);setTime(SENTENCES[contextMenu.sentenceIdx - 1].start);setContextMenu(null);}}>
             <Icon name="play" size={12} /> Play from here
           </button>
-          <div className="sep" />
-          <button className="muted" onClick={() => setContextMenu(null)}>Cancel</button>
         </div>
       }
 
@@ -609,17 +676,25 @@ const EditorScreen = ({ go }) => {
             const exists = ls.find((L) => L.kind === "bg");
             if (exists) {
               return ls.map((L) => L.kind !== "bg" ? L : {
-                ...L, items: L.items.map((it) => ({ ...it, mediaId: data.mediaId, motion: data.motion, crossfade: data.crossfade }))
+                ...L, items: L.items.map((it) => ({ ...it, mediaIds: data.mediaIds, mediaId: data.mediaId, motion: data.motion, crossfade: data.crossfade }))
               });
             }
             const newBG = { id: "L-bg", kind: "bg", name: "Background", items: [{
-                id: "bg-001", mediaId: data.mediaId, sentences: [1, SENTENCES.length], start: 0, end: PROJECT_DURATION,
+                id: "bg-001", mediaIds: data.mediaIds, mediaId: data.mediaId, sentences: [1, SENTENCES.length], start: 0, end: PROJECT_DURATION,
                 motion: data.motion, transitions: { in: "cut", out: "cut" }, crossfade: data.crossfade
               }] };
             return [...ls, newBG];
           });
           setModal(null);
         }} />
+
+      <WatermarkModal
+        open={modal?.kind === "watermark"}
+        onClose={() => setModal(null)}
+        assetId={watermarkAssetId}
+        onSelect={setWatermarkAssetId}
+        enabled={watermarkOn}
+        onEnabledChange={setWatermarkOn} />
       
       <SubtitlesModal
         open={modal?.kind === "subtitles"}

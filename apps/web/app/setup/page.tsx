@@ -12,7 +12,7 @@ import { Button, Field, Select, TextInput } from "@/components/ui";
 import { formatDuration } from "@/lib/format";
 import { defaultSetupPath, useSetupDraft } from "@/lib/setup/useSetupDraft";
 
-const outputPresets = ["final", "draft", "vertical"] as const;
+const outputPresets = ["final", "draft"] as const;
 
 export default function SetupPage() {
   return (

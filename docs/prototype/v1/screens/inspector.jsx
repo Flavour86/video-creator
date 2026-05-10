@@ -4,11 +4,7 @@
 const POS_LABELS_INS = ["TL","TC","TR","ML","MC","MR","BL","BC","BR"];
 
 const InspectorEmpty = () => (
-  <div className="ins-empty">
-    <Icon name="layers" size={22}/>
-    <strong>Nothing selected</strong>
-    <p>Click an item in any layer to edit its parameters.<br/>Right-click a sentence to add a new foreground or PiP item.</p>
-  </div>
+  <div className="ins-empty blank" />
 );
 
 const InspectorSub = ({ item, onPatch }) => (
@@ -40,16 +36,21 @@ const InspectorSub = ({ item, onPatch }) => (
           <button className={item.subPos==="top"?"on":""} onClick={()=>onPatch({subPos:"top"})}>Top</button>
         </div>
       </div>
+      <button className="btn ghost ins-apply-all"><Icon name="type" size={12}/> Apply to all subtitles</button>
     </div>
   </>
 );
 
 const InspectorBG = ({ item, onPatch, onDelete, onChangeAsset }) => {
-  const m = MEDIA_BY_ID[item.mediaId];
+  const mediaIds = item.mediaIds || (item.mediaId ? [item.mediaId] : []);
+  const assets = mediaIds.map((id) => MEDIA_BY_ID[id]).filter(Boolean);
+  const lockedKind = assets[0]?.kind || "image";
+  const m = assets[0];
   return (
     <>
       <div className="ins-section">
         <h4>Background</h4>
+        {assets.length === 1 &&
         <button className="ins-asset clickable" onClick={onChangeAsset} title="Click to change asset">
           <div className="ins-thumb" style={{background: thumbGrad(m?.thumb)}}/>
           <div>
@@ -58,7 +59,20 @@ const InspectorBG = ({ item, onPatch, onDelete, onChangeAsset }) => {
           </div>
           <span className="swap-hint"><Icon name="upload" size={11}/> change</span>
         </button>
-        <p className="hint">Plays underneath all other layers. When the foreground covers the screen, BG is hidden.</p>
+        }
+        <button className="asset-stack playlist-click" onClick={onChangeAsset} title="Click to change background assets">
+          {assets.map((mm) => (
+            <div key={mm.id} className="asset-stack-row">
+              <div className="ins-thumb" style={{background: thumbGrad(mm.thumb)}}/>
+              <div>
+                <div className="name">{mm.name}</div>
+                <div className="meta">{mm.kind === "video" ? mm.dur : `${mm.w}x${mm.h}`} / {mm.size}</div>
+              </div>
+              <span className="kind-pill">{mm.kind === "video" ? "MP4" : "IMG"}</span>
+            </div>
+          ))}
+        </button>
+        <p className="hint">{assets.length} {lockedKind === "video" ? "video clips" : "images"} in playlist. Images split the full duration evenly. Videos play in sequence; short video leaves black fallback, long video is cut.</p>
       </div>
       <div className="ins-section">
         <h4>Cycle &amp; crossfade</h4>
@@ -196,7 +210,7 @@ const InspectorPiP = ({ item, layer, onPatch, onDelete, onChangeAsset }) => {
         <div className="pip-fields compact">
           <div className="row"><span>Size</span><input type="range" min={15} max={60} value={pip.size} onChange={(e)=>setPip({size:+e.target.value})}/><span className="num-val">{pip.size}%</span></div>
           <div className="row"><span>Radius</span><input type="range" min={0} max={32} value={pip.radius} onChange={(e)=>setPip({radius:+e.target.value})}/><span className="num-val">{pip.radius}px</span></div>
-          <div className="row"><span>Opacity</span><input type="range" min={20} max={100} value={pip.opacity} onChange={(e)=>setPip({opacity:+e.target.value})}/><span className="num-val">{pip.opacity}%</span></div>
+          <div className="row"><span>Opacity</span><input type="range" min={10} max={100} value={pip.opacity} onChange={(e)=>setPip({opacity:+e.target.value})}/><span className="num-val">{pip.opacity}%</span></div>
         </div>
       </div>
       <div className="ins-section">

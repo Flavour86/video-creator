@@ -1,4 +1,4 @@
-// SubtitlesModal — edit subtitle styling and merge cues.
+// SubtitlesModal: edit global subtitle styling.
 
 const SubtitlesModal = ({ open, onClose, settings, onSave }) => {
   const [s, setS] = React.useState(settings || {});
@@ -76,20 +76,6 @@ const SubtitlesModal = ({ open, onClose, settings, onSave }) => {
                 Drop an image onto a sentence and the editor knows when it should appear.
               </div>
               <span className="sp-label">Preview · 16:9</span>
-            </div>
-          </div>
-          <div className="field">
-            <label>Cue list</label>
-            <div className="cue-list">
-              {SENTENCES.slice(0, 6).map((sn) =>
-              <div key={sn.idx} className="cue-row">
-                  <span className="idx">s{sn.idx}</span>
-                  <span className="tc">{fmtTC(sn.start, false)} → {fmtTC(sn.end, false)}</span>
-                  <span className="text">{sn.text}</span>
-                  <button className="btn ghost sm">merge ↓</button>
-                </div>
-              )}
-              <div className="cue-more">… 158 more cues</div>
             </div>
           </div>
         </div>

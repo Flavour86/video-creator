@@ -22,7 +22,12 @@ export function OutputPanel({ job }: { job: RenderJob | null }) {
         [t("video"), formatVideoChain(manifest.codec, manifest.crf, manifest.preset)],
         [t("audio"), formatAudioChain(manifest.audioCodec, manifest.audioBitrate)],
         [t("color"), formatColor(manifest.colorMatrix, manifest.pixfmt)],
-        [job.phase === "done" ? t("size") : t("estSize"), formatBytes(job.phase === "done" ? job.bytes : manifest.estimatedBytes, { approx: job.phase !== "done" })],
+        [
+          job.phase === "done" ? t("size") : t("estSize"),
+          job.phase === "done" && !job.outputExists
+            ? "missing output"
+            : formatBytes(job.phase === "done" ? job.bytes : manifest.estimatedBytes, { approx: job.phase !== "done" }),
+        ],
       ]
     : [[t("file"), "--"]];
 

@@ -43,6 +43,8 @@ function EditorContent() {
   const [assignRange, setAssignRange] = useState<[number, number]>([1, 1]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const loadedProjectRef = useRef(false);
+  const skipAutosaveRef = useRef(false);
 
   const sentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
   const duration = sentences.at(-1)?.end_s ?? 0;
@@ -61,6 +63,8 @@ function EditorContent() {
         request<Project>(`/projects/load?project=${encodeURIComponent(path)}` as `/${string}`),
         request<EditorMediaItem[]>(`/projects/media?project=${encodeURIComponent(path)}` as `/${string}`),
       ]);
+      loadedProjectRef.current = true;
+      skipAutosaveRef.current = true;
       setProjectName(project.name ?? path.split(/[\\/]/).pop() ?? "Project");
       setAudioFile(project.audio ?? "");
       setLayers((project.layers ?? []) as Layer[]);
@@ -120,15 +124,29 @@ function EditorContent() {
     }
   }, [layers, projectPath]);
 
+  useEffect(() => {
+    if (!projectPath || !loadedProjectRef.current) {
+      return;
+    }
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false;
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void saveNow();
+    }, 900);
+    return () => window.clearTimeout(timeout);
+  }, [layers, projectPath, saveNow]);
+
   const renderDraft = useCallback(async () => {
-    setRenderJob({ phase: "verifying cache", progress: 12, running: true });
+    setRenderJob({ phase: "starting", progress: 0, running: true });
     try {
       const result = await request<{ render_id: string }>(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "draft" } });
-      setRenderJob({ phase: result.render_id, progress: 100, running: false });
+      router.push(`/render?project=${encodeURIComponent(projectPath)}&job=${encodeURIComponent(result.render_id)}`);
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false });
     }
-  }, [projectPath]);
+  }, [projectPath, router]);
 
   const renderFinal = useCallback(async () => {
     try {
@@ -218,6 +236,8 @@ function EditorContent() {
             onTogglePlay={() => setPlaying((value) => !value)}
             playing={playing}
             projectPath={projectPath}
+            fitMode={fitMode}
+            resolution={resolution}
             sentences={sentences}
           />
           <div className="relative">

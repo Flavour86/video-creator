@@ -16,6 +16,9 @@ let mockRuntimeLoading = false;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname,
+  useSearchParams: () => ({
+    get: () => null,
+  }),
 }));
 
 vi.mock("@/lib/hooks/useRuntimeStatus", () => ({

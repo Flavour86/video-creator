@@ -34,13 +34,14 @@ class RenderResponse(BaseModel):
 class RenderHistoryResponse(BaseModel):
     id: str
     output_path: str
+    output_exists: bool
     preset: str
     started_at: str
     finished_at: str | None
     duration_s: float | None
     status: str
     message: str | None
-    file_size: int
+    file_size: int | None
 
 
 class RenderCancelRequest(BaseModel):
@@ -235,16 +236,18 @@ async def play_render(
 
 def _render_history_response(row: dict[str, str | float | None]) -> RenderHistoryResponse:
     output_path = _resolve_stored_path(str(row["output_path"]))
+    output_exists = output_path.is_file()
     return RenderHistoryResponse(
         id=str(row["id"]),
         output_path=str(output_path),
+        output_exists=output_exists,
         preset=str(row["preset"]),
         started_at=str(row["started_at"]),
         finished_at=str(row["finished_at"]) if row["finished_at"] is not None else None,
         duration_s=float(row["duration_s"]) if row["duration_s"] is not None else None,
         status=str(row["status"]),
         message=str(row["message"]) if row["message"] is not None else None,
-        file_size=output_path.stat().st_size if output_path.is_file() else 0,
+        file_size=output_path.stat().st_size if output_exists else None,
     )
 
 
