@@ -308,14 +308,14 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Enforce route rules: Launcher always reachable; Setup is subflow-only; Editor/Render require valid `project_id` and redirect to Launcher otherwise.
 
 **Acceptance criteria:**
-- [ ] Editor route uses `/editor/:projectId` or equivalent project-id query consistently.
-- [ ] Render route uses `/render/:projectId` or equivalent project-id query consistently.
-- [ ] Invalid/missing ids redirect or show Launcher recovery, not path-based blank states.
-- [ ] Tokens page is hidden from product navigation and can remain dev-only.
+- [x] Editor route uses `/editor/:projectId` or equivalent project-id query consistently.
+- [x] Render route uses `/render/:projectId` or equivalent project-id query consistently.
+- [x] Invalid/missing ids redirect or show Launcher recovery, not path-based blank states.
+- [x] Tokens page is hidden from product navigation and can remain dev-only.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- app/editor app/render app/page-chrome`
-- [ ] Manual deep-link checks.
+- [x] `rtk pnpm -F @vc/web test -- app/editor app/render app/page-chrome`
+- [x] Manual deep-link checks.
 
 **Dependencies:** Task 6
 

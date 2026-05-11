@@ -100,7 +100,7 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
   }, [detected.transcript, detected.voice, draft.path, draft.project_id, inspect]);
 
   return {
-    canContinue: alignmentStatus === "aligned",
+    canContinue: alignmentStatus === "aligned" && Boolean(projectId),
     draft,
     inspect,
     runAlignment,

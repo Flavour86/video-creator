@@ -19,24 +19,25 @@ function RenderContent() {
   const t = useTranslations("pages.render");
   const router = useRouter();
   const params = useSearchParams();
-  const projectPath = params.get("project") ?? "";
+  const requestedProjectId = params.get("projectId") ?? "";
+  const projectId = isValidProjectId(requestedProjectId) ? requestedProjectId : "";
   const selectedJobId = params.get("job") ?? params.get("renderId");
   const autoStartedProjectRef = useRef("");
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const { entries, purgeAll, refresh, remove } = useRenderHistory(selectedJobId ?? "");
-  const { error, job, startRender } = useRenderJob(projectPath, selectedJobId);
-  const cancelRender = useRenderCancel();
+  const { entries, purgeAll, refresh, remove } = useRenderHistory(projectId, selectedJobId ?? "");
+  const { error, job, startRender } = useRenderJob(projectId, selectedJobId);
+  const cancelRender = useRenderCancel(projectId);
   const reveal = useSystemReveal();
   const open = useSystemOpen();
 
   const goEditor = useCallback(() => {
-    const target = projectPath ? `/editor?project=${encodeURIComponent(projectPath)}` : "/editor";
+    const target = projectId ? `/editor?projectId=${encodeURIComponent(projectId)}` : "/editor";
     if (document.referrer.includes("/editor")) {
       router.back();
     } else {
       router.push(target as Parameters<typeof router.push>[0]);
     }
-  }, [projectPath, router]);
+  }, [projectId, router]);
 
   const revealOutput = useCallback((path?: string) => {
     const target = path ?? job?.outputPath;
@@ -50,16 +51,16 @@ function RenderContent() {
   const startFinal = useCallback(async () => {
     const id = await startRender("final");
     if (id) {
-      router.replace(`/render?project=${encodeURIComponent(projectPath)}&job=${encodeURIComponent(id)}` as Parameters<typeof router.replace>[0]);
+      router.replace(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(id)}` as Parameters<typeof router.replace>[0]);
       await refresh();
     }
-  }, [projectPath, refresh, router, startRender]);
+  }, [projectId, refresh, router, startRender]);
 
   useEffect(() => {
-    if (!projectPath || selectedJobId || job || autoStartedProjectRef.current === projectPath) return;
-    autoStartedProjectRef.current = projectPath;
+    if (!projectId || selectedJobId || job || autoStartedProjectRef.current === projectId) return;
+    autoStartedProjectRef.current = projectId;
     void startFinal();
-  }, [job, projectPath, selectedJobId, startFinal]);
+  }, [job, projectId, selectedJobId, startFinal]);
 
   useEffect(() => {
     if (job?.phase === "done" || job?.phase === "error" || job?.phase === "cancelled") {
@@ -75,7 +76,7 @@ function RenderContent() {
     onReveal: () => revealOutput(),
   });
 
-  if (!projectPath) {
+  if (!projectId) {
     return (
       <PageChrome variant="empty">
         <p className="vc-type-body text-(--text-2)">{t("noProject")}</p>
@@ -107,7 +108,7 @@ function RenderContent() {
           void purgeAll().then(refresh);
         }}
         onReveal={revealOutput}
-        onSelectHistory={(id) => router.replace(`/render?project=${encodeURIComponent(projectPath)}&job=${encodeURIComponent(id)}` as Parameters<typeof router.replace>[0])}
+        onSelectHistory={(id) => router.replace(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(id)}` as Parameters<typeof router.replace>[0])}
       />
       {error ? <p className="col-start-1 rounded border border-(--red-line) bg-(--red-bg) px-3 py-2 text-sm text-(--text)">{error}</p> : null}
       <ConfirmDialog
@@ -124,6 +125,10 @@ function RenderContent() {
       />
     </PageChrome>
   );
+}
+
+function isValidProjectId(value: string): boolean {
+  return /^p_[A-Za-z0-9_-]+$/.test(value);
 }
 
 export default function RenderPage() {

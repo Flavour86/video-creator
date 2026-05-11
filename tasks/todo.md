@@ -20,7 +20,7 @@
 ## Phase 3: App Shell And Routing Parity
 
 - [x] Task 10: Remove product-visible global route nav, phase suffix, top theme/language controls, and center status segment.
-- [ ] Task 11: Guard Editor/Render by project id and hide Tokens from product UI.
+- [x] Task 11: Guard Editor/Render by project id and hide Tokens from product UI.
 - [ ] Checkpoint: shell and route behavior match prototype/spec.
 
 ## Phase 4: Editor State, Save, And Recovery

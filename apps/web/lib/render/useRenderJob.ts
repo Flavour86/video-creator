@@ -8,18 +8,20 @@ type RenderStartResponse = {
   render_id: string;
 };
 
-export function useRenderJob(projectPath: string, jobId: string | null) {
+export function useRenderJob(projectId: string, jobId: string | null) {
   const [baseRow, setBaseRow] = useState<RenderHistoryResponse | null>(null);
   const [job, setJob] = useState<RenderJob | null>(null);
   const [error, setError] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
 
   const loadJob = useCallback(async (id: string) => {
-    const row = await request<RenderHistoryResponse>(`/render/job/${encodeURIComponent(id)}` as `/${string}`);
+    const row = projectId
+      ? await request<RenderHistoryResponse>(`/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(id)}` as `/${string}`)
+      : await request<RenderHistoryResponse>(`/render/job/${encodeURIComponent(id)}` as `/${string}`);
     setBaseRow(row);
     setJob(normalizeJob(row));
     return row;
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     setError("");
@@ -60,14 +62,14 @@ export function useRenderJob(projectPath: string, jobId: string | null) {
   }, [baseRow, loadJob]);
 
   const startRender = useCallback(async (preset: RenderPreset) => {
-    if (!projectPath) return null;
-    const body = await request<RenderStartResponse>(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, {
+    if (!projectId) return null;
+    const body = await request<RenderStartResponse>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, {
       method: "POST",
       body: { preset },
     });
     await loadJob(body.render_id);
     return body.render_id;
-  }, [loadJob, projectPath]);
+  }, [loadJob, projectId]);
 
   return { error, job, loadJob, startRender };
 }

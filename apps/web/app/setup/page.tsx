@@ -45,7 +45,7 @@ function SetupScreen() {
           </Button>
           <Button
             disabled={!setup.canContinue}
-            onClick={() => router.push(`/editor?project=${encodeURIComponent(draft.path)}`)}
+            onClick={() => router.push(`/editor?projectId=${encodeURIComponent(draft.project_id ?? "")}`)}
             variant="primary"
           >
             {t("continueToEditor")}

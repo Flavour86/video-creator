@@ -28,21 +28,33 @@ export type AlignmentState =
   | { status: "done"; result: AlignmentResult }
   | { status: "error"; message: string };
 
+type AlignmentTarget =
+  | { kind: "none" }
+  | { kind: "path"; value: string }
+  | { kind: "projectId"; value: string };
+
 export function useAlignment(projectPath: string) {
+  return useAlignmentForTarget(projectPath ? { kind: "path", value: projectPath } : { kind: "none" });
+}
+
+export function useProjectAlignment(projectId: string) {
+  return useAlignmentForTarget(projectId ? { kind: "projectId", value: projectId } : { kind: "none" });
+}
+
+function useAlignmentForTarget(target: AlignmentTarget) {
   const [state, setState] = useState<AlignmentState>({ status: "idle" });
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const targetValue = target.kind === "none" ? "" : target.value;
 
   useEffect(() => {
-    if (!projectPath) return;
+    if (target.kind === "none") return;
     void loadCached();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectPath]);
+  }, [target.kind, targetValue]);
 
   async function loadCached() {
     try {
-      const r = await fetch(
-        `/api/server/projects/align?project=${encodeURIComponent(projectPath)}`,
-      );
+      const r = await fetch(`/api/server${alignmentPath(target)}`);
       if (r.ok) {
         setState({ status: "done", result: normalizeAlignmentResult((await r.json()) as AlignmentResult) });
       }
@@ -55,9 +67,7 @@ export function useAlignment(projectPath: string) {
     async (force = false) => {
       setState({ status: "loading" });
       try {
-        const url =
-          `/api/server/projects/align?project=${encodeURIComponent(projectPath)}` +
-          (force ? "&force=true" : "");
+        const url = `/api/server${alignmentPath(target, force)}`;
         const r = await fetch(url, { method: "POST" });
         if (!r.ok) {
           const body = (await r.json()) as { error?: { message?: string } };
@@ -69,7 +79,7 @@ export function useAlignment(projectPath: string) {
         setState({ status: "error", message: String(err) });
       }
     },
-    [projectPath],
+    [target],
   );
 
   const selectSentence = useCallback(
@@ -95,6 +105,19 @@ export function useAlignment(projectPath: string) {
   );
 
   return { state, selected, runAlignment, selectSentence };
+}
+
+function alignmentPath(target: AlignmentTarget, force = false): string {
+  if (target.kind === "projectId") {
+    const suffix = force ? "?force=true" : "";
+    return `/projects/${encodeURIComponent(target.value)}/alignment${suffix}`;
+  }
+  if (target.kind === "path") {
+    const query = new URLSearchParams({ project: target.value });
+    if (force) query.set("force", "true");
+    return `/projects/align?${query.toString()}`;
+  }
+  return "/projects/align";
 }
 
 function normalizeAlignmentResult(result: AlignmentResult): AlignmentResult {

@@ -4,16 +4,16 @@ import { Suspense } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
 
-// Mutable so individual tests can override the "project" param value
-let _projectParam: string | null = null;
+// Mutable so individual tests can override the "projectId" param value
+let _projectIdParam: string | null = null;
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => ({ get: (k: string) => (k === "project" ? _projectParam : null) }),
+  useSearchParams: () => ({ get: (k: string) => (k === "projectId" ? _projectIdParam : null) }),
 }));
 
 beforeEach(() => {
-  _projectParam = null;
+  _projectIdParam = null;
   global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
   Element.prototype.scrollIntoView = vi.fn();
 });
@@ -31,20 +31,26 @@ function renderEditor() {
   );
 }
 
-it("shows no-project message when project param is absent", () => {
+it("shows no-project message when project id param is absent", () => {
   renderEditor();
   expect(screen.getByText(/No project open/i)).toBeInTheDocument();
 });
 
-it("shows project path in toolbar when project param is present", () => {
-  _projectParam = "E:/projects/demo";
+it("shows launcher recovery when project id param is malformed", () => {
+  _projectIdParam = "E:/projects/demo";
   renderEditor();
-  expect(screen.getByText("E:/projects/demo")).toBeInTheDocument();
+  expect(screen.getByText(/No project open/i)).toBeInTheDocument();
+});
+
+it("shows project id in toolbar when project id param is present", () => {
+  _projectIdParam = "p_demo";
+  renderEditor();
+  expect(screen.getByText("p_demo")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
 });
 
-const TEST_PROJECT_PATH = "E:/claude/video-creator/projects/test01";
+const TEST_PROJECT_ID = "p_test01";
 
 const TEST_ALIGNMENT = {
   sentences: [
@@ -125,11 +131,11 @@ const TEST_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"
 function mockTest01Fetch() {
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.includes("/projects/align")) return ok(TEST_ALIGNMENT);
-    if (url.includes("/projects/load")) return ok(TEST_PROJECT);
-    if (url.includes("/projects/media")) return ok(TEST_MEDIA);
-    if (url.includes("/projects/render")) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
-    if (url.includes("/projects/layers") && init?.method === "PUT") return ok({ layers: TEST_PROJECT.layers });
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(TEST_ALIGNMENT);
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") return ok({ project_id: TEST_PROJECT_ID, config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: true });
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`)) return ok({ project_id: TEST_PROJECT_ID, config: TEST_PROJECT, config_hash: "h1", has_unrendered_changes: false });
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/media`)) return ok(TEST_MEDIA);
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/render`)) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
     return { ok: false, json: async () => ({}) } as Response;
   });
 }
@@ -139,13 +145,13 @@ function ok(body: unknown): Response {
 }
 
 it("renders the test01 editor from project, alignment, and media data", async () => {
-  _projectParam = TEST_PROJECT_PATH;
+  _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
 
   renderEditor();
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
-  expect(screen.getByText(TEST_PROJECT_PATH)).toBeInTheDocument();
+  expect(screen.getByText(TEST_PROJECT_ID)).toBeInTheDocument();
   expect(screen.getByText("cache 3/3")).toBeInTheDocument();
   expect(screen.getByText(/Transcript/i)).toHaveTextContent("5");
   expect(screen.getByText("Subtitles · 1")).toBeInTheDocument();
@@ -158,7 +164,7 @@ it("renders the test01 editor from project, alignment, and media data", async ()
 });
 
 it("highlights search matches, scrolls to the first match, and advances with Enter", async () => {
-  _projectParam = TEST_PROJECT_PATH;
+  _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
 
   renderEditor();
@@ -174,7 +180,7 @@ it("highlights search matches, scrolls to the first match, and advances with Ent
 });
 
 it("opens assign media with the clicked sentence range and real thumbnails", async () => {
-  _projectParam = TEST_PROJECT_PATH;
+  _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
 
   renderEditor();

@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { dictionaries } from "@/lib/i18n/messages";
 
 const mocks = vi.hoisted(() => ({
-  projectParam: null as string | null,
+  projectIdParam: null as string | null,
   jobParam: null as string | null,
   replace: vi.fn(),
   push: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
   }),
   useSearchParams: () => ({
     get: (key: string) => {
-      if (key === "project") return mocks.projectParam;
+      if (key === "projectId") return mocks.projectIdParam;
       if (key === "job" || key === "renderId") return mocks.jobParam;
       return null;
     },
@@ -95,7 +95,7 @@ vi.mock("@/lib/render/useFfmpegLog", () => ({
 import RenderPage from "./page";
 
 beforeEach(() => {
-  mocks.projectParam = null;
+  mocks.projectIdParam = null;
   mocks.jobParam = null;
   mocks.push.mockReset();
   mocks.replace.mockReset();
@@ -111,7 +111,15 @@ function renderPage() {
   );
 }
 
-it("shows no-project message when project param is absent", () => {
+it("shows no-project message when project id param is absent", () => {
+  renderPage();
+
+  expect(screen.getByText(/No project open/i)).toBeInTheDocument();
+  expect(mocks.startRender).not.toHaveBeenCalled();
+});
+
+it("shows launcher recovery when project id is malformed", () => {
+  mocks.projectIdParam = "E:/projects/demo";
   renderPage();
 
   expect(screen.getByText(/No project open/i)).toBeInTheDocument();
@@ -119,16 +127,16 @@ it("shows no-project message when project param is absent", () => {
 });
 
 it("auto-starts a final render for a project route", async () => {
-  mocks.projectParam = "E:/projects/demo";
+  mocks.projectIdParam = "p_demo";
   renderPage();
 
   expect(screen.getByText("No render in progress")).toBeInTheDocument();
   await waitFor(() => expect(mocks.startRender).toHaveBeenCalledWith("final"));
-  expect(mocks.replace).toHaveBeenCalledWith("/render?project=E%3A%2Fprojects%2Fdemo&job=r-started");
+  expect(mocks.replace).toHaveBeenCalledWith("/render?projectId=p_demo&job=r-started");
 });
 
 it("does not auto-start when viewing an existing render", () => {
-  mocks.projectParam = "E:/projects/demo";
+  mocks.projectIdParam = "p_demo";
   mocks.jobParam = "r-existing";
   renderPage();
 

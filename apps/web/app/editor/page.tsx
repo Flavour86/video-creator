@@ -3,7 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { Project } from "@vc/shared-schemas";
+import type { Project, ProjectConfigLoadResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditorModal } from "@/components/editor/EditorModal";
@@ -16,16 +16,19 @@ import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
 import { Button } from "@/components/ui";
 import { request } from "@/lib/api/server";
-import { useAlignment } from "@/lib/hooks/useAlignment";
+import { useProjectAlignment } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
 function EditorContent() {
   const t = useTranslations("pages.editor");
   const router = useRouter();
   const params = useSearchParams();
-  const projectPath = params.get("project") ?? "";
-  const { state: alignmentState } = useAlignment(projectPath);
+  const requestedProjectId = params.get("projectId") ?? "";
+  const projectId = isValidProjectId(requestedProjectId) ? requestedProjectId : "";
+  const { state: alignmentState } = useProjectAlignment(projectId);
+  const [project, setProject] = useState<Project | null>(null);
   const [projectName, setProjectName] = useState("test01");
+  const [projectPath, setProjectPath] = useState("");
   const [audioFile, setAudioFile] = useState("");
   const [layers, setLayers] = useState<Layer[]>([]);
   const [media, setMedia] = useState<EditorMediaItem[]>([]);
@@ -57,24 +60,31 @@ function EditorContent() {
     return active ? [active.index, active.index] : [sentences[0]?.index ?? 1, sentences[0]?.index ?? 1];
   }, [currentTime, sentences]);
 
-  const loadProject = useCallback(async (path: string) => {
+  const loadProject = useCallback(async (id: string) => {
     try {
-      const [project, mediaItems] = await Promise.all([
-        request<Project>(`/projects/load?project=${encodeURIComponent(path)}` as `/${string}`),
-        request<EditorMediaItem[]>(`/projects/media?project=${encodeURIComponent(path)}` as `/${string}`),
+      const [response, mediaItems] = await Promise.all([
+        request<ProjectConfigLoadResponse>(`/projects/${encodeURIComponent(id)}/config` as `/${string}`),
+        request<EditorMediaItem[]>(`/projects/${encodeURIComponent(id)}/media` as `/${string}`),
       ]);
+      const config = response.config;
+      const resolvedProjectPath = await resolveProjectPath(id);
       loadedProjectRef.current = true;
       skipAutosaveRef.current = true;
-      setProjectName(project.name ?? path.split(/[\\/]/).pop() ?? "Project");
-      setAudioFile(project.audio ?? "");
-      setLayers((project.layers ?? []) as Layer[]);
+      setProject(config);
+      setProjectName(config.name ?? id);
+      setProjectPath(resolvedProjectPath);
+      setAudioFile(config.audio ?? "");
+      setLayers((config.layers ?? []) as Layer[]);
       setMedia(mediaItems);
-      const firstSelectable = (project.layers ?? []).flatMap((layer) => layer.kind === "sub" ? [] : layer.items.map((item) => ({ item, layer }))).find(({ item }) => "id" in item);
+      const firstSelectable = (config.layers ?? []).flatMap((layer) => layer.kind === "sub" ? [] : layer.items.map((item) => ({ item, layer }))).find(({ item }) => "id" in item);
       if (firstSelectable && "id" in firstSelectable.item) {
         setSelected({ layerId: firstSelectable.layer.id, itemId: firstSelectable.item.id });
       }
     } catch {
-      setProjectName(path.split(/[\\/]/).pop() ?? "Project");
+      loadedProjectRef.current = false;
+      setProject(null);
+      setProjectName(id);
+      setProjectPath("");
     }
   }, []);
 
@@ -87,9 +97,9 @@ function EditorContent() {
   }, []);
 
   useEffect(() => {
-    if (!projectPath) return;
-    void loadProject(projectPath);
-  }, [loadProject, projectPath]);
+    if (!projectId) return;
+    void loadProject(projectId);
+  }, [loadProject, projectId]);
 
   useEffect(() => {
     const firstSentence = sentences[0];
@@ -118,14 +128,17 @@ function EditorContent() {
   const saveNow = useCallback(async () => {
     setSaving(true);
     try {
-      await request(`/projects/layers?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "PUT", body: { layers } });
+      if (!project) return;
+      const nextProject: Project = { ...project, layers: layers as Project["layers"] };
+      await request(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, { method: "PUT", body: { config: nextProject } });
+      setProject(nextProject);
     } finally {
       setSaving(false);
     }
-  }, [layers, projectPath]);
+  }, [layers, project, projectId]);
 
   useEffect(() => {
-    if (!projectPath || !loadedProjectRef.current) {
+    if (!projectId || !loadedProjectRef.current) {
       return;
     }
     if (skipAutosaveRef.current) {
@@ -136,28 +149,28 @@ function EditorContent() {
       void saveNow();
     }, 900);
     return () => window.clearTimeout(timeout);
-  }, [layers, projectPath, saveNow]);
+  }, [layers, projectId, saveNow]);
 
   const renderDraft = useCallback(async () => {
     setRenderJob({ phase: "starting", progress: 0, running: true });
     try {
-      const result = await request<{ render_id: string }>(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "draft" } });
-      router.push(`/render?project=${encodeURIComponent(projectPath)}&job=${encodeURIComponent(result.render_id)}`);
+      const result = await request<{ render_id: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "draft" } });
+      router.push(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(result.render_id)}`);
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false });
     }
-  }, [projectPath, router]);
+  }, [projectId, router]);
 
   const renderFinal = useCallback(async () => {
     try {
-      const result = await request<{ render_id: string }>(`/projects/render?project=${encodeURIComponent(projectPath)}` as `/${string}`, { method: "POST", body: { preset: "final" } });
-      router.push(`/render?project=${encodeURIComponent(projectPath)}&job=${encodeURIComponent(result.render_id)}`);
+      const result = await request<{ render_id: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "final" } });
+      router.push(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(result.render_id)}`);
       return;
     } catch {
       // Render screen shows final status.
     }
-    router.push(`/render?project=${encodeURIComponent(projectPath)}`);
-  }, [projectPath, router]);
+    router.push(`/render?projectId=${encodeURIComponent(projectId)}`);
+  }, [projectId, router]);
 
   const matches = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -180,7 +193,7 @@ function EditorContent() {
     }
   }
 
-  if (!projectPath) {
+  if (!projectId) {
     return (
       <PageChrome variant="empty">
         <p className="vc-type-body text-(--text-2)">{t("noProject")}</p>
@@ -194,13 +207,13 @@ function EditorContent() {
       <EditorBar
         cacheLabel={cacheLabel}
         onChangeBackground={() => setModal("background")}
-        onOpenFolder={() => void request("/system/reveal", { method: "POST", body: { path: projectPath } })}
+        onOpenFolder={() => projectPath ? void request("/system/reveal", { method: "POST", body: { path: projectPath } }) : router.push("/")}
         onRenderDraft={renderDraft}
         onRenderFinal={renderFinal}
         onSave={() => void saveNow()}
         onSubtitles={() => setModal("subtitles")}
         projectName={projectName}
-        projectPath={projectPath}
+        projectPath={projectId}
         renderJob={renderJob}
         saving={saving}
       />
@@ -255,7 +268,7 @@ function EditorContent() {
         </main>
         <Inspector layers={layers} media={media} onOpenBackground={() => setModal("background")} onOpenUpload={() => setModal("upload")} projectPath={projectPath} selected={selected} />
       </div>
-      {audioFile ? (
+      {audioFile && projectPath ? (
         <audio
           data-testid="editor-audio"
           onEnded={() => setPlaying(false)}
@@ -268,6 +281,19 @@ function EditorContent() {
       <EditorModal assignRange={assignRange} media={media} modal={modal} onClose={() => setModal(null)} projectPath={projectPath} />
     </PageChrome>
   );
+}
+
+async function resolveProjectPath(projectId: string): Promise<string> {
+  try {
+    const projects = await request<Array<{ project_id: string; path: string }>>("/projects");
+    return projects.find((project) => project.project_id === projectId)?.path ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function isValidProjectId(value: string): boolean {
+  return /^p_[A-Za-z0-9_-]+$/.test(value);
 }
 
 export default function EditorPage() {
