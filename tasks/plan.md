@@ -389,14 +389,14 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Match prototype toolbar: home icon, project title, `projectId`, cache tag, `Save`, `Render Draft`, and `Render Final`; remove path crumb, open folder, change background, and subtitles toolbar actions.
 
 **Acceptance criteria:**
-- [ ] Left toolbar has back/home icon, project title, and project id metadata only.
-- [ ] Right toolbar has cache status, `Save`, `Render Draft`, `Render Final`.
-- [ ] Render buttons follow spec enablement for new aligned projects and already-rendered projects.
-- [ ] Active render buttons attach to or disable against active jobs.
+- [x] Left toolbar has back/home icon, project title, and project id metadata only.
+- [x] Right toolbar has cache status, `Save`, `Render Draft`, `Render Final`.
+- [x] Render buttons follow spec enablement for new aligned projects and already-rendered projects.
+- [x] Active render buttons attach to or disable against active jobs.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/EditorBar.test.tsx app/editor/page.test.tsx`
-- [ ] Browser check Editor toolbar against prototype.
+- [x] `rtk pnpm -F @vc/web test -- components/editor/EditorBar.test.tsx app/editor/page.test.tsx`
+- [x] Browser check Editor toolbar against prototype.
 
 **Dependencies:** Tasks 12, 13
 

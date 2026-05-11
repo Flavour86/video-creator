@@ -246,17 +246,15 @@ function EditorContent() {
     <PageChrome className="grid h-[calc(100vh-44px-40px)] grid-rows-[48px_1fr] overflow-hidden">
       <EditorBar
         cacheLabel={cacheLabel}
-        onChangeBackground={() => setModal("background")}
-        onOpenFolder={() => projectPath ? void request("/system/reveal", { method: "POST", body: { path: projectPath } }) : router.push("/")}
+        onHome={() => router.push("/")}
         onRenderDraft={renderDraft}
         onRenderFinal={renderFinal}
         onSave={() => void saveNow()}
-        onSubtitles={() => setModal("subtitles")}
         projectName={projectName}
-          projectPath={projectId}
-          renderJob={renderJob}
-          renderDisabled={!hasUnrenderedChanges}
-          saveStatus={saveStatus}
+        projectId={projectId}
+        renderJob={renderJob}
+        renderDisabled={!hasUnrenderedChanges}
+        saveStatus={saveStatus}
           saving={saving}
         />
       <div className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] divide-x divide-(--line) bg-(--line)">

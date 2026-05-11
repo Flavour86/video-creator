@@ -27,7 +27,7 @@
 
 - [x] Task 12: Load/save Editor config through SQLite `project_configs`.
 - [x] Task 13: Add browser-local incremental operation log, recovery, undo, and redo.
-- [ ] Task 14: Refactor Editor toolbar to prototype controls and render enablement.
+- [x] Task 14: Refactor Editor toolbar to prototype controls and render enablement.
 - [ ] Task 15: Implement draft render strip states and cancellation.
 - [ ] Checkpoint: save/load/recovery/toolbar/draft render foundation works.
 
