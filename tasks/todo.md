@@ -6,7 +6,7 @@
 - [x] Task 2: Add SQLite migration runner with `schema_migrations`.
 - [x] Task 3: Implement `projects` table and stable `project_id`.
 - [x] Task 4: Implement `project_configs` canonical save snapshots and config hashes.
-- [ ] Task 5: Implement `render_artifacts` and `render_events`.
+- [x] Task 5: Implement `render_artifacts` and `render_events`.
 - [ ] Checkpoint: shared schemas regenerate, server tests pass, DB schema reviewed.
 
 ## Phase 2: API Surface And Project Flow

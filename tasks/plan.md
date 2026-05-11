@@ -138,13 +138,13 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Add `render_artifacts` and `render_events` tables and accessor functions for final/draft MP4s, partials, logs, filtergraphs, subtitles, thumbnails, and event timeline.
 
 **Acceptance criteria:**
-- [ ] Every render can store typed artifacts with path, size, hash, created timestamp, and reuse eligibility.
-- [ ] Render events persist stage/log/status data needed by Render page and history.
-- [ ] Deleting/pruning a render removes DB rows and handles generated files safely.
+- [x] Every render can store typed artifacts with path, size, hash, created timestamp, and reuse eligibility.
+- [x] Render events persist stage/log/status data needed by Render page and history.
+- [x] Deleting/pruning a render removes DB rows and handles generated files safely.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/server test -- test_render_history.py test_render_endpoint.py`
-- [ ] Add tests for partial outputs excluded from play actions.
+- [x] `rtk pnpm -F @vc/server test -- test_render_history.py test_render_endpoint.py`
+- [x] Add tests for partial outputs excluded from play actions.
 
 **Dependencies:** Task 2
 

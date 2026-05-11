@@ -18,6 +18,8 @@ def test_init_creates_tables(monkeypatch, tmp_path: Path) -> None:
     assert "projects" in names
     assert "app_settings" in names
     assert "project_configs" in names
+    assert "render_artifacts" in names
+    assert "render_events" in names
     assert "render_history" in names
     assert "schema_migrations" in names
 
@@ -34,6 +36,7 @@ def test_init_records_migration_once(monkeypatch, tmp_path: Path) -> None:
         (1, "initial"),
         (2, "projects"),
         (3, "project_configs"),
+        (4, "render_artifacts_events"),
     ]
 
 

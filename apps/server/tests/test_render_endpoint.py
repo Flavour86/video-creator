@@ -190,6 +190,32 @@ async def test_play_render_calls_default_player(monkeypatch, tmp_path: Path) -> 
     assert opened == [output_path]
 
 
+@pytest.mark.asyncio
+async def test_play_partial_render_is_rejected(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    output_path = tmp_path / ".vc" / "drafts" / "draft.partial"
+    output_path.parent.mkdir(parents=True)
+    output_path.write_bytes(b"partial")
+    insert_render(
+        render_id="r-partial",
+        project_path=tmp_path,
+        output_path=output_path,
+        preset="draft",
+        started_at=datetime_now(),
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/projects/renders/r-partial/play",
+            params={"project": str(tmp_path)},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RENDER_NOT_PLAYABLE"
+
+
 def datetime_now():
     from datetime import UTC, datetime
 
