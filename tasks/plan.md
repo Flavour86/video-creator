@@ -91,13 +91,13 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Add `projects` table with stable `project_id`, path, name, status fields, thumbnails, config hashes, and render enablement metadata. Migrate existing `recent_projects` rows into this model.
 
 **Acceptance criteria:**
-- [ ] `projects` stores `project_id`, normalized path, name, timestamps, alignment state, thumbnail path, current/latest rendered config hashes, and unrendered-change flag.
-- [ ] Recent project list is returned by `project_id` and never exposes raw path in primary UI data.
-- [ ] Missing/corrupt projects can be represented as states instead of crashing list rendering.
+- [x] `projects` stores `project_id`, normalized path, name, timestamps, alignment state, thumbnail path, current/latest rendered config hashes, and unrendered-change flag.
+- [x] Recent project list is returned by `project_id` and never exposes raw path in primary UI data.
+- [x] Missing/corrupt projects can be represented as states instead of crashing list rendering.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/server test -- test_app_db.py test_projects_route.py`
-- [ ] Manual DB query confirms migrated rows.
+- [x] `rtk pnpm -F @vc/server test -- test_app_db.py test_projects_route.py`
+- [x] Manual DB query confirms migrated rows.
 
 **Dependencies:** Task 2
 

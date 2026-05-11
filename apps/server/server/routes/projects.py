@@ -11,8 +11,16 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
-from server.db.projects import list_recent, remove_recent, touch_recent
-from server.domain.project import AlignmentState, Project, RecentProject, load_project, save_project
+from server.db.projects import list_projects, list_recent, remove_recent, touch_recent
+from server.domain.project import (
+    AlignmentState,
+    Project,
+    ProjectStatus,
+    RecentProject,
+    RecentProjectCard,
+    load_project,
+    save_project,
+)
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
@@ -58,6 +66,44 @@ def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") ->
         alignment_state=alignment_state,
         palette_seed=name,
     )
+
+
+def _project_card(row: dict[str, object]) -> RecentProjectCard:
+    project_dir = Path(str(row["path"]))
+    project = _load_recent_project(project_dir)
+    audio_path = _audio_path(project_dir, project)
+    transcript_path = _transcript_path(project_dir, project)
+    transcript_text = _read_text(transcript_path)
+    alignment = _load_current_alignment(project_dir, audio_path, transcript_text)
+    alignment_state = _alignment_state(audio_path, transcript_path, transcript_text, alignment)
+    return RecentProjectCard(
+        project_id=str(row["project_id"]),
+        name=str(row["name"]),
+        last_opened_at=str(row["last_opened_at"]),
+        voice_duration=_voice_duration(audio_path),
+        sentence_count=_sentence_count(transcript_text, alignment, alignment_state),
+        media_count=_media_count(project_dir),
+        alignment_state=alignment_state,
+        status=_project_status(project_dir, project),
+        thumbnail_path=_optional_str(row.get("thumbnail_path")),
+        current_config_hash=_optional_str(row.get("current_config_hash")),
+        last_rendered_config_hash=_optional_str(row.get("last_rendered_config_hash")),
+        has_unrendered_changes=bool(row.get("has_unrendered_changes")),
+        latest_render_id=_optional_str(row.get("latest_render_id")),
+        latest_render_status=row.get("latest_render_status"),
+    )
+
+
+def _project_status(project_dir: Path, project: Project | None) -> ProjectStatus:
+    if not project_dir.exists():
+        return ProjectStatus.missing
+    if project is None:
+        return ProjectStatus.corrupt
+    return ProjectStatus.ready
+
+
+def _optional_str(value: object) -> str | None:
+    return str(value) if value is not None else None
 
 
 def _load_recent_project(project_dir: Path) -> Project | None:
@@ -251,6 +297,11 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
     )
     touch_recent(project_dir, payload.name)
     return ProjectResponse(path=str(project_dir), name=payload.name)
+
+
+@router.get("", response_model=list[RecentProjectCard])
+async def projects(limit: int = Query(default=20, ge=1, le=500)) -> list[RecentProjectCard]:
+    return [_project_card(row) for row in list_projects(limit=limit)]
 
 
 @router.post("/new", response_model=ProjectResponse)

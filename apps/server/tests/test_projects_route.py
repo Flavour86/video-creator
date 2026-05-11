@@ -98,6 +98,53 @@ async def test_recent_open_and_remove_project(monkeypatch, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_projects_list_returns_project_id_cards_without_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "metadata"
+    _write_project(project_dir, "First sentence. Second sentence.")
+    touch_recent(project_dir, "Rich Metadata")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects")
+
+    assert response.status_code == 200
+    project = response.json()[0]
+    assert project["project_id"].startswith("p_")
+    assert "path" not in project
+    assert project["name"] == "Rich Metadata"
+    assert project["sentence_count"] == 2
+    assert project["status"] == "ready"
+    assert project["has_unrendered_changes"] is False
+
+
+@pytest.mark.asyncio
+async def test_projects_list_represents_missing_and_corrupt_projects(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    missing = tmp_path / "missing"
+    corrupt = tmp_path / "corrupt"
+    corrupt.mkdir()
+    (corrupt / "project.json").write_text("{not json", encoding="utf-8")
+    touch_recent(missing, "Missing")
+    touch_recent(corrupt, "Corrupt")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects")
+
+    assert response.status_code == 200
+    by_name = {project["name"]: project for project in response.json()}
+    assert by_name["Missing"]["status"] == "missing"
+    assert by_name["Corrupt"]["status"] == "corrupt"
+
+
+@pytest.mark.asyncio
 async def test_recent_projects_include_voice_transcript_media_metadata(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -2,7 +2,7 @@ from pathlib import Path
 import sqlite3
 
 from server.db.app_db import connection, init_db
-from server.db.projects import list_recent, remove_recent, touch_recent
+from server.db.projects import list_projects, list_recent, project_id_for_path, remove_recent, touch_recent
 from server.settings import settings
 
 
@@ -15,6 +15,7 @@ def test_init_creates_tables(monkeypatch, tmp_path: Path) -> None:
         ).fetchall()
     names = [row["name"] for row in rows]
     assert "recent_projects" in names
+    assert "projects" in names
     assert "app_settings" in names
     assert "render_history" in names
     assert "schema_migrations" in names
@@ -28,7 +29,7 @@ def test_init_records_migration_once(monkeypatch, tmp_path: Path) -> None:
         rows = conn.execute(
             "SELECT version, name FROM schema_migrations ORDER BY version"
         ).fetchall()
-    assert [(row["version"], row["name"]) for row in rows] == [(1, "initial")]
+    assert [(row["version"], row["name"]) for row in rows] == [(1, "initial"), (2, "projects")]
 
 
 def test_init_upgrades_existing_inline_schema_without_data_loss(
@@ -69,8 +70,11 @@ def test_init_upgrades_existing_inline_schema_without_data_loss(
     with connection() as conn:
         project = conn.execute("SELECT name FROM recent_projects WHERE path = 'E:/demo'").fetchone()
         migration = conn.execute("SELECT version FROM schema_migrations").fetchone()
+        migrated_project = conn.execute("SELECT project_id, name FROM projects WHERE path = 'E:/demo'").fetchone()
     assert project["name"] == "Demo"
     assert migration["version"] == 1
+    assert migrated_project["project_id"].startswith("p_")
+    assert migrated_project["name"] == "Demo"
 
 
 def test_recent_round_trip(monkeypatch, tmp_path: Path) -> None:
@@ -79,7 +83,11 @@ def test_recent_round_trip(monkeypatch, tmp_path: Path) -> None:
     project_path.mkdir()
     touch_recent(project_path, "My Project")
     rows = list_recent()
+    project_rows = list_projects()
     assert len(rows) == 1
     assert rows[0]["name"] == "My Project"
+    assert project_rows[0]["project_id"] == project_id_for_path(project_path)
+    assert project_rows[0]["name"] == "My Project"
     remove_recent(project_path)
     assert list_recent() == []
+    assert list_projects() == []
