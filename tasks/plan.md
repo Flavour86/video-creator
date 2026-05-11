@@ -250,15 +250,15 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Refactor Launcher to the prototype layout and states: header, `New project`, recent cards only, optional play render action for rendered projects, no runtime/tips/open-folder/create-another UI.
 
 **Acceptance criteria:**
-- [ ] Top-level Launcher shows product header, `LOCAL WORKSPACE`, `Recent projects`, and a single `New project` button.
-- [ ] Project cards show thumbnail, name, voice duration, sentence count, media count, last opened, alignment/render status, and optional current render status.
-- [ ] Raw folder paths are not shown in primary project cards.
-- [ ] Rendered project cards expose `Play render` and call backend play/open for latest successful render.
-- [ ] Empty, missing folder, corrupt config, alignment pending/failed, running render, picker cancelled, and permission denied states render cleanly.
+- [x] Top-level Launcher shows product header, `LOCAL WORKSPACE`, `Recent projects`, and a single `New project` button.
+- [x] Project cards show thumbnail, name, voice duration, sentence count, media count, last opened, alignment/render status, and optional current render status.
+- [x] Raw folder paths are not shown in primary project cards.
+- [x] Rendered project cards expose `Play render` and call backend play/open for latest successful render.
+- [x] Empty, missing folder, corrupt config, alignment pending/failed, running render, picker cancelled, and permission denied states render cleanly.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- app/page.test.tsx components/launcher`
-- [ ] Browser check Launcher page against prototype.
+- [x] `rtk pnpm -F @vc/web test -- app/page.test.tsx components/launcher`
+- [x] Browser check Launcher page against prototype.
 
 **Dependencies:** Tasks 3, 6, 7
 

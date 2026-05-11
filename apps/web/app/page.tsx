@@ -1,14 +1,12 @@
 "use client";
 
-import { FolderOpen, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import type { RecentProject } from "@vc/shared-schemas";
+import type { RecentProjectCard } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { ProjectCard } from "@/components/launcher/ProjectCard";
-import { RuntimeCard } from "@/components/launcher/RuntimeCard";
-import { TipsCard } from "@/components/launcher/TipsCard";
 import { Button, Field, TextInput } from "@/components/ui";
 import { request, ServerRequestError } from "@/lib/api/server";
 
@@ -20,25 +18,10 @@ type ProjectCreateResponse = {
   name: string;
 };
 
-function isTransientTestProject(project: RecentProject): boolean {
-  const normalizedPath = project.path.toLowerCase();
-
-  return (
-    normalizedPath.includes("\\appdata\\local\\temp\\") ||
-    normalizedPath.includes("/appdata/local/temp/") ||
-    normalizedPath.includes("pytest-of-") ||
-    normalizedPath.includes(".ctx-mode-")
-  );
-}
-
-function presentableProjects(projects: RecentProject[]): RecentProject[] {
-  return projects.filter((project) => !isTransientTestProject(project));
-}
-
 export default function LauncherPage() {
   const t = useTranslations("pages.launcher");
   const router = useRouter();
-  const [projects, setProjects] = useState<RecentProject[]>([]);
+  const [projects, setProjects] = useState<RecentProjectCard[]>([]);
   const [recentError, setRecentError] = useState(false);
   const [pickerState, setPickerState] = useState<FolderPickerState>("idle");
   const [folderPath, setFolderPath] = useState("");
@@ -48,8 +31,8 @@ export default function LauncherPage() {
   useEffect(() => {
     async function loadRecent() {
       try {
-        const recent = await request<RecentProject[]>("/projects/recent");
-        setProjects(presentableProjects(recent));
+        const recent = await request<RecentProjectCard[]>("/projects");
+        setProjects(recent);
         setRecentError(false);
       } catch {
         setProjects([]);
@@ -60,13 +43,21 @@ export default function LauncherPage() {
     void loadRecent();
   }, []);
 
-  async function openProject(project: RecentProject) {
-    try {
-      await request<RecentProject>("/projects/open", { method: "POST", body: { path: project.path } });
-      router.push(`/editor?project=${encodeURIComponent(project.path)}`);
-    } catch {
-      router.push(`/setup?path=${encodeURIComponent(project.path)}`);
+  function openProject(project: RecentProjectCard) {
+    if (project.alignment_state === "aligned" && project.status === "ready") {
+      router.push(`/editor?projectId=${encodeURIComponent(project.project_id)}`);
+      return;
     }
+    router.push(`/setup?projectId=${encodeURIComponent(project.project_id)}`);
+  }
+
+  async function playLatestRender(project: RecentProjectCard) {
+    if (!project.latest_render_id) {
+      return;
+    }
+    await request(`/projects/${encodeURIComponent(project.project_id)}/renders/${encodeURIComponent(project.latest_render_id)}/play`, {
+      method: "POST",
+    });
   }
 
   function startFolderSelection() {
@@ -106,17 +97,13 @@ export default function LauncherPage() {
   }
 
   return (
-    <PageChrome className="mx-auto grid max-w-350 grid-cols-[minmax(0,1fr)_360px] gap-4.5 p-(--space-9)">
+    <PageChrome className="mx-auto max-w-350 p-(--space-9)">
       <header className="col-span-full mb-4.5 flex items-end justify-between gap-(--space-7)">
         <div className="whitespace-nowrap">
           <p className="vc-type-eyebrow mb-(--space-2) text-(--text-3)">{t("eyebrow")}</p>
           <h1 className="vc-type-display">{t("title")}</h1>
         </div>
         <div className="flex gap-(--space-3)">
-          <Button onClick={startFolderSelection} variant="ghost">
-            <FolderOpen aria-hidden="true" className="h-(--space-4) w-(--space-4)" />
-            {t("openFolder")}
-          </Button>
           <Button onClick={startFolderSelection} variant="primary">
             <Plus aria-hidden="true" className="h-(--space-4) w-(--space-4)" />
             {t("newProject")}
@@ -162,15 +149,20 @@ export default function LauncherPage() {
             {t("recentUnavailable")}
           </div>
         ) : null}
+        {projects.length === 0 && !recentError ? (
+          <div className="rounded-(--r) border border-dashed border-(--line) bg-(--bg-2) px-(--space-6) py-(--space-8) text-center text-sm text-(--text-3)">
+            No projects yet.
+          </div>
+        ) : null}
         {projects.map((project) => (
-          <ProjectCard key={project.path} onClick={() => void openProject(project)} project={project} />
+          <ProjectCard
+            key={project.project_id}
+            onClick={() => openProject(project)}
+            onPlayLatest={() => void playLatestRender(project)}
+            project={project}
+          />
         ))}
-        <ProjectCard onClick={startFolderSelection} variant="empty" />
       </section>
-      <aside className="flex flex-col gap-(--space-6)">
-        <RuntimeCard />
-        <TipsCard />
-      </aside>
     </PageChrome>
   );
 }

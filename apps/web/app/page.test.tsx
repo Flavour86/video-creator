@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RecentProject, RuntimeHealthResponse } from "@vc/shared-schemas";
+import type { RecentProjectCard, RuntimeHealthResponse } from "@vc/shared-schemas";
 import { dictionaries } from "@/lib/i18n/messages";
 import LauncherPage from "./page";
 
@@ -40,12 +40,12 @@ function mockServer({
 }: {
   createOk?: boolean;
   createPayload?: unknown;
-  recent: RecentProject[];
+  recent: RecentProjectCard[];
   recentOk?: boolean;
 }) {
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.endsWith("/projects/recent")) {
+    if (url.endsWith("/projects")) {
       return {
         ok: recentOk,
         json: async () => recent,
@@ -57,6 +57,9 @@ function mockServer({
         status: createOk ? 200 : 409,
         json: async () => createPayload,
       } as Response;
+    }
+    if (url.endsWith("/play") && init?.method === "POST") {
+      return { ok: true, json: async () => ({ ok: true }) } as Response;
     }
     if (url.endsWith("/health")) {
       return {
@@ -78,9 +81,10 @@ describe("LauncherPage", () => {
     renderLauncher();
     expect(screen.getByRole("heading", { name: "Recent projects" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /New project/ }).className).toContain("bg-(--blue)");
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith("/api/server/projects/recent"));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith("/api/server/projects"));
     expect(screen.queryByText("Tokyo Essay")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create another project" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create another project" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open folder…" })).not.toBeInTheDocument();
   });
 
   it("keeps prototype projects hidden when recent projects cannot be loaded", async () => {
@@ -88,30 +92,61 @@ describe("LauncherPage", () => {
     renderLauncher();
     await waitFor(() => expect(screen.getByText("Recent projects unavailable")).toBeInTheDocument());
     expect(screen.queryByText("Tokyo Essay")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create another project" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create another project" })).not.toBeInTheDocument();
   });
 
-  it("shows recent projects from the sidecar", async () => {
+  it("shows project-id cards from the sidecar without raw paths", async () => {
     mockServer({
       recent: [
         {
-          path: "E:\\projects\\demo",
+          project_id: "p_demo",
           name: "Demo",
           last_opened_at: "2026-05-07T00:00:00Z",
           voice_duration: "",
           sentence_count: 0,
           media_count: 3,
           alignment_state: "pending",
-          palette_seed: "demo",
+          status: "ready",
+          has_unrendered_changes: true,
         },
       ],
     });
     renderLauncher();
     await waitFor(() => expect(screen.getByText("Demo")).toBeInTheDocument());
-    const card = screen.getByText("Demo").closest("button");
+    const card = screen.getByText("Demo").closest("article");
     expect(card?.className).toContain("bg-(--bg-2)");
     expect(card).toHaveTextContent("3 media");
+    expect(card).toHaveTextContent("p_demo");
+    expect(card).not.toHaveTextContent("E:\\projects\\demo");
     expect(screen.getByText("pending")).toBeInTheDocument();
+  });
+
+  it("plays the latest successful render from a project card", async () => {
+    mockServer({
+      recent: [
+        {
+          project_id: "p_done",
+          name: "Rendered",
+          last_opened_at: "2026-05-07T00:00:00Z",
+          voice_duration: "01:10",
+          sentence_count: 12,
+          media_count: 3,
+          alignment_state: "aligned",
+          status: "ready",
+          has_unrendered_changes: false,
+          latest_render_id: "r_latest",
+          latest_render_status: "done",
+        },
+      ],
+    });
+    renderLauncher();
+    fireEvent.click(await screen.findByRole("button", { name: "Play render" }));
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/server/projects/p_done/renders/r_latest/play",
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
   });
 
   it("opens the folder boundary instead of routing straight to setup", async () => {
