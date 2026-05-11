@@ -2,8 +2,8 @@
 
 ## Phase 1: Contracts And Persistence Foundation
 
-- [ ] Task 1: Extend shared schema for project config, media, layers, setup, render, and response models.
-- [ ] Task 2: Add SQLite migration runner with `schema_migrations`.
+- [x] Task 1: Extend shared schema for project config, media, layers, setup, render, and response models.
+- [x] Task 2: Add SQLite migration runner with `schema_migrations`.
 - [ ] Task 3: Implement `projects` table and stable `project_id`.
 - [ ] Task 4: Implement `project_configs` canonical save snapshots and config hashes.
 - [ ] Task 5: Implement `render_artifacts` and `render_events`.

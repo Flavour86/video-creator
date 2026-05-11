@@ -42,15 +42,15 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Update `packages/shared-schemas/project.schema.json` and generated TS/Python types so the saved project config supports media metadata, watermark media, subtitles settings, background playlists, visual item cache/orphan state, render/project summaries, and config hashes required by the spec.
 
 **Acceptance criteria:**
-- [ ] Project config validates `media` assets with id, name, kind, path, thumb path, dimensions, duration, size, hash, import mode, and timestamp.
-- [ ] Layers validate `sub`, `pip`, `fg`, and `bg`, including `mediaId` or playlist `mediaIds`, sentence ranges, start/end seconds, motion, transitions, PiP placement, cache status, and orphan status.
-- [ ] Shared response models cover recent project cards, setup draft, alignment state, render history rows, render artifacts, and project config save/load responses.
+- [x] Project config validates `media` assets with id, name, kind, path, thumb path, dimensions, duration, size, hash, import mode, and timestamp.
+- [x] Layers validate `sub`, `pip`, `fg`, and `bg`, including `mediaId` or playlist `mediaIds`, sentence ranges, start/end seconds, motion, transitions, PiP placement, cache status, and orphan status.
+- [x] Shared response models cover recent project cards, setup draft, alignment state, render history rows, render artifacts, and project config save/load responses.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/shared-schemas gen:ts`
-- [ ] `rtk pnpm -F @vc/shared-schemas gen:py`
-- [ ] `rtk pnpm -F @vc/server test -- test_project_schema.py test_shared_api_schemas.py`
-- [ ] `rtk pnpm -F @vc/web test -- lib`
+- [x] `rtk pnpm -F @vc/shared-schemas gen:ts`
+- [x] `rtk pnpm -F @vc/shared-schemas gen:py`
+- [x] `rtk pnpm -F @vc/server test -- test_project_schema.py test_shared_api_schemas.py`
+- [x] `rtk pnpm -F @vc/web test -- lib`
 
 **Dependencies:** None
 
@@ -68,13 +68,13 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Replace inline-only schema initialization with an idempotent migration runner that creates `schema_migrations` and runs ordered SQL/Python migrations inside transactions.
 
 **Acceptance criteria:**
-- [ ] DB initialization applies migrations exactly once and records version/checksum.
-- [ ] Tests can run migrations against temp SQLite files.
-- [ ] Existing app DBs with current tables are upgraded without data loss.
+- [x] DB initialization applies migrations exactly once and records version/checksum.
+- [x] Tests can run migrations against temp SQLite files.
+- [x] Existing app DBs with current tables are upgraded without data loss.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/server test -- test_app_db.py`
-- [ ] Manual temp DB migration from old `recent_projects`/`render_history` schema.
+- [x] `rtk pnpm -F @vc/server test -- test_app_db.py`
+- [x] Manual temp DB migration from old `recent_projects`/`render_history` schema.
 
 **Dependencies:** Task 1
 

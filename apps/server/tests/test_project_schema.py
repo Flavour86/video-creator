@@ -72,6 +72,64 @@ def test_fg_layer_round_trip(tmp_path: Path) -> None:
     assert loaded.layers[1].root.items[0].media_id == "img.jpg"
 
 
+def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
+    project = Project.model_validate(
+        {
+            "version": 1,
+            "project_id": "p-demo",
+            "config_hash": "sha256:current",
+            "last_rendered_config_hash": "sha256:rendered",
+            "name": "test",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "final"},
+            "media": [
+                {
+                    "id": "media-bg-1",
+                    "name": "bg.jpg",
+                    "kind": "image",
+                    "path": "media/bg.jpg",
+                    "thumb_path": ".vc/thumbs/bg.jpg",
+                    "dimensions": {"width": 1920, "height": 1080},
+                    "duration": None,
+                    "size": 1234,
+                    "hash": "sha256:bg",
+                    "import_mode": "copy",
+                    "imported_at": "2026-05-09T00:00:00Z",
+                }
+            ],
+            "layers": [
+                {
+                    "id": "L-bg",
+                    "kind": "bg",
+                    "name": "Background",
+                    "items": [
+                        {
+                            "id": "bg-playlist",
+                            "mediaId": "media-bg-1",
+                            "mediaIds": ["media-bg-1"],
+                            "sentences": [1, 2],
+                            "start": 0,
+                            "end": 10,
+                            "motion": {"kind": "ken_burns", "easing": "ease_in_out"},
+                            "transitions": {"in": "cut", "out": "fade"},
+                            "crossfade": 0.4,
+                            "cache_status": "warm",
+                            "orphaned": False,
+                            "orphan_reason": None,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert project.project_id == "p-demo"
+    assert project.media[0].id == "media-bg-1"
+    assert project.layers[0].root.items[0].media_ids == ["media-bg-1"]
+    assert project.layers[0].root.items[0].cache_status.value == "warm"
+
+
 def test_invalid_version_rejected() -> None:
     with pytest.raises(ValidationError):
         Project.model_validate({"version": 2, "name": "x"})

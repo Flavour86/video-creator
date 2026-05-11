@@ -10,9 +10,16 @@
     "name": { "type": "string", "minLength": 1, "maxLength": 200 },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" },
+    "project_id": { "type": "string", "minLength": 1 },
+    "config_hash": { "type": "string", "minLength": 1 },
+    "last_rendered_config_hash": { "type": "string", "minLength": 1 },
     "audio": { "type": "string" },
     "transcript": { "$ref": "#/$defs/Transcript" },
     "output": { "$ref": "#/$defs/Output" },
+    "media": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/MediaAsset" }
+    },
     "layers": {
       "type": "array",
       "description": "Ordered top-to-bottom in render stack: subtitles first, background last.",
@@ -62,6 +69,63 @@
     "DetectedTranscriptState": {
       "title": "DetectedTranscriptState",
       "enum": ["parsed", "empty", "invalid"]
+    },
+    "ProjectStatus": {
+      "title": "ProjectStatus",
+      "enum": ["ready", "missing", "corrupt", "alignment_pending", "alignment_failed", "rendering"]
+    },
+    "RenderStatus": {
+      "title": "RenderStatus",
+      "enum": ["queued", "running", "done", "error", "cancelled", "partial"]
+    },
+    "RenderPreset": {
+      "title": "RenderPreset",
+      "enum": ["draft", "final"]
+    },
+    "RenderArtifactKind": {
+      "title": "RenderArtifactKind",
+      "enum": ["final_mp4", "draft_mp4", "partial", "log", "filtergraph", "subtitles", "thumbnail", "companion"]
+    },
+    "MediaKind": {
+      "title": "MediaKind",
+      "enum": ["image", "video", "audio", "watermark_image", "watermark_video"]
+    },
+    "MediaImportMode": {
+      "title": "MediaImportMode",
+      "enum": ["copy", "link", "generated"]
+    },
+    "VisualCacheStatus": {
+      "title": "VisualCacheStatus",
+      "enum": ["warm", "partial", "cold", "invalid", "orphaned"]
+    },
+    "Dimensions": {
+      "title": "Dimensions",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "MediaAsset": {
+      "title": "MediaAsset",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "kind", "path", "import_mode", "imported_at"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/MediaKind" },
+        "path": { "type": "string", "minLength": 1 },
+        "thumb_path": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "dimensions": { "oneOf": [{ "$ref": "#/$defs/Dimensions" }, { "type": "null" }] },
+        "duration": { "oneOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] },
+        "size": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "import_mode": { "$ref": "#/$defs/MediaImportMode" },
+        "imported_at": { "type": "string", "format": "date-time" }
+      }
     },
     "SidecarStatus": {
       "title": "SidecarStatus",
@@ -160,6 +224,38 @@
         "palette_seed": { "type": "string" }
       }
     },
+    "RecentProjectCard": {
+      "title": "RecentProjectCard",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "name",
+        "last_opened_at",
+        "voice_duration",
+        "sentence_count",
+        "media_count",
+        "alignment_state",
+        "status",
+        "has_unrendered_changes"
+      ],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "last_opened_at": { "type": "string" },
+        "voice_duration": { "type": "string" },
+        "sentence_count": { "type": "integer", "minimum": 0 },
+        "media_count": { "type": "integer", "minimum": 0 },
+        "alignment_state": { "$ref": "#/$defs/AlignmentState" },
+        "status": { "$ref": "#/$defs/ProjectStatus" },
+        "thumbnail_path": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "current_config_hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "last_rendered_config_hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "has_unrendered_changes": { "type": "boolean" },
+        "latest_render_id": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "latest_render_status": { "oneOf": [{ "$ref": "#/$defs/RenderStatus" }, { "type": "null" }] }
+      }
+    },
     "DetectedVoice": {
       "title": "DetectedVoice",
       "type": "object",
@@ -219,12 +315,26 @@
       "additionalProperties": false,
       "required": ["path", "name", "output_preset", "voice", "transcript", "alignment"],
       "properties": {
+        "project_id": { "type": "string", "minLength": 1 },
         "path": { "type": "string" },
         "name": { "type": "string" },
         "output_preset": { "type": "string" },
         "voice": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedVoice" }] },
         "transcript": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedTranscript" }] },
         "alignment": { "$ref": "#/$defs/SetupAlignment" }
+      }
+    },
+    "AlignmentStateResponse": {
+      "title": "AlignmentStateResponse",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "status", "cache_hit"],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/SetupAlignmentState" },
+        "cache_hit": { "type": "boolean" },
+        "hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "error": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
       }
     },
     "Transcript": {
@@ -292,6 +402,11 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "mediaId": { "type": "string", "minLength": 1 },
+        "mediaIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
         "anchor": { "enum": ["sentences", "time"] },
         "from": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}:\\d{2}\\.\\d{3}$" },
         "to": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}:\\d{2}\\.\\d{3}$" },
@@ -299,7 +414,10 @@
         "start": { "type": "number", "minimum": 0 },
         "end": { "type": "number", "minimum": 0 },
         "motion": { "$ref": "#/$defs/Motion" },
-        "transitions": { "$ref": "#/$defs/Transitions" }
+        "transitions": { "$ref": "#/$defs/Transitions" },
+        "cache_status": { "$ref": "#/$defs/VisualCacheStatus" },
+        "orphaned": { "type": "boolean" },
+        "orphan_reason": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
       }
     },
     "ForegroundItem": {
@@ -441,6 +559,69 @@
         "posY": { "type": "number", "minimum": 0, "maximum": 100 },
         "scale": { "type": "number", "minimum": 0 },
         "opacity": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "RenderArtifact": {
+      "title": "RenderArtifact",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "render_id", "project_id", "kind", "path", "created_at", "playable", "reusable"],
+      "properties": {
+        "artifact_id": { "type": "string", "minLength": 1 },
+        "render_id": { "type": "string", "minLength": 1 },
+        "project_id": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/RenderArtifactKind" },
+        "path": { "type": "string", "minLength": 1 },
+        "size": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "playable": { "type": "boolean" },
+        "reusable": { "type": "boolean" }
+      }
+    },
+    "RenderHistoryRow": {
+      "title": "RenderHistoryRow",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["render_id", "project_id", "preset", "status", "created_at", "artifacts"],
+      "properties": {
+        "render_id": { "type": "string", "minLength": 1 },
+        "project_id": { "type": "string", "minLength": 1 },
+        "preset": { "$ref": "#/$defs/RenderPreset" },
+        "status": { "$ref": "#/$defs/RenderStatus" },
+        "filename": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "resolution": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "duration": { "oneOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] },
+        "file_size": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "config_hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/RenderArtifact" } }
+      }
+    },
+    "ProjectConfigLoadResponse": {
+      "title": "ProjectConfigLoadResponse",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "config", "config_hash", "has_unrendered_changes"],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1 },
+        "config": { "$ref": "#" },
+        "config_hash": { "type": "string", "minLength": 1 },
+        "last_rendered_config_hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "has_unrendered_changes": { "type": "boolean" }
+      }
+    },
+    "ProjectConfigSaveResponse": {
+      "title": "ProjectConfigSaveResponse",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "config_hash", "saved_at", "has_unrendered_changes"],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1 },
+        "config_hash": { "type": "string", "minLength": 1 },
+        "saved_at": { "type": "string", "format": "date-time" },
+        "has_unrendered_changes": { "type": "boolean" }
       }
     }
   }

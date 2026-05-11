@@ -7,6 +7,16 @@
 
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "MediaKind".
+ */
+export type MediaKind = "image" | "video" | "audio" | "watermark_image" | "watermark_video";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "MediaImportMode".
+ */
+export type MediaImportMode = "copy" | "link" | "generated";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "ForegroundItem".
  */
 export type ForegroundItem = VisualItemBase;
@@ -18,6 +28,11 @@ export type ForegroundItem = VisualItemBase;
  * via the `definition` "SentenceRange".
  */
 export type SentenceRange = [number, number];
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "VisualCacheStatus".
+ */
+export type VisualCacheStatus = "warm" | "partial" | "cold" | "invalid" | "orphaned";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "PipItem".
@@ -57,15 +72,47 @@ export type DetectedVoiceState = "copied" | "copying" | "invalid";
  * via the `definition` "DetectedTranscriptState".
  */
 export type DetectedTranscriptState = "parsed" | "empty" | "invalid";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "ProjectStatus".
+ */
+export type ProjectStatus = "ready" | "missing" | "corrupt" | "alignment_pending" | "alignment_failed" | "rendering";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderStatus".
+ */
+export type RenderStatus = "queued" | "running" | "done" | "error" | "cancelled" | "partial";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderPreset".
+ */
+export type RenderPreset = "draft" | "final";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderArtifactKind".
+ */
+export type RenderArtifactKind =
+  | "final_mp4"
+  | "draft_mp4"
+  | "partial"
+  | "log"
+  | "filtergraph"
+  | "subtitles"
+  | "thumbnail"
+  | "companion";
 
 export interface Project {
   version: 1;
   name: string;
   created_at?: string;
   updated_at?: string;
+  project_id?: string;
+  config_hash?: string;
+  last_rendered_config_hash?: string;
   audio: string;
   transcript: Transcript;
   output: Output;
+  media?: MediaAsset[];
   /**
    * Ordered top-to-bottom in render stack: subtitles first, background last.
    */
@@ -95,6 +142,31 @@ export interface Transcript {
  */
 export interface Output {
   preset: "draft" | "final";
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "MediaAsset".
+ */
+export interface MediaAsset {
+  id: string;
+  name: string;
+  kind: MediaKind;
+  path: string;
+  thumb_path?: string | null;
+  dimensions?: Dimensions | null;
+  duration?: number | null;
+  size?: number | null;
+  hash?: string | null;
+  import_mode: MediaImportMode;
+  imported_at: string;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Dimensions".
+ */
+export interface Dimensions {
+  width: number;
+  height: number;
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -133,6 +205,10 @@ export interface ForegroundLayer {
 export interface VisualItemBase {
   id: string;
   mediaId: string;
+  /**
+   * @minItems 1
+   */
+  mediaIds?: [string, ...string[]];
   anchor?: "sentences" | "time";
   from?: string;
   to?: string;
@@ -141,6 +217,9 @@ export interface VisualItemBase {
   end: number;
   motion: Motion;
   transitions: Transitions;
+  cache_status?: VisualCacheStatus;
+  orphaned?: boolean;
+  orphan_reason?: string | null;
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -286,6 +365,26 @@ export interface RecentProject {
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RecentProjectCard".
+ */
+export interface RecentProjectCard {
+  project_id: string;
+  name: string;
+  last_opened_at: string;
+  voice_duration: string;
+  sentence_count: number;
+  media_count: number;
+  alignment_state: AlignmentState;
+  status: ProjectStatus;
+  thumbnail_path?: string | null;
+  current_config_hash?: string | null;
+  last_rendered_config_hash?: string | null;
+  has_unrendered_changes: boolean;
+  latest_render_id?: string | null;
+  latest_render_status?: RenderStatus | null;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "DetectedVoice".
  */
 export interface DetectedVoice {
@@ -334,10 +433,77 @@ export interface DetectedInputs {
  * via the `definition` "SetupDraft".
  */
 export interface SetupDraft {
+  project_id?: string;
   path: string;
   name: string;
   output_preset: string;
   voice: null | DetectedVoice;
   transcript: null | DetectedTranscript;
   alignment: SetupAlignment;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "AlignmentStateResponse".
+ */
+export interface AlignmentStateResponse {
+  project_id: string;
+  status: SetupAlignmentState;
+  cache_hit: boolean;
+  hash?: string | null;
+  error?: string | null;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderArtifact".
+ */
+export interface RenderArtifact {
+  artifact_id: string;
+  render_id: string;
+  project_id: string;
+  kind: RenderArtifactKind;
+  path: string;
+  size?: number | null;
+  hash?: string | null;
+  created_at: string;
+  playable: boolean;
+  reusable: boolean;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderHistoryRow".
+ */
+export interface RenderHistoryRow {
+  render_id: string;
+  project_id: string;
+  preset: RenderPreset;
+  status: RenderStatus;
+  filename?: string | null;
+  resolution?: string | null;
+  duration?: number | null;
+  file_size?: number | null;
+  config_hash?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+  artifacts: RenderArtifact[];
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "ProjectConfigLoadResponse".
+ */
+export interface ProjectConfigLoadResponse {
+  project_id: string;
+  config: Project;
+  config_hash: string;
+  last_rendered_config_hash?: string | null;
+  has_unrendered_changes: boolean;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "ProjectConfigSaveResponse".
+ */
+export interface ProjectConfigSaveResponse {
+  project_id: string;
+  config_hash: string;
+  saved_at: string;
+  has_unrendered_changes: boolean;
 }
