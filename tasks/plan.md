@@ -114,13 +114,13 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Add config snapshot storage in SQLite and route project save/load through `project_configs`, while syncing user-visible `project.json`.
 
 **Acceptance criteria:**
-- [ ] Saving validates config JSON against shared schema before writing.
-- [ ] Saving inserts a new `project_configs` row with `config_hash` and updates `projects.current_config_hash`.
-- [ ] Successful render can update `projects.last_rendered_config_hash` and clear `has_unrendered_changes`.
+- [x] Saving validates config JSON against shared schema before writing.
+- [x] Saving inserts a new `project_configs` row with `config_hash` and updates `projects.current_config_hash`.
+- [x] Successful render can update `projects.last_rendered_config_hash` and clear `has_unrendered_changes`.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/server test -- test_project_load.py test_layers_endpoint.py`
-- [ ] Add tests for invalid config rejection and hash updates.
+- [x] `rtk pnpm -F @vc/server test -- test_project_load.py test_layers_endpoint.py`
+- [x] Add tests for invalid config rejection and hash updates.
 
 **Dependencies:** Tasks 1, 3
 

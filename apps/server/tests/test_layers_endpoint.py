@@ -8,7 +8,9 @@ from pathlib import Path
 import httpx
 import pytest
 
+from server.db.projects import get_project_by_path
 from server.main import app
+from server.settings import settings
 
 _BASE_PROJECT = {
     "version": 1,
@@ -57,6 +59,58 @@ async def test_put_layers_saves_to_disk(tmp_path: Path) -> None:
     saved = json.loads((tmp_path / "project.json").read_text())
     assert len(saved["layers"]) == 1
     assert saved["layers"][0]["kind"] == "bg"
+
+
+@pytest.mark.asyncio
+async def test_put_layers_saves_canonical_config_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    (tmp_path / "project.json").write_text(json.dumps(_BASE_PROJECT))
+    layers = [
+        {
+            "id": "L-bg",
+            "kind": "bg",
+            "name": "Background",
+            "items": [],
+        }
+    ]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.put(
+            "/projects/layers",
+            params={"project": str(tmp_path)},
+            json={"layers": layers},
+        )
+
+    assert r.status_code == 200
+    row = get_project_by_path(tmp_path)
+    assert row is not None
+    assert str(row["current_config_hash"]).startswith("sha256:")
+    assert row["has_unrendered_changes"] == 1
+
+
+@pytest.mark.asyncio
+async def test_put_layers_rejects_invalid_config_without_writing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    (tmp_path / "project.json").write_text(json.dumps(_BASE_PROJECT))
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.put(
+            "/projects/layers",
+            params={"project": str(tmp_path)},
+            json={"layers": [{"id": "bad", "kind": "fg", "name": "Bad", "items": [{}]}]},
+        )
+
+    assert r.status_code == 422
+    saved = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
+    assert saved["layers"] == []
 
 
 @pytest.mark.asyncio

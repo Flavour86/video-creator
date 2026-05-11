@@ -5,7 +5,7 @@
 - [x] Task 1: Extend shared schema for project config, media, layers, setup, render, and response models.
 - [x] Task 2: Add SQLite migration runner with `schema_migrations`.
 - [x] Task 3: Implement `projects` table and stable `project_id`.
-- [ ] Task 4: Implement `project_configs` canonical save snapshots and config hashes.
+- [x] Task 4: Implement `project_configs` canonical save snapshots and config hashes.
 - [ ] Task 5: Implement `render_artifacts` and `render_events`.
 - [ ] Checkpoint: shared schemas regenerate, server tests pass, DB schema reviewed.
 

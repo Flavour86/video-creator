@@ -17,6 +17,7 @@ def test_init_creates_tables(monkeypatch, tmp_path: Path) -> None:
     assert "recent_projects" in names
     assert "projects" in names
     assert "app_settings" in names
+    assert "project_configs" in names
     assert "render_history" in names
     assert "schema_migrations" in names
 
@@ -29,7 +30,11 @@ def test_init_records_migration_once(monkeypatch, tmp_path: Path) -> None:
         rows = conn.execute(
             "SELECT version, name FROM schema_migrations ORDER BY version"
         ).fetchall()
-    assert [(row["version"], row["name"]) for row in rows] == [(1, "initial"), (2, "projects")]
+    assert [(row["version"], row["name"]) for row in rows] == [
+        (1, "initial"),
+        (2, "projects"),
+        (3, "project_configs"),
+    ]
 
 
 def test_init_upgrades_existing_inline_schema_without_data_loss(

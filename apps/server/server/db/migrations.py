@@ -49,9 +49,16 @@ def run_migrations(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS_D
         with conn:
             conn.executescript(migration.sql)
             conn.execute(
-                "INSERT INTO schema_migrations (version, name, checksum) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO schema_migrations (version, name, checksum) VALUES (?, ?, ?)",
                 (migration.version, migration.name, migration.checksum),
             )
+            row = conn.execute(
+                "SELECT checksum FROM schema_migrations WHERE version = ?",
+                (migration.version,),
+            ).fetchone()
+            recorded_checksum = row["checksum"] if isinstance(row, sqlite3.Row) else row[0]
+            if recorded_checksum != migration.checksum:
+                raise RuntimeError(f"Migration {migration.version} checksum mismatch")
 
 
 def load_migrations(migrations_dir: Path = MIGRATIONS_DIR) -> list[Migration]:

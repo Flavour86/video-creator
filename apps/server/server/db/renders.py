@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from server.db.app_db import connection
+from server.db.projects import mark_project_rendered
 
 RenderHistoryRow = dict[str, str | float | None]
 
@@ -47,6 +48,7 @@ def mark_render_finished(
     finished_at: datetime,
     duration_s: float,
 ) -> None:
+    project_path: Path | None = None
     with connection() as conn:
         conn.execute(
             """
@@ -56,6 +58,14 @@ def mark_render_finished(
             """,
             (finished_at.isoformat(), duration_s, "done", render_id),
         )
+        row = conn.execute(
+            "SELECT project_path FROM render_history WHERE id = ?",
+            (render_id,),
+        ).fetchone()
+        if row is not None:
+            project_path = Path(str(row["project_path"]))
+    if project_path is not None:
+        mark_project_rendered(project_path)
 
 
 def mark_render_failed(

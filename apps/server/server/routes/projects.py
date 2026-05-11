@@ -11,6 +11,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
+from server.db.project_configs import latest_config_for_project_path, save_config_snapshot
 from server.db.projects import list_projects, list_recent, remove_recent, touch_recent
 from server.domain.project import (
     AlignmentState,
@@ -104,6 +105,15 @@ def _project_status(project_dir: Path, project: Project | None) -> ProjectStatus
 
 def _optional_str(value: object) -> str | None:
     return str(value) if value is not None else None
+
+
+def _write_valid_project_config(project_dir: Path, data: dict[str, Any]) -> str:
+    updated = Project.model_validate(data)
+    save_project(project_dir, updated)
+    return save_config_snapshot(
+        project_dir,
+        updated.model_dump(mode="json", by_alias=True, exclude_none=False),
+    )
 
 
 def _load_recent_project(project_dir: Path) -> Project | None:
@@ -296,6 +306,7 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
         encoding="utf-8",
     )
     touch_recent(project_dir, payload.name)
+    save_config_snapshot(project_dir, project.model_dump(mode="json", by_alias=True, exclude_none=False))
     return ProjectResponse(path=str(project_dir), name=payload.name)
 
 
@@ -369,10 +380,13 @@ class PutWatermarkResponse(BaseModel):
 
 @router.get("/load", response_model=None)
 async def load_project_data(project: str = Query(...)) -> JSONResponse:
-    project_json = Path(project) / "project.json"
+    project_dir = Path(project)
+    project_json = project_dir / "project.json"
     if not project_json.exists():
         return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
-    data = json.loads(project_json.read_text(encoding="utf-8"))
+    data = latest_config_for_project_path(project_dir)
+    if data is None:
+        data = json.loads(project_json.read_text(encoding="utf-8"))
     return JSONResponse(data)
 
 
@@ -386,10 +400,20 @@ async def put_layers(
     if not project_json.exists():
         return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
 
-    data: dict[str, Any] = json.loads(project_json.read_text(encoding="utf-8"))
+    data = latest_config_for_project_path(project_dir)
+    if data is None:
+        data = json.loads(project_json.read_text(encoding="utf-8"))
     data["layers"] = payload.layers
     data["updated_at"] = datetime.now(UTC).isoformat()
-    project_json.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    try:
+        _write_valid_project_config(project_dir, data)
+    except ValidationError as exc:
+        return _error(
+            422,
+            "INVALID_PROJECT_CONFIG",
+            "Project config failed validation.",
+            {"error": str(exc)},
+        )
     return PutLayersResponse(layers=payload.layers)
 
 
@@ -407,8 +431,7 @@ async def put_subtitles(
     data = loaded.model_dump(mode="json", by_alias=True, exclude_none=False)
     data["subtitles"] = _default_subtitles(payload.burn_in)
     data["updated_at"] = datetime.now(UTC).isoformat()
-    updated = Project.model_validate(data)
-    save_project(project_dir, updated)
+    _write_valid_project_config(project_dir, data)
     return PutSubtitlesResponse(subtitles=data["subtitles"])
 
 
@@ -439,6 +462,5 @@ async def put_watermark(
     data = loaded.model_dump(mode="json", by_alias=True, exclude_none=False)
     data["watermark"] = None if payload.media_id is None else payload.model_dump(by_alias=True)
     data["updated_at"] = datetime.now(UTC).isoformat()
-    updated = Project.model_validate(data)
-    save_project(project_dir, updated)
+    _write_valid_project_config(project_dir, data)
     return PutWatermarkResponse(watermark=data["watermark"])

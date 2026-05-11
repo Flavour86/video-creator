@@ -122,6 +122,49 @@ def get_project(project_id: str) -> dict[str, object] | None:
     return dict(row) if row is not None else None
 
 
+def get_project_by_path(path: Path) -> dict[str, object] | None:
+    with connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                project_id,
+                path,
+                name,
+                status,
+                alignment_state,
+                thumbnail_path,
+                current_config_hash,
+                last_rendered_config_hash,
+                has_unrendered_changes,
+                render_enabled,
+                latest_render_id,
+                latest_render_status,
+                created_at,
+                updated_at,
+                last_opened_at
+            FROM projects
+            WHERE path = ?
+            """,
+            (str(path.resolve()),),
+        ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def mark_project_rendered(project_path: Path) -> None:
+    now = datetime.now(UTC).isoformat()
+    with connection() as conn:
+        conn.execute(
+            """
+            UPDATE projects
+            SET last_rendered_config_hash = current_config_hash,
+                has_unrendered_changes = 0,
+                updated_at = ?
+            WHERE path = ? AND current_config_hash IS NOT NULL
+            """,
+            (now, str(project_path.resolve())),
+        )
+
+
 def remove_recent(path: Path) -> None:
     normalized_path = str(path.resolve())
     with connection() as conn:
