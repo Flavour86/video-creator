@@ -14,6 +14,8 @@ type EditorBarProps = {
   projectName: string;
   projectPath: string;
   renderJob: EditorRenderJob;
+  renderDisabled: boolean;
+  saveStatus: "pending" | "saving" | "saved" | "failed";
   saving: boolean;
 };
 
@@ -28,9 +30,12 @@ export function EditorBar({
   projectName,
   projectPath,
   renderJob,
+  renderDisabled,
+  saveStatus,
   saving,
 }: EditorBarProps) {
   const t = useTranslations("pages.editor");
+  const saveLabel = saveStatus === "saving" ? t("saving") : saveStatus === "saved" ? t("saved") : saveStatus === "failed" ? t("saveFailed") : t("save");
 
   return (
     <div className="grid h-12 grid-cols-[minmax(280px,_22%)_1fr_minmax(360px,_28%)] items-center gap-[14px] border-b border-(--line) bg-(--bg-1) px-[14px]">
@@ -55,13 +60,13 @@ export function EditorBar({
         <StatusTag title={`${projectPath}\\.vc\\clips`} variant="ready">{cacheLabel}</StatusTag>
         <Button disabled={saving} onClick={onSave} size="extra-small" variant="ghost">
           <Save aria-hidden="true" className="h-4 w-4" />
-          {saving ? t("saving") : t("save")}
+          {saveLabel}
         </Button>
-        <Button disabled={renderJob.running} onClick={onRenderDraft} size="extra-small" variant="ghost">
+        <Button disabled={renderJob.running || renderDisabled} onClick={onRenderDraft} size="extra-small" variant="ghost">
           <Clapperboard aria-hidden="true" className="h-4 w-4" />
           {renderJob.running ? t("drafting", { progress: renderJob.progress }) : t("renderDraft")}
         </Button>
-        <Button onClick={onRenderFinal} size="extra-small" variant="render">
+        <Button disabled={renderJob.running || renderDisabled} onClick={onRenderFinal} size="extra-small" variant="render">
           <Film aria-hidden="true" className="h-4 w-4" />
           {t("renderFinal")}
         </Button>

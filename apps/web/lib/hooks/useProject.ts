@@ -1,8 +1,10 @@
 import { create } from "zustand";
+import type { Project, ProjectConfigLoadResponse } from "@vc/shared-schemas";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 
 type ProjectStore = {
+  projectId: string;
   projectPath: string;
   layers: Layer[];
   subtitles: SubtitlesSettings;
@@ -11,6 +13,7 @@ type ProjectStore = {
   duration: number;
   selectedLayerId: string | null;
   selectedItemId: string | null;
+  setProjectId: (id: string) => void;
   setProjectPath: (path: string) => void;
   setLayers: (layers: Layer[]) => void;
   setSubtitles: (subtitles: SubtitlesSettings | null | undefined) => void;
@@ -54,6 +57,7 @@ export type WatermarkSettings = {
 };
 
 export const useProject = create<ProjectStore>((set, get) => ({
+  projectId: "",
   projectPath: "",
   layers: [],
   subtitles: DEFAULT_SUBTITLES,
@@ -63,6 +67,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
   selectedLayerId: null,
   selectedItemId: null,
 
+  setProjectId: (id) => set({ projectId: id }),
   setProjectPath: (path) => set({ projectPath: path }),
   setLayers: (layers) => set({ layers }),
   setSubtitles: (subtitles) => set({ subtitles: subtitles ?? DEFAULT_SUBTITLES }),
@@ -72,53 +77,40 @@ export const useProject = create<ProjectStore>((set, get) => ({
   setSelectedItem: (layerId, itemId) => set({ selectedLayerId: layerId, selectedItemId: itemId }),
 
   saveLayers: async (layers) => {
-    const { projectPath } = get();
-    if (!projectPath) return;
-    const r = await fetch(
-      `/api/server/projects/layers?project=${encodeURIComponent(projectPath)}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ layers }),
-      },
-    );
-    if (r.ok) {
-      const data = (await r.json()) as { layers: Layer[] };
-      set({ layers: data.layers });
-    }
+    const { projectId } = get();
+    if (!projectId) return;
+    await saveConfigPatch(projectId, { layers: layers as Project["layers"] });
+    set({ layers });
   },
 
   saveSubtitles: async (burnIn) => {
-    const { projectPath } = get();
-    if (!projectPath) return;
-    const r = await fetch(
-      `/api/server/projects/subtitles?project=${encodeURIComponent(projectPath)}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ burn_in: burnIn }),
-      },
-    );
-    if (r.ok) {
-      const data = (await r.json()) as { subtitles: SubtitlesSettings };
-      set({ subtitles: data.subtitles });
-    }
+    const { projectId } = get();
+    if (!projectId) return;
+    const subtitles = { ...DEFAULT_SUBTITLES, burn_in: burnIn };
+    await saveConfigPatch(projectId, { subtitles: subtitles as Project["subtitles"] });
+    set({ subtitles });
   },
 
   saveWatermark: async (watermark) => {
-    const { projectPath } = get();
-    if (!projectPath) return;
-    const r = await fetch(
-      `/api/server/projects/watermark?project=${encodeURIComponent(projectPath)}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(watermark ?? { mediaId: null }),
-      },
-    );
-    if (r.ok) {
-      const data = (await r.json()) as { watermark: WatermarkSettings | null };
-      set({ watermark: data.watermark });
-    }
+    const { projectId } = get();
+    if (!projectId) return;
+    await saveConfigPatch(projectId, { watermark: watermark as Project["watermark"] });
+    set({ watermark });
   },
 }));
+
+async function saveConfigPatch(projectId: string, patch: Partial<Project>): Promise<void> {
+  if (!projectId) return;
+  const current = await fetch(`/api/server/projects/${encodeURIComponent(projectId)}/config`);
+  if (!current.ok) return;
+  const { config } = (await current.json()) as ProjectConfigLoadResponse;
+  const nextConfig: Project = { ...config, ...patch };
+  const saved = await fetch(`/api/server/projects/${encodeURIComponent(projectId)}/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config: nextConfig }),
+  });
+  if (!saved.ok) {
+    throw new Error("Project config save failed.");
+  }
+}

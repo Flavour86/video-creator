@@ -340,15 +340,15 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Change Editor from direct `project.json` layer updates to full config load/save through `project_configs` and config hashes.
 
 **Acceptance criteria:**
-- [ ] Editor loads project title, audio, transcript/alignment, media, layers, subtitles, watermark, output, and render metadata from `GET /projects/:projectId/config`.
-- [ ] `Save` sends the full current working config to `PUT /projects/:projectId/config`.
-- [ ] Save states show pending/saving/saved/failed.
-- [ ] Already-rendered project render buttons enable only when config hash differs from latest successful render hash.
+- [x] Editor loads project title, audio, transcript/alignment, media, layers, subtitles, watermark, output, and render metadata from `GET /projects/:projectId/config`.
+- [x] `Save` sends the full current working config to `PUT /projects/:projectId/config`.
+- [x] Save states show pending/saving/saved/failed.
+- [x] Already-rendered project render buttons enable only when config hash differs from latest successful render hash.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- app/editor lib/hooks/useProject.test.ts`
-- [ ] `rtk pnpm -F @vc/server test -- test_project_load.py test_layers_endpoint.py`
-- [ ] Manual Save and reload preserves all global config and layers.
+- [x] `rtk pnpm -F @vc/web test -- app/editor lib/hooks/useProject.test.ts`
+- [x] `rtk pnpm -F @vc/server test -- test_project_load.py test_layers_endpoint.py`
+- [x] Manual Save and reload preserves all global config and layers.
 
 **Dependencies:** Tasks 4, 6, 11
 

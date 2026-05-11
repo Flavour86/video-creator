@@ -253,6 +253,8 @@
       "changeBgAria": "Add or change background asset",
       "save": "Save",
       "saving": "Saving",
+      "saved": "Saved",
+      "saveFailed": "Failed",
       "renderDraft": "Render Draft",
       "renderFinal": "Render Final",
       "drafting": "Drafting · {progress}%",

@@ -30,6 +30,7 @@ function EditorContent() {
   const [projectName, setProjectName] = useState("test01");
   const [projectPath, setProjectPath] = useState("");
   const [audioFile, setAudioFile] = useState("");
+  const [hasUnrenderedChanges, setHasUnrenderedChanges] = useState(true);
   const [layers, setLayers] = useState<Layer[]>([]);
   const [media, setMedia] = useState<EditorMediaItem[]>([]);
   const [selected, setSelected] = useState<EditorSelection>(null);
@@ -44,6 +45,7 @@ function EditorContent() {
   const [currentMatch, setCurrentMatch] = useState(0);
   const [renderJob, setRenderJob] = useState<EditorRenderJob>({ phase: "", progress: 0, running: false });
   const [assignRange, setAssignRange] = useState<[number, number]>([1, 1]);
+  const [saveStatus, setSaveStatus] = useState<"pending" | "saving" | "saved" | "failed">("pending");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const loadedProjectRef = useRef(false);
@@ -74,6 +76,8 @@ function EditorContent() {
       setProjectName(config.name ?? id);
       setProjectPath(resolvedProjectPath);
       setAudioFile(config.audio ?? "");
+      setHasUnrenderedChanges(response.has_unrendered_changes);
+      setSaveStatus(response.has_unrendered_changes ? "pending" : "saved");
       setLayers((config.layers ?? []) as Layer[]);
       setMedia(mediaItems);
       const firstSelectable = (config.layers ?? []).flatMap((layer) => layer.kind === "sub" ? [] : layer.items.map((item) => ({ item, layer }))).find(({ item }) => "id" in item);
@@ -85,6 +89,8 @@ function EditorContent() {
       setProject(null);
       setProjectName(id);
       setProjectPath("");
+      setHasUnrenderedChanges(true);
+      setSaveStatus("failed");
     }
   }, []);
 
@@ -127,11 +133,16 @@ function EditorContent() {
 
   const saveNow = useCallback(async () => {
     setSaving(true);
+    setSaveStatus("saving");
     try {
       if (!project) return;
       const nextProject: Project = { ...project, layers: layers as Project["layers"] };
-      await request(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, { method: "PUT", body: { config: nextProject } });
+      const response = await request<{ has_unrendered_changes: boolean }>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, { method: "PUT", body: { config: nextProject } });
       setProject(nextProject);
+      setHasUnrenderedChanges(response.has_unrendered_changes);
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("failed");
     } finally {
       setSaving(false);
     }
@@ -145,6 +156,8 @@ function EditorContent() {
       skipAutosaveRef.current = false;
       return;
     }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
     const timeout = window.setTimeout(() => {
       void saveNow();
     }, 900);
@@ -154,15 +167,17 @@ function EditorContent() {
   const renderDraft = useCallback(async () => {
     setRenderJob({ phase: "starting", progress: 0, running: true });
     try {
+      if (!hasUnrenderedChanges) return;
       const result = await request<{ render_id: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "draft" } });
       router.push(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(result.render_id)}`);
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false });
     }
-  }, [projectId, router]);
+  }, [hasUnrenderedChanges, projectId, router]);
 
   const renderFinal = useCallback(async () => {
     try {
+      if (!hasUnrenderedChanges) return;
       const result = await request<{ render_id: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "final" } });
       router.push(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(result.render_id)}`);
       return;
@@ -170,7 +185,7 @@ function EditorContent() {
       // Render screen shows final status.
     }
     router.push(`/render?projectId=${encodeURIComponent(projectId)}`);
-  }, [projectId, router]);
+  }, [hasUnrenderedChanges, projectId, router]);
 
   const matches = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -213,10 +228,12 @@ function EditorContent() {
         onSave={() => void saveNow()}
         onSubtitles={() => setModal("subtitles")}
         projectName={projectName}
-        projectPath={projectId}
-        renderJob={renderJob}
-        saving={saving}
-      />
+          projectPath={projectId}
+          renderJob={renderJob}
+          renderDisabled={!hasUnrenderedChanges}
+          saveStatus={saveStatus}
+          saving={saving}
+        />
       <div className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] divide-x divide-(--line) bg-(--line)">
         <TranscriptPane
           activeRange={activeRange}

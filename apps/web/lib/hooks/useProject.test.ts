@@ -13,6 +13,7 @@ const BG_LAYER: Layer = {
 
 beforeEach(() => {
   useProject.setState({
+    projectId: "",
     projectPath: "",
     layers: [],
     subtitles: DEFAULT_SUBTITLES,
@@ -23,9 +24,38 @@ beforeEach(() => {
   global.fetch = vi.fn();
 });
 
+const BASE_CONFIG = {
+  version: 1,
+  name: "demo",
+  audio: "",
+  transcript: { kind: "plain_text", path: "transcript.txt" },
+  output: { preset: "draft" },
+  layers: [],
+  subtitles: null,
+  watermark: null,
+};
+
+function mockConfigSaveResponse(config = BASE_CONFIG) {
+  global.fetch = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ project_id: "p_demo", config, config_hash: "h1", has_unrendered_changes: false }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ project_id: "p_demo", config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: true }),
+    });
+}
+
 // ── initial state ─────────────────────────────────────────────────────────────
 
 describe("initial state", () => {
+  it("has empty projectId", () => {
+    const { result } = renderHook(() => useProject());
+    expect(result.current.projectId).toBe("");
+  });
+
   it("has empty projectPath", () => {
     const { result } = renderHook(() => useProject());
     expect(result.current.projectPath).toBe("");
@@ -65,6 +95,12 @@ it("setProjectPath updates projectPath", () => {
   expect(result.current.projectPath).toBe("/my/project");
 });
 
+it("setProjectId updates projectId", () => {
+  const { result } = renderHook(() => useProject());
+  act(() => result.current.setProjectId("p_demo"));
+  expect(result.current.projectId).toBe("p_demo");
+});
+
 it("setLayers updates layers", () => {
   const { result } = renderHook(() => useProject());
   act(() => result.current.setLayers([BG_LAYER]));
@@ -101,58 +137,59 @@ it("setWatermark updates watermark", () => {
 // ── saveLayers ────────────────────────────────────────────────────────────────
 
 describe("saveLayers", () => {
-  it("does nothing when projectPath is empty", async () => {
+  it("does nothing when projectId is empty", async () => {
     const { result } = renderHook(() => useProject());
     await act(async () => { await result.current.saveLayers([BG_LAYER]); });
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("sends PUT to /projects/layers with correct body", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ layers: [BG_LAYER] }),
-    });
+  it("sends full config PUT to /projects/:projectId/config with correct body", async () => {
+    mockConfigSaveResponse();
 
     const { result } = renderHook(() => useProject());
-    act(() => result.current.setProjectPath("/my/proj"));
+    act(() => result.current.setProjectId("p_demo"));
     await act(async () => { await result.current.saveLayers([BG_LAYER]); });
 
-    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toContain("/projects/layers");
-    expect(url).toContain(encodeURIComponent("/my/proj"));
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(url).toContain("/projects/p_demo/config");
     expect((opts as RequestInit).method).toBe("PUT");
-    const body = JSON.parse((opts as RequestInit).body as string) as { layers: Layer[] };
-    expect(body.layers).toHaveLength(1);
+    const body = JSON.parse((opts as RequestInit).body as string) as { config: typeof BASE_CONFIG };
+    expect(body.config.layers).toHaveLength(1);
   });
 
   it("updates store layers on successful save", async () => {
     const saved: Layer[] = [BG_LAYER];
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ layers: saved }),
-    });
+    mockConfigSaveResponse();
 
     const { result } = renderHook(() => useProject());
-    act(() => result.current.setProjectPath("/my/proj"));
+    act(() => result.current.setProjectId("p_demo"));
     await act(async () => { await result.current.saveLayers(saved); });
 
     expect(result.current.layers).toEqual(saved);
   });
 
   it("leaves store unchanged when PUT fails", async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false });
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ project_id: "p_demo", config: BASE_CONFIG, config_hash: "h1", has_unrendered_changes: false }),
+      })
+      .mockResolvedValueOnce({ ok: false });
 
     const { result } = renderHook(() => useProject());
-    act(() => result.current.setProjectPath("/my/proj"));
+    act(() => result.current.setProjectId("p_demo"));
     act(() => result.current.setLayers([BG_LAYER]));
-    await act(async () => { await result.current.saveLayers([]); });
+    await act(async () => {
+      await expect(result.current.saveLayers([])).rejects.toThrow("Project config save failed.");
+    });
 
     expect(result.current.layers).toEqual([BG_LAYER]);
   });
 });
 
 describe("saveSubtitles", () => {
-  it("does nothing when projectPath is empty", async () => {
+  it("does nothing when projectId is empty", async () => {
     const { result } = renderHook(() => useProject());
     await act(async () => {
       await result.current.saveSubtitles(true);
@@ -160,33 +197,27 @@ describe("saveSubtitles", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("sends PUT to /projects/subtitles with correct body", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ subtitles: { ...DEFAULT_SUBTITLES, burn_in: true } }),
-    });
+  it("sends full config PUT with subtitles", async () => {
+    mockConfigSaveResponse();
 
     const { result } = renderHook(() => useProject());
-    act(() => result.current.setProjectPath("/my/proj"));
+    act(() => result.current.setProjectId("p_demo"));
     await act(async () => {
       await result.current.saveSubtitles(true);
     });
 
-    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toContain("/projects/subtitles");
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(url).toContain("/projects/p_demo/config");
     expect((opts as RequestInit).method).toBe("PUT");
-    expect(JSON.parse((opts as RequestInit).body as string)).toEqual({ burn_in: true });
+    expect(JSON.parse((opts as RequestInit).body as string).config.subtitles.burn_in).toBe(true);
   });
 
   it("updates store subtitles on successful save", async () => {
     const subtitles = { ...DEFAULT_SUBTITLES, burn_in: true };
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ subtitles }),
-    });
+    mockConfigSaveResponse();
 
     const { result } = renderHook(() => useProject());
-    act(() => result.current.setProjectPath("/my/proj"));
+    act(() => result.current.setProjectId("p_demo"));
     await act(async () => {
       await result.current.saveSubtitles(true);
     });
@@ -198,38 +229,32 @@ describe("saveSubtitles", () => {
 describe("saveWatermark", () => {
   it("sends PUT to /projects/watermark with correct body", async () => {
     const watermark = { mediaId: "logo.png", posX: 100, posY: 100, scale: 0.08, opacity: 60 };
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ watermark }),
-    });
+    mockConfigSaveResponse();
 
     const { result } = renderHook(() => useProject());
-    act(() => result.current.setProjectPath("/my/proj"));
+    act(() => result.current.setProjectId("p_demo"));
     await act(async () => {
       await result.current.saveWatermark(watermark);
     });
 
-    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toContain("/projects/watermark");
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(url).toContain("/projects/p_demo/config");
     expect((opts as RequestInit).method).toBe("PUT");
-    expect(JSON.parse((opts as RequestInit).body as string)).toEqual(watermark);
+    expect(JSON.parse((opts as RequestInit).body as string).config.watermark).toEqual(watermark);
     expect(result.current.watermark).toEqual(watermark);
   });
 
   it("sends null mediaId when clearing watermark", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ watermark: null }),
-    });
+    mockConfigSaveResponse({ ...BASE_CONFIG, watermark: { mediaId: "logo.png", posX: 100, posY: 100, scale: 0.08, opacity: 60 } });
 
     const { result } = renderHook(() => useProject());
-    act(() => result.current.setProjectPath("/my/proj"));
+    act(() => result.current.setProjectId("p_demo"));
     await act(async () => {
       await result.current.saveWatermark(null);
     });
 
-    const [, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(JSON.parse((opts as RequestInit).body as string)).toEqual({ mediaId: null });
+    const [, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(JSON.parse((opts as RequestInit).body as string).config.watermark).toBeNull();
     expect(result.current.watermark).toBeNull();
   });
 });
