@@ -198,14 +198,14 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Define and implement the local folder picker boundary for `New project`. If browser-only cannot open a native picker, use a backend/system adapter or a controlled fallback that still begins the Setup subflow only after a chosen folder exists.
 
 **Acceptance criteria:**
-- [ ] `New project` does not route directly to Setup without a selected folder.
-- [ ] Folder picker cancelled, permission denied, invalid path, and non-empty folder states are represented.
-- [ ] No arbitrary root media is imported during folder selection.
+- [x] `New project` does not route directly to Setup without a selected folder.
+- [x] Folder picker cancelled, permission denied, invalid path, and non-empty folder states are represented.
+- [x] No arbitrary root media is imported during folder selection.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/server test -- test_setup_route.py`
-- [ ] `rtk pnpm -F @vc/web test -- app/page.test.tsx lib/setup/useSetupDraft.test.ts`
-- [ ] Manual check Launcher -> New project -> cancelled and success paths.
+- [x] `rtk pnpm -F @vc/server test -- test_setup_route.py`
+- [x] `rtk pnpm -F @vc/web test -- app/page.test.tsx lib/setup/useSetupDraft.test.ts`
+- [x] Manual check Launcher -> New project -> cancelled and success paths.
 
 **Dependencies:** Task 6
 

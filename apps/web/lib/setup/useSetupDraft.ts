@@ -31,7 +31,7 @@ export type UseSetupDraftState = {
   setPath: (path: string) => void;
 };
 
-export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftState {
+export function useSetupDraft(initialPath = ""): UseSetupDraftState {
   const [path, setPathState] = useState(initialPath);
   const [name, setName] = useState(() => nameFromPath(initialPath));
   const [outputPreset, setOutputPreset] = useState("final");
@@ -43,6 +43,11 @@ export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftStat
   const [alignmentStatus, setAlignmentStatus] = useState<SetupAlignmentState>("pending");
 
   const inspect = useCallback(async () => {
+    if (!path) {
+      setDetected({ ...emptyDetectedInputs, path: "", name: "" });
+      setAlignmentStatus("pending");
+      return;
+    }
     try {
       const result = await request<DetectedInputs>(`/setup/inspect?path=${encodeURIComponent(path)}` as `/${string}`);
       setDetected(result);
@@ -105,5 +110,8 @@ export function useSetupDraft(initialPath = defaultSetupPath): UseSetupDraftStat
 }
 
 function nameFromPath(path: string): string {
+  if (!path) {
+    return "";
+  }
   return path.split(/[\\/]/).filter(Boolean).pop() ?? "Untitled Project";
 }

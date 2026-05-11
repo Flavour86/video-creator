@@ -10,7 +10,7 @@ import { StatusTile, type StatusTileState } from "@/components/setup/StatusTile"
 import { Stepper } from "@/components/setup/Stepper";
 import { Button, Field, Select, TextInput } from "@/components/ui";
 import { formatDuration } from "@/lib/format";
-import { defaultSetupPath, useSetupDraft } from "@/lib/setup/useSetupDraft";
+import { useSetupDraft } from "@/lib/setup/useSetupDraft";
 
 const outputPresets = ["final", "draft"] as const;
 
@@ -28,7 +28,7 @@ function SetupScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputsRef = useRef<HTMLDivElement>(null);
-  const setup = useSetupDraft(searchParams.get("path") ?? defaultSetupPath);
+  const setup = useSetupDraft(searchParams.get("path") ?? "");
   const { draft } = setup;
 
   return (
@@ -82,7 +82,7 @@ function SetupScreen() {
           </Field>
         </div>
         <div className="mt-[18px]">
-          <PathCard onChange={() => setup.setPath(defaultSetupPath)} path={draft.path} />
+          <PathCard onChange={() => router.push("/")} path={draft.path} />
         </div>
         <div className="mt-[18px] border-t border-(--line-soft) pt-[18px]" ref={inputsRef}>
           <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-normal text-(--text-2)">

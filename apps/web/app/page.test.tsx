@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecentProject, RuntimeHealthResponse } from "@vc/shared-schemas";
@@ -32,13 +32,30 @@ function renderLauncher() {
   );
 }
 
-function mockServer({ recent, recentOk = true }: { recent: RecentProject[]; recentOk?: boolean }) {
-  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+function mockServer({
+  createOk = true,
+  createPayload = { path: "E:\\video-projects\\new-cut", name: "new-cut" },
+  recent,
+  recentOk = true,
+}: {
+  createOk?: boolean;
+  createPayload?: unknown;
+  recent: RecentProject[];
+  recentOk?: boolean;
+}) {
+  global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/projects/recent")) {
       return {
         ok: recentOk,
         json: async () => recent,
+      } as Response;
+    }
+    if (url.endsWith("/projects/new-folder") && init?.method === "POST") {
+      return {
+        ok: createOk,
+        status: createOk ? 200 : 409,
+        json: async () => createPayload,
       } as Response;
     }
     if (url.endsWith("/health")) {
@@ -95,5 +112,46 @@ describe("LauncherPage", () => {
     expect(card?.className).toContain("bg-(--bg-2)");
     expect(card).toHaveTextContent("3 media");
     expect(screen.getByText("pending")).toBeInTheDocument();
+  });
+
+  it("opens the folder boundary instead of routing straight to setup", async () => {
+    renderLauncher();
+    fireEvent.click(screen.getByRole("button", { name: /New project/ }));
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByRole("form", { name: "Choose a local folder" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByText("Folder selection cancelled.")).toBeInTheDocument();
+  });
+
+  it("creates the selected folder before entering setup", async () => {
+    renderLauncher();
+    fireEvent.click(screen.getByRole("button", { name: /New project/ }));
+    fireEvent.change(screen.getByLabelText("Folder path"), { target: { value: "E:\\video-projects\\new-cut" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/setup?path=E%3A%5Cvideo-projects%5Cnew-cut"));
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/server/projects/new-folder",
+      expect.objectContaining({
+        body: JSON.stringify({ path: "E:\\video-projects\\new-cut", name: "new-cut" }),
+        method: "POST",
+      }),
+    );
+  });
+
+  it("keeps non-empty folder errors on the launcher", async () => {
+    mockServer({
+      createOk: false,
+      createPayload: { error: { code: "NOT_EMPTY", message: "Project directory already exists.", details: {} } },
+      recent: [],
+    });
+    renderLauncher();
+    fireEvent.click(screen.getByRole("button", { name: /New project/ }));
+    fireEvent.change(screen.getByLabelText("Folder path"), { target: { value: "E:\\video-projects\\used" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+
+    await waitFor(() => expect(screen.getByText("Folder is not empty.")).toBeInTheDocument());
+    expect(push).not.toHaveBeenCalled();
   });
 });

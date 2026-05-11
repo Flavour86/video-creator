@@ -24,7 +24,7 @@ describe("useSetupDraft", () => {
   });
 
   test("keeps canContinue false until alignment is aligned", async () => {
-    const { result } = renderHook(() => useSetupDraft());
+    const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\tokyo-essay"));
     await waitFor(() => expect(result.current.draft.alignment.status).toBe("pending"));
     expect(result.current.canContinue).toBe(false);
   });
@@ -47,8 +47,16 @@ describe("useSetupDraft", () => {
         },
       }),
     });
-    const { result } = renderHook(() => useSetupDraft());
+    const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\tokyo-essay"));
     await waitFor(() => expect(result.current.canContinue).toBe(true));
+  });
+
+  test("does not inspect a fallback project when no folder is selected", async () => {
+    const { result } = renderHook(() => useSetupDraft());
+
+    await waitFor(() => expect(result.current.draft.path).toBe(""));
+    expect(result.current.canContinue).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   test("uses the selected folder basename while inspection is unavailable", async () => {

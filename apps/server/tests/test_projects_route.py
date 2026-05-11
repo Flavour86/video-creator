@@ -85,6 +85,28 @@ async def test_create_project_rejects_non_empty_directory(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_folder_reports_permission_denied(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    target = tmp_path / "denied"
+    real_mkdir = Path.mkdir
+
+    def deny_target(path: Path, *args: object, **kwargs: object) -> None:
+        if path == target:
+            raise PermissionError("denied")
+        return real_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", deny_target)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/projects/new-folder",
+            json={"path": str(target), "name": "Denied"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "PERMISSION_DENIED"
+
+
+@pytest.mark.asyncio
 async def test_recent_open_and_remove_project(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     target = tmp_path / "newproj"

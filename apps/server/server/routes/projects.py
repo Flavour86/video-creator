@@ -309,11 +309,6 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
             {"path": payload.path},
         )
 
-    project_dir.mkdir(parents=True, exist_ok=True)
-    (project_dir / "media").mkdir(exist_ok=True)
-    (project_dir / "renders").mkdir(exist_ok=True)
-    (project_dir / ".vc").mkdir(exist_ok=True)
-
     now = datetime.now(UTC).isoformat()
     project = Project.model_validate(
         {
@@ -329,10 +324,29 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
             "watermark": None,
         }
     )
-    (project_dir / "project.json").write_text(
-        json.dumps(project.model_dump(mode="json", by_alias=True, exclude_none=False), indent=2),
-        encoding="utf-8",
-    )
+    try:
+        project_dir.mkdir(parents=True, exist_ok=True)
+        (project_dir / "media").mkdir(exist_ok=True)
+        (project_dir / "renders").mkdir(exist_ok=True)
+        (project_dir / ".vc").mkdir(exist_ok=True)
+        (project_dir / "project.json").write_text(
+            json.dumps(project.model_dump(mode="json", by_alias=True, exclude_none=False), indent=2),
+            encoding="utf-8",
+        )
+    except PermissionError:
+        return _error(
+            403,
+            "PERMISSION_DENIED",
+            "Project folder cannot be created because permission was denied.",
+            {"path": payload.path},
+        )
+    except OSError as exc:
+        return _error(
+            400,
+            "INVALID_PATH",
+            "Project folder could not be created.",
+            {"path": payload.path, "error": str(exc)},
+        )
     touch_recent(project_dir, payload.name)
     save_config_snapshot(project_dir, project.model_dump(mode="json", by_alias=True, exclude_none=False))
     return ProjectResponse(path=str(project_dir), name=payload.name)

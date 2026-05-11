@@ -12,7 +12,7 @@
 ## Phase 2: API Surface And Project Flow
 
 - [x] Task 6: Add project-id API routes required by the prototype.
-- [ ] Task 7: Implement native folder picker boundary or approved backend fallback.
+- [x] Task 7: Implement native folder picker boundary or approved backend fallback.
 - [ ] Task 8: Refactor Setup inspect/alignment flow to prototype behavior.
 - [ ] Task 9: Refactor Launcher recent projects UI and rendered-project playback.
 - [ ] Checkpoint: Launcher -> New project -> Setup -> Alignment -> Editor works.
