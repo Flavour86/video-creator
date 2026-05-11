@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from server.db.projects import project_path_for_id
 from server.db.renders import (
     delete_render,
     delete_renders,
@@ -60,6 +61,18 @@ def _error(status_code: int, code: str, message: str, details: dict[str, str]) -
     )
 
 
+def _project_path_or_error(project_id: str) -> Path | JSONResponse:
+    project_dir = project_path_for_id(project_id)
+    if project_dir is None or not (project_dir / "project.json").exists():
+        return _error(
+            404,
+            "PROJECT_NOT_FOUND",
+            "Project not found.",
+            {"project_id": project_id},
+        )
+    return project_dir
+
+
 @router.post("/projects/render", response_model=RenderResponse)
 async def render_project(
     payload: RenderRequest,
@@ -78,6 +91,17 @@ async def render_project(
         return _error(exc.status_code, exc.code, exc.message, {"project": project})
 
     return RenderResponse(render_id=result.render_id, output_path=str(result.output_path))
+
+
+@router.post("/projects/{project_id}/render", response_model=RenderResponse)
+async def render_project_by_id(
+    project_id: str,
+    payload: RenderRequest,
+) -> RenderResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return await render_project(payload=payload, project=str(project_dir))
 
 
 @router.get("/render/job/{render_id}", response_model=RenderHistoryResponse)
@@ -161,6 +185,31 @@ async def list_renders(
     return [_render_history_response(row) for row in rows]
 
 
+@router.get("/projects/{project_id}/renders", response_model=list[RenderHistoryResponse])
+async def list_project_renders(
+    project_id: str,
+    limit: int = Query(10, ge=1, le=500),
+) -> list[RenderHistoryResponse] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return await list_renders(project=str(project_dir), limit=limit)
+
+
+@router.get("/projects/{project_id}/renders/{render_id}", response_model=RenderHistoryResponse)
+async def get_project_render(
+    project_id: str,
+    render_id: str,
+) -> RenderHistoryResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    return _render_history_response(row)
+
+
 @router.delete("/projects/render/{render_id}", response_model=None)
 async def cancel_render(
     render_id: str,
@@ -173,6 +222,32 @@ async def cancel_render(
     if not canceled:
         return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
     return {"ok": True}
+
+
+@router.delete("/projects/{project_id}/renders/{render_id}", response_model=None)
+async def delete_project_render(
+    project_id: str,
+    render_id: str,
+) -> dict[str, bool] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    delete_render(render_id)
+    return {"ok": True}
+
+
+@router.post("/projects/{project_id}/renders/{render_id}/cancel", response_model=None)
+async def cancel_project_render(
+    project_id: str,
+    render_id: str,
+) -> dict[str, bool] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return await cancel_render(render_id=render_id, project=str(project_dir))
 
 
 @router.post("/projects/renders/{render_id}/reveal", response_model=None)
@@ -199,6 +274,17 @@ async def reveal_render(
 
     render_pipeline.reveal_in_file_browser(output_path)
     return {"ok": True}
+
+
+@router.post("/projects/{project_id}/renders/{render_id}/reveal", response_model=None)
+async def reveal_project_render(
+    project_id: str,
+    render_id: str,
+) -> dict[str, bool] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return await reveal_render(render_id=render_id, project=str(project_dir))
 
 
 @router.post("/projects/renders/{render_id}/play", response_model=None)
@@ -232,6 +318,17 @@ async def play_render(
 
     render_pipeline.open_in_default_player(output_path)
     return {"ok": True}
+
+
+@router.post("/projects/{project_id}/renders/{render_id}/play", response_model=None)
+async def play_project_render(
+    project_id: str,
+    render_id: str,
+) -> dict[str, bool] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return await play_render(render_id=render_id, project=str(project_dir))
 
 
 def _render_history_response(row: dict[str, str | float | None]) -> RenderHistoryResponse:

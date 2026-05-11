@@ -60,6 +60,19 @@ async def test_create_project(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_folder_project_alias(tmp_path) -> None:
+    target = tmp_path / "new-folder"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/projects/new-folder",
+            json={"path": str(target), "name": "New Folder"},
+        )
+    assert response.status_code == 200
+    assert (target / "project.json").exists()
+
+
+@pytest.mark.asyncio
 async def test_create_project_rejects_non_empty_directory(tmp_path) -> None:
     target = tmp_path / "newproj"
     target.mkdir()
@@ -142,6 +155,38 @@ async def test_projects_list_represents_missing_and_corrupt_projects(
     by_name = {project["name"]: project for project in response.json()}
     assert by_name["Missing"]["status"] == "missing"
     assert by_name["Corrupt"]["status"] == "corrupt"
+
+
+@pytest.mark.asyncio
+async def test_project_id_config_inspect_and_delete_routes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "project-id"
+    _write_project(project_dir, "First sentence. Second sentence.")
+    touch_recent(project_dir, "Project Id")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        projects = (await client.get("/projects")).json()
+        project_id = projects[0]["project_id"]
+
+        config_response = await client.get(f"/projects/{project_id}/config")
+        inspect_response = await client.post(f"/projects/{project_id}/inspect")
+        save_response = await client.put(
+            f"/projects/{project_id}/config",
+            json={"config": {**json.loads((project_dir / "project.json").read_text()), "name": "Saved"}},
+        )
+        delete_response = await client.delete(f"/projects/{project_id}")
+
+    assert config_response.status_code == 200
+    assert config_response.json()["project_id"] == project_id
+    assert inspect_response.status_code == 200
+    assert inspect_response.json()["name"] == "Rich Metadata"
+    assert save_response.status_code == 200
+    assert save_response.json()["config_hash"].startswith("sha256:")
+    assert delete_response.status_code == 200
 
 
 @pytest.mark.asyncio

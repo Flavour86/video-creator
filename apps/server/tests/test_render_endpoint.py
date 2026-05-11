@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from server.db.projects import project_id_for_path, touch_recent
 from server.db.renders import insert_render, mark_render_finished
 from server.main import app
 from server.pipeline import render as render_pipeline
@@ -59,6 +60,41 @@ async def test_render_endpoint_returns_render_result(monkeypatch, tmp_path: Path
         "render_id": "r-test",
         "output_path": str(tmp_path / ".vc" / "drafts" / "draft.mp4"),
     }
+
+
+@pytest.mark.asyncio
+async def test_project_id_render_routes(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
+    output_path = tmp_path / "renders" / "final.mp4"
+    output_path.parent.mkdir()
+    output_path.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-by-id",
+        project_path=tmp_path,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime_now(),
+    )
+    mark_render_finished(
+        render_id="r-by-id",
+        finished_at=datetime_now(),
+        duration_s=1.5,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        rows = await client.get(f"/projects/{project_id}/renders")
+        item = await client.get(f"/projects/{project_id}/renders/r-by-id")
+        delete = await client.delete(f"/projects/{project_id}/renders/r-by-id")
+
+    assert rows.status_code == 200
+    assert rows.json()[0]["id"] == "r-by-id"
+    assert item.status_code == 200
+    assert item.json()["id"] == "r-by-id"
+    assert delete.status_code == 200
 
 
 @pytest.mark.asyncio

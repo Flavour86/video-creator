@@ -11,6 +11,8 @@ from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from server.db.projects import project_path_for_id
+
 router = APIRouter(tags=["media"])
 
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
@@ -88,6 +90,18 @@ def _get_project(project: str) -> Path | JSONResponse:
     return d
 
 
+def _get_project_id(project_id: str) -> Path | JSONResponse:
+    project_dir = project_path_for_id(project_id)
+    if project_dir is None or not (project_dir / "project.json").exists():
+        return _error(
+            404,
+            "PROJECT_NOT_FOUND",
+            "Project not found.",
+            {"project_id": project_id},
+        )
+    return project_dir
+
+
 def _build_item(project_dir: Path, f: Path) -> MediaItem:
     ext = f.suffix.lower()
     kind: Literal["image", "video"] = "image" if ext in IMAGE_EXTENSIONS else "video"
@@ -138,6 +152,17 @@ async def upload_media(
     return items
 
 
+@router.post("/projects/{project_id}/media", response_model=list[MediaItem])
+async def upload_project_media(
+    project_id: str,
+    files: Annotated[list[UploadFile], File(...)],
+) -> list[MediaItem] | JSONResponse:
+    result = _get_project_id(project_id)
+    if isinstance(result, JSONResponse):
+        return result
+    return await upload_media(files=files, project=str(result))
+
+
 @router.get("/projects/media", response_model=list[MediaItem])
 async def list_media(project: str = Query(...)) -> list[MediaItem] | JSONResponse:
     result = _get_project(project)
@@ -154,6 +179,14 @@ async def list_media(project: str = Query(...)) -> list[MediaItem] | JSONRespons
         for f in sorted(media_dir.iterdir())
         if f.is_file() and f.suffix.lower() in ALLOWED_EXTENSIONS
     ]
+
+
+@router.get("/projects/{project_id}/media", response_model=list[MediaItem])
+async def list_project_media(project_id: str) -> list[MediaItem] | JSONResponse:
+    result = _get_project_id(project_id)
+    if isinstance(result, JSONResponse):
+        return result
+    return await list_media(project=str(result))
 
 
 _MEDIA_CONTENT_TYPES: dict[str, str] = {

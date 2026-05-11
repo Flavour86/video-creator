@@ -12,16 +12,28 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from server.db.project_configs import latest_config_for_project_path, save_config_snapshot
-from server.db.projects import list_projects, list_recent, remove_recent, touch_recent
+from server.db.projects import (
+    get_project_by_path,
+    list_projects,
+    list_recent,
+    project_path_for_id,
+    remove_recent,
+    touch_recent,
+)
 from server.domain.project import (
     AlignmentState,
+    DetectedInputs,
     Project,
+    ProjectConfigLoadResponse,
+    ProjectConfigSaveResponse,
     ProjectStatus,
     RecentProject,
     RecentProjectCard,
     load_project,
     save_project,
 )
+from server.routes.alignment import get_alignment, run_alignment
+from server.routes.setup import inspect_setup
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
@@ -41,6 +53,10 @@ class ProjectResponse(BaseModel):
 
 class OpenProjectRequest(BaseModel):
     path: str = Field(min_length=1)
+
+
+class PutProjectConfigRequest(BaseModel):
+    config: dict[str, Any]
 
 
 def _error(status_code: int, code: str, message: str, details: dict[str, str]) -> JSONResponse:
@@ -114,6 +130,18 @@ def _write_valid_project_config(project_dir: Path, data: dict[str, Any]) -> str:
         project_dir,
         updated.model_dump(mode="json", by_alias=True, exclude_none=False),
     )
+
+
+def _project_path_or_error(project_id: str) -> Path | JSONResponse:
+    project_dir = project_path_for_id(project_id)
+    if project_dir is None or not (project_dir / "project.json").exists():
+        return _error(
+            404,
+            "PROJECT_NOT_FOUND",
+            "Project not found.",
+            {"project_id": project_id},
+        )
+    return project_dir
 
 
 def _load_recent_project(project_dir: Path) -> Project | None:
@@ -464,3 +492,96 @@ async def put_watermark(
     data["updated_at"] = datetime.now(UTC).isoformat()
     _write_valid_project_config(project_dir, data)
     return PutWatermarkResponse(watermark=data["watermark"])
+
+
+@router.post("/new-folder", response_model=ProjectResponse)
+async def new_folder_project(payload: CreateProjectRequest) -> ProjectResponse | JSONResponse:
+    return await create_project(payload)
+
+
+@router.delete("/{project_id}", response_model=None)
+async def delete_project(project_id: str) -> dict[str, bool] | JSONResponse:
+    project_dir = project_path_for_id(project_id)
+    if project_dir is None:
+        return _error(
+            404,
+            "PROJECT_NOT_FOUND",
+            "Project not found.",
+            {"project_id": project_id},
+        )
+    remove_recent(project_dir)
+    return {"ok": True}
+
+
+@router.post("/{project_id}/inspect", response_model=DetectedInputs)
+async def inspect_project(project_id: str) -> DetectedInputs | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return inspect_setup(path=str(project_dir))
+
+
+@router.post("/{project_id}/alignment", response_model=None)
+async def run_project_alignment(
+    project_id: str,
+    force: bool = Query(False),
+) -> Any:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return await run_alignment(project=str(project_dir), force=force)
+
+
+@router.get("/{project_id}/alignment", response_model=None)
+async def get_project_alignment(project_id: str) -> Any:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    return await get_alignment(project=str(project_dir))
+
+
+@router.get("/{project_id}/config", response_model=ProjectConfigLoadResponse)
+async def get_project_config(project_id: str) -> ProjectConfigLoadResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    config = latest_config_for_project_path(project_dir)
+    if config is None:
+        config = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+        config_hash = save_config_snapshot(project_dir, config)
+    else:
+        config_hash = save_config_snapshot(project_dir, config)
+    row = get_project_by_path(project_dir)
+    return ProjectConfigLoadResponse(
+        project_id=project_id,
+        config=Project.model_validate(config),
+        config_hash=config_hash,
+        last_rendered_config_hash=_optional_str(row.get("last_rendered_config_hash")) if row else None,
+        has_unrendered_changes=bool(row.get("has_unrendered_changes")) if row else True,
+    )
+
+
+@router.put("/{project_id}/config", response_model=ProjectConfigSaveResponse)
+async def put_project_config(
+    project_id: str,
+    payload: PutProjectConfigRequest,
+) -> ProjectConfigSaveResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    try:
+        config_hash = _write_valid_project_config(project_dir, payload.config)
+    except ValidationError as exc:
+        return _error(
+            422,
+            "INVALID_PROJECT_CONFIG",
+            "Project config failed validation.",
+            {"error": str(exc)},
+        )
+    row = get_project_by_path(project_dir)
+    return ProjectConfigSaveResponse(
+        project_id=project_id,
+        config_hash=config_hash,
+        saved_at=datetime.now(UTC).isoformat(),
+        has_unrendered_changes=bool(row.get("has_unrendered_changes")) if row else True,
+    )

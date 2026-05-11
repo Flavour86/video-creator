@@ -4,7 +4,10 @@ from pathlib import Path
 
 import httpx
 import pytest
+
+from server.db.projects import project_id_for_path, touch_recent
 from server.main import app
+from server.settings import settings
 
 
 @pytest.mark.asyncio
@@ -97,3 +100,25 @@ async def test_list_media_returns_uploaded(tmp_path: Path) -> None:
     assert len(items) == 1
     assert items[0]["filename"] == "img.png"
     assert items[0]["kind"] == "image"
+
+
+@pytest.mark.asyncio
+async def test_project_id_media_routes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    (tmp_path / "project.json").write_text('{"version":1}')
+    (tmp_path / "media").mkdir()
+    (tmp_path / ".vc" / "thumbs").mkdir(parents=True)
+    touch_recent(tmp_path, "Media")
+    project_id = project_id_for_path(tmp_path)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        upload = await c.post(
+            f"/projects/{project_id}/media",
+            files=[("files", ("id.jpg", b"\xff\xd8\xff" + b"\x00" * 100, "image/jpeg"))],
+        )
+        listed = await c.get(f"/projects/{project_id}/media")
+
+    assert upload.status_code == 200
+    assert listed.status_code == 200
+    assert listed.json()[0]["filename"] == "id.jpg"

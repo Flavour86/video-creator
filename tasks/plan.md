@@ -172,14 +172,14 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Implement the spec API surface while keeping legacy routes as temporary adapters where needed.
 
 **Acceptance criteria:**
-- [ ] Launcher APIs: `GET /projects`, `POST /projects/new-folder`, `DELETE /projects/:projectId`.
-- [ ] Setup APIs: `POST /projects/:projectId/inspect`, `POST /projects/:projectId/alignment`, `GET /projects/:projectId/alignment`.
-- [ ] Editor APIs: `GET/PUT /projects/:projectId/config`, `POST /projects/:projectId/media`, `GET /projects/:projectId/media`, `POST /projects/:projectId/render`.
-- [ ] Render APIs: `GET /projects/:projectId/renders`, `GET /projects/:projectId/renders/:renderId`, cancel, reveal, play, and delete.
+- [x] Launcher APIs: `GET /projects`, `POST /projects/new-folder`, `DELETE /projects/:projectId`.
+- [x] Setup APIs: `POST /projects/:projectId/inspect`, `POST /projects/:projectId/alignment`, `GET /projects/:projectId/alignment`.
+- [x] Editor APIs: `GET/PUT /projects/:projectId/config`, `POST /projects/:projectId/media`, `GET /projects/:projectId/media`, `POST /projects/:projectId/render`.
+- [x] Render APIs: `GET /projects/:projectId/renders`, `GET /projects/:projectId/renders/:renderId`, cancel, reveal, play, and delete.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/server test -- test_projects_route.py test_setup_route.py test_alignment_integration.py test_media_upload.py test_render_endpoint.py`
-- [ ] API error responses include stable codes and details.
+- [x] `rtk pnpm -F @vc/server test -- test_projects_route.py test_setup_route.py test_alignment_integration.py test_media_upload.py test_render_endpoint.py`
+- [x] API error responses include stable codes and details.
 
 **Dependencies:** Tasks 3, 4, 5
 

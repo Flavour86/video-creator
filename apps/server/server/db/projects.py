@@ -122,6 +122,13 @@ def get_project(project_id: str) -> dict[str, object] | None:
     return dict(row) if row is not None else None
 
 
+def project_path_for_id(project_id: str) -> Path | None:
+    project = get_project(project_id)
+    if project is None:
+        return None
+    return Path(str(project["path"]))
+
+
 def get_project_by_path(path: Path) -> dict[str, object] | None:
     with connection() as conn:
         row = conn.execute(
