@@ -16,6 +16,7 @@ from server.db.projects import (
     get_project_by_path,
     list_projects,
     list_recent,
+    project_id_for_path,
     project_path_for_id,
     remove_recent,
     touch_recent,
@@ -47,6 +48,7 @@ class CreateProjectRequest(BaseModel):
 
 
 class ProjectResponse(BaseModel):
+    project_id: str
     path: str
     name: str
 
@@ -349,7 +351,7 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
         )
     touch_recent(project_dir, payload.name)
     save_config_snapshot(project_dir, project.model_dump(mode="json", by_alias=True, exclude_none=False))
-    return ProjectResponse(path=str(project_dir), name=payload.name)
+    return ProjectResponse(project_id=project_id_for_path(project_dir), path=str(project_dir), name=payload.name)
 
 
 @router.get("", response_model=list[RecentProjectCard])

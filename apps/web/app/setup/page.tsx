@@ -1,5 +1,6 @@
 "use client";
 
+import { Image as ImageIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef } from "react";
@@ -28,7 +29,7 @@ function SetupScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputsRef = useRef<HTMLDivElement>(null);
-  const setup = useSetupDraft(searchParams.get("path") ?? "");
+  const setup = useSetupDraft(searchParams.get("path") ?? "", searchParams.get("projectId") ?? "");
   const { draft } = setup;
 
   return (
@@ -89,7 +90,7 @@ function SetupScreen() {
             {t("inputs.title")}
           </h3>
           <p className="mb-(--space-5) text-xs leading-relaxed text-(--text-3)">{t("inputs.body")}</p>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5">
             <StatusTile
               filename={fileName(draft.voice?.path)}
               kind="voice"
@@ -106,6 +107,14 @@ function SetupScreen() {
               meta={draft.transcript ? t("inputs.transcriptDetected", { count: draft.transcript.sentence_count }) : undefined}
               state={transcriptTileState(draft.transcript?.state)}
             />
+            <div className="flex flex-col items-center gap-(--space-3) rounded-(--r-sm) border border-dashed border-(--bg-5) bg-(--bg-1) px-(--space-6) py-(--space-8) text-center text-(--text-3)">
+              <ImageIcon aria-hidden="true" className="h-(--space-8) w-(--space-8)" />
+              <strong className="text-sm font-semibold text-(--text)">watermark.png</strong>
+              <span className="font-mono text-[11px] text-(--text-3)">optional</span>
+              <Button size="extra-small" variant="ghost">
+                Choose
+              </Button>
+            </div>
           </div>
         </div>
       </section>

@@ -223,15 +223,15 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Make Setup match prototype behavior: selected folder, detected voice/transcript, optional watermark, explicit `Run alignment API`, status card, cache state, and `Continue to editor` enabled only after alignment succeeds.
 
 **Acceptance criteria:**
-- [ ] Setup shows `Detect inputs and align`, project name, output preset, detected voice/transcript, optional watermark chooser, and alignment card as in prototype.
-- [ ] `Run alignment API` calls backend alignment route and transitions pending/running/succeeded/failed.
-- [ ] `Continue to editor` is disabled until alignment succeeds.
-- [ ] Alignment artifacts are cached and cache hit is shown on repeat runs.
+- [x] Setup shows `Detect inputs and align`, project name, output preset, detected voice/transcript, optional watermark chooser, and alignment card as in prototype.
+- [x] `Run alignment API` calls backend alignment route and transitions pending/running/succeeded/failed.
+- [x] `Continue to editor` is disabled until alignment succeeds.
+- [x] Alignment artifacts are cached and cache hit is shown on repeat runs.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- app/setup components/setup lib/setup`
-- [ ] `rtk pnpm -F @vc/server test -- test_setup_route.py test_alignment_integration.py`
-- [ ] Browser check against prototype Setup page.
+- [x] `rtk pnpm -F @vc/web test -- app/setup components/setup lib/setup`
+- [x] `rtk pnpm -F @vc/server test -- test_setup_route.py test_alignment_integration.py`
+- [x] Browser check against prototype Setup page.
 
 **Dependencies:** Tasks 6, 7
 

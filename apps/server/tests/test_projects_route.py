@@ -54,6 +54,7 @@ async def test_create_project(tmp_path) -> None:
         response = await client.post("/projects", json={"path": str(target), "name": "Test"})
     assert response.status_code == 200
     assert (target / "project.json").exists()
+    assert response.json()["project_id"].startswith("p_")
     assert (target / "media").is_dir()
     assert (target / "renders").is_dir()
     assert (target / ".vc").is_dir()

@@ -31,8 +31,9 @@ export type UseSetupDraftState = {
   setPath: (path: string) => void;
 };
 
-export function useSetupDraft(initialPath = ""): UseSetupDraftState {
+export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetupDraftState {
   const [path, setPathState] = useState(initialPath);
+  const [projectId, setProjectId] = useState(initialProjectId);
   const [name, setName] = useState(() => nameFromPath(initialPath));
   const [outputPreset, setOutputPreset] = useState("final");
   const [detected, setDetected] = useState<DetectedInputs>({
@@ -49,7 +50,9 @@ export function useSetupDraft(initialPath = ""): UseSetupDraftState {
       return;
     }
     try {
-      const result = await request<DetectedInputs>(`/setup/inspect?path=${encodeURIComponent(path)}` as `/${string}`);
+      const result = projectId
+        ? await request<DetectedInputs>(`/projects/${encodeURIComponent(projectId)}/inspect` as `/${string}`, { method: "POST" })
+        : await request<DetectedInputs>(`/setup/inspect?path=${encodeURIComponent(path)}` as `/${string}`);
       setDetected(result);
       setName(result.name);
       setAlignmentStatus(result.alignment.status);
@@ -57,7 +60,7 @@ export function useSetupDraft(initialPath = ""): UseSetupDraftState {
       setDetected({ ...emptyDetectedInputs, path, name: name || nameFromPath(path) });
       setAlignmentStatus("pending");
     }
-  }, [name, path]);
+  }, [name, path, projectId]);
 
   useEffect(() => {
     void inspect();
@@ -65,6 +68,7 @@ export function useSetupDraft(initialPath = ""): UseSetupDraftState {
 
   const draft = useMemo<SetupDraft>(
     () => ({
+      project_id: projectId || undefined,
       path: detected.path || path,
       name,
       output_preset: outputPreset,
@@ -75,7 +79,7 @@ export function useSetupDraft(initialPath = ""): UseSetupDraftState {
         status: alignmentStatus,
       },
     }),
-    [alignmentStatus, detected, name, outputPreset, path],
+    [alignmentStatus, detected, name, outputPreset, path, projectId],
   );
 
   const runAlignment = useCallback(async () => {
@@ -84,16 +88,16 @@ export function useSetupDraft(initialPath = ""): UseSetupDraftState {
     }
     setAlignmentStatus("running");
     try {
-      await request("/setup/scaffold", {
-        method: "POST",
-        body: { path: draft.path, name: draft.name, output_preset: draft.output_preset, force: true },
-      });
-      await request(`/projects/align?project=${encodeURIComponent(draft.path)}` as `/${string}`, { method: "POST" });
+      if (draft.project_id) {
+        await request(`/projects/${encodeURIComponent(draft.project_id)}/alignment` as `/${string}`, { method: "POST" });
+      } else {
+        await request(`/projects/align?project=${encodeURIComponent(draft.path)}` as `/${string}`, { method: "POST" });
+      }
       await inspect();
     } catch {
       setAlignmentStatus("failed");
     }
-  }, [detected.transcript, detected.voice, draft.name, draft.output_preset, draft.path, inspect]);
+  }, [detected.transcript, detected.voice, draft.path, draft.project_id, inspect]);
 
   return {
     canContinue: alignmentStatus === "aligned",
@@ -104,6 +108,7 @@ export function useSetupDraft(initialPath = ""): UseSetupDraftState {
     setOutputPreset,
     setPath: (nextPath: string) => {
       setPathState(nextPath);
+      setProjectId("");
       setName(nameFromPath(nextPath));
     },
   };

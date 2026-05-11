@@ -15,6 +15,7 @@ import { request, ServerRequestError } from "@/lib/api/server";
 type FolderPickerState = "idle" | "selecting" | "creating" | "cancelled" | "error";
 
 type ProjectCreateResponse = {
+  project_id: string;
   path: string;
   name: string;
 };
@@ -94,7 +95,10 @@ export default function LauncherPage() {
         method: "POST",
         body: { path: selectedPath, name: projectName || "Untitled Project" },
       });
-      router.push(`/setup?path=${encodeURIComponent(created.path)}`);
+      if (!created.project_id) {
+        throw new Error("Missing project id");
+      }
+      router.push(`/setup?projectId=${encodeURIComponent(created.project_id)}&path=${encodeURIComponent(created.path)}`);
     } catch (error) {
       setPickerState("error");
       setFolderError(folderPickerError(error));

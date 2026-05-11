@@ -34,7 +34,7 @@ function renderLauncher() {
 
 function mockServer({
   createOk = true,
-  createPayload = { path: "E:\\video-projects\\new-cut", name: "new-cut" },
+  createPayload = { project_id: "p_new_cut", path: "E:\\video-projects\\new-cut", name: "new-cut" },
   recent,
   recentOk = true,
 }: {
@@ -130,7 +130,9 @@ describe("LauncherPage", () => {
     fireEvent.change(screen.getByLabelText("Folder path"), { target: { value: "E:\\video-projects\\new-cut" } });
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/setup?path=E%3A%5Cvideo-projects%5Cnew-cut"));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith("/setup?projectId=p_new_cut&path=E%3A%5Cvideo-projects%5Cnew-cut"),
+    );
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/server/projects/new-folder",
       expect.objectContaining({
