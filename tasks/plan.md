@@ -365,14 +365,14 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Implement browser-local recovery and undo/redo as incremental operations, not full config snapshots on every operation.
 
 **Acceptance criteria:**
-- [ ] Browser storage records edit operations such as add, patch, delete, move, stretch, reorder, global config update, subtitle settings update, and watermark update.
-- [ ] Reload can recover unsaved working state for the active project.
-- [ ] `Ctrl/Cmd+Z` undo and `Ctrl/Cmd+Shift+Z` redo apply inverse operations.
-- [ ] Shortcuts do not fire while typing in input, textarea, select, or contenteditable.
+- [x] Browser storage records edit operations such as add, patch, delete, move, stretch, reorder, global config update, subtitle settings update, and watermark update.
+- [x] Reload can recover unsaved working state for the active project.
+- [x] `Ctrl/Cmd+Z` undo and `Ctrl/Cmd+Shift+Z` redo apply inverse operations.
+- [x] Shortcuts do not fire while typing in input, textarea, select, or contenteditable.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- lib/editor-operation-log components/editor`
-- [ ] Manual add/move/stretch/undo/redo/reload recovery.
+- [x] `rtk pnpm -F @vc/web test -- lib/editor-operation-log components/editor`
+- [x] Manual add/move/stretch/undo/redo/reload recovery.
 
 **Dependencies:** Task 12
 

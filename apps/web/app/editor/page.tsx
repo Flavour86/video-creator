@@ -16,6 +16,7 @@ import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
 import { Button } from "@/components/ui";
 import { request } from "@/lib/api/server";
+import { clearOperationLog, isTextEditingTarget, recoverWorkingState, redoLast, undoLast } from "@/lib/editor-operation-log/operation-log";
 import { useProjectAlignment } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
@@ -70,17 +71,24 @@ function EditorContent() {
       ]);
       const config = response.config;
       const resolvedProjectPath = await resolveProjectPath(id);
+      const working = recoverWorkingState(id, {
+        layers: (config.layers ?? []) as Layer[],
+        output: config.output,
+        subtitles: config.subtitles,
+        watermark: config.watermark,
+      });
+      const workingConfig = { ...config, layers: working.layers as Project["layers"], output: working.output, subtitles: working.subtitles, watermark: working.watermark };
       loadedProjectRef.current = true;
       skipAutosaveRef.current = true;
-      setProject(config);
-      setProjectName(config.name ?? id);
+      setProject(workingConfig);
+      setProjectName(workingConfig.name ?? id);
       setProjectPath(resolvedProjectPath);
-      setAudioFile(config.audio ?? "");
+      setAudioFile(workingConfig.audio ?? "");
       setHasUnrenderedChanges(response.has_unrendered_changes);
       setSaveStatus(response.has_unrendered_changes ? "pending" : "saved");
-      setLayers((config.layers ?? []) as Layer[]);
+      setLayers(working.layers);
       setMedia(mediaItems);
-      const firstSelectable = (config.layers ?? []).flatMap((layer) => layer.kind === "sub" ? [] : layer.items.map((item) => ({ item, layer }))).find(({ item }) => "id" in item);
+      const firstSelectable = working.layers.flatMap((layer) => layer.kind === "sub" ? [] : layer.items.map((item) => ({ item, layer }))).find(({ item }) => "id" in item);
       if (firstSelectable && "id" in firstSelectable.item) {
         setSelected({ layerId: firstSelectable.layer.id, itemId: firstSelectable.item.id });
       }
@@ -141,6 +149,7 @@ function EditorContent() {
       setProject(nextProject);
       setHasUnrenderedChanges(response.has_unrendered_changes);
       setSaveStatus("saved");
+      clearOperationLog(projectId);
     } catch {
       setSaveStatus("failed");
     } finally {
@@ -163,6 +172,22 @@ function EditorContent() {
     }, 900);
     return () => window.clearTimeout(timeout);
   }, [layers, projectId, saveNow]);
+
+  useEffect(() => {
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if ((!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== "z" || isTextEditingTarget(event.target)) return;
+      if (!projectId || !project) return;
+      event.preventDefault();
+      const working = { layers, output: project.output, subtitles: project.subtitles, watermark: project.watermark };
+      const result = event.shiftKey ? redoLast(projectId, working) : undoLast(projectId, working);
+      setLayers(result.state.layers);
+      setProject({ ...project, layers: result.state.layers as Project["layers"], output: result.state.output, subtitles: result.state.subtitles, watermark: result.state.watermark });
+      setHasUnrenderedChanges(true);
+      setSaveStatus("pending");
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [layers, project, projectId]);
 
   const renderDraft = useCallback(async () => {
     setRenderJob({ phase: "starting", progress: 0, running: true });
