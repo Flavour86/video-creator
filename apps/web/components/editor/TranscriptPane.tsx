@@ -4,8 +4,6 @@ import { KeyboardEvent, RefObject, useEffect, useMemo, useRef } from "react";
 import { Kbd, StatusTag } from "@/components/ui";
 import { formatDuration, formatRangeLabel } from "@/lib/format";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
-import { RenderStrip } from "./RenderStrip";
-import type { EditorRenderJob } from "./types";
 
 type TranscriptPaneProps = {
   activeRange: [number, number];
@@ -15,7 +13,6 @@ type TranscriptPaneProps = {
   onSearchKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onSeek: (time: number) => void;
   query: string;
-  renderJob: EditorRenderJob;
   searchInputRef: RefObject<HTMLInputElement | null>;
   sentences: AlignedSentence[];
 };
@@ -28,7 +25,6 @@ export function TranscriptPane({
   onSearchKeyDown,
   onSeek,
   query,
-  renderJob,
   searchInputRef,
   sentences,
 }: TranscriptPaneProps) {
@@ -47,7 +43,6 @@ export function TranscriptPane({
 
   return (
     <aside className="flex min-h-0 flex-col bg-(--bg-1)">
-      <RenderStrip job={renderJob} />
       <div className="flex items-center gap-2 border-b border-(--line) px-3 py-2">
         <Search aria-hidden="true" className="h-4 w-4 text-(--text-3)" />
         <input

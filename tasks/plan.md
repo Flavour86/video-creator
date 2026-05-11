@@ -412,14 +412,14 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Implement the draft render strip below the toolbar with queued/running/ready/failed/cancelled states and cancellation behavior.
 
 **Acceptance criteria:**
-- [ ] Strip appears when draft render is active, queued, failed, cancelled, or recently completed.
-- [ ] Shows progressbar, fill, label, stage, percentage, and `Cancel` while cancellable.
-- [ ] Draft outputs write to `.vc/drafts`, and cancelled partial drafts are excluded from playback.
+- [x] Strip appears when draft render is active, queued, failed, cancelled, or recently completed.
+- [x] Shows progressbar, fill, label, stage, percentage, and `Cancel` while cancellable.
+- [x] Draft outputs write to `.vc/drafts`, and cancelled partial drafts are excluded from playback.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/RenderStrip.test.tsx`
-- [ ] `rtk pnpm -F @vc/server test -- test_render_endpoint.py test_render_progress.py`
-- [ ] Manual draft render and cancel.
+- [x] `rtk pnpm -F @vc/web test -- components/editor/RenderStrip.test.tsx`
+- [x] `rtk pnpm -F @vc/server test -- test_render_endpoint.py test_render_progress.py`
+- [x] Manual draft render and cancel.
 
 **Dependencies:** Tasks 5, 12, 14
 

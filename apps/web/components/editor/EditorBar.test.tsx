@@ -15,7 +15,7 @@ function renderBar(overrides: Partial<ComponentProps<typeof EditorBar>> = {}) {
     projectId: "p_demo",
     projectName: "Demo",
     renderDisabled: false,
-    renderJob: { phase: "", progress: 0, running: false },
+    renderJob: { phase: "", progress: 0, running: false, status: "idle" },
     saveStatus: "pending",
     saving: false,
     ...overrides,

@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { Project, ProjectConfigLoadResponse } from "@vc/shared-schemas";
@@ -11,6 +11,7 @@ import { Inspector } from "@/components/editor/Inspector";
 import { LayersPopover } from "@/components/editor/LayersPopover";
 import { PreviewControls } from "@/components/editor/PreviewControls";
 import { PreviewSurface } from "@/components/editor/PreviewSurface";
+import { RenderStrip } from "@/components/editor/RenderStrip";
 import { Timeline } from "@/components/editor/Timeline";
 import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
@@ -44,13 +45,14 @@ function EditorContent() {
   const [layersOpen, setLayersOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [currentMatch, setCurrentMatch] = useState(0);
-  const [renderJob, setRenderJob] = useState<EditorRenderJob>({ phase: "", progress: 0, running: false });
+  const [renderJob, setRenderJob] = useState<EditorRenderJob>({ phase: "", progress: 0, running: false, status: "idle" });
   const [assignRange, setAssignRange] = useState<[number, number]>([1, 1]);
   const [saveStatus, setSaveStatus] = useState<"pending" | "saving" | "saved" | "failed">("pending");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const loadedProjectRef = useRef(false);
   const skipAutosaveRef = useRef(false);
+  const renderSocketRef = useRef<WebSocket | null>(null);
 
   const sentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
   const duration = sentences.at(-1)?.end_s ?? 0;
@@ -114,6 +116,12 @@ function EditorContent() {
     if (!projectId) return;
     void loadProject(projectId);
   }, [loadProject, projectId]);
+
+  useEffect(() => {
+    return () => {
+      renderSocketRef.current?.close();
+    };
+  }, []);
 
   useEffect(() => {
     const firstSentence = sentences[0];
@@ -190,15 +198,36 @@ function EditorContent() {
   }, [layers, project, projectId]);
 
   const renderDraft = useCallback(async () => {
-    setRenderJob({ phase: "starting", progress: 0, running: true });
+    if (!hasUnrenderedChanges) return;
+    renderSocketRef.current?.close();
+    setRenderJob({ phase: "starting", progress: 0, running: true, status: "queued" });
     try {
-      if (!hasUnrenderedChanges) return;
-      const result = await request<{ render_id: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "draft" } });
-      router.push(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(result.render_id)}`);
+      const result = await request<{ render_id: string; output_path: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "draft" } });
+      setRenderJob({
+        phase: "queued",
+        progress: 0,
+        running: true,
+        status: "queued",
+        outputPath: result.output_path,
+        renderId: result.render_id,
+      });
+      renderSocketRef.current = connectDraftProgress(result.render_id, result.output_path, setRenderJob, () => setHasUnrenderedChanges(false));
     } catch {
-      setRenderJob({ phase: "failed", progress: 0, running: false });
+      setRenderJob({ phase: "failed", progress: 0, running: false, status: "failed", message: "Render failed to start." });
     }
-  }, [hasUnrenderedChanges, projectId, router]);
+  }, [hasUnrenderedChanges, projectId]);
+
+  const cancelDraft = useCallback(async () => {
+    if (!renderJob.renderId || (renderJob.status !== "queued" && renderJob.status !== "running")) return;
+    renderSocketRef.current?.close();
+    setRenderJob((job) => ({ ...job, phase: "cancelling", running: true, status: "running" }));
+    try {
+      await request(`/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(renderJob.renderId)}/cancel` as `/${string}`, { method: "POST" });
+      setRenderJob((job) => ({ ...job, phase: "cancelled", progress: 0, running: false, status: "cancelled", message: "Render cancelled." }));
+    } catch {
+      setRenderJob((job) => ({ ...job, phase: "cancel failed", running: false, status: "failed", message: "Render cancel failed." }));
+    }
+  }, [projectId, renderJob.renderId, renderJob.status]);
 
   const renderFinal = useCallback(async () => {
     try {
@@ -243,7 +272,7 @@ function EditorContent() {
   }
 
   return (
-    <PageChrome className="grid h-[calc(100vh-44px-40px)] grid-rows-[48px_1fr] overflow-hidden">
+    <PageChrome className="grid h-[calc(100vh-44px-40px)] grid-rows-[48px_auto_1fr] overflow-hidden">
       <EditorBar
         cacheLabel={cacheLabel}
         onHome={() => router.push("/")}
@@ -257,6 +286,7 @@ function EditorContent() {
         saveStatus={saveStatus}
           saving={saving}
         />
+      <RenderStrip job={renderJob} onCancel={cancelDraft} />
       <div className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] divide-x divide-(--line) bg-(--line)">
         <TranscriptPane
           activeRange={activeRange}
@@ -275,7 +305,6 @@ function EditorContent() {
           onSearchKeyDown={onSearchKeyDown}
           onSeek={seekTo}
           query={query}
-          renderJob={renderJob}
           searchInputRef={searchInputRef}
           sentences={sentences}
         />
@@ -334,6 +363,108 @@ async function resolveProjectPath(projectId: string): Promise<string> {
 
 function isValidProjectId(value: string): boolean {
   return /^p_[A-Za-z0-9_-]+$/.test(value);
+}
+
+type DraftProgressEvent = {
+  type: "progress";
+  render_id: string;
+  stage: "cache_warm" | "compose" | "muxing" | "done" | "error" | "cancelled";
+  percent: number;
+  message?: string;
+  output_path?: string;
+};
+
+function connectDraftProgress(renderId: string, outputPath: string, setRenderJob: Dispatch<SetStateAction<EditorRenderJob>>, onReady: () => void): WebSocket {
+  const socket = new WebSocket(renderWsUrl(renderId));
+  socket.onmessage = (message) => {
+    const event = parseProgressEvent(message.data);
+    if (!event) return;
+    if (event.stage === "done") {
+      onReady();
+      setRenderJob({
+        phase: "ready",
+        progress: 100,
+        running: false,
+        status: "ready",
+        message: event.message,
+        outputPath: event.output_path ?? outputPath,
+        renderId,
+      });
+      socket.close();
+      return;
+    }
+    if (event.stage === "error") {
+      setRenderJob({
+        phase: "failed",
+        progress: event.percent,
+        running: false,
+        status: "failed",
+        message: event.message,
+        outputPath,
+        renderId,
+      });
+      socket.close();
+      return;
+    }
+    if (event.stage === "cancelled") {
+      setRenderJob({
+        phase: "cancelled",
+        progress: 0,
+        running: false,
+        status: "cancelled",
+        message: event.message,
+        outputPath,
+        renderId,
+      });
+      socket.close();
+      return;
+    }
+    setRenderJob({
+      phase: event.stage,
+      progress: event.percent,
+      running: true,
+      status: "running",
+      message: event.message,
+      outputPath,
+      renderId,
+    });
+  };
+  socket.onerror = () => {
+    setRenderJob({
+      phase: "connection failed",
+      progress: 0,
+      running: false,
+      status: "failed",
+      message: "Render progress connection failed.",
+      outputPath,
+      renderId,
+    });
+  };
+  return socket;
+}
+
+function parseProgressEvent(data: unknown): DraftProgressEvent | null {
+  if (typeof data !== "string") return null;
+  try {
+    const value = JSON.parse(data) as Partial<DraftProgressEvent>;
+    if (value.type !== "progress" || !value.render_id || !value.stage || typeof value.percent !== "number") return null;
+    return value as DraftProgressEvent;
+  } catch {
+    return null;
+  }
+}
+
+function renderWsUrl(renderId: string): string {
+  const query = new URLSearchParams({ render_id: renderId });
+  const configured = process.env.NEXT_PUBLIC_SERVER_WS_URL;
+  if (configured) {
+    return `${configured.replace(/\/$/, "")}/projects/render/ws?${query.toString()}`;
+  }
+  if (typeof window === "undefined") {
+    return `/projects/render/ws?${query.toString()}`;
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/api/server/projects/render/ws?${query.toString()}`;
 }
 
 export default function EditorPage() {

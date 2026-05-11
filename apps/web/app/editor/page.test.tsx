@@ -128,13 +128,15 @@ const TEST_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"
   thumb_url: `/projects/thumb?project=test01&filename=${filename.replace(/\.[^.]+$/, ".jpg")}`,
 }));
 
-function mockTest01Fetch() {
+function mockTest01Fetch(options: { hasUnrenderedChanges?: boolean } = {}) {
+  const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(TEST_ALIGNMENT);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") return ok({ project_id: TEST_PROJECT_ID, config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: true });
-    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`)) return ok({ project_id: TEST_PROJECT_ID, config: TEST_PROJECT, config_hash: "h1", has_unrendered_changes: false });
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`)) return ok({ project_id: TEST_PROJECT_ID, config: TEST_PROJECT, config_hash: "h1", has_unrendered_changes: hasUnrenderedChanges });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/media`)) return ok(TEST_MEDIA);
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/renders/r-test01/cancel`)) return ok({ ok: true });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render`)) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
     return { ok: false, json: async () => ({}) } as Response;
   });
@@ -191,4 +193,36 @@ it("opens assign media with the clicked sentence range and real thumbnails", asy
   expect(within(dialog).getByLabelText("From")).toHaveValue(5);
   expect(within(dialog).getByLabelText("To")).toHaveValue(5);
   expect(within(dialog).getAllByRole("img")).toHaveLength(5);
+});
+
+it("keeps draft render progress in the editor and can cancel it", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: true });
+  const sockets: MockWebSocket[] = [];
+  class MockWebSocket {
+    onerror: (() => void) | null = null;
+    onmessage: ((message: { data: string }) => void) | null = null;
+    url: string;
+
+    constructor(url: string) {
+      this.url = url;
+      sockets.push(this);
+    }
+
+    close = vi.fn();
+  }
+  vi.stubGlobal("WebSocket", MockWebSocket);
+
+  renderEditor();
+
+  fireEvent.click(await screen.findByRole("button", { name: /render draft/i }));
+  expect(await screen.findByText("Rendering draft : Queued")).toBeInTheDocument();
+  expect(screen.getByRole("progressbar", { name: "Draft render progress" })).toHaveAttribute("aria-valuenow", "0");
+
+  sockets[0]?.onmessage?.({ data: JSON.stringify({ type: "progress", render_id: "r-test01", stage: "compose", percent: 42, message: "ffmpeg compose" }) });
+  expect(await screen.findByText("Rendering draft : Running")).toBeInTheDocument();
+  expect(screen.getByText("42%")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(await screen.findByText("Rendering draft : Cancelled")).toBeInTheDocument();
 });

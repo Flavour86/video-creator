@@ -13,10 +13,16 @@ export type EditorSelection = {
   layerId: string;
 } | null;
 
+export type EditorRenderJobStatus = "idle" | "queued" | "running" | "ready" | "failed" | "cancelled";
+
 export type EditorRenderJob = {
+  status: EditorRenderJobStatus;
   phase: string;
   progress: number;
   running: boolean;
+  message?: string;
+  outputPath?: string;
+  renderId?: string;
 };
 
 export type EditorModal = "subtitles" | "background" | "upload" | null;

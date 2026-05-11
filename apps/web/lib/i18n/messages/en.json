@@ -259,6 +259,8 @@
       "renderFinal": "Render Final",
       "drafting": "Drafting · {progress}%",
       "renderStripDraft": "Rendering draft : {phase}",
+      "renderStripProgress": "Draft render progress",
+      "cancelRender": "Cancel",
       "searchPlaceholder": "Search transcript… (⌘F)",
       "transcriptHead": "Transcript · {count} aligned",
       "resolution": "Resolution",

@@ -98,6 +98,29 @@ async def test_project_id_render_routes(monkeypatch, tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_project_id_cancel_render_route(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
+    cancelled: list[str] = []
+
+    async def fake_cancel_render(render_id: str) -> bool:
+        cancelled.append(render_id)
+        return True
+
+    monkeypatch.setattr(render_pipeline, "cancel_render", fake_cancel_render)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/projects/{project_id}/renders/r-cancel/cancel")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert cancelled == ["r-cancel"]
+
+
+@pytest.mark.asyncio
 async def test_render_endpoint_project_not_found(tmp_path: Path) -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
