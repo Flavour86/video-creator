@@ -2,7 +2,7 @@
 
 ## Source
 
-This spec is derived from `docs/prototype/Video Creator.html`, cross-checked against the preserved prototype source in `docs/prototype/v1/` and the current shared schema/database files.
+This spec is derived from `docs/prototype/Video Creator.html`, cross-checked against the preserved prototype source in `docs/prototype/v1/`(you can start a server and access it on browser), and the current shared schema/database files.
 
 Reference files reviewed:
 
@@ -413,7 +413,7 @@ Components:
 Sentence row fields:
 
 - sentence index.
-- timecode.
+- timecode(start and end time).
 - sentence text.
 - orphan marker state.
 

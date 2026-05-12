@@ -33,7 +33,7 @@
 
 ## Phase 5: Editor Transcript, Preview, Timeline, And Layers
 
-- [ ] Task 16: Complete Transcript pane interactions and states.
+- [x] Task 16: Complete Transcript pane interactions and states.
 - [ ] Task 17: Match transcript context menu and remove Cancel row.
 - [ ] Task 18: Match Preview surface and controls, including watermark state.
 - [ ] Task 19: Implement Timeline seek/select/move/stretch/delete with sentence synchronization.

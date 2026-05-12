@@ -49,26 +49,33 @@ Required tools: Node 22, pnpm 10, Python 3.11, ffmpeg 6+.
 
 ```
 <project>/
-├── project.json        # canonical state (matches shared schema)
-├── voice.wav
-├── transcript.txt
-├── media/              # user images/clips
-├── renders/            # MP4 outputs
-└── .vc/                # cache: alignment JSON, pre-rendered clips, thumbnails
+  voice.wav
+  transcript.txt
+  subtitles.srt
+  media/
+  renders/
+  .vc/
+    alignment.json
+    alignment.hash
+    thumbs/
+    clips/
+    drafts/
+    logs/
 ```
 
 **Render pipeline** (server-side):
 
-1. POST `/render?preset=draft|final` triggers the pipeline
+1. POST `/api/server/projects/:projectId/render?preset=draft|final&resolution=1920x1080|1280x720|1080x1920` triggers the pipeline
 2. `pipeline/transcribe.py` runs WhisperX forced alignment (reference-text mode) and caches to `.vc/`
 3. `pipeline/clip_render.py` pre-renders each foreground clip (motion, transitions) into `.vc/clips/`
-4. `pipeline/filtergraph.py` builds the ffmpeg complex filter chain (background → foreground overlay → subtitles → watermark)
-5. `pipeline/render.py` invokes ffmpeg and streams progress via WebSocket (`/ws`)
-6. Result logged to SQLite (`db/app.db`)
+4. `pipeline/subtitles.py` generates `subtitles.srt` from alignment data at the project root
+5. `pipeline/filtergraph.py` builds the ffmpeg complex filter chain (background → foreground → PiP → subtitles → watermark)
+6. `pipeline/render.py` invokes ffmpeg and streams progress via WebSocket (`/ws`)
+7. Result written to `render_history`, `render_artifacts`, and `render_events` in the app SQLite DB (`%APPDATA%/videocreator/app.db` on Windows, `~/.videocreator/app.db` on Unix)
 
-**Layer model** (bottom to top): black fill → background (auto-distributed images/clips) → foreground (sentence-mapped clips) → subtitles → watermark.
+**Layer model** (bottom to top): black fill → background (auto-distributed images/clips) → foreground (sentence-mapped clips) → PiP (picture-in-picture overlays) → subtitles → watermark.
 
-**State management**: Zustand on the frontend; `project.json` on disk is the durable store. FastAPI reads/writes `project.json` directly — it is not a database-backed API.
+**State management**: Zustand on the frontend; canonical project config stored in SQLite `project_configs` (`config_json` validated against the shared schema, content-hashed on save). Browser storage owns UI preferences (`theme`, `accent`, `density`, `language`) and incremental undo/redo operations. FastAPI reads/writes through SQLite — it is not a filesystem-based API.
 
 **Forward-compatibility hooks**: `apps/server/server/adapters/ai/base.py` defines an abstract `AIProvider` interface for Phase 2 AI integration — keep it intact.
 
@@ -97,4 +104,18 @@ Keep local media, renders, caches, `.vc/`, virtualenvs, and downloads out of sou
 
 ## Docs
 
-`docs/designs/PHASE_1_DESIGN.md` is the authoritative spec — read it before making architectural decisions. It covers the full layer model, render tiers, cache invalidation rules, and the three-phase roadmap.
+`docs/designs/SPEC.md` is the single authoritative spec — read it before any change. It covers every feature, every UI/UX behavior, the data/persistence model, the API surface, edge cases, and success criteria. Other planning files (`tasks/plan.md`, `tasks/todo.md`) are derived views: they must never narrow, drop, or contradict anything in `SPEC.md`. If a plan/task and `SPEC.md` disagree, `SPEC.md` wins — fix the plan, not the spec.
+
+## SPEC Compliance (MANDATORY)
+
+- Implement **every** point in `docs/designs/SPEC.md`. Do not silently skip pages, controls, states, edge cases, or boundary rules. If something in the spec is genuinely out of scope or blocked, say so explicitly and get a decision — never just omit it.
+- Before starting a task, re-read the relevant `SPEC.md` section(s) in full. Before marking a task done, walk its `SPEC.md` section line by line and confirm each requirement is met or explicitly deferred with a note.
+- Keep `tasks/plan.md` and `tasks/todo.md` in sync with `SPEC.md`: when the spec changes, reconcile the plan; when you find a plan item missing a spec requirement, add it.
+
+## UI/UX Parity Against Prototype (MANDATORY)
+
+The prototype in `docs/prototype/v1/` is the visual/interaction reference for screen composition, layout, control placement, and behavior.
+- **After any UI-affecting change you MUST verify it in a real browser.** Run the app (`pnpm dev`), open the affected screen, and open the same screen from the prototype (serve `docs/prototype/v1/` — e.g. it runs at `http://127.0.0.1:4173/app.html` directly). Compare them **side by side, visually**. Iterate until the implemented screen is a **100% replication** of the prototype's layout, structure, controls, states, and interactions.
+- **`SPEC.md` is synced with the prototype, if they are conflict, stop and ask user.**.
+- **Do not copy prototype CSS.** Rebuild the look with Tailwind and the existing design tokens/shared primitives (buttons, icon buttons, segmented controls, forms, tags, panels, modals, layer chips). Visual output should match; the implementation should not be a CSS paste.
+- Use the browser-testing / DevTools tooling to check console errors and to capture before/after screenshots for PRs that touch UI. A UI task is not done until the browser comparison passes.

@@ -41,11 +41,8 @@ const Transcript = ({ sentences, selection, currentSentence, onSelect, onContext
             <div key={s.idx} className={cls.join(" ")}
             onClick={(e) => onSelect(s.idx, e)}
             onContextMenu={(e) => {e.preventDefault();onContext(s.idx, e);}}>
-              <button className="sent-add" title="Assign media to this sentence" onClick={(e) => {e.stopPropagation();onContext(s.idx, e);}}>
-                <Icon name="plusCircle" size={14} />
-              </button>
               <span className="idx">{s.idx}</span>
-              <span className="tc">{fmtTC(s.start, false)}</span>
+              <span className="tc">{fmtTC(s.start, false)}–{fmtTC(s.end, false)}</span>
               <span className="text">{s.text}</span>
             </div>);
 
@@ -128,12 +125,15 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
   const fgMedia = fgItem ? MEDIA_BY_ID[fgItem.item.mediaId] : null;
   const bgMedia = bgItem ? MEDIA_BY_ID[bgItem.mediaId] : null;
 
-  const stageStyle = { aspectRatio: `${resolution.w} / ${resolution.h}`, maxHeight: "100%" };
+  const isVertical = resolution.h > resolution.w;
+  const canvasStyle = isVertical
+    ? { height: "100%", maxWidth: "100%", aspectRatio: "9 / 16" }
+    : { width: "100%", maxHeight: "100%", aspectRatio: "16 / 9" };
 
   return (
     <div className="preview-wrap">
-      <div className="preview-stage" style={stageStyle}>
-        <div className="preview-canvas">
+      <div className="preview-stage">
+        <div className="preview-canvas" style={canvasStyle}>
           {bgMedia && <div className="scene bg-scene" style={{ background: thumbGrad(bgMedia.thumb) }} />}
           {!bgMedia && <div className="scene empty"><span>No background</span></div>}
           {showFG && <div className="scene fg-scene" style={{ background: thumbGrad(fgMedia.thumb) }} />}
@@ -213,7 +213,7 @@ const Clip = ({ left, width, kind, label, selected, onClick, onResize, onDelete 
 
 };
 
-const TimelineRow = ({ layer, selection, onSelect, onResize, onDelete, onClickHeader }) => {
+const TimelineRow = ({ layer, selection, onSelect, onResize, onDelete, onClickHeader, sentences }) => {
   return (
     <div className="track-row" data-layer={layer.kind}>
       <div className="track-label" onClick={onClickHeader}>
@@ -224,8 +224,8 @@ const TimelineRow = ({ layer, selection, onSelect, onResize, onDelete, onClickHe
       <div className="track">
         {layer.kind === "sub" ?
         // synthesize sub clips per sentence, distributed across the project duration
-        SENTENCES.map((s, i) => {
-          const segPct = 100 / SENTENCES.length;
+        sentences.map((s, i) => {
+          const segPct = 100 / sentences.length;
           const left = i * segPct;
           const width = segPct * 0.92; // small gap between cues
           return <div key={s.idx} className="clip sub" style={{ left: `${left}%`, width: `${width}%` }} title={`s${s.idx}`} />;
@@ -254,7 +254,7 @@ const TimelineRow = ({ layer, selection, onSelect, onResize, onDelete, onClickHe
 
 };
 
-const Timeline = ({ layers, time, onSeek, selection, onSelect, onResize, onDelete }) => {
+const Timeline = ({ layers, time, onSeek, selection, onSelect, onResize, onDelete, sentences }) => {
   const playPct = time / PROJECT_DURATION * 100;
   const ticks = Array.from({ length: 16 }, (_, i) => ({ pct: i / 15 * 100, label: fmtTC(i / 15 * PROJECT_DURATION, false) }));
 
@@ -291,7 +291,7 @@ const Timeline = ({ layers, time, onSeek, selection, onSelect, onResize, onDelet
         </div>
         <div className="tracks">
           {layers.map((L) =>
-          <TimelineRow key={L.id} layer={L} selection={selection} onSelect={onSelect} onResize={onResize} onDelete={onDelete} />
+          <TimelineRow key={L.id} layer={L} selection={selection} onSelect={onSelect} onResize={onResize} onDelete={onDelete} sentences={sentences} />
           )}
         </div>
         <div className="playhead-line" style={{ left: `calc(100px + (100% - 100px - 10px) * ${playPct} / 100)` }} />
@@ -315,6 +315,7 @@ const EditorScreen = ({ go }) => {
   const [subSettings, setSubSettings] = React.useState({ burnin: true, pos: "bottom", font: "Inter", size: 44, bg: "shadow", maxChars: 42 });
   const [watermarkOn, setWatermarkOn] = React.useState(true);
   const [watermarkAssetId, setWatermarkAssetId] = React.useState("m3");
+  const [sentences, setSentences] = React.useState(() => [...SENTENCES]);
   const [draft, setDraft] = React.useState(null); // null | { progress: 0..100, stage, done?: boolean }
 
   // Simulated draft render — drives the progress bar under the editor toolbar.
@@ -374,9 +375,9 @@ const EditorScreen = ({ go }) => {
   }, []);
 
   const currentSentence = React.useMemo(() => {
-    const s = SENTENCES.find((s) => time >= s.start && time <= s.end);
-    return s ? s.idx : SENTENCES.find((s) => time < s.start)?.idx ?? SENTENCES.length;
-  }, [time]);
+    const s = sentences.find((s) => time >= s.start && time <= s.end);
+    return s ? s.idx : sentences.find((s) => time < s.start)?.idx ?? sentences.length;
+  }, [time, sentences]);
 
   const onSentenceSelect = (idx, e) => {
     if (e.shiftKey && selection.length > 0) {
@@ -385,7 +386,7 @@ const EditorScreen = ({ go }) => {
       setSelection(Array.from({ length: hi - lo + 1 }, (_, i) => lo + i));
     } else {
       setSelection([idx]);
-      setTime(SENTENCES[idx - 1].start);
+      setTime(sentences[idx - 1]?.start ?? 0);
     }
   };
 
@@ -394,12 +395,59 @@ const EditorScreen = ({ go }) => {
   };
 
   const sentenceRangeForTimes = (start, end) => {
-    const overlapping = SENTENCES.filter((s) => s.end > start && s.start < end);
+    const overlapping = sentences.filter((s) => s.end > start && s.start < end);
     if (overlapping.length === 0) {
-      const nearest = SENTENCES.reduce((best, s) => Math.abs(s.start - start) < Math.abs(best.start - start) ? s : best, SENTENCES[0]);
+      const nearest = sentences.reduce((best, s) => Math.abs(s.start - start) < Math.abs(best.start - start) ? s : best, sentences[0]);
       return [nearest.idx, nearest.idx];
     }
     return [overlapping[0].idx, overlapping[overlapping.length - 1].idx];
+  };
+
+  // ── merge sentences ──
+  const mergeSentences = () => {
+    const sorted = [...selection].sort((a, b) => a - b);
+    const lo = sorted[0];
+    const hi = sorted[sorted.length - 1];
+    const merged = sentences.filter((s) => s.idx >= lo && s.idx <= hi);
+    if (merged.length < 2) return;
+
+    const text = merged.map((s) => s.text).join(" ");
+    const start = merged[0].start;
+    const end = merged[merged.length - 1].end;
+    const conf = merged.reduce((sum, s) => sum + s.conf, 0) / merged.length;
+    const gap = hi - lo;
+
+    const filtered = sentences
+      .filter((s) => s.idx < lo || s.idx > hi)
+      .map((s) => s.idx > hi ? { ...s, idx: s.idx - gap } : { ...s });
+
+    const newSentence = { idx: lo, start, end, text, conf, orphan: false };
+    filtered.splice(lo - 1, 0, newSentence);
+    filtered.forEach((s, i) => { s.idx = i + 1; });
+
+    // update clip anchors that reference merged sentences
+    const remap = (f, t) => {
+      if (f > hi) return [f - gap, t - gap];
+      if (f >= lo && t <= hi) return [lo, lo];
+      if (f < lo && t >= lo) return [f, lo];
+      if (f <= hi && t > hi) return [lo, t - gap];
+      return [f, t];
+    };
+
+    const newLayers = layers.map((L) => ({
+      ...L,
+      items: L.items.map((it) => {
+        if (!it.sentences) return it;
+        const [f, t] = remap(it.sentences[0], it.sentences[1]);
+        return { ...it, sentences: [f, t] };
+      })
+    }));
+
+    setSentences(filtered);
+    window.SENTENCES = filtered;
+    setLayers(newLayers);
+    setSelection([lo]);
+    setContextMenu(null);
   };
 
   // ── layer mutations ──
@@ -493,7 +541,7 @@ const EditorScreen = ({ go }) => {
       const bg = ls.find((L) => L.kind === "bg");
       if (bg) return ls;
       const newBG = { id: "L-bg", kind: "bg", name: "Background", items: [{
-          id: "bg-001", mediaId: "m6", sentences: [1, SENTENCES.length], start: 0, end: PROJECT_DURATION,
+          id: "bg-001", mediaId: "m6", sentences: [1, sentences.length], start: 0, end: PROJECT_DURATION,
           motion: { kind: "ken_burns", easing: "linear" },
           transitions: { in: "cut", out: "cut" }, crossfade: 0.6
         }] };
@@ -504,7 +552,7 @@ const EditorScreen = ({ go }) => {
   const removeBackground = () => setLayers((ls) => ls.filter((L) => L.kind !== "bg"));
 
   const resolution = RESOLUTIONS[resolutionKey];
-  const subtitleText = SENTENCES[currentSentence - 1]?.text || "";
+  const subtitleText = sentences[currentSentence - 1]?.text || "";
   const watermarkAsset = MEDIA_BY_ID[watermarkAssetId];
 
   const layerCounts = {
@@ -551,7 +599,7 @@ const EditorScreen = ({ go }) => {
 
         <div className="editor-body">
           <Transcript
-            sentences={SENTENCES}
+            sentences={sentences}
             selection={selection}
             currentSentence={currentSentence}
             onSelect={onSentenceSelect}
@@ -607,7 +655,8 @@ const EditorScreen = ({ go }) => {
               selection={selItem}
               onSelect={(layerId, itemId) => setSelItem({ layerId, itemId })}
               onResize={resizeItem}
-              onDelete={deleteItem} />
+              onDelete={deleteItem}
+              sentences={sentences} />
             
           </div>
 
@@ -653,7 +702,12 @@ const EditorScreen = ({ go }) => {
           <button onClick={() => {setModal({ kind: "assign", range: [contextMenu.sentenceIdx, contextMenu.sentenceIdx] });setContextMenu(null);}}>
             <Icon name="upload" size={12} /> Assign media to range…
           </button>
-          <button onClick={() => {setSelection([contextMenu.sentenceIdx]);setTime(SENTENCES[contextMenu.sentenceIdx - 1].start);setContextMenu(null);}}>
+          {selection.length >= 2 &&
+          <button onClick={mergeSentences}>
+            <Icon name="cut" size={12} /> Merge {selection.length} sentences
+          </button>
+          }
+          <button onClick={() => {setSelection([contextMenu.sentenceIdx]);setTime(sentences[contextMenu.sentenceIdx - 1]?.start ?? 0);setContextMenu(null);}}>
             <Icon name="play" size={12} /> Play from here
           </button>
         </div>
@@ -680,7 +734,7 @@ const EditorScreen = ({ go }) => {
               });
             }
             const newBG = { id: "L-bg", kind: "bg", name: "Background", items: [{
-                id: "bg-001", mediaIds: data.mediaIds, mediaId: data.mediaId, sentences: [1, SENTENCES.length], start: 0, end: PROJECT_DURATION,
+                id: "bg-001", mediaIds: data.mediaIds, mediaId: data.mediaId, sentences: [1, sentences.length], start: 0, end: PROJECT_DURATION,
                 motion: data.motion, transitions: { in: "cut", out: "cut" }, crossfade: data.crossfade
               }] };
             return [...ls, newBG];

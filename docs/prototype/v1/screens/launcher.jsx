@@ -22,6 +22,11 @@ const LauncherScreen = ({ go }) => {
             onKeyDown={(e) => {if (e.key === "Enter" || e.key === " ") openProject(p);}}>
               <div className={"proj-thumb " + p.thumb}>
                 <div></div><div></div><div></div>
+                {p.rendered &&
+                <button className="proj-play-overlay" onClick={(e) => {e.stopPropagation();setPlayingProject(p);}} title="Play render">
+                  <Icon name="play" size={20} />
+                </button>
+                }
               </div>
               <div className="proj-info">
                 <h2>{p.name}</h2>
@@ -34,11 +39,6 @@ const LauncherScreen = ({ go }) => {
               </div>
               <div className="proj-state">
                 <span className="tag ok"><span className="dot ok"/>aligned</span>
-                {p.rendered &&
-                <button className="btn sm ghost play-render" onClick={(e) => {e.stopPropagation();setPlayingProject(p);}}>
-                  <Icon name="play" size={12}/> Play render
-                </button>
-                }
                 <Icon name="chevRight" />
               </div>
             </div>

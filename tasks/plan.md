@@ -2,7 +2,7 @@
 
 ## Overview
 
-Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.md` and the prototype at `http://127.0.0.1:4173/app.html` become the UI/UX and behavior contract. The work keeps Phase 1 local-first: Launcher, Setup subflow, Editor, Render, project config persistence, app SQLite metadata, render artifacts, and browser-local working recovery. The prototype is the visual truth for screen composition and control placement; the spec is the behavioral and data truth. And the `tasks/todo.md` is the task list overview.
+Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.md` and the prototype at `http://127.0.0.1:4173/app.html` become the UI/UX and behavior contract. The work keeps Phase 1 local-first: Launcher, Setup subflow, Editor, Render, project config persistence, app SQLite metadata, render artifacts, and browser-local working recovery. The prototype is the visual reference for screen composition and control placement; `docs/designs/SPEC.md` is the single authoritative source for behavior, data and presentation — where the prototype is derived from `SPEC.md`, if they are conflict, stop and ask user. Do not copy prototype CSS; rebuild visuals with Tailwind and the existing design tokens/shared primitives. And the `tasks/todo.md` is the task list overview.
 
 ## Current Gaps
 
@@ -11,18 +11,18 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 - Setup already has inspection/alignment concepts but uses route-level setup and path query semantics instead of a Launcher-owned folder-selection subflow with project identity.
 - Editor persists layers directly to `project.json`, autosaves too aggressively, shows open-folder/change-background/subtitles controls in old locations, lacks full global config persistence, and does not yet model incremental browser undo/redo operations.
 - Timeline/editor interactions are partly implemented but need prototype parity for context menus, layer popover rules, clip movement/stretching, synchronized sentence ranges, and inspector controls.
-- SQLite currently has `recent_projects`, `app_settings`, and simple `render_history`; it lacks `schema_migrations`, `projects`, `project_configs`, `runtime_checks`, `render_artifacts`, and `render_events`.
+- SQLite currently has `recent_projects`, `app_settings`, and simple `render_history`; it lacks `schema_migrations`, `projects`, `project_configs`, `render_artifacts`, and `render_events`. Per `SPEC.md`, do **not** add a `runtime_checks` table (runtime status comes from live health endpoints), and `app_settings` must be reduced to the single allowed key `default_output_preset`.
 - API names are path-centric and do not match the spec's project-id based surface.
 - Render page has a working base but must be tightened to the prototype/spec states, artifact model, history rules, and play/reveal behavior.
 
 ## Architecture Decisions
 
 - Use `project_id` as the stable public identifier in web routes and APIs. Keep absolute paths server-side in SQLite only.
-- Treat `project_configs.config_json` as the canonical saved config snapshot; keep `project.json` as a user-visible exported/synced project file until the spec says otherwise.
+- Treat `project_configs.config_json` as the **only** canonical project config store. Per `SPEC.md`, `project.json` is not written into the project folder; the project folder holds user-visible files (`voice.wav`, `transcript.txt`, `subtitles.srt`, `media/`, `renders/`) plus the `.vc/` cache.
 - Browser storage owns UI preferences and incremental editor operation recovery. SQLite owns saved configs, project metadata, render history, and generated render artifacts.
 - Add a migration runner before expanding `app.db`; do not keep growing the inline `SCHEMA` string.
 - Keep render artifacts separate from source media. Source media stays in project `media/`; generated files such as final/draft MP4, partial files, logs, filtergraphs, subtitles, thumbnails, and reusable companion files go through `render_artifacts`.
-- Implement visual changes through existing component boundaries where possible, but use the prototype as the final layout authority when existing components conflict.
+- Implement visual changes through existing component boundaries where possible, using the prototype as the layout reference Do not copy prototype CSS — rebuild with Tailwind tokens and shared primitives.
 
 ## Dependency Graph
 
@@ -111,7 +111,7 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 
 ### Task 4: Implement `project_configs` Canonical Saves
 
-**Description:** Add config snapshot storage in SQLite and route project save/load through `project_configs`, while syncing user-visible `project.json`.
+**Description:** Add config snapshot storage in SQLite and route project save/load through `project_configs`. Do not write a `project.json` into the project folder; the project folder only holds user-visible files plus `.vc/`.
 
 **Acceptance criteria:**
 - [x] Saving validates config JSON against shared schema before writing.
@@ -445,15 +445,15 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Description:** Complete transcript pane behavior from spec and prototype.
 
 **Acceptance criteria:**
-- [ ] Search input, keyboard hint, `Transcript - N aligned`, selection chip, sentence rows, and add handles match prototype.
-- [ ] Click sentence selects and seeks; shift-click selects contiguous range; right-click and `+` open context menu.
-- [ ] Search filters or highlights matches, Enter/Down advances, Escape clears.
-- [ ] Current sentence follows playhead, and orphan/low-confidence/search states are visually distinct.
-- [ ] Sentence merge/concatenate belongs in Transcript pane and updates dependent clip anchors.
+- [x] Search input, keyboard hint, `Transcript - N aligned`, selection chip, sentence rows, and add handles match prototype.
+- [x] Click sentence selects and seeks; shift-click selects contiguous range; right-click and `+` open context menu.
+- [x] Search filters or highlights matches, Enter/Down advances, Escape clears.
+- [x] Current sentence follows playhead, and orphan/low-confidence/search states are visually distinct.
+- [x] Sentence merge/concatenate belongs in Transcript pane and updates dependent clip anchors.
 
 **Verification:**
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/TranscriptPane.test.tsx`
-- [ ] Manual transcript selection/search/context-menu checks.
+- [x] `rtk pnpm -F @vc/web test -- components/editor/TranscriptPane.test.tsx`
+- [x] Manual transcript selection/search/context-menu checks.
 
 **Dependencies:** Tasks 12, 13
 
@@ -520,6 +520,10 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 - [ ] Drag body moves start/end together and synchronizes transcript current/selection state during drag.
 - [ ] Background, foreground, PiP, and subtitle clips support timing interactions where applicable.
 - [ ] Delete selected non-background clip through clip `x`, Delete, or Backspace.
+- [ ] Deleting the last item in a foreground/PiP layer removes that layer.
+- [ ] Resize/move clamps: start `>= 0`, end `<=` voice duration, minimum clip duration `0.5s`; the covered sentence range is recomputed from the updated time span.
+- [ ] Timeline keeps a fixed height; when layers overflow, the track area scrolls without resizing the preview or pushing the Inspector off screen.
+- [ ] Overlapping foreground/PiP clips are auto-placed on different layers (or surface a validation state); non-overlapping clips may share a layer.
 - [ ] Waveform spans the full voice duration and full timeline width.
 
 **Verification:**
@@ -755,6 +759,7 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 - [ ] Progress card shows output filename, specs, status tag, big progress bar, percent, encode speed, ETA, and frames.
 - [ ] Log card shows `ffmpeg log`, `tail - live`, timestamped lines, and info/ok/warning/error/fatal tones.
 - [ ] Refreshing Render page recovers current state from DB/events.
+- [ ] Multiple concurrent render requests are queued by the backend in submission order and surfaced live in the current project's UI.
 
 **Verification:**
 - [ ] `rtk pnpm -F @vc/server test -- test_render_progress.py test_render_endpoint.py`
@@ -1033,6 +1038,36 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 - `docs/designs/SPEC.md` only if test procedure documentation needs a small note
 
 **Estimated scope:** M
+
+### Task 39: Spec Reconciliation Cleanup
+
+**Description:** Close the remaining gaps between earlier (already-landed) tasks and `docs/designs/SPEC.md` that were not covered by their original acceptance criteria.
+
+**Acceptance criteria:**
+- [ ] No `project.json` is written into the project folder anywhere in the pipeline or routes; canonical config is SQLite `project_configs` only.
+- [ ] No `runtime_checks` table exists; runtime status is served from live health endpoints.
+- [ ] `app_settings` retains only `default_output_preset`; a migration removes `theme`, `language`, `show_statusbar`, `last_project_path`, and `render_history_filter` if present.
+- [ ] `projects` table includes `palette_seed` (and the other spec columns: `voice_duration_s`, `sentence_count`, `media_count`, `thumbnail_path`, `project_mtime`, `exists_on_disk`, `current_config_hash`, `last_rendered_config_hash`, `has_unrendered_changes`, `last_error`).
+- [ ] Editor API exposes `GET /projects/:projectId/render-cache`; system actions expose `POST /system/reveal` and `POST /system/open`.
+- [ ] Alignment writes `<project>/subtitles.srt` at the project root (never under `.vc/`), with cues adjusted to the transcript content; the transcript pane sentence list is derived from that file.
+- [ ] Tweaks panel is dev-only and hidden in normal builds (same as Tokens/theme/language).
+
+**Verification:**
+- [ ] `rtk pnpm -F @vc/server test`
+- [ ] `rtk pnpm -F @vc/web test`
+- [ ] `rtk grep -rn "project.json" apps/server apps/web` shows only export/compat code paths, not canonical-store writes.
+
+**Dependencies:** Tasks 2, 3, 4, 6, 8, 10
+
+**Files likely touched:**
+- `apps/server/server/db/migrations/*.sql`
+- `apps/server/server/db/projects.py`
+- `apps/server/server/db/app_db.py`
+- `apps/server/server/routes/projects.py`
+- `apps/server/server/routes/render.py`
+- `apps/web/components/tweaks-panel/*`
+
+**Estimated scope:** S
 
 ### Final Checkpoint: Ready For Review
 
