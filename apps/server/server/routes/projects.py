@@ -31,12 +31,11 @@ from server.domain.project import (
     RecentProject,
     RecentProjectCard,
     load_project,
-    save_project,
 )
 from server.routes.alignment import get_alignment, run_alignment
 from server.routes.setup import inspect_setup
 from server.domain.timing import AlignmentResult
-from server.pipeline.cache import compute_alignment_hash
+from server.pipeline.cache import compute_alignment_hash, is_cached
 from server.pipeline.chunker import segment
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -127,7 +126,6 @@ def _optional_str(value: object) -> str | None:
 
 def _write_valid_project_config(project_dir: Path, data: dict[str, Any]) -> str:
     updated = Project.model_validate(data)
-    save_project(project_dir, updated)
     return save_config_snapshot(
         project_dir,
         updated.model_dump(mode="json", by_alias=True, exclude_none=False),
@@ -136,7 +134,7 @@ def _write_valid_project_config(project_dir: Path, data: dict[str, Any]) -> str:
 
 def _project_path_or_error(project_id: str) -> Path | JSONResponse:
     project_dir = project_path_for_id(project_id)
-    if project_dir is None or not (project_dir / "project.json").exists():
+    if project_dir is None or not project_dir.is_dir():
         return _error(
             404,
             "PROJECT_NOT_FOUND",
@@ -331,10 +329,6 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
         (project_dir / "media").mkdir(exist_ok=True)
         (project_dir / "renders").mkdir(exist_ok=True)
         (project_dir / ".vc").mkdir(exist_ok=True)
-        (project_dir / "project.json").write_text(
-            json.dumps(project.model_dump(mode="json", by_alias=True, exclude_none=False), indent=2),
-            encoding="utf-8",
-        )
     except PermissionError:
         return _error(
             403,
@@ -375,17 +369,29 @@ async def recent_projects() -> list[RecentProject]:
 @router.post("/open", response_model=RecentProject)
 async def open_project(payload: OpenProjectRequest) -> RecentProject | JSONResponse:
     project_dir = Path(payload.path)
-    project_json = project_dir / "project.json"
-    if not project_json.exists():
+    if not project_dir.is_dir():
         return _error(
             404,
             "PROJECT_NOT_FOUND",
-            "Project folder is missing or does not contain project.json.",
+            "Project folder is missing.",
             {"path": payload.path},
         )
-    project = load_project(project_dir)
-    touch_recent(project_dir, project.name)
-    return _project_metadata(project_dir, project.name)
+    config = latest_config_for_project_path(project_dir)
+    if config is None:
+        try:
+            project = load_project(project_dir)
+            name = project.name
+        except (FileNotFoundError, Exception):
+            return _error(
+                404,
+                "PROJECT_NOT_FOUND",
+                "Project config not found.",
+                {"path": payload.path},
+            )
+    else:
+        name = config.get("name", project_dir.name)
+    touch_recent(project_dir, name)
+    return _project_metadata(project_dir, name)
 
 
 @router.delete("/recent")
@@ -425,12 +431,15 @@ class PutWatermarkResponse(BaseModel):
 @router.get("/load", response_model=None)
 async def load_project_data(project: str = Query(...)) -> JSONResponse:
     project_dir = Path(project)
-    project_json = project_dir / "project.json"
-    if not project_json.exists():
+    if not project_dir.is_dir():
         return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
     data = latest_config_for_project_path(project_dir)
     if data is None:
-        data = json.loads(project_json.read_text(encoding="utf-8"))
+        project_json = project_dir / "project.json"
+        if project_json.exists():
+            data = json.loads(project_json.read_text(encoding="utf-8"))
+        else:
+            return _error(404, "PROJECT_NOT_FOUND", "Project config not found.", {"project": project})
     return JSONResponse(data)
 
 
@@ -600,4 +609,38 @@ async def put_project_config(
         config_hash=config_hash,
         saved_at=datetime.now(UTC).isoformat(),
         has_unrendered_changes=bool(row.get("has_unrendered_changes")) if row else True,
+    )
+
+
+class RenderCacheResponse(BaseModel):
+    project_id: str
+    cached_count: int
+    total_count: int
+    state: str  # warm | cold | partial | invalid
+
+
+@router.get("/{project_id}/render-cache", response_model=RenderCacheResponse)
+async def get_render_cache(project_id: str) -> RenderCacheResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    clips_dir = project_dir / ".vc" / "clips"
+    cached = 0
+    if clips_dir.is_dir():
+        cached = sum(
+            1 for p in clips_dir.iterdir()
+            if p.is_file() and p.suffix == ".mp4" and p.stat().st_size > 0
+        )
+    total = cached  # total matches cached in absence of config-based counting
+    if cached == 0 and total == 0:
+        state = "cold"
+    elif cached > 0 and cached == total:
+        state = "warm"
+    else:
+        state = "partial"
+    return RenderCacheResponse(
+        project_id=project_id,
+        cached_count=cached,
+        total_count=total,
+        state=state,
     )

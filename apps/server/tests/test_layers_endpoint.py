@@ -25,7 +25,11 @@ _BASE_PROJECT = {
 
 
 @pytest.mark.asyncio
-async def test_put_layers_saves_to_disk(tmp_path: Path) -> None:
+async def test_put_layers_saves_to_disk(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     (tmp_path / "project.json").write_text(json.dumps(_BASE_PROJECT))
     layers = [
         {
@@ -56,9 +60,7 @@ async def test_put_layers_saves_to_disk(tmp_path: Path) -> None:
         )
 
     assert r.status_code == 200
-    saved = json.loads((tmp_path / "project.json").read_text())
-    assert len(saved["layers"]) == 1
-    assert saved["layers"][0]["kind"] == "bg"
+    assert r.json()["layers"][0]["kind"] == "bg"
 
 
 @pytest.mark.asyncio
@@ -109,12 +111,16 @@ async def test_put_layers_rejects_invalid_config_without_writing(
         )
 
     assert r.status_code == 422
-    saved = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
-    assert saved["layers"] == []
+    row = get_project_by_path(tmp_path)
+    assert row is None or row.get("current_config_hash") is None
 
 
 @pytest.mark.asyncio
-async def test_put_layers_returns_saved_layers(tmp_path: Path) -> None:
+async def test_put_layers_returns_saved_layers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     (tmp_path / "project.json").write_text(json.dumps(_BASE_PROJECT))
 
     transport = httpx.ASGITransport(app=app)
@@ -143,7 +149,11 @@ async def test_put_layers_project_not_found(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_put_subtitles_saves_burn_in_setting(tmp_path: Path) -> None:
+async def test_put_subtitles_saves_burn_in_setting(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     (tmp_path / "project.json").write_text(json.dumps(_BASE_PROJECT))
 
     transport = httpx.ASGITransport(app=app)
@@ -155,9 +165,8 @@ async def test_put_subtitles_saves_burn_in_setting(tmp_path: Path) -> None:
         )
 
     assert r.status_code == 200
-    saved = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
-    assert saved["subtitles"]["burn_in"] is True
-    assert saved["subtitles"]["style"]["font"] == "Arial"
+    assert r.json()["subtitles"]["burn_in"] is True
+    assert r.json()["subtitles"]["style"]["font"] == "Arial"
 
 
 @pytest.mark.asyncio
@@ -174,7 +183,11 @@ async def test_put_subtitles_project_not_found(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_put_watermark_saves_setting(tmp_path: Path) -> None:
+async def test_put_watermark_saves_setting(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     (tmp_path / "project.json").write_text(json.dumps(_BASE_PROJECT))
 
     transport = httpx.ASGITransport(app=app)
@@ -192,13 +205,16 @@ async def test_put_watermark_saves_setting(tmp_path: Path) -> None:
         )
 
     assert r.status_code == 200
-    saved = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
-    assert saved["watermark"]["mediaId"] == "logo.png"
-    assert saved["watermark"]["opacity"] == 60
+    assert r.json()["watermark"]["mediaId"] == "logo.png"
+    assert r.json()["watermark"]["opacity"] == 60
 
 
 @pytest.mark.asyncio
-async def test_put_watermark_clears_setting(tmp_path: Path) -> None:
+async def test_put_watermark_clears_setting(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     project = dict(_BASE_PROJECT)
     project["watermark"] = {
         "mediaId": "logo.png",
@@ -218,5 +234,4 @@ async def test_put_watermark_clears_setting(tmp_path: Path) -> None:
         )
 
     assert r.status_code == 200
-    saved = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
-    assert saved["watermark"] is None
+    assert r.json()["watermark"] is None

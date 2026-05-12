@@ -91,7 +91,7 @@ const INITIAL_LAYERS = [
   {
     id: "L-pip-2", kind: "pip", name: "PiP · z4",
     items: [
-      { id: "pip-002", mediaId: "m4", sentences: [10,11], start: 60.5, end: 70.0,
+      { id: "pip-002", mediaId: "m4", sentences: [9,11], start: 51, end: 70.0,
         pip: { posX: 2, posY: 2, size: 22, radius: 16, opacity: 90 },
         motion: { kind: "static", easing: "linear" },
         transitions: { in: "fade", out: "fade" } },
@@ -104,7 +104,7 @@ const INITIAL_LAYERS = [
   {
     id: "L-pip-1", kind: "pip", name: "PiP · z3",
     items: [
-      { id: "pip-001", mediaId: "m3", sentences: [6,7], start: 36.0, end: 44.0,
+      { id: "pip-001", mediaId: "m3", sentences: [6, 10], start: 32.0, end: 63.0,
         pip: { posX: 2, posY: 2, size: 30, radius: 12, opacity: 100 },
         motion: { kind: "static", easing: "linear" },
         transitions: { in: "fade", out: "fade" } },

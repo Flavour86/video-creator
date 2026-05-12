@@ -25,23 +25,9 @@ Reference files reviewed:
 - `apps/server/server/db/renders.py`
 - `docs/designs/PHASE_1_DESIGN.md`
 
-## Decisions From Review Comments
-
-- `project.json` is no longer stored inside the selected project folder. Canonical project config is stored in SQLite `project_configs`.
-- The user-selected folder stores user-visible source/output files: `voice`, `transcript`, media, renders, and `subtitles.srt`.
-- `subtitles.srt` must be stored at `<project>/subtitles.srt`, not under `.vc/`, because the user may use it directly.
-- No visible top navigation. Launcher is the home page. Editor and Render are only reachable with a valid `project_id`.
-- Setup is a Launcher subflow for new projects only.
-- New projects may render after successful alignment even if no foreground/background has been added.
-- Already-rendered projects may render again only when the current config has unrendered changes.
-- Multiple render requests are queued by the backend and shown live in the UI.
-- Phase 1 fully supports vertical `9:16` output. It is a resolution/aspect choice, not a separate render preset.
-- Undo/redo uses browser storage with incremental operations, not whole-config snapshots.
-- Render artifacts are generated-output records. They are not source assets; the primary reusable clip cache remains `.vc/clips/`.
-
 ## Objective
 
-Build a local-first video creation app where the transcript/subtitle timing is the editing surface. The user selects a project folder, provides or detects voice and transcript files, optionally sets a watermark, runs alignment to generate `subtitles.srt`, assigns uploaded media to sentence ranges, previews the layered timeline, and renders queued draft/final MP4 outputs.
+Build a local-first video creation app where the transcript/subtitle timing is the editing surface. The user selects a project folder, provides voice and transcript files, optionally sets a watermark, runs alignment to generate `subtitles.srt`, assigns uploaded media to sentence ranges, previews the layered timeline, and renders queued draft/final MP4 outputs.
 
 Target users:
 
@@ -184,57 +170,64 @@ Routing rules:
 - The app has no visible navigation bar with Launcher/Setup/Editor/Render/Tokens buttons.
 - Launcher is always reachable as home.
 - `New project` opens a native folder picker first; the Setup subflow starts only after a folder is selected.
-- Setup collects/detects voice, transcript, optional watermark, and then runs alignment.
+- Setup collects voice, transcript, optional watermark, and then runs alignment.
 - `Continue to Editor` is enabled only after alignment succeeds.
 - Editor requires a valid `project_id`; without it, redirect to Launcher.
-- Render requires a valid `project_id`; without it, redirect to Launcher.
+- Render requires a valid `project_id` and `render_id`; without it, redirect to Launcher.
 - For a new project, Render is available immediately after alignment succeeds, even if no foreground or background exists.
 - For an already-rendered project, Render is enabled only when the current config has unrendered changes.
 - The Tokens page is not part of the product UI, but token-based design-system implementation is still required.
 
 ## App Shell Components
 
-### Visible Shell
+### Topbar
+### Visual Truth
+![dark](visuals/shell-dark.png)
+![light](visuals/shell-light.png)
 
-The Phase 1 shell should not show prototype navigation buttons or the `phase 1 - local` logo suffix.
+#### Left: Logo and Application title
+Intereaction:
+ - click the `logo and Application title` locate to `Launcher` Page
 
-The bottom shell should remove the center live status segment shown in the red-highlighted part of the reference image. Keep only the left command pill and the right prototype/version badge.
-
-### Theme And Language
+#### Right: Theme And Language
 
 Controls may exist in settings/dev surfaces, but not as a persistent top nav:
 
 - Theme toggle: dark/light.
 - Language toggle: English/Chinese.
-- Accent/density can remain dev-only.
 
 Browser storage owns UI preferences:
 
 - `theme`
-- `accent`
-- `density`
 - `language`
 
-### Tweaks Panel
+### Bottom
+#### left command pill
+#### right prototype/version badge
 
-Tweaks is not part of Phase 1 product UI. It may remain dev-only and hidden in normal builds.
-
-## Launcher Page
-
+## Launcher Page(Home page)
 Purpose: show recent projects and start a new project. It does not include a separate `Open folder` action, runtime card, tips card, or create-another card.
 
-Primary layout:
+### main interface
+#### Visual Truth
+![dark](visuals/Launcher-dark.png)
+![light](visuals/Launcher-light.png)
 
-- Header with product logo/name.
-- `New project` button.
+#### Primary layout:
+Header
+- left side filled with `Recent projects` title, and the `Local workspace` at top of title .
+- right side is `New project` button.
+
+Body:
 - Recent project list.
 
-Buttons:
+#### Interaction detail
+1. Buttons:
 
-- `New project`: opens a native folder picker; after the user selects a folder, start the Setup subflow.
+- `New project`: opens a native folder picker; Only after the user selects a folder, start the Setup subflow.
 - Project card: opens Editor for that project.
 
-Project card fields:
+2. Project card fields:
 
 - thumbnail.
 - project name.
@@ -243,132 +236,129 @@ Project card fields:
 - media count.
 - last opened.
 - alignment/render status tag.
-- optional current render queue status.
 
-Project card must not show the raw folder path in the primary UI.
-
-Thumbnail rules:
+3. Thumbnail rules:
 
 - Prefer the first frame of the latest successful rendered video.
 - If no rendered video exists, generate a deterministic placeholder image when the project is created: three random colors divided evenly. Store or cache the generated thumbnail path.
+- Click the thumbnail's play icon, open a modal to display the rendered video, check ![dark effect](visuals/Launcher-play-dark.png) and ![light effect](visuals/Launcher-play-light.png)
 
 Launcher states:
 
 - No recent projects.
-- Project folder missing on disk.
+- Project folder missing on disk.(don't show it)
 - Project config missing/corrupt in database.
-- Alignment missing, pending, failed, or aligned.
-- Current project has queued/running render.
-- Folder picker cancelled.
+- tag status: `aligned`, `queued`, `running`, `rendered`, `error`.
+- Folder picker cancelled.(nothing happened)
 - Folder permission denied.
 
-Runtime status is not shown as a right rail in Phase 1.
+### Setup Subflow
 
-## Setup Subflow
+#### Visual Truth
+![dark](visuals/Setup-dark.png)
+![light](visuals/Setup-light.png)
 
 Purpose: create and align a new project after the user selects a folder from Launcher.
 
-Primary layout:
+#### Primary layout:
 
-- New project title.
-- Project name input.
-- Output resolution/preset controls.
-- Voice and transcript input area.
-- Optional watermark input.
-- Alignment status/action area.
-- `Cancel`.
-- `Continue to Editor`.
+Header:
+- left: `New project` eyebrow with `SetUp` title below.
+- right: `Cancel` and `Continue to Editor` button
 
-Inputs:
+Body:
+- left: set up progess: `Folder`, `Voice + transcript` provided, `Alignment` ready
+- center: Project name input, Output resolution/preset controls, Inputs: Voice, transcript and watermark input area
+- right: Alignment status/action area
 
-- Voice and transcript are auto-detected from the selected folder when possible.
-- If voice or transcript is not detected, the user can select each manually.
-- No folder path card is needed after the folder was selected in Launcher.
-- Watermark is optional.
 
-Output choices:
+#### Interaction:
+Header:
+- right: `Cancel`: returns to Launcher, `Continue to Editor`: enabled only when alignment succeeds, click it go to `Editor` page
 
-- Draft quality: 720p, fast/ultrafast.
-- Final quality: 1080p, CRF 18.
-- Vertical output: 9:16, 1080x1920, fully supported in Phase 1.
+Body:
+left: 
+  - It reflect which step of setup the new project is on, the folder always selected, because without, it's impossible to get into `Setup` interface, `Voice + transcript` checked when the `Voice` and `transcript` provided by user, `Alignment` is ready only when the `Alignment` is successful\
+center: 
+  - Project name is the name of folder selected. Output Preset: 720p(Draft quality), 1080p(Final quality), 1080p/vertical(9:16). 
+  - Inputs: Voice and transcript are provided by user. Watermark is optional.
 
-Alignment UI:
-
-- Show human-meaningful status only: pending, running, aligned, failed.
-- Do not show hash, device, or model in the primary UI.
-- It is acceptable to show duration and a simple progress indicator.
-
-Buttons and behavior:
-
-- `Cancel`: returns to Launcher.
-- `Run alignment`: creates the project row/config in SQLite, runs alignment, and writes `<project>/subtitles.srt`.
-- `Continue to Editor`: enabled only when alignment succeeds.
-
+right(Alignment):
+  - Show Alignment status only: pending, running, succeeded, failed
+  - description below the `Alignment` title, when `Alignment status` is running show `Calling the local alignment API and waiting for sentence timestamps.`, when `Alignment status` is done, show `Sentence timestamps are ready. Entering the editor is allowed only after this succeeds.`, otherwise `Run alignment before entering the editor.` 
+  - `Forced alignment` panel, show data of `sentences`, `duration` when `Alignment status` is succeeded，otherwise show `--`\
+  - `Run alignment` Button, click it, make a request, only when runs alignment and writes `<project>/subtitles.srt` successfully then creates the project row/config in SQLite, otherwise never create a new project
+  - `Transcript readable / {length or '--'} sentences`
+  - `Audio stream valid / pcm_s16le / 48kHz`
 Setup states:
 
 - Folder selected.
-- Voice auto-detected.
 - Voice manually selected.
 - Voice missing.
 - Voice invalid.
-- Transcript auto-detected.
 - Transcript manually selected.
 - Transcript missing.
 - Transcript empty/invalid.
 - Watermark absent or selected.
 - Alignment pending/running/aligned/failed.
 - Permission denied.
-- Disk full.
 
 ## Editor Page
 
+### Visual Truth
+![dark](visuals/editor-dark.png)
+![light](visuals/editor-light.png)
+
 Purpose: transcript/subtitle-anchored video editing.
 
-Primary layout:
+### Primary layout:
 
 - Top editor toolbar.
-- Optional draft render strip below toolbar.
+- draft render strip below toolbar(showing when click the `draft render` button).
 - Three-pane editor body:
   - Transcript pane.
   - Center preview plus timeline.
   - Right Inspector rail with global video config at the top.
 
-### Editor Toolbar
+#### Editor Toolbar Interactions
 
 Left:
 
-- Back/home icon button to Launcher.
+- Back/home icon button to `Launcher`(Home).
 - Project title.
-- Do not show the project path crumb.
 
 Right:
 
-- Cache status tag, e.g. `cache 24/24`.
-- `Save`.
-- `Render Draft`.
-- `Render Final`.
+- `Save`: 
+  1. Click: Browser storage records the working editing state and incremental operations for local recovery, `Save` snapshots the current browser working config and syncs it to SQLite `project_configs`
+  2. Disabled: when the config is saving
+  3. Shortcuts: `Cmd/Ctrl+Z`: undo, `Cmd/Ctrl+Shift+Z`: redo. Don't save a whole config on every undo/redo operation,
+    Undo/redo persistence:
+      - Browser storage records incremental edit operations such as add clip, patch clip, delete clip, move clip, stretch clip, change subtitle style, change background, and change watermark.
+      - Do not record the entire project config for every operation.
+      - On reload, the browser can restore the current draft and operation stack for the same `project_id`.
+      - SQLite remains canonical after explicit save/sync.
+- `Render Draft`: 
+  1. Click: Show the `Draft Render Strip` and percentage of the progess in the `ender Draft` button, and then queue to render the draft of video,
+  2. Disabled: when draft render is active, queued
+- `Render Final`: 
+  1. Enabled: 
+    a. New aligned project: Draft/Final render is enabled even without any foreground/background/PIP. 
+    b. Already-rendered or in-running project: Draft/Final render is enabled only when the current config hash differs from the latest successful rendered config hash. 
+  2. Click: Get in to `Render` page, and queue to render video
 
-Save behavior:
-
-- Browser storage records the working editing state and incremental operations for local recovery.
-- `Save` snapshots the current browser working config and syncs it to SQLite `project_configs`.
-- Do not save a whole config on every undo/redo operation; only record incremental operation entries.
-
-Render button enablement:
-
-- New aligned project: Draft/Final render is enabled even without foreground/background.
-- Already-rendered project: Draft/Final render is enabled only when the current config hash differs from the latest successful rendered config hash.
-- While a draft/final render is active, the corresponding button is disabled or attaches to the active job.
-
-Toolbar states:
+`Editor Toolbar` states:
 
 - Save pending, saving, saved, failed.
 - Cache warm, cold, partial, invalid.
-- Render disabled because no alignment.
 - Render disabled because no unrendered changes on already-rendered project.
 - Render queued/running.
 
 ### Draft Render Strip
+
+#### Visual Truth
+![dark](visuals/editor-draft-render-strip-dark.png)
+![light](visuals/editor-draft-render-strip-light.png)
 
 Appears below toolbar when draft render is active, queued, failed, cancelled, or recently completed.
 
@@ -379,9 +369,8 @@ Fields:
 - label: queued, rendering draft, draft ready, failed, cancelled.
 - stage label.
 - percentage.
-- `Cancel` button while queued or active.
 
-Stages:
+Stages label:
 
 1. queued
 2. verifying cache
@@ -394,13 +383,12 @@ Stages:
 Output:
 
 - Drafts write to `<project>/.vc/drafts/<timestamp>.mp4`.
-- Cancelled partial drafts are excluded from playback.
 
 ### Transcript Pane
 
 Sentences are derived from the generated `<project>/subtitles.srt`, which is adjusted against the transcript content.
 
-Components:
+Layout:
 
 - Search input with search icon.
 - Keyboard hint `Cmd/Ctrl+F`.
@@ -408,26 +396,22 @@ Components:
 - Selection range chip.
 - Scrollable sentence list.
 - Sentence row.
-- Sentence add button.
 
 Sentence row fields:
 
 - sentence index.
 - timecode(start and end time).
 - sentence text.
-- orphan marker state.
 
 Interactions:
 
 - Click sentence: select it and seek playhead to the sentence start timestamp.
-- Shift-click sentence: select contiguous sentence range.
-- Right-click sentence: open context menu.
-- Click `+` handle: open context menu for that sentence.
+- Shift-click sentence: select contiguous sentence range. Check visual ![selected multiple](visuals/editor-transcript-1.png)
+- Right-click sentence: open context menu. Check visual ![show menus](visuals/editor-transcript-2.png)
 - Current sentence is highlighted by playhead time.
 - Search filters transcript and scrolls to the first matched element.
-- Enter or Down arrow in search advances to the next match.
-- Escape clears transcript search.
-- Concatenate/merge sentences in the Transcript Panel, not in the Subtitles modal. This updates the subtitle/sentence model and dependent clip anchors.
+- Shortcuts: `Enter` or `Down arrow` in search advances to the next match, Escape clears transcript search
+- Concatenate/merge sentences in the Transcript Panel, not in the Subtitles modal, check visual ![merge](visuals/editor-transcript-3.png). This updates the subtitle/sentence model and dependent clip anchors. 
 
 Sentence states:
 
@@ -436,25 +420,30 @@ Sentence states:
 - selection first.
 - selection last.
 - current/now.
-- orphaned assignment after transcript changes; render it in red.
-- search match.
-- low-confidence alignment. Low confidence means WhisperX could align the transcript text to audio only weakly for that sentence/word range; show it as a warning so the user knows timing may need review. It should not block editing by itself.
+- search match with highlighted border.
 
-### Transcript Context Menu
+#### Transcript Context Menu
+
+#### Visual Truth
+Check visual ![show menus](visuals/editor-transcript-3.png)
 
 Opened at pointer position.
 
 Buttons:
 
 - `Assign media to range...`: opens Assign modal with `from=to=clicked sentence`.
+- `Merge <N> sentences`: merge multiple sentences
 - `Play from here`: selects sentence and seeks to its start.
 
 ### Preview Surface
 
-Components:
+#### Visual Truth
+![dark](docs/designs/visuals/editor-preview-dark.png)
+![light](docs/designs/visuals/editor-preview-light.png)
 
-- Preview wrap.
-- Preview stage with active aspect ratio.
+#### Layout:
+
+- Preview stage with active aspect ratio. ![9：16](visuals/editor-preview-1.png)
 - Preview canvas.
 - Background scene or black fallback.
 - Foreground scene when active.
@@ -463,6 +452,7 @@ Components:
 - Watermark overlay when configured.
 - Transport controls.
 - Timecode display.
+- `icon + Layers - N` Button
 
 Render order:
 
@@ -473,24 +463,22 @@ Render order:
 5. subtitles
 6. watermark
 
+#### Interaction：
+
+- Preview stage: reflect the visual effect that configed by user in live time, including Background scene, Foreground scene, PiP overlays, Subtitle, Watermark
+- Shortcuts `Space`: play/pause.
+
 Buttons:
-
-- Previous sentence.
+- Previous, play from previous sentence.
 - Play/Pause.
-- Next sentence.
-
-Do not show an inline empty-background `add one` button in the preview. Background is configured from the right Inspector global config.
-
-Do not open the Subtitles modal from preview; subtitles are configured from the right Inspector global config.
+- Next, play from next sentence.
 
 Preview controls:
-
 - Resolution segmented control:
   - `1080p`: 1920x1080, 16:9
   - `720p`: 1280x720, 16:9
   - `9:16`: 1080x1920, vertical
-- No separate `Actual` mode. Selecting a resolution makes the preview use that output aspect/resolution model directly while fitting the available preview area.
-- `Layers - N`: opens the layers popover.
+- `Layers - N`: opens the `Layers Popover`. check visual ![layers popover](visuals/editor-preview-popover.png)
 
 Preview states:
 
@@ -507,9 +495,36 @@ Preview states:
 - playing.
 - paused.
 
+#### Layers Popover
+
+Opened by `Layers - N`.
+![layers popover](visuals/editor-preview-popover.png)
+
+Content:
+
+- Header `Layer order - top renders on top`.
+- Rows in render order.
+
+Layer row fields:
+
+- kind dot.
+- layer name.
+- item count.
+- optional trash button for removable background/foreground/PiP layers.
+
+Interactions:
+
+- Click row: select first item in layer, close popover.
+- Click background trash: remove background, keep other layers.
+- Click outside closes.
+
 ### Timeline
 
-Components:
+#### Visual Truth
+![dark](docs/designs/visuals/editor-timeline-dark.png)
+![light](docs/designs/visuals/editor-timeline-light.png)
+
+#### Layout:
 
 - Header `Timeline`.
 - Metadata: `30 fps`, clip count, cache count.
@@ -519,6 +534,13 @@ Components:
 - Track label.
 - Track clips.
 - Playhead line.
+
+Timeline layout:
+
+- Timeline keeps a fixed height.
+- If there are too many layers, the track area scrolls without resizing the preview or pushing the Inspector off screen.
+
+#### Interaction
 
 Track visual order:
 
@@ -542,11 +564,7 @@ Clip interactions:
 - Drag/drop and stretch must be supported for every visible clip kind where the underlying data has timing: background clips, foreground clips, PiP clips, and subtitle clips.
 - During drag/stretch, synchronize current time/selection state with the sentence row in the left panel.
 - Delete selected non-background clip through clip `x`.
-
-Timeline layout:
-
-- Timeline keeps a fixed height.
-- If there are too many layers, the track area scrolls without resizing the preview or pushing the Inspector off screen.
+- Shortcuts `Backspace` or `Delete`: delete selected non-background item.
 
 Resize/move constraints:
 
@@ -555,31 +573,10 @@ Resize/move constraints:
 - minimum duration is `0.5s`.
 - resizing changes `start`/`end` seconds and automatically recalculates the covered sentence range from the updated time span.
 
-### Layers Popover
-
-Opened by `Layers - N`.
-
-Content:
-
-- Header `Layer order - top renders on top`.
-- Rows in render order.
-
-No footer `+ Add layer item` is needed. New items are added from the Transcript context menu or sentence `+` handle.
-
-Layer row fields:
-
-- kind dot.
-- layer name.
-- item count.
-- optional trash button for removable background/foreground/PiP layers.
-
-Interactions:
-
-- Click row: select first item in layer, close popover.
-- Click background trash: remove background, keep other layers.
-- Click outside closes.
-
 ### Inspector Rail And Global Video Config
+
+![dark](visuals/editor-inspector-dark.png)
+![light](visuals/editor-inspector-light.png)
 
 The right rail starts with global video config controls, then the contextual Inspector.
 
@@ -587,17 +584,17 @@ Global video config controls:
 
 - `Watermark`: configure optional watermark.
 - `Subtitles`: opens Subtitles modal for global subtitle defaults.
-- `Add BG` or `Change BG`: opens Background modal.
+- `Add` or `Change` Background: opens `Change background`
 
 Inspector states:
 
-- No selection: show an empty/blank panel, not an explanatory empty state.
+- No selection: There is no way no clip selected, because once user get in, the default clip the background layer.
 - Subtitle clip selected.
 - Background selected.
 - Foreground selected.
 - PiP selected.
 
-#### Inspector: Subtitle Clip
+#### Inspector: Subtitle Clip [x]
 
 When a subtitle clip is selected, show parameters for that subtitle clip's style and a text button to apply that style to all subtitles.
 
@@ -611,7 +608,25 @@ Fields:
 - Background style.
 - `Apply to all subtitles` text button.
 
-#### Inspector: Background
+#### Inspector: Background Clip
+
+![Inspector with Background](visuals/editor-inspector-1.png)
+
+Sections:
+- Background assets(multiple).
+- Crossfade.
+- Motion.
+- Easing
+- `Delete item` with danger color..
+
+Fields:
+- Assets card.
+- Crossfade: from 0-2 seconds.
+- Motion kind: `none`, `ken burns_subtle`, `ken_burns_strong`.
+- Easing: `linear`, `ease_in`, `ease_out`.
+- `Delete item` with danger color.
+
+Interactions:
 
 Background asset rules:
 
@@ -624,9 +639,9 @@ Controls:
 
 - Clickable asset card/list: opens Background modal in edit mode.
 - For multiple assets, show a compact stacked/list asset presentation consistent with the rest of the UI.
-- Cycle/hold control for image playlists.
-- Crossfade number input.
-- Motion kind select: `none`, `ken_burns`, `ken_burns_strong`.
+- Easing kind select: `linear`, `ease_in`, `ease_out`.
+- Crossfade number input, from 0-2s.
+- Motion kind select: `none`, `ken_burns_subtle`, `ken_burns_strong`.
 - `Remove background` danger button.
 
 State notes:
@@ -635,27 +650,29 @@ State notes:
 - Video background playlists use their natural sequence duration, then black fallback or trimming as described above.
 - Fullscreen foreground hides background while active.
 
-#### Inspector: Foreground
+#### Inspector: Foreground Clip
+
+![Inspector with Foreground](visuals/editor-inspector-2.png)
 
 Sections:
-
 - Foreground asset.
 - Range.
 - Motion.
 - Transitions.
 
 Fields:
-
 - Asset card.
 - Sentence range: from/to sentence indexes.
 - Corresponding resolved time range.
 - Stretch hint.
-- Motion kind: `none`, `ken_burns`, `ken_burns_strong`, `zoom_in`, `zoom_out`, `pan_left`, `pan_right`.
-- Easing: `linear`, `ease_in`, `ease_out`, `ease_in_out`.
-- Transition in/out: `cut`, `fade`, `slide_left`, `slide_right`, `dip_black`.
-- `Delete item`.
+- Motion kind: `none`, `ken_burns`, `ken_burns_strong`.
+- Easing: `linear`, `ease_in`, `ease_out`.
+- Transition in/out: `cut`, `fade`, `slide_left`, `slide_right`.
+- `Delete item` with danger color.
 
-#### Inspector: PiP
+#### Inspector: PiP Clip
+
+![Inspector with PiP](visuals/editor-inspector-dark.png)
 
 Sections:
 
@@ -675,7 +692,7 @@ Fields:
 - Sentence range and corresponding resolved time range.
 - Motion kind.
 - Transition in/out.
-- `Delete PiP item`.
+- `Delete PiP item` with danger color.
 
 PiP rules:
 
@@ -683,23 +700,23 @@ PiP rules:
 - Multiple PiP clips can be active at the same time only when they are in different layers.
 - Canonical PiP placement uses `posX` and `posY` grid coordinates plus offsets. `posX/posY` are confirmed as the canonical field names.
 
-## Assign Media Modal
+### Assign(Edit) Media to range Modal
 
-Purpose: create or edit foreground/PiP assignment from a sentence range.
+![visual effect](visuals/AssignModal.png)
+![light](visuals/AssignModal-light.png)
+![scroll-to-bottom](visuals/AssignModal-light-1.png)
+
+Purpose: create or edit foreground/PiP assignment.
 
 Open paths:
 
-- Transcript sentence right-click `Assign media to range...`.
-- Sentence `+` handle.
-- Inspector asset card for foreground/PiP edit mode.
-
-Do not open Assign Media from a Layers popover footer.
+- `Transcript panel` sentences right-click `Assign media to range...`.
+- `Inspector` asset card for foreground/PiP edit mode.
 
 Asset rules:
 
 - Media resources are added only when the user uploads/imports them.
 - Do not auto-pick arbitrary files from the folder selected by Launcher `New project`.
-- The only files auto-detected from the selected project folder are voice and transcript.
 - Supported media badges include image/video types such as `IMG`, `MP4`, `MOV`, `RMVB`, and `FLV`, subject to backend decoder support.
 
 Sections and controls:
@@ -717,16 +734,15 @@ Sections and controls:
 3. Compositing
    - `Fullscreen`
    - `Picture-in-picture`
-4. PiP placement, only for PiP
+4. Layer
+   - create new Foreground layer.
+   - create new PiP layer. when selectd PiP layer, the `PiP placement` appeared
+5. PiP placement, only for PiP layer
    - 3x3 grid.
    - size slider 15-60.
    - radius slider 0-32.
    - opacity slider 10-100.
    - placement preview.
-5. Layer
-   - select existing compatible layer.
-   - create new Foreground layer.
-   - create new PiP layer.
 6. Motion and easing.
 7. Transition in/out.
 
@@ -763,22 +779,25 @@ Modal states:
 - easing disabled when motion is `none`.
 - submit disabled if no valid asset or range.
 
-## Background Modal
+### Background Modal
+
+![Background Modal with light theme](visuals/change-background-light.png)
 
 Purpose: add or change background assets. Full-duration behavior applies only to image backgrounds.
 
-Open paths:
+Triggered paths:
 
-- Right rail global video config `Add BG` or `Change BG`.
-- Background Inspector asset card.
+- Right rail global video config `Add Background` or `Change Background`, `Add Background` appears when no `Background` layer
+- `Background Inspector` asset card. ![multiple assets](visuals/editor-inspector-1.png)
 
 Controls:
 
+- Modal title: when triggered by `Add Background` button
 - Asset grid with multi-select.
 - `Import from disk...`
 - Label metadata: number selected and `images only` or `clips only`.
-- Motion select: `none`, `ken_burns`, `ken_burns_strong`.
-- Easing select: `linear`, `ease_in`, `ease_out`, `ease_in_out`.
+- Motion select: `none`, `ken_burns_subtle`, `ken_burns_strong`.
+- Easing select: `linear`, `ease_in`, `ease_out`.
 - Crossfade range: 0 to 2 seconds, step 0.1.
 - `Cancel`.
 - `Add background` or `Save changes`.
@@ -807,7 +826,9 @@ States:
 - import failed.
 - invalid crossfade.
 
-## Subtitles Modal
+### Subtitles Modal
+
+![SubtitleModal with dark](visuals/SubtitleModal.png)
 
 Purpose: edit global subtitle style defaults.
 
@@ -829,10 +850,8 @@ Controls:
 
 Behavior:
 
-- `Apply` saves global subtitle settings and closes.
+- `Apply` saves global subtitle settings(apply to all subtitles) and closes.
 - `Cancel` closes without saving.
-- No cue list in this modal.
-- No per-cue merge button in this modal. Sentence/cue merge belongs in Transcript Panel.
 
 States:
 
@@ -842,111 +861,7 @@ States:
 - long cue overflow.
 - no alignment cues.
 
-## Render Page
-
-Purpose: show only the current project's render queue, active render progress, ffmpeg log, output specs, history, and post-render actions.
-
-Primary layout:
-
-- Header.
-- Current project render progress card.
-- ffmpeg log card.
-- Output panel.
-- Current project render history.
-- After render actions.
-
-Header:
-
-- Eyebrow `Render`.
-- Title: project title plus resolution, for example `Tokyo Essay - 1080p`. Do not include `MP4` in the title because Phase 1 only supports MP4 output.
-- `Back to editor`.
-- `Cancel render`: cancels a queued task or directly cancels the active rendering process.
-
-Render card:
-
-- Data updates live.
-- Output filename.
-- Specs string.
-- Status tag.
-- Big progress bar.
-- Stats:
-  - percent complete.
-  - encode speed.
-  - ETA.
-  - frames written.
-- Stages:
-  1. queued
-  2. verify alignment cache
-  3. pre-render cached clips
-  4. build `subtitles.srt`
-  5. compose filtergraph
-  6. mux MP4 with `+faststart`
-  7. append render history to app.db
-
-Log card:
-
-- Data updates live.
-- Header `ffmpeg log`.
-- Meta `tail - live`.
-- Timestamped ffmpeg lines.
-- Info, ok, warning, error tones.
-
-Output panel fields:
-
-- file.
-- resolution.
-- framerate.
-- video codec, CRF, preset.
-- audio codec, bitrate, sample rate.
-- color and pixel format.
-- actual size as accurately as possible from the output file on disk.
-
-Render history row fields:
-
-- icon.
-- filename.
-- resolution or preset.
-- duration.
-- file size.
-- status.
-- reveal folder button for successful outputs.
-- trash button for cancelled/partial/error entries where applicable.
-
-After render buttons:
-
-- `Reveal in Explorer` only if the web app can invoke the host OS file manager through the backend. If not supported, remove this button.
-- `Play locally`.
-- No YouTube upload in Phase 1. Add upload in Phase 2.
-
-Render states:
-
-- idle/no active job.
-- queued.
-- verifying cache.
-- pre-rendering clips.
-- building subtitles.
-- composing.
-- muxing.
-- logging history.
-- done.
-- cancelling.
-- cancelled.
-- failed.
-- output missing.
-- partial output excluded.
-- ffmpeg warning.
-- ffmpeg fatal error.
-- history empty.
-
-Cancel behavior:
-
-- Ask for confirmation if a render is active and cancellation would leave a partial file.
-- Send one cancel request.
-- Move active render to cancelling/cancelled.
-- Partial file gets `.partial`.
-- Partial history row is excluded from local play actions.
-
-## Media And Layer Model
+### Media And Layer Model
 
 Media asset fields required by project config:
 
@@ -970,7 +885,7 @@ Layer kinds:
 - `fg`: fullscreen foreground replacements above background.
 - `bg`: background visuals above black fallback.
 
-Visual item fields:
+Visual item fields: checkout `project.schema.json`
 
 - `id`
 - `mediaId` or `mediaIds` where playlist semantics apply.
@@ -992,32 +907,105 @@ Layer rules:
 - Timeline visual order is bottom-to-top: background, foreground, PiP, subtitles.
 - Render order is black fallback -> background -> foreground -> PiP -> subtitles -> watermark.
 
+## Render Page
+
+### Visual Truth
+![dark](visuals/render-dark.png)
+![light](visuals/render-light.png)
+
+Purpose: show only the current project's render queue, active render progress, ffmpeg log, output specs, history, and post-render actions.
+
+### Primary layout:
+
+- Header.
+- Current project render progress card.
+- Render history.(Current project)
+- Output panel.
+- After render actions.
+
+Header:
+
+- Eyebrow `Render`.
+- Title: project title plus resolution, for example `Tokyo Essay - 1080p final render`.
+- `Back to editor`.
+- `Cancel render`: cancels a queued task or directly cancels the active rendering process.
+
+Render card:
+
+- Data updates live.
+- Output filename(with extension `.mp4`).
+- Specs string.
+- Status tag.
+- Big progress bar.
+- Stats:
+  - percent complete.
+  - encode speed.
+  - ETA.
+  - frames written.
+- Stages:
+  1. queued
+  2. verify alignment cache
+  3. pre-render cached clips
+  4. build `subtitles.srt`
+  5. compose filtergraph
+  6. mux MP4 with `+faststart`
+  7. append render history to app.db
+
+Output panel fields:
+
+- project name.
+- resolution.
+- framerate.
+- video codec, CRF, preset.
+- audio codec, bitrate, sample rate.
+- actual size as accurately as possible from the output file on disk.
+
+Render history row fields:
+
+- icon.
+- filename.
+- resolution or preset.
+- duration.
+- status.
+
+After render buttons:
+
+- `Reveal in Explorer` only if the web app can invoke the host OS file manager through the backend. If not supported, remove this button.
+- `Play locally`.
+
+### Render states:
+
+- idle/no active job.
+- queued.
+- verifying cache.
+- pre-rendering clips.
+- building subtitles.
+- composing.
+- muxing.
+- logging history.
+- done.
+- cancelling.
+- cancelled.
+- failed.
+- output missing.
+- partial output excluded.
+- ffmpeg warning.
+- ffmpeg fatal error.
+- history empty.
+
+Cancel behavior:
+
+- Ask for confirmation if a render is active and cancellation should remove the partial file.
+- Send one cancel request.
+- Move active render to cancelling/cancelled.
+- Remove partial file gets `.partial`.
+- record the Cancel action for Render history
+
 ## Keyboard Shortcuts
-
-Required shortcuts:
-
-- `Space`: play/pause.
-- Left/right arrow: frame step at 30 fps.
-- Shift + left/right arrow: previous/next sentence.
-- `Cmd/Ctrl+F`: focus transcript search.
-- `Enter` or Down arrow in transcript search: next search match.
-- `Esc` in transcript search: clear search.
-- `Backspace` or `Delete`: delete selected non-background item.
-- `Cmd/Ctrl+Z`: undo.
-- `Cmd/Ctrl+Shift+Z`: redo.
-
-Do not add global Escape behavior for closing every menu/modal in Phase 1 beyond transcript search clear and component-native behavior.
 
 Shortcut boundary:
 
 - Shortcuts must not fire while typing in input, textarea, select, or contenteditable unless the shortcut is explicitly for that control.
-
-Undo/redo persistence:
-
-- Browser storage records incremental edit operations such as add clip, patch clip, delete clip, move clip, stretch clip, change subtitle style, change background, and change watermark.
-- Do not record the entire project config for every operation.
-- On reload, the browser can restore the current draft and operation stack for the same `project_id`.
-- SQLite remains canonical after explicit save/sync.
 
 ## Persistence Model
 
@@ -1042,31 +1030,8 @@ Schema decisions:
 
 - Add canonical `media[]` to the project config schema.
 - Add background playlist support through `mediaIds` or an explicit background playlist object; the exact shape is flexible as long as multiple assets are supported.
-- Canonical PiP placement uses `posX`, `posY`, `offsetX`, and `offsetY`.
+- Canonical PiP placement uses `posX`, `posY`.
 - Output settings should include full resolution/fps/codec fields, not just preset.
-
-Recommended config addition:
-
-```json
-{
-  "media": [
-    {
-      "id": "m1",
-      "path": "media/tokyo-skyline.jpg",
-      "kind": "image",
-      "name": "tokyo-skyline.jpg",
-      "width": 4032,
-      "height": 2268,
-      "duration_s": null,
-      "size_bytes": 3565158,
-      "hash": "sha256:...",
-      "thumb": ".vc/thumbs/m1.png",
-      "import_mode": "copied",
-      "created_at": "2026-05-10T00:00:00Z"
-    }
-  ]
-}
-```
 
 ### User-Visible Project Files
 
@@ -1347,44 +1312,31 @@ CREATE INDEX IF NOT EXISTS idx_render_events_render_ts
 
 ## API Surface Required By Prototype
 
+API base : `{origin}/api`
+
 Launcher:
 
 - `GET /projects`
-- `POST /projects/new-folder`
 - `DELETE /projects/:projectId`
 
 Setup:
 
-- `POST /projects/:projectId/inspect`
-- `POST /projects/:projectId/alignment`
-- `GET /projects/:projectId/alignment`
-- WebSocket event for setup inspection/alignment progress.
+- `POST /projects`: create a new project, including alignment, user should wait a bit time, required checking if the `Voice` and `Transcript` is attaching
 
 Editor:
 
-- `GET /projects/:projectId/config`
-- `PUT /projects/:projectId/config`
-- `POST /projects/:projectId/media/import`
-- `GET /projects/:projectId/media`
-- `POST /projects/:projectId/clips`
-- `PUT /projects/:projectId/clips/:clipId`
-- `DELETE /projects/:projectId/clips/:clipId`
-- `POST /projects/:projectId/background`
-- `DELETE /projects/:projectId/background`
-- `PUT /projects/:projectId/subtitles`
-- `PUT /projects/:projectId/watermark`
-- `GET /projects/:projectId/render-cache`
+- `GET /projects/:projectId/config` 
+- `PUT /projects/:projectId/config` update config partially. including foreground, PIP, background, transcript, watermark, resolution, subtitles style
+- `POST /uploads` uploading all types of assets needed by rendering and get mediaId, put all assets in the `/uploads`, so I can migrate easy in future.
+- `POST /projects/:projectId/render?preset=draft|final&resolution=1920x1080|1280x720|1080x1920` get into `Render` page only when request seccussfully
 
 Render:
 
-- `POST /projects/:projectId/render?preset=draft|final&resolution=1920x1080|1280x720|1080x1920`
-- `POST /projects/:projectId/render/:renderId/cancel`
-- `GET /projects/:projectId/render/history`
-- `DELETE /projects/:projectId/render/history/:renderId`
-- `GET /projects/:projectId/render/:renderId/log`
-- `POST /system/reveal`
-- `POST /system/open`
-- WebSocket for render queue updates and ffmpeg log tail.
+- `DELETE /projects/:projectId/render/:renderId` 
+- `GET /projects/:projectId/history`
+- `DELETE /projects/:projectId/history/:renderId`
+- `GET /projects/:projectId/render/:renderId` play the rendered video
+- WebSocket for render queue data status updating.
 
 ## Edge Cases And Boundary Conditions
 
@@ -1413,9 +1365,6 @@ Setup and alignment:
 - WhisperX not installed.
 - CUDA unavailable.
 - CUDA OOM falls back to CPU or fails clearly.
-- Alignment cache hit.
-- Alignment cache stale.
-- Alignment low confidence.
 - Alignment fails due long silence or mismatched text.
 - User edits voice or transcript after assigning clips.
 
@@ -1424,7 +1373,6 @@ Transcript and sentence assignments:
 - Range `from > to` should reorder or reject consistently.
 - Range below `1` or above sentence count is clamped or rejected.
 - Sentence anchor disappears after transcript edit: item becomes orphaned and red, not silently deleted.
-- Re-recorded voice preserves sentence anchors and recomputes seconds.
 - Manual timeline stretch preserves sentence anchor.
 - Search no results.
 - Search in different language input.
@@ -1434,7 +1382,7 @@ Media:
 
 - Import duplicate file.
 - Import same filename with different content.
-- Import huge video.
+- Import huge video. (split to multiple chunks uploading)
 - Import image too small for output.
 - Import corrupt image/video.
 - Import referenced file that later disappears.
@@ -1492,10 +1440,10 @@ Frontend unit/component tests:
 
 - Launcher project card states and generated thumbnail fallback.
 - New project folder picker -> Setup subflow.
-- Setup auto-detect/manual select voice and transcript.
+- Setup manual select voice and transcript.
 - Continue disabled until alignment succeeds.
 - Editor route guard requires `project_id`.
-- Render route guard requires `project_id`.
+- Render route guard requires `project_id` and `render_id`.
 - Transcript selection, shift selection, search, context menu, merge/concatenate.
 - Assign modal create and edit modes.
 - Background modal image/video playlist rules.
@@ -1578,15 +1526,3 @@ Never:
 
 ## Success Criteria
 
-- Launcher, Setup subflow, Editor, and Render match the revised product flow.
-- No visible prototype top nav, Tokens page, full StatusBar, runtime right rail, Tips card, or Open Folder action appears in Phase 1 product UI.
-- Every remaining visible button/control has a defined action, disabled state, or out-of-scope note.
-- New project can render after alignment even with no foreground/background.
-- Already-rendered project can rerender only when config has unrendered changes.
-- Editor can represent no background, no foreground, no PiP, no subtitles, and no watermark.
-- Background image and video playlist behavior is implemented as specified.
-- Timeline supports drag/stretch and layer packing for overlaps.
-- Subtitle merge/concatenate happens in Transcript Panel.
-- SQLite schema supports `projects`, `project_configs`, render queue/history/events/artifacts.
-- Render artifacts are generated-output manifests, while `.vc/clips` remains the primary render clip cache.
-- Edge cases listed here either have tests or explicit product decisions.

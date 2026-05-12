@@ -64,7 +64,7 @@ async def test_alignment_endpoint_writes_subtitles(monkeypatch, tmp_path: Path) 
         response = await client.post("/projects/align", params={"project": str(tmp_path)})
 
     assert response.status_code == 200
-    assert (tmp_path / ".vc" / "subtitles.srt").read_bytes() == (
+    assert (tmp_path / "subtitles.srt").read_bytes() == (
         b"1\r\n00:00:00,000 --> 00:00:01,200\r\nHello world.\r\n"
     )
 
@@ -85,10 +85,10 @@ async def test_alignment_cache_hit_regenerates_missing_subtitles(
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         first = await client.post("/projects/align", params={"project": str(tmp_path)})
         assert first.status_code == 200
-        (tmp_path / ".vc" / "subtitles.srt").unlink()
+        (tmp_path / "subtitles.srt").unlink()
 
         second = await client.post("/projects/align", params={"project": str(tmp_path)})
 
     assert second.status_code == 200
     assert second.json()["cache_hit"] is True
-    assert (tmp_path / ".vc" / "subtitles.srt").is_file()
+    assert (tmp_path / "subtitles.srt").is_file()

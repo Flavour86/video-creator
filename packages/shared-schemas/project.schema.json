@@ -374,7 +374,7 @@
             "pan_right"
           ]
         },
-        "easing": { "enum": ["linear", "ease_in", "ease_out", "ease_in_out"] }
+        "easing": { "enum": ["linear", "ease_in", "ease_out"] }
       }
     },
     "Transitions": {
@@ -383,8 +383,8 @@
       "additionalProperties": false,
       "required": ["in", "out"],
       "properties": {
-        "in": { "enum": ["cut", "fade", "slide_left", "slide_right", "dip_black"] },
-        "out": { "enum": ["cut", "fade", "slide_left", "slide_right", "dip_black"] }
+        "in": { "enum": ["cut", "fade", "slide_left", "slide_right"] },
+        "out": { "enum": ["cut", "fade", "slide_left", "slide_right"] }
       }
     },
     "SentenceRange": {

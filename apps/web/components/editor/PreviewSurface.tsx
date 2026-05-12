@@ -6,7 +6,6 @@ import { resolveDisplay } from "@/lib/preview/resolveDisplay";
 import type { EditorStateProps } from "./types";
 
 type PreviewSurfaceProps = Pick<EditorStateProps, "currentTime" | "duration" | "layers" | "projectPath" | "sentences"> & {
-  fitMode: string;
   onNext: () => void;
   onPrevious: () => void;
   onTogglePlay: () => void;
@@ -14,7 +13,7 @@ type PreviewSurfaceProps = Pick<EditorStateProps, "currentTime" | "duration" | "
   resolution: string;
 };
 
-export function PreviewSurface({ currentTime, duration, fitMode, layers, onNext, onPrevious, onTogglePlay, playing, projectPath, resolution, sentences }: PreviewSurfaceProps) {
+export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevious, onTogglePlay, playing, projectPath, resolution, sentences }: PreviewSurfaceProps) {
   const t = useTranslations("pages.editor.transport");
   const display = resolveDisplay(layers, sentences, currentTime);
   const baseImage = display.bg?.mediaId ?? display.fg[0]?.mediaId;
@@ -22,7 +21,6 @@ export function PreviewSurface({ currentTime, duration, fitMode, layers, onNext,
   const baseTranslateX = display.bg ? 0 : display.fg[0]?.translateX ?? 0;
   const overlayForegrounds = display.bg ? display.fg : display.fg.slice(1);
   const aspectClass = resolution === "9:16" ? "aspect-[9/16]" : "aspect-video";
-  const objectClass = fitMode === "actual" ? "object-scale-down" : "object-contain";
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -31,7 +29,7 @@ export function PreviewSurface({ currentTime, duration, fitMode, layers, onNext,
           {baseImage ? (
             <img
               alt=""
-              className={`absolute inset-0 h-full w-full ${objectClass}`}
+              className="absolute inset-0 h-full w-full object-contain"
               src={mediaUrl(projectPath, baseImage)}
               style={{
                 opacity: baseOpacity,
@@ -44,7 +42,7 @@ export function PreviewSurface({ currentTime, duration, fitMode, layers, onNext,
           {overlayForegrounds.map((layer, index) => (
             <img
               alt=""
-              className={`absolute inset-0 h-full w-full ${objectClass}`}
+              className="absolute inset-0 h-full w-full object-contain"
               key={`${layer.mediaId}-${index}`}
               src={mediaUrl(projectPath, layer.mediaId)}
               style={{

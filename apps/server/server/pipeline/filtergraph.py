@@ -86,7 +86,7 @@ def build_compose_command(
         duration_s=duration_s,
         config=config,
         items=items,
-        subtitles_path=project_dir / ".vc" / "subtitles.srt" if _burns_subtitles(project) else None,
+        subtitles_path=project_dir / "subtitles.srt" if _burns_subtitles(project) else None,
         watermark=project.watermark,
         watermark_input_index=watermark_input_index,
     )

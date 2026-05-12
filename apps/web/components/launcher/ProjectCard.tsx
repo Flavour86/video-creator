@@ -24,9 +24,6 @@ export function ProjectCard({ onClick, onPlayLatest, project }: ProjectCardProps
         <span className="mb-0.5 block text-base font-semibold leading-tight tracking-normal text-(--text)">
           {project.name}
         </span>
-        <span className="mb-(--space-3) block font-mono text-[11.5px] text-(--text-3)">
-          {project.project_id}
-        </span>
         <span className="flex gap-(--space-6) text-[11.5px] text-(--text-3)">
           <Meta label={t("voice")} value={project.voice_duration || "--"} />
           <Meta label={t("sentences")} value={project.sentence_count} />

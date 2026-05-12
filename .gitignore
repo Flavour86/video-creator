@@ -51,3 +51,5 @@ app/web/graphify-out/cache/
 # project
 projects/
 docs/designs/audits
+docs/designs/visuals
+uploads/

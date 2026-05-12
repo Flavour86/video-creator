@@ -45,7 +45,7 @@ it("shows launcher recovery when project id param is malformed", () => {
 it("shows project id in toolbar when project id param is present", () => {
   _projectIdParam = "p_demo";
   renderEditor();
-  expect(screen.getByText("p_demo")).toBeInTheDocument();
+  expect(screen.getByText("projectId: p_demo")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
 });
@@ -153,9 +153,9 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   renderEditor();
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
-  expect(screen.getByText(TEST_PROJECT_ID)).toBeInTheDocument();
+  expect(screen.getByText(`projectId: ${TEST_PROJECT_ID}`)).toBeInTheDocument();
   expect(screen.getByText("cache 3/3")).toBeInTheDocument();
-  expect(screen.getByText(/Transcript/i)).toHaveTextContent("5");
+  expect(await screen.findByText("Transcript · 5 aligned")).toBeInTheDocument();
   expect(screen.getByText("Subtitles · 1")).toBeInTheDocument();
   expect(screen.getAllByText("PiP · z3").length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
@@ -188,6 +188,7 @@ it("opens assign media with the clicked sentence range and real thumbnails", asy
   renderEditor();
 
   fireEvent.click(await screen.findByRole("button", { name: "Assign media to sentence 5" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /assign media to range/i }));
 
   const dialog = await screen.findByRole("dialog");
   expect(within(dialog).getByLabelText("From")).toHaveValue(5);

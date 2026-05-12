@@ -116,7 +116,7 @@ describe("LauncherPage", () => {
     const card = screen.getByText("Demo").closest("article");
     expect(card?.className).toContain("bg-(--bg-2)");
     expect(card).toHaveTextContent("3 media");
-    expect(card).toHaveTextContent("p_demo");
+    expect(card).not.toHaveTextContent("p_demo");
     expect(card).not.toHaveTextContent("E:\\projects\\demo");
     expect(screen.getByText("pending")).toBeInTheDocument();
   });

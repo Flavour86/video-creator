@@ -39,7 +39,7 @@ export function EditorBar({
         <IconButton icon={Home} label={t("goLauncher")} onClick={onHome} />
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold tracking-normal text-(--text)">{projectName}</h2>
-          <p className="truncate font-mono text-[11px] text-(--text-3)">{projectId}</p>
+          <p className="truncate font-mono text-[11px] text-(--text-3)">projectId: {projectId.slice(0, 11)}</p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-2">

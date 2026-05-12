@@ -1,9 +1,20 @@
+import json
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from server.domain.project import Project, load_project, save_project
+from server.domain.project import Project, load_project
+
+
+def _dump_project(project_dir: Path, project: Project) -> None:
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "project.json").write_text(
+        json.dumps(
+            project.model_dump(mode="json", by_alias=True, exclude_none=False), indent=2
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_minimal_valid(tmp_path: Path) -> None:
@@ -17,7 +28,7 @@ def test_minimal_valid(tmp_path: Path) -> None:
             "layers": [],
         }
     )
-    save_project(tmp_path, project)
+    _dump_project(tmp_path, project)
     loaded = load_project(tmp_path)
     assert loaded.name == "test"
     assert loaded.layers == []
@@ -64,7 +75,7 @@ def test_fg_layer_round_trip(tmp_path: Path) -> None:
             ],
         }
     )
-    save_project(tmp_path, project)
+    _dump_project(tmp_path, project)
     loaded = load_project(tmp_path)
     assert len(loaded.layers) == 2
     assert loaded.layers[0].root.kind == "sub"

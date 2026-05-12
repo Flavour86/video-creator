@@ -243,7 +243,7 @@ def test_subtitle_burn_in_appends_subtitles_filter(tmp_path: Path) -> None:
 
     filtergraph = _filtergraph(command)
     assert "subtitles='" in filtergraph
-    assert "/.vc/subtitles.srt':force_style='Fontname=Arial,Fontsize=28" in filtergraph
+    assert "/subtitles.srt':force_style='Fontname=Arial,Fontsize=28" in filtergraph
     assert "Alignment=2,MarginV=60'[vsub];[vsub]format=yuv420p[vout]" in filtergraph
 
 

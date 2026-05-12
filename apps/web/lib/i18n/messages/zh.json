@@ -261,6 +261,13 @@
       "renderStripDraft": "Rendering draft : {phase}",
       "renderStripProgress": "Draft render progress",
       "cancelRender": "Cancel",
+      "lowConfidence": "low conf",
+      "orphanSentence": "orphan",
+      "menu": {
+        "assignRange": "Assign media to range...",
+        "playFromHere": "Play from here",
+        "mergeNext": "Merge s{index} with next"
+      },
       "searchPlaceholder": "Search transcript… (⌘F)",
       "transcriptHead": "Transcript · {count} aligned",
       "resolution": "Resolution",

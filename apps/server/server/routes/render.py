@@ -63,7 +63,7 @@ def _error(status_code: int, code: str, message: str, details: dict[str, str]) -
 
 def _project_path_or_error(project_id: str) -> Path | JSONResponse:
     project_dir = project_path_for_id(project_id)
-    if project_dir is None or not (project_dir / "project.json").exists():
+    if project_dir is None or not project_dir.is_dir():
         return _error(
             404,
             "PROJECT_NOT_FOUND",

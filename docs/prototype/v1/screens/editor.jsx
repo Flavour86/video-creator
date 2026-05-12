@@ -154,9 +154,9 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
           })}
           <div className="subtitles">{subtitleText}</div>
           {showWatermark && watermarkAsset &&
-          <div className="watermark-asset" style={{background: thumbGrad(watermarkAsset.thumb)}}>
-              <span>{watermarkAsset.kind === "video" ? "MP4" : "IMG"}</span>
-            </div>
+          <div className="watermark-asset">
+            <span>WaterMark</span>
+          </div>
           }
         </div>
       </div>
@@ -291,7 +291,7 @@ const Timeline = ({ layers, time, onSeek, selection, onSelect, onResize, onDelet
         </div>
         <div className="tracks">
           {layers.map((L) =>
-          <TimelineRow key={L.id} layer={L} selection={selection} onSelect={onSelect} onResize={onResize} onDelete={onDelete} sentences={sentences} />
+            <TimelineRow key={L.id} layer={L} selection={selection} onSelect={onSelect} onResize={onResize} onDelete={onDelete} sentences={sentences} />
           )}
         </div>
         <div className="playhead-line" style={{ left: `calc(100px + (100% - 100px - 10px) * ${playPct} / 100)` }} />
@@ -308,7 +308,7 @@ const EditorScreen = ({ go }) => {
   const [selection, setSelection] = React.useState([6, 7]);
   const [layers, setLayers] = React.useState(INITIAL_LAYERS);
   const [selItem, setSelItem] = React.useState({ layerId: "L-fg-1", itemId: "fg-002" });
-  const [modal, setModal] = React.useState(null); // {kind:"assign", range, edit?} | {kind:"subtitles"}
+  const [modal, setModal] = React.useState(null); // {kind:"assign", range, edit?} | {kind:"subtitles"} | {kind:"watermark"} | {kind:"bg"}
   const [resolutionKey, setResolutionKey] = React.useState("1080p");
   const [showLayersMenu, setShowLayersMenu] = React.useState(false);
   const [contextMenu, setContextMenu] = React.useState(null); // {x,y,sentenceIdx}
@@ -554,6 +554,8 @@ const EditorScreen = ({ go }) => {
   const resolution = RESOLUTIONS[resolutionKey];
   const subtitleText = sentences[currentSentence - 1]?.text || "";
   const watermarkAsset = MEDIA_BY_ID[watermarkAssetId];
+  const bgItem = layers.find((L) => L.kind === "bg")?.items[0];
+  const hasBG = !!bgItem;
 
   const layerCounts = {
     fg: layers.filter((L) => L.kind === "fg").length,
@@ -567,11 +569,9 @@ const EditorScreen = ({ go }) => {
           <div className="title">
             <button className="iconbtn" onClick={() => go("launcher")}><Icon name="folderOpen" /></button>
             <h2>Tokyo Essay</h2>
-            <span className="crumb">projectId: prj_tokyo_essay</span>
           </div>
           <div className="center"></div>
           <div className="right">
-            <span className="tag info"><span className="dot info" />cache 24/24</span>
             <button className="btn"><Icon name="save" size={13} /> Save</button>
             <button className="btn" onClick={startDraft} disabled={draft && !draft.done}>
               {draft && !draft.done ? `Drafting · ${Math.round(draft.progress)}%` : "Render Draft"}
@@ -677,6 +677,10 @@ const EditorScreen = ({ go }) => {
                 <button className="gc-row" onClick={() => setModal({ kind: "subtitles" })}>
                   <span><Icon name="type" size={13}/> Subtitles</span>
                   <span>{subSettings.burnin ? "Burn-in" : "Sidecar"}</span>
+                </button>
+                <button className={"gc-row"} onClick={() => setModal({ kind: "bg" })}>
+                  <span><Icon name="plusCircle" size={13}/>{hasBG ? "Change" : "Add"} Background</span>
+                  <span>Choose</span>
                 </button>
               </div>
               <Inspector selection={selItem} layers={layers}

@@ -14,7 +14,7 @@ const RenderScreen = ({ go }) => {
       <div className="render">
         <div className="render-head">
           <div>
-            <p className="eyebrow">Current project</p>
+            <p className="eyebrow">Render</p>
             <h1>Tokyo Essay / 1080p final render</h1>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -27,7 +27,7 @@ const RenderScreen = ({ go }) => {
           <div className="top">
             <div>
               <h2>Tokyo Essay</h2>
-              <span className="specs">1920x1080 / H.264 / CRF 18 / x264 slow / AAC 192kbps / BT.709</span>
+              <span className="specs">1920x1080 / H.264 / CRF 18 / AAC 192kbps </span>
             </div>
             <span className="tag warn"><span className="dot warn" />composing</span>
           </div>
@@ -46,24 +46,10 @@ const RenderScreen = ({ go }) => {
           <div className="stages">
             <div className="stage done"><span className="num"><Icon name="check" size={9} /></span><span>Verify alignment cache</span><span className="muted mono">warm</span><span className="when">+0.4s</span></div>
             <div className="stage done"><span className="num"><Icon name="check" size={9} /></span><span>Pre-render cached clips / 4 of 4 warm</span><span className="muted mono">cache</span><span className="when">+1.2s</span></div>
-            <div className="stage done"><span className="num"><Icon name="check" size={9} /></span><span>Build subtitles sidecar</span><span className="muted mono">164 cues</span><span className="when">+0.3s</span></div>
+            <div className="stage done"><span className="num"><Icon name="check" size={9} /></span><span>Build subtitles.srt</span><span className="muted mono">164 cues</span><span className="when">+0.3s</span></div>
             <div className="stage active"><span className="num">4</span><span>Compose filtergraph / ffmpeg single pass</span><span className="muted mono">libx264 slow</span><span className="when">running</span></div>
             <div className="stage"><span className="num">5</span><span>Mux output with +faststart</span><span className="muted mono">renders/</span><span className="when">queued</span></div>
             <div className="stage"><span className="num">6</span><span>Append render history</span><span className="muted mono">SQLite</span><span className="when">queued</span></div>
-          </div>
-        </div>
-
-        <div className="panel log-card">
-          <div className="panel-head">
-            <h3>ffmpeg log</h3>
-            <span className="meta">tail / live</span>
-          </div>
-          <div className="body">
-            <div><span className="ts">[15:30:01]</span> <span className="info">*</span> ffmpeg -i voice.wav -filter_complex_script cache/graph.txt</div>
-            <div><span className="ts">[15:30:02]</span> <span className="ok">ok</span> Stream #0:0 to h264 (libx264) (yuv420p)</div>
-            <div><span className="ts">[15:30:02]</span> <span className="ok">ok</span> Stream #0:1 to aac (LC) 48000Hz stereo</div>
-            <div><span className="ts">[15:30:18]</span> frame=  3210 fps= 28 q=18.0 size=  9612kB time=00:01:47.00 bitrate=735.6kbits/s speed=1.18x</div>
-            <div><span className="ts">[15:30:31]</span> frame=  5208 fps= 30 q=18.0 size= 16344kB time=00:02:53.60 bitrate=771.0kbits/s speed=1.20x</div>
           </div>
         </div>
 
@@ -75,7 +61,7 @@ const RenderScreen = ({ go }) => {
                 <div className="ic"><Icon name="film" size={14} /></div>
                 <div>
                   <strong>Tokyo Essay / final</strong>
-                  <span>1080p / rendering now</span>
+                  <span>1080p / duration: 5:01</span>
                 </div>
                 <span className="tag warn"><span className="dot warn"/>live</span>
               </div>

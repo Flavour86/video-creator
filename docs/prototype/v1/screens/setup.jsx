@@ -12,7 +12,7 @@ const SetupScreen = ({ go }) => {
         <div className="setup-head">
           <div>
             <p className="eyebrow">New project</p>
-            <h1>Detect inputs and align</h1>
+            <h1>SetUp</h1>
           </div>
           <div style={{display:"flex", gap:8}}>
             <button className="btn" onClick={() => go("launcher")}>Cancel</button>
@@ -96,24 +96,19 @@ const SetupScreen = ({ go }) => {
             <div className="job">
               <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
                 <strong style={{fontSize:12}}>Forced alignment</strong>
-                <span className={"tag " + (alignment === "running" ? "warn" : "ok")}><span className={"dot " + (alignment === "running" ? "warn" : "ok")}/>{alignment === "running" ? "api running" : "cache ready"}</span>
               </div>
               <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, fontSize:11}}>
                 <div className="kv"><span className="k">sentences</span><span className="v">164</span></div>
                 <div className="kv"><span className="k">duration</span><span className="v">15:42</span></div>
-                <div className="kv"><span className="k">confidence</span><span className="v">96%</span></div>
-                <div className="kv"><span className="k">unmatched</span><span className="v">0</span></div>
               </div>
               <button className="btn accent" disabled={alignment === "running"} onClick={runAlignment} style={{justifyContent:"center"}}>
-                <Icon name="cpu" size={13}/>{alignment === "running" ? "Calling alignment API..." : "Run alignment API"}
+                <Icon name="cpu" size={13}/>{alignment === "running" ? "Calling alignment" : "Run alignment"}
               </button>
             </div>
 
             <ul className="checks">
               <li><span className="dot ok"/>Transcript readable / 164 sentences</li>
               <li><span className="dot ok"/>Audio stream valid / pcm_s16le / 48kHz</li>
-              <li><span className="dot info"/>Media is added later from the Editor</li>
-              <li><span className="dot info"/>Alignment artifacts are cached for later renders</li>
             </ul>
           </div>
         </div>

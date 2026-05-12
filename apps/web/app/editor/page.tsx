@@ -18,7 +18,7 @@ import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, 
 import { Button } from "@/components/ui";
 import { request } from "@/lib/api/server";
 import { clearOperationLog, isTextEditingTarget, recoverWorkingState, redoLast, undoLast } from "@/lib/editor-operation-log/operation-log";
-import { useProjectAlignment } from "@/lib/hooks/useAlignment";
+import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
 function EditorContent() {
@@ -36,11 +36,11 @@ function EditorContent() {
   const [layers, setLayers] = useState<Layer[]>([]);
   const [media, setMedia] = useState<EditorMediaItem[]>([]);
   const [selected, setSelected] = useState<EditorSelection>(null);
+  const [selectedSentenceRange, setSelectedSentenceRange] = useState<[number, number] | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resolution, setResolution] = useState("1080p");
-  const [fitMode, setFitMode] = useState("fit");
   const [modal, setModal] = useState<EditorModalKind>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -54,7 +54,8 @@ function EditorContent() {
   const skipAutosaveRef = useRef(false);
   const renderSocketRef = useRef<WebSocket | null>(null);
 
-  const sentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
+  const alignmentSentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
+  const [sentences, setSentences] = useState<AlignedSentence[]>([]);
   const duration = sentences.at(-1)?.end_s ?? 0;
   const visualClipCount = useMemo(() => {
     return layers.reduce((total, layer) => total + (layer.kind === "sub" ? 0 : layer.items.length), 0);
@@ -116,6 +117,11 @@ function EditorContent() {
     if (!projectId) return;
     void loadProject(projectId);
   }, [loadProject, projectId]);
+
+  useEffect(() => {
+    setSentences(alignmentSentences);
+    setSelectedSentenceRange(null);
+  }, [alignmentSentences]);
 
   useEffect(() => {
     return () => {
@@ -183,6 +189,11 @@ function EditorContent() {
 
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" && !isTextEditingTarget(event.target)) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
       if ((!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== "z" || isTextEditingTarget(event.target)) return;
       if (!projectId || !project) return;
       event.preventDefault();
@@ -251,9 +262,9 @@ function EditorContent() {
     if (event.key === "Escape") {
       setQuery("");
       setCurrentMatch(0);
-    } else if (event.key === "Enter" && matches.length > 0) {
+    } else if ((event.key === "Enter" || event.key === "ArrowDown") && matches.length > 0) {
       event.preventDefault();
-      const next = (currentMatch + (event.shiftKey ? -1 : 1) + matches.length) % matches.length;
+      const next = (currentMatch + (event.shiftKey && event.key === "Enter" ? -1 : 1) + matches.length) % matches.length;
       setCurrentMatch(next);
       const match = matches[next];
       if (match) {
@@ -261,6 +272,28 @@ function EditorContent() {
       }
     }
   }
+
+  const assignSentenceRange = useCallback((range: [number, number]) => {
+    setAssignRange(range);
+    setSelectedSentenceRange(range);
+    setModal("upload");
+  }, []);
+
+  const playFromSentence = useCallback((index: number) => {
+    const sentence = sentences.find((item) => item.index === index);
+    if (!sentence) return;
+    seekTo(sentence.start_s);
+    setPlaying(true);
+  }, [seekTo, sentences]);
+
+  const mergeSentenceWithNext = useCallback((index: number) => {
+    const nextSentences = mergeSentences(sentences, index);
+    setSentences(nextSentences);
+    setLayers((current) => remapLayersAfterSentenceMerge(current, index, nextSentences));
+    setSelectedSentenceRange([index, index]);
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [sentences]);
 
   if (!projectId) {
     return (
@@ -291,11 +324,9 @@ function EditorContent() {
         <TranscriptPane
           activeRange={activeRange}
           currentMatch={currentMatch}
-          onAssign={(index) => {
-            seekTo(sentences.find((sentence) => sentence.index === index)?.start_s ?? currentTime);
-            setAssignRange([index, index]);
-            setModal("upload");
-          }}
+          onAssignRange={assignSentenceRange}
+          onMergeNext={mergeSentenceWithNext}
+          onPlayFrom={playFromSentence}
           onQueryChange={(value) => {
             setQuery(value);
             setCurrentMatch(0);
@@ -304,8 +335,10 @@ function EditorContent() {
           }}
           onSearchKeyDown={onSearchKeyDown}
           onSeek={seekTo}
+          onSelectRange={setSelectedSentenceRange}
           query={query}
           searchInputRef={searchInputRef}
+          selectedRange={selectedSentenceRange}
           sentences={sentences}
         />
         <main className="flex min-w-0 flex-col bg-(--bg-0)">
@@ -318,16 +351,13 @@ function EditorContent() {
             onTogglePlay={() => setPlaying((value) => !value)}
             playing={playing}
             projectPath={projectPath}
-            fitMode={fitMode}
             resolution={resolution}
             sentences={sentences}
           />
           <div className="relative">
             <PreviewControls
-              fitMode={fitMode}
               layerCount={layers.length}
               onLayers={() => setLayersOpen((value) => !value)}
-              onSetFitMode={setFitMode}
               onSetResolution={setResolution}
               resolution={resolution}
             />
@@ -363,6 +393,60 @@ async function resolveProjectPath(projectId: string): Promise<string> {
 
 function isValidProjectId(value: string): boolean {
   return /^p_[A-Za-z0-9_-]+$/.test(value);
+}
+
+function mergeSentences(sentences: AlignedSentence[], index: number): AlignedSentence[] {
+  const position = sentences.findIndex((sentence) => sentence.index === index);
+  if (position === -1 || position >= sentences.length - 1) return sentences;
+  const current = sentences[position];
+  const next = sentences[position + 1];
+  if (!current || !next) return sentences;
+  const merged: AlignedSentence = {
+    index: current.index,
+    text: `${current.text.trim()} ${next.text.trim()}`.trim(),
+    start_s: current.start_s,
+    end_s: next.end_s,
+    confidence_avg: Math.min(current.confidence_avg, next.confidence_avg),
+  };
+  return [
+    ...sentences.slice(0, position),
+    merged,
+    ...sentences.slice(position + 2).map((sentence) => ({ ...sentence, index: sentence.index - 1 })),
+  ];
+}
+
+function remapLayersAfterSentenceMerge(layers: Layer[], index: number, sentences: AlignedSentence[]): Layer[] {
+  return layers.map((layer) => {
+    if (layer.kind === "sub") return layer;
+    if (layer.kind === "bg") return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, index, sentences)) };
+    if (layer.kind === "fg") return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, index, sentences)) };
+    return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, index, sentences)) };
+  });
+}
+
+function remapVisualItemAfterSentenceMerge<T extends { end: number; sentences: [number, number]; start: number }>(
+  item: T,
+  index: number,
+  sentences: AlignedSentence[],
+): T {
+  const nextRange = normalizeMergedRange(item.sentences, index);
+  const start = sentences.find((sentence) => sentence.index === nextRange[0])?.start_s;
+  const end = sentences.find((sentence) => sentence.index === nextRange[1])?.end_s;
+  return {
+    ...item,
+    sentences: nextRange,
+    start: start ?? item.start,
+    end: end ?? item.end,
+  };
+}
+
+function normalizeMergedRange(range: [number, number], index: number): [number, number] {
+  const remap = (value: number) => {
+    if (value === index + 1) return index;
+    if (value > index + 1) return value - 1;
+    return value;
+  };
+  return [remap(range[0]), Math.max(remap(range[0]), remap(range[1]))];
 }
 
 type DraftProgressEvent = {

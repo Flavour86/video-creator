@@ -590,7 +590,7 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 14px;
-  padding: 0 14px;
+  padding: 5px 14px;
   border-bottom: 1px solid var(--line);
   background: var(--bg-1);
 }
@@ -858,8 +858,8 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
 }
 .preview-canvas .watermark-asset {
   position: absolute;
-  right: 3%;
-  bottom: 4%;
+  left: 3%;
+  top: 4%;
   width: 9%;
   min-width: 46px;
   aspect-ratio: 16/9;
@@ -2038,9 +2038,6 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
   min-height: 240px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  display: grid;
-  place-items: center;
-  gap: 10px;
   color: #fff;
   position: relative;
   overflow: hidden;
@@ -2054,7 +2051,7 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
 }
 .render-player .iconbtn,
 .render-player span {
-  position: relative;
+  position: absolute;
   z-index: 1;
 }
 .render-player .iconbtn {
@@ -2062,6 +2059,15 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
   height: 48px;
   background: oklch(1 0 0 / 0.18);
   border-color: oklch(1 0 0 / 0.35);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.render-player span {
+  left: 50%;
+  bottom: 10%;
+  transform: translateX(-50%);
 }
 
 .editor {

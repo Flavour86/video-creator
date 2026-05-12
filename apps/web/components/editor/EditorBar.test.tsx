@@ -34,7 +34,7 @@ describe("EditorBar", () => {
 
     expect(screen.getByRole("button", { name: "Open Launcher" })).toBeInTheDocument();
     expect(screen.getByText("Demo")).toBeInTheDocument();
-    expect(screen.getByText("p_demo")).toBeInTheDocument();
+    expect(screen.getByText("projectId: p_demo")).toBeInTheDocument();
     expect(screen.getByText("cache 2/3")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();

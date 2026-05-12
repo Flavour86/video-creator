@@ -37,6 +37,7 @@ def test_init_records_migration_once(monkeypatch, tmp_path: Path) -> None:
         (2, "projects"),
         (3, "project_configs"),
         (4, "render_artifacts_events"),
+        (5, "spec_cleanup"),
     ]
 
 

@@ -97,7 +97,7 @@ const BGModal = ({ open, onClose, onApply, bgItem }) => {
               </select>
             </div>
             <div className="field">
-              <label>Easing</label>
+              <label>transitions</label>
               <select value={easing} onChange={(e) => setEasing(e.target.value)} disabled={motionKind === "none"}>
                 <option value="linear">linear</option>
                 <option value="ease_in">ease in</option>

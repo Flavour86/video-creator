@@ -40,8 +40,7 @@ def generate_srt(alignment: AlignmentResult) -> str:
 
 
 def write_srt(project_dir: Path, alignment: AlignmentResult) -> Path:
-    srt_path = project_dir / ".vc" / "subtitles.srt"
-    srt_path.parent.mkdir(parents=True, exist_ok=True)
+    srt_path = project_dir / "subtitles.srt"
     srt_path.write_text(generate_srt(alignment), encoding="utf-8", newline="")
     return srt_path
 

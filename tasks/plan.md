@@ -2,7 +2,7 @@
 
 ## Overview
 
-Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.md` and the prototype at `http://127.0.0.1:4173/app.html` become the UI/UX and behavior contract. The work keeps Phase 1 local-first: Launcher, Setup subflow, Editor, Render, project config persistence, app SQLite metadata, render artifacts, and browser-local working recovery. The prototype is the visual reference for screen composition and control placement; `docs/designs/SPEC.md` is the single authoritative source for behavior, data and presentation — where the prototype is derived from `SPEC.md`, if they are conflict, stop and ask user. Do not copy prototype CSS; rebuild visuals with Tailwind and the existing design tokens/shared primitives. And the `tasks/todo.md` is the task list overview.
+Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.md` and the prototype at `http://127.0.0.1:4173/app.html` become the UI/UX and behavior contract. The work keeps Phase 1 local-first: Launcher, Setup subflow, Editor, Render, project config persistence, app SQLite metadata, render artifacts, and browser-local working recovery. The prototype is the visual reference for screen composition and control placement; `docs/designs/SPEC.md` is the single authoritative source for behavior, data and presentation — where the prototype is derived from `SPEC.md`, if they are conflict, stop and ask user. Do not copy prototype CSS; rebuild visuals with Tailwind and the existing design tokens/shared primitives. And the `tasks/todo.md` is the task list overview. Everytime, once you finish the task, you tick it in the task list below and `tasks/todo.md`!
 
 ## Current Gaps
 
@@ -1004,7 +1004,7 @@ Refactor the existing Next.js web app and FastAPI sidecar so `docs/designs/SPEC.
 **Verification:**
 - [ ] `rtk pnpm -F @vc/web test`
 - [ ] Browser snapshots for Launcher, Setup, Editor, Watermark modal, Background modal, Render at desktop and narrow viewport.
-- [ ] Chrome DevTools accessibility/Lighthouse snapshot where practical.
+- [ ] Chrome DevTools(claude in chrome) accessibility/Lighthouse snapshot where practical.
 
 **Dependencies:** Tasks 9, 10, 18, 21, 22, 24, 27
 

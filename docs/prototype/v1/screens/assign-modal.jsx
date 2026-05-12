@@ -61,7 +61,7 @@ const AssignModal = ({ open, onClose, onSubmit, initialRange, layers, editing })
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <h2>{isEdit ? "Edit assignment" : "Upload to range"}</h2>
+            <h2>{isEdit ? "Edit media to range" : "Assign media to range"}</h2>
             <p>Place a media asset over a span of sentences. The timeline is computed automatically.</p>
           </div>
           <button className="iconbtn" onClick={onClose}><Icon name="close"/></button>
@@ -201,7 +201,7 @@ const AssignModal = ({ open, onClose, onSubmit, initialRange, layers, editing })
               <label>Transition in</label>
               <select value={trIn} onChange={(e)=>setTrIn(e.target.value)}>
                 <option value="cut">cut</option>
-                <option value="fade">fade · 0.4s</option>
+                <option value="fade">fade</option>
                 <option value="slide_left">slide left</option>
                 <option value="slide_right">slide right</option>
                 <option value="dip_black">dip to black</option>
@@ -211,7 +211,7 @@ const AssignModal = ({ open, onClose, onSubmit, initialRange, layers, editing })
               <label>Transition out</label>
               <select value={trOut} onChange={(e)=>setTrOut(e.target.value)}>
                 <option value="cut">cut</option>
-                <option value="fade">fade · 0.4s</option>
+                <option value="fade">fade</option>
                 <option value="slide_left">slide left</option>
                 <option value="slide_right">slide right</option>
                 <option value="dip_black">dip to black</option>

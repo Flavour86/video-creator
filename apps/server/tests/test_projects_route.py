@@ -53,7 +53,6 @@ async def test_create_project(tmp_path) -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/projects", json={"path": str(target), "name": "Test"})
     assert response.status_code == 200
-    assert (target / "project.json").exists()
     assert response.json()["project_id"].startswith("p_")
     assert (target / "media").is_dir()
     assert (target / "renders").is_dir()
@@ -70,7 +69,7 @@ async def test_new_folder_project_alias(tmp_path) -> None:
             json={"path": str(target), "name": "New Folder"},
         )
     assert response.status_code == 200
-    assert (target / "project.json").exists()
+    assert response.json()["project_id"].startswith("p_")
 
 
 @pytest.mark.asyncio

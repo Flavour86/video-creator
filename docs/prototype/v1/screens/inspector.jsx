@@ -75,13 +75,8 @@ const InspectorBG = ({ item, onPatch, onDelete, onChangeAsset }) => {
         <p className="hint">{assets.length} {lockedKind === "video" ? "video clips" : "images"} in playlist. Images split the full duration evenly. Videos play in sequence; short video leaves black fallback, long video is cut.</p>
       </div>
       <div className="ins-section">
-        <h4>Cycle &amp; crossfade</h4>
+        <h4>Crossfade</h4>
         <div className="field-grid">
-          <div className="label">Cycle</div>
-          <div className="seg">
-            <button className={!item.cycle ? "on" : ""} onClick={()=>onPatch({cycle:false})}>Hold</button>
-            <button className={item.cycle ? "on" : ""} onClick={()=>onPatch({cycle:true})}>Cycle list</button>
-          </div>
           <div className="label">Crossfade</div>
           <input type="number" step="0.1" value={item.crossfade ?? 0.6} onChange={(e)=>onPatch({crossfade:+e.target.value})}/>
         </div>
@@ -94,6 +89,18 @@ const InspectorBG = ({ item, onPatch, onDelete, onChangeAsset }) => {
             <option value="none">None</option>
             <option value="ken_burns">Ken Burns · subtle</option>
             <option value="ken_burns_strong">Ken Burns · strong</option>
+          </select>
+        </div>
+      </div>
+      <div className="ins-section">
+        <h4>Easing</h4>
+        <div className="field-grid">
+          <div className="label">Kind</div>
+          <select value={item.motion?.easing || "ease_in_out"} onChange={(e)=>onPatch({motion:{...item.motion, easing:e.target.value}})}>
+            <option value="linear">linear</option>
+            <option value="ease_in">ease in</option>
+            <option value="ease_out">ease out</option>
+            <option value="ease_in_out">ease in-out</option>
           </select>
         </div>
       </div>
@@ -162,7 +169,7 @@ const InspectorFG = ({ item, layer, onPatch, onDelete, onChangeAsset }) => {
           <div className="label">In</div>
           <select value={item.transitions?.in || "fade"} onChange={(e)=>onPatch({transitions:{...item.transitions, in:e.target.value}})}>
             <option value="cut">cut</option>
-            <option value="fade">fade · 0.4s</option>
+            <option value="fade">fade</option>
             <option value="slide_left">slide left</option>
             <option value="slide_right">slide right</option>
             <option value="dip_black">dip to black</option>
@@ -170,7 +177,7 @@ const InspectorFG = ({ item, layer, onPatch, onDelete, onChangeAsset }) => {
           <div className="label">Out</div>
           <select value={item.transitions?.out || "cut"} onChange={(e)=>onPatch({transitions:{...item.transitions, out:e.target.value}})}>
             <option value="cut">cut</option>
-            <option value="fade">fade · 0.4s</option>
+            <option value="fade">fade</option>
             <option value="slide_left">slide left</option>
             <option value="slide_right">slide right</option>
             <option value="dip_black">dip to black</option>
@@ -229,22 +236,45 @@ const InspectorPiP = ({ item, layer, onPatch, onDelete, onChangeAsset }) => {
         </div>
       </div>
       <div className="ins-section">
-        <h4>Motion &amp; transitions</h4>
+        <h4>Motion</h4>
         <div className="field-grid">
-          <div className="label">Motion</div>
+          <div className="label">Kind</div>
           <select value={item.motion?.kind || "static"} onChange={(e)=>onPatch({motion:{...item.motion, kind:e.target.value}})}>
-            <option value="none">None</option>
+            <option value="none">None — static</option>
+            <option value="ken_burns">Ken Burns · subtle</option>
+            <option value="ken_burns_strong">Ken Burns · strong</option>
             <option value="zoom_in">Zoom in</option>
             <option value="zoom_out">Zoom out</option>
-            <option value="ken_burns">Ken Burns · subtle</option>
+            <option value="pan_left">Pan left</option>
+            <option value="pan_right">Pan right</option>
           </select>
+          <div className="label">Easing</div>
+          <select value={item.motion?.easing || "ease_in_out"} disabled={item.motion?.kind === "none"} onChange={(e)=>onPatch({motion:{...item.motion, easing:e.target.value}})}>
+            <option value="linear">linear</option>
+            <option value="ease_in">ease in</option>
+            <option value="ease_out">ease out</option>
+            <option value="ease_in_out">ease in-out</option>
+          </select>
+        </div>
+      </div>
+      <div className="ins-section">
+        <h4>Transitions</h4>
+        <div className="field-grid">
           <div className="label">In</div>
           <select value={item.transitions?.in || "fade"} onChange={(e)=>onPatch({transitions:{...item.transitions, in:e.target.value}})}>
-            <option value="cut">cut</option><option value="fade">fade</option><option value="slide_left">slide left</option><option value="slide_right">slide right</option>
+            <option value="cut">cut</option>
+            <option value="fade">fade</option>
+            <option value="slide_left">slide left</option>
+            <option value="slide_right">slide right</option>
+            <option value="dip_black">dip to black</option>
           </select>
           <div className="label">Out</div>
-          <select value={item.transitions?.out || "fade"} onChange={(e)=>onPatch({transitions:{...item.transitions, out:e.target.value}})}>
-            <option value="cut">cut</option><option value="fade">fade</option><option value="slide_left">slide left</option><option value="slide_right">slide right</option>
+          <select value={item.transitions?.out || "cut"} onChange={(e)=>onPatch({transitions:{...item.transitions, out:e.target.value}})}>
+            <option value="cut">cut</option>
+            <option value="fade">fade</option>
+            <option value="slide_left">slide left</option>
+            <option value="slide_right">slide right</option>
+            <option value="dip_black">dip to black</option>
           </select>
         </div>
       </div>
