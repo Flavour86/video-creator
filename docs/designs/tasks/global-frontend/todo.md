@@ -27,7 +27,7 @@
 - [x] Task 5: Add the frontend visual parity harness
   - Acceptance: web visual test command exists; captures fixed-viewport screenshots; compares SSIM with threshold `0.98`; artifacts are gitignored.
   - Verify: `rtk pnpm -F @vc/web test:visual -- --help`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/web lint`
-- [ ] Task 6: Cover shell dark/light visual parity
+- [x] Task 6: Cover shell dark/light visual parity
   - Acceptance: exactly one parity test covers `shell-dark.png`; exactly one covers `shell-light.png`; both pass with SSIM >= 0.98.
   - Verify: `rtk pnpm -F @vc/web test:visual -- shell`
 - [ ] Task 7: Enforce split-spec screenshot coverage inventory
