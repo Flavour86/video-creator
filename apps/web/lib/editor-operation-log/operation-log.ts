@@ -42,13 +42,18 @@ export function editorOperationStorageKey(projectId: string): string {
 
 export function loadOperationLog(projectId: string, storage = browserStorage()): StoredOperationLog {
   if (!projectId || !storage) return emptyOperationLog();
+  const storageKey = editorOperationStorageKey(projectId);
   try {
-    const raw = storage.getItem(editorOperationStorageKey(projectId));
+    const raw = storage.getItem(storageKey);
     if (!raw) return emptyOperationLog();
     const parsed = JSON.parse(raw) as Partial<StoredOperationLog>;
-    if (parsed.version !== 1 || !Array.isArray(parsed.undo) || !Array.isArray(parsed.redo)) return emptyOperationLog();
+    if (parsed.version !== 1 || !Array.isArray(parsed.undo) || !Array.isArray(parsed.redo)) {
+      storage.removeItem(storageKey);
+      return emptyOperationLog();
+    }
     return { redo: parsed.redo, undo: parsed.undo, version: 1 };
   } catch {
+    storage.removeItem(storageKey);
     return emptyOperationLog();
   }
 }

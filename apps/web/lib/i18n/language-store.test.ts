@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { LANGUAGE_STORAGE_KEY, useLanguageStore } from "./language-store";
 
 describe("language store", () => {
+  test("uses vc.language as the only global language preference key", () => {
+    expect(LANGUAGE_STORAGE_KEY).toBe("vc.language");
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
     document.documentElement.lang = "en";

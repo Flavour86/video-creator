@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { THEME_STORAGE_KEY, useThemeStore } from "./theme-store";
 
 describe("theme store", () => {
+  test("uses vc.theme as the only global theme preference key", () => {
+    expect(THEME_STORAGE_KEY).toBe("vc.theme");
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
     delete document.documentElement.dataset.theme;

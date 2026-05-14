@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import {
   appendOperation,
@@ -40,6 +42,10 @@ describe("editor operation log", () => {
     const raw = window.localStorage.getItem(editorOperationStorageKey("p_demo"));
     expect(raw).toContain("\"type\":\"add\"");
     expect(raw).not.toContain("\"version\":1,\"name\"");
+  });
+
+  it("uses the editor-owned browser storage key namespace", () => {
+    expect(editorOperationStorageKey("p_demo")).toBe("vc.editor.operations.p_demo");
   });
 
   it("recovers unsaved working state by replaying operations", () => {
@@ -88,10 +94,48 @@ describe("editor operation log", () => {
     expect(recovered.watermark?.mediaId).toBe("logo.png");
   });
 
-  it("ignores broken or cleared storage", () => {
+  it("discards malformed operation logs from browser storage", () => {
     window.localStorage.setItem(editorOperationStorageKey("p_demo"), "{bad json");
     expect(recoverWorkingState("p_demo", BASE_STATE)).toEqual(BASE_STATE);
-    clearOperationLog("p_demo");
     expect(window.localStorage.getItem(editorOperationStorageKey("p_demo"))).toBeNull();
+  });
+
+  it("ignores cleared storage", () => {
+    appendOperation("p_demo", {
+      index: 0,
+      item: { id: "bg-1", mediaId: "bg.jpg", start: 0, end: 5 },
+      layerId: "bg-main",
+      type: "add",
+    });
+    clearOperationLog("p_demo");
+
+    expect(recoverWorkingState("p_demo", BASE_STATE)).toEqual(BASE_STATE);
+    expect(window.localStorage.getItem(editorOperationStorageKey("p_demo"))).toBeNull();
+  });
+
+  it("keeps global UI preference keys out of server and shared schema sources", () => {
+    const repoRoot = path.resolve(__dirname, "../../../..");
+    const forbiddenPatterns = ["vc.theme", "vc.language"];
+    const contractFiles = [
+      "apps/server/server/routes/setup.py",
+      "apps/server/server/routes/projects.py",
+      "apps/server/server/routes/render.py",
+      "apps/server/server/db/migrations/010_app_settings_whitelist.sql",
+      "packages/shared-schemas/project.schema.json",
+      "packages/shared-schemas/ts/index.ts",
+    ];
+    const violations: string[] = [];
+
+    for (const relativePath of contractFiles) {
+      const fullPath = path.join(repoRoot, relativePath);
+      const content = fs.readFileSync(fullPath, "utf8");
+      for (const pattern of forbiddenPatterns) {
+        if (content.includes(pattern)) {
+          violations.push(`${relativePath} -> ${pattern}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 });

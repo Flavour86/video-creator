@@ -8,7 +8,7 @@
 - [x] Task 2: Prove theme and language persistence through the shell controls
   - Acceptance: `vc.theme` and `vc.language` persist to browser storage; DOM theme/lang re-apply on reload; `ThemeInitScript` remains before `AppShell`.
   - Verify: `rtk pnpm -F @vc/web test -- lib/theme/theme-store.test.ts lib/i18n/language-store.test.ts components/app-shell/AppShell.test.tsx components/app-shell/ThemeInitScript.test.tsx`
-- [ ] Checkpoint: Shell
+- [x] Checkpoint: Shell
   - Acceptance: shell tests pass; topbar/right controls match the spec; current tests no longer assert hidden theme/language controls.
 
 ## Phase 2: Storage And Shortcut Boundaries
@@ -16,10 +16,10 @@
 - [x] Task 3: Centralize shortcut-boundary detection
   - Acceptance: shared helper guards input, textarea, select, contenteditable, and contenteditable descendants; editor and render shortcuts consume it.
   - Verify: `rtk pnpm -F @vc/web test -- lib/shortcuts`, `rtk pnpm -F @vc/web test -- app/editor/page.test.tsx app/render/page.test.tsx lib/render/useRenderHotkeys.test.ts`
-- [ ] Task 4: Lock the browser-storage ownership contract
+- [x] Task 4: Lock the browser-storage ownership contract
   - Acceptance: tests cover global preference keys and editor undo/redo recovery key; malformed operation logs are discarded; no server persistence is introduced for UI prefs.
   - Verify: `rtk pnpm -F @vc/web test -- lib/theme lib/i18n lib/editor-operation-log`, `rtk pnpm -F @vc/web lint`
-- [ ] Checkpoint: Storage And Shortcuts
+- [x] Checkpoint: Storage And Shortcuts
   - Acceptance: browser-storage ownership and shortcut boundaries are covered by tests.
 
 ## Phase 3: Visual Parity Foundation
