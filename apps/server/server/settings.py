@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     port: int = 8787
     debug: bool = False
     whisperx_model: str = "large-v3"
+    storage_root: Path | None = Field(
+        default=None,
+        description="Optional override for workspace root used by global uploads storage.",
+    )
     app_db_path: Path = Field(
         default_factory=_default_app_db_path,
         description="SQLite DB for global app state (recent projects, settings).",
@@ -33,3 +37,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def app_root() -> Path:
+    if settings.storage_root is not None:
+        return settings.storage_root.resolve()
+    cwd = Path.cwd().resolve()
+    if cwd.name == "server" and cwd.parent.name == "apps":
+        return cwd.parent.parent
+    return cwd
+
+
+def uploads_root() -> Path:
+    return app_root() / "uploads"

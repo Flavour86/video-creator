@@ -48,3 +48,35 @@ def load_project(project_dir: Path) -> Project:
     data: dict[str, Any] = json.loads(project_json.read_text(encoding="utf-8"))
     return Project.model_validate(data)
 
+
+def ensure_project_layout(project_dir: Path) -> None:
+    project_dir.mkdir(parents=True, exist_ok=True)
+    for dir_name in ("media", "renders"):
+        (project_dir / dir_name).mkdir(exist_ok=True)
+
+    vc_dir = project_dir / ".vc"
+    vc_dir.mkdir(exist_ok=True)
+    for dir_name in ("clips", "drafts", "thumbs", "logs"):
+        (vc_dir / dir_name).mkdir(exist_ok=True)
+
+    transcript_path = project_dir / "transcript.txt"
+    if not transcript_path.exists():
+        transcript_path.write_text("", encoding="utf-8")
+
+    subtitles_path = project_dir / "subtitles.srt"
+    if not subtitles_path.exists():
+        subtitles_path.write_text("", encoding="utf-8")
+
+    has_voice_file = any(
+        (project_dir / name).is_file()
+        for name in ("voice.wav", "voice.mp3", "voice.m4a", "voice.flac", "voice.ogg")
+    )
+    if not has_voice_file:
+        (project_dir / "voice.wav").write_bytes(b"")
+
+    alignment_path = vc_dir / "alignment.json"
+    if not alignment_path.exists():
+        alignment_path.write_text(
+            json.dumps({"sentences": [], "words": [], "cache_hit": False}),
+            encoding="utf-8",
+        )

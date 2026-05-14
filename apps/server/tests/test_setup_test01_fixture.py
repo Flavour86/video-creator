@@ -42,8 +42,13 @@ async def test_setup_scaffold_and_inspect_test01_fixture(tmp_path: Path) -> None
     assert payload["alignment"]["hash"] == second_inspect.json()["alignment"]["hash"]
 
     media_names = {path.name for path in (project_dir / "media").iterdir()}
-    assert {"bg0.png", "bg1.png", "bg2.png", "foreground.png", "PIP.png"} <= media_names
+    assert media_names == set()
+    assert (project_dir / "bg0.png").is_file()
+    assert (project_dir / "bg1.png").is_file()
+    assert (project_dir / "bg2.png").is_file()
+    assert (project_dir / "foreground.png").is_file()
+    assert (project_dir / "PIP.png").is_file()
 
     project = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
     layer_kinds = {layer["kind"] for layer in project["layers"]}
-    assert {"sub", "bg", "fg", "pip"} <= layer_kinds
+    assert layer_kinds == {"sub"}

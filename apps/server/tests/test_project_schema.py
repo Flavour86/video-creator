@@ -17,6 +17,24 @@ def _dump_project(project_dir: Path, project: Project) -> None:
     )
 
 
+def _phase1_output() -> dict[str, object]:
+    return {
+        "preset": "draft",
+        "resolution": "1920x1080",
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "video_codec": "h264",
+        "video_crf": 23,
+        "video_preset": "medium",
+        "audio_codec": "aac",
+        "audio_bitrate_kbps": 192,
+        "audio_sample_rate": 48000,
+        "pixel_format": "yuv420p",
+        "color_space": "bt709",
+    }
+
+
 def test_minimal_valid(tmp_path: Path) -> None:
     project = Project.model_validate(
         {
@@ -24,7 +42,7 @@ def test_minimal_valid(tmp_path: Path) -> None:
             "name": "test",
             "audio": "voice.wav",
             "transcript": {"kind": "plain_text", "path": "transcript.txt"},
-            "output": {"preset": "draft"},
+            "output": _phase1_output(),
             "layers": [],
         }
     )
@@ -41,7 +59,7 @@ def test_fg_layer_round_trip(tmp_path: Path) -> None:
             "name": "test",
             "audio": "voice.wav",
             "transcript": {"kind": "plain_text", "path": "transcript.txt"},
-            "output": {"preset": "draft"},
+            "output": _phase1_output(),
             "layers": [
                 {
                     "id": "L-sub",
@@ -67,7 +85,7 @@ def test_fg_layer_round_trip(tmp_path: Path) -> None:
                             "sentences": [1, 3],
                             "start": 0.3,
                             "end": 19.5,
-                            "motion": {"kind": "ken_burns", "easing": "ease_in_out"},
+                            "motion": {"kind": "ken_burns", "easing": "ease_in"},
                             "transitions": {"in": "fade", "out": "cut"},
                         }
                     ],
@@ -93,7 +111,7 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
             "name": "test",
             "audio": "voice.wav",
             "transcript": {"kind": "plain_text", "path": "transcript.txt"},
-            "output": {"preset": "final"},
+            "output": {**_phase1_output(), "preset": "final"},
             "media": [
                 {
                     "id": "media-bg-1",
@@ -122,7 +140,7 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
                             "sentences": [1, 2],
                             "start": 0,
                             "end": 10,
-                            "motion": {"kind": "ken_burns", "easing": "ease_in_out"},
+                            "motion": {"kind": "ken_burns", "easing": "ease_in"},
                             "transitions": {"in": "cut", "out": "fade"},
                             "crossfade": 0.4,
                             "cache_status": "warm",
@@ -144,3 +162,31 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
 def test_invalid_version_rejected() -> None:
     with pytest.raises(ValidationError):
         Project.model_validate({"version": 2, "name": "x"})
+
+
+def test_ai_field_rejected() -> None:
+    payload = {
+        "version": 1,
+        "name": "test",
+        "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": _phase1_output(),
+        "layers": [],
+        "ai": {"provider": "future"},
+    }
+    with pytest.raises(ValidationError):
+        Project.model_validate(payload)
+
+
+def test_characters_field_rejected() -> None:
+    payload = {
+        "version": 1,
+        "name": "test",
+        "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": _phase1_output(),
+        "layers": [],
+        "characters": [{"id": "c1"}],
+    }
+    with pytest.raises(ValidationError):
+        Project.model_validate(payload)

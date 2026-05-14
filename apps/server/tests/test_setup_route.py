@@ -48,3 +48,33 @@ async def test_setup_inspect_populates_metadata_and_hash(tmp_path: Path) -> None
     assert payload["voice"]["channels"] == 2
     assert payload["transcript"]["sentence_count"] == 2
     assert len(payload["alignment"]["hash"]) == 64
+
+
+@pytest.mark.asyncio
+async def test_setup_inspect_completes_partial_layout_without_overwriting_media(
+    tmp_path: Path,
+) -> None:
+    media_file = tmp_path / "media" / "keep.png"
+    media_file.parent.mkdir(parents=True)
+    media_file.write_bytes(b"keep")
+    (tmp_path / "project.json").write_text(
+        '{"version":1,"name":"Demo","audio":"voice.wav","transcript":{"kind":"plain_text","path":"transcript.txt"},"output":{"preset":"draft"},"layers":[],"subtitles":null,"watermark":null}',
+        encoding="utf-8",
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/setup/inspect", params={"path": str(tmp_path)})
+
+    assert response.status_code == 200
+    assert media_file.read_bytes() == b"keep"
+    assert (tmp_path / "media").is_dir()
+    assert (tmp_path / "renders").is_dir()
+    assert (tmp_path / "voice.wav").is_file()
+    assert (tmp_path / "transcript.txt").is_file()
+    assert (tmp_path / "subtitles.srt").is_file()
+    assert (tmp_path / ".vc" / "alignment.json").is_file()
+    assert (tmp_path / ".vc" / "clips").is_dir()
+    assert (tmp_path / ".vc" / "drafts").is_dir()
+    assert (tmp_path / ".vc" / "thumbs").is_dir()
+    assert (tmp_path / ".vc" / "logs").is_dir()

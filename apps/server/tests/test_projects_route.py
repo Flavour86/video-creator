@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from server.db.app_db import connection
 from server.db.projects import touch_recent
 from server.main import app
 from server.pipeline.cache import compute_alignment_hash
@@ -57,6 +58,14 @@ async def test_create_project(tmp_path) -> None:
     assert (target / "media").is_dir()
     assert (target / "renders").is_dir()
     assert (target / ".vc").is_dir()
+    assert (target / "transcript.txt").is_file()
+    assert (target / "voice.wav").is_file()
+    assert (target / "subtitles.srt").is_file()
+    assert (target / ".vc" / "alignment.json").is_file()
+    assert (target / ".vc" / "clips").is_dir()
+    assert (target / ".vc" / "drafts").is_dir()
+    assert (target / ".vc" / "thumbs").is_dir()
+    assert (target / ".vc" / "logs").is_dir()
 
 
 @pytest.mark.asyncio
@@ -120,6 +129,7 @@ async def test_recent_open_and_remove_project(monkeypatch, tmp_path) -> None:
         recent_response = await client.get("/projects/recent")
         assert recent_response.status_code == 200
         assert recent_response.json()[0]["name"] == "Test"
+        assert recent_response.json()[0]["last_render_at"]
 
         open_response = await client.post("/projects/open", json={"path": str(target)})
         assert open_response.status_code == 200
@@ -151,6 +161,7 @@ async def test_projects_list_returns_project_id_cards_without_paths(
     assert project["project_id"].startswith("p_")
     assert "path" not in project
     assert project["name"] == "Rich Metadata"
+    assert project["last_render_at"]
     assert project["sentence_count"] == 2
     assert project["status"] == "ready"
     assert project["has_unrendered_changes"] is False
@@ -323,3 +334,117 @@ async def test_recent_projects_detect_test01_raw_ingredients(
     assert project["sentence_count"] >= 20
     assert project["media_count"] == 5
     assert project["alignment_state"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_put_project_config_uses_single_canonical_row_and_stable_hash(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "canonical-config"
+    _write_project(project_dir, "First sentence.")
+    touch_recent(project_dir, "Canonical Config")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        project_id = (await client.get("/projects")).json()[0]["project_id"]
+        base = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+        first = await client.put(f"/projects/{project_id}/config", json={"config": base})
+        reordered = {
+            "watermark": base["watermark"],
+            "subtitles": base["subtitles"],
+            "layers": base["layers"],
+            "output": base["output"],
+            "transcript": base["transcript"],
+            "audio": base["audio"],
+            "name": base["name"],
+            "version": base["version"],
+        }
+        second = await client.put(f"/projects/{project_id}/config", json={"config": reordered})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["config_hash"] == second.json()["config_hash"]
+
+    with connection() as conn:
+        count_row = conn.execute("SELECT COUNT(*) AS c FROM project_configs").fetchone()
+    assert count_row is not None
+    assert int(count_row["c"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_put_project_config_updates_hash_and_dirty_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "dirty-state"
+    _write_project(project_dir, "First sentence.")
+    touch_recent(project_dir, "Dirty State")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        project_id = (await client.get("/projects")).json()[0]["project_id"]
+        base = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+        initial = await client.put(f"/projects/{project_id}/config", json={"config": base})
+        first_hash = initial.json()["config_hash"]
+
+        with connection() as conn:
+            conn.execute(
+                """
+                UPDATE projects
+                SET last_rendered_config_hash = ?, has_unrendered_changes = 0
+                WHERE project_id = ?
+                """,
+                (first_hash, project_id),
+            )
+
+        same_save = await client.put(f"/projects/{project_id}/config", json={"config": base})
+        changed = dict(base)
+        changed["name"] = "Dirty State Changed"
+        changed_save = await client.put(f"/projects/{project_id}/config", json={"config": changed})
+
+    assert same_save.status_code == 200
+    assert same_save.json()["config_hash"] == first_hash
+    assert same_save.json()["has_unrendered_changes"] is False
+    assert changed_save.status_code == 200
+    assert changed_save.json()["config_hash"] != first_hash
+    assert changed_save.json()["has_unrendered_changes"] is True
+
+
+@pytest.mark.asyncio
+async def test_put_project_config_rejects_schema_invalid_without_partial_write(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "invalid-config"
+    _write_project(project_dir, "First sentence.")
+    touch_recent(project_dir, "Invalid Config")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        project_id = (await client.get("/projects")).json()[0]["project_id"]
+        base = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+        ok = await client.put(f"/projects/{project_id}/config", json={"config": base})
+        before_hash = ok.json()["config_hash"]
+        invalid = dict(base)
+        invalid["ai"] = {"provider": "future"}
+        bad = await client.put(f"/projects/{project_id}/config", json={"config": invalid})
+
+    assert bad.status_code == 422
+    assert bad.json()["error"]["code"] == "INVALID_PROJECT_CONFIG"
+    with connection() as conn:
+        row = conn.execute(
+            """
+            SELECT p.current_config_hash, c.config_hash
+            FROM projects p
+            JOIN project_configs c ON c.project_id = p.project_id
+            WHERE p.project_path = ?
+            """,
+            (str(project_dir.resolve()),),
+        ).fetchone()
+    assert row is not None
+    assert row["current_config_hash"] == before_hash
+    assert row["config_hash"] == before_hash

@@ -1,4 +1,4 @@
-"""Recent-projects CRUD."""
+"""Projects index CRUD."""
 
 from __future__ import annotations
 
@@ -17,49 +17,38 @@ def project_id_for_path(path: Path) -> str:
 
 def touch_recent(path: Path, name: str) -> None:
     normalized_path = str(path.resolve())
-    opened_at = datetime.now(UTC).isoformat()
+    now = datetime.now(UTC).isoformat()
     with connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO recent_projects (path, name, last_opened_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(path) DO UPDATE SET
-                name = excluded.name,
-                last_opened_at = excluded.last_opened_at
-            """,
-            (normalized_path, name, opened_at),
-        )
         conn.execute(
             """
             INSERT INTO projects (
                 project_id,
-                path,
-                name,
-                status,
-                alignment_state,
+                project_path,
+                project_name,
                 created_at,
-                updated_at,
-                last_opened_at
+                last_render_at,
+                has_unrendered_changes
             )
-            VALUES (?, ?, ?, 'ready', 'missing', ?, ?, ?)
-            ON CONFLICT(path) DO UPDATE SET
-                name = excluded.name,
-                status = CASE
-                    WHEN projects.status IN ('missing', 'corrupt') THEN projects.status
-                    ELSE excluded.status
-                END,
-                updated_at = excluded.updated_at,
-                last_opened_at = excluded.last_opened_at
+            VALUES (?, ?, ?, ?, ?, 0)
+            ON CONFLICT(project_path) DO UPDATE SET
+                project_name = excluded.project_name
             """,
-            (project_id_for_path(path), normalized_path, name, opened_at, opened_at, opened_at),
+            (project_id_for_path(path), normalized_path, name, now, now),
         )
 
 
 def list_recent(limit: int = 20) -> list[dict[str, str]]:
     with connection() as conn:
         rows = conn.execute(
-            "SELECT path, name, last_opened_at FROM recent_projects "
-            "ORDER BY last_opened_at DESC LIMIT ?",
+            """
+            SELECT
+                project_path AS path,
+                project_name AS name,
+                last_render_at
+            FROM projects
+            ORDER BY last_render_at DESC
+            LIMIT ?
+            """,
             (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
@@ -71,22 +60,22 @@ def list_projects(limit: int = 20) -> list[dict[str, object]]:
             """
             SELECT
                 project_id,
-                path,
-                name,
-                status,
-                alignment_state,
+                project_path AS path,
+                project_name AS name,
                 thumbnail_path,
                 current_config_hash,
                 last_rendered_config_hash,
                 has_unrendered_changes,
-                render_enabled,
-                latest_render_id,
-                latest_render_status,
                 created_at,
-                updated_at,
-                last_opened_at
+                last_render_at,
+                voice_duration_s,
+                sentence_count,
+                media_count,
+                palette_seed,
+                project_mtime,
+                last_error
             FROM projects
-            ORDER BY last_opened_at DESC
+            ORDER BY last_render_at DESC
             LIMIT ?
             """,
             (limit,),
@@ -100,20 +89,20 @@ def get_project(project_id: str) -> dict[str, object] | None:
             """
             SELECT
                 project_id,
-                path,
-                name,
-                status,
-                alignment_state,
+                project_path AS path,
+                project_name AS name,
                 thumbnail_path,
                 current_config_hash,
                 last_rendered_config_hash,
                 has_unrendered_changes,
-                render_enabled,
-                latest_render_id,
-                latest_render_status,
                 created_at,
-                updated_at,
-                last_opened_at
+                last_render_at,
+                voice_duration_s,
+                sentence_count,
+                media_count,
+                palette_seed,
+                project_mtime,
+                last_error
             FROM projects
             WHERE project_id = ?
             """,
@@ -135,22 +124,22 @@ def get_project_by_path(path: Path) -> dict[str, object] | None:
             """
             SELECT
                 project_id,
-                path,
-                name,
-                status,
-                alignment_state,
+                project_path AS path,
+                project_name AS name,
                 thumbnail_path,
                 current_config_hash,
                 last_rendered_config_hash,
                 has_unrendered_changes,
-                render_enabled,
-                latest_render_id,
-                latest_render_status,
                 created_at,
-                updated_at,
-                last_opened_at
+                last_render_at,
+                voice_duration_s,
+                sentence_count,
+                media_count,
+                palette_seed,
+                project_mtime,
+                last_error
             FROM projects
-            WHERE path = ?
+            WHERE project_path = ?
             """,
             (str(path.resolve()),),
         ).fetchone()
@@ -165,8 +154,8 @@ def mark_project_rendered(project_path: Path) -> None:
             UPDATE projects
             SET last_rendered_config_hash = current_config_hash,
                 has_unrendered_changes = 0,
-                updated_at = ?
-            WHERE path = ? AND current_config_hash IS NOT NULL
+                last_render_at = ?
+            WHERE project_path = ? AND current_config_hash IS NOT NULL
             """,
             (now, str(project_path.resolve())),
         )
@@ -175,5 +164,4 @@ def mark_project_rendered(project_path: Path) -> None:
 def remove_recent(path: Path) -> None:
     normalized_path = str(path.resolve())
     with connection() as conn:
-        conn.execute("DELETE FROM recent_projects WHERE path = ?", (normalized_path,))
-        conn.execute("DELETE FROM projects WHERE path = ?", (normalized_path,))
+        conn.execute("DELETE FROM projects WHERE project_path = ?", (normalized_path,))

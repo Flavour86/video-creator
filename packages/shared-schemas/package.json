@@ -7,7 +7,8 @@
   "types": "./ts/index.ts",
   "scripts": {
     "gen:ts": "json2ts --unreachableDefinitions -i project.schema.json -o ts/index.ts",
-    "gen:py": "node ../../scripts/gen-pydantic.mjs"
+    "gen:py": "node ../../scripts/gen-pydantic.mjs",
+    "check:drift": "node ../../scripts/check-generated-schemas.mjs"
   },
   "devDependencies": {
     "json-schema-to-typescript": "^15.0.0"

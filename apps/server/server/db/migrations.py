@@ -10,6 +10,10 @@ from pathlib import Path
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
 
 
+class MigrationError(RuntimeError):
+    """Raised when migration integrity checks fail."""
+
+
 @dataclass(frozen=True)
 class Migration:
     version: int
@@ -43,13 +47,16 @@ def run_migrations(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS_D
         existing_checksum = applied.get(migration.version)
         if existing_checksum is not None:
             if existing_checksum != migration.checksum:
-                raise RuntimeError(f"Migration {migration.version} checksum mismatch")
+                raise MigrationError("Schema migration integrity check failed.")
             continue
 
         with conn:
             conn.executescript(migration.sql)
             conn.execute(
-                "INSERT OR IGNORE INTO schema_migrations (version, name, checksum) VALUES (?, ?, ?)",
+                (
+                    "INSERT OR IGNORE INTO schema_migrations "
+                    "(version, name, checksum) VALUES (?, ?, ?)"
+                ),
                 (migration.version, migration.name, migration.checksum),
             )
             row = conn.execute(
@@ -58,7 +65,7 @@ def run_migrations(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS_D
             ).fetchone()
             recorded_checksum = row["checksum"] if isinstance(row, sqlite3.Row) else row[0]
             if recorded_checksum != migration.checksum:
-                raise RuntimeError(f"Migration {migration.version} checksum mismatch")
+                raise MigrationError("Schema migration integrity check failed.")
 
 
 def load_migrations(migrations_dir: Path = MIGRATIONS_DIR) -> list[Migration]:

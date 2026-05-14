@@ -28,7 +28,9 @@ _EXTRA_ABBREVS = {
 }
 _tokenizer: nltk.tokenize.PunktSentenceTokenizer | None = None
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff]")
-_CJK_SENTENCE_RE = re.compile(r"[^。！？；…\n]+(?:[。！？；…]+|(?=\n|$))")
+_CJK_SENTENCE_RE = re.compile(
+    r"[^\u3002\uff01\uff1f\uff1b\u2026\n]+(?:[\u3002\uff01\uff1f\uff1b\u2026]+|(?=\n|$))"
+)
 _NOISE_LINE_RE = re.compile(r"^\s*(?:#{1,6}\s|\d+\.\s|[-*_]{3,}\s*$)")
 _QUOTE_CHARS = "\"“”「」『』"
 

@@ -77,6 +77,9 @@ async def test_project_id_render_routes(monkeypatch, tmp_path: Path) -> None:
         output_path=output_path,
         preset="final",
         started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
     )
     mark_render_finished(
         render_id="r-by-id",
@@ -171,6 +174,9 @@ async def test_list_renders_returns_history(monkeypatch, tmp_path: Path) -> None
         output_path=output_path,
         preset="draft",
         started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
     )
     mark_render_finished(
         render_id="r-history",
@@ -201,6 +207,9 @@ async def test_reveal_render_calls_opener(monkeypatch, tmp_path: Path) -> None:
         output_path=output_path,
         preset="final",
         started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
     )
     opened: list[Path] = []
     monkeypatch.setattr(render_pipeline, "reveal_in_file_browser", opened.append)
@@ -229,6 +238,9 @@ async def test_play_render_calls_default_player(monkeypatch, tmp_path: Path) -> 
         output_path=output_path,
         preset="final",
         started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
     )
     mark_render_finished(
         render_id="r-play",
@@ -262,6 +274,9 @@ async def test_play_partial_render_is_rejected(monkeypatch, tmp_path: Path) -> N
         output_path=output_path,
         preset="draft",
         started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
     )
 
     transport = httpx.ASGITransport(app=app)

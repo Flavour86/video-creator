@@ -16,6 +16,7 @@ from server.pipeline.cache import (
     clip_cache_key_from_components,
     clip_cache_path,
 )
+from server.settings import uploads_root
 
 IMAGE_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp"})
 VIDEO_EXTENSIONS: frozenset[str] = frozenset({".mp4", ".mov", ".webm"})
@@ -304,7 +305,9 @@ def _resolve_media_path(project_dir: Path, media_id: str) -> Path:
         raise ValueError(f"Invalid mediaId for clip render: {media_id}")
     media_path = project_dir / "media" / safe_name
     if not media_path.is_file():
-        raise FileNotFoundError(f"Media file not found: {media_path}")
+        media_path = uploads_root() / safe_name
+    if not media_path.is_file():
+        raise FileNotFoundError(f"Media file not found: {safe_name}")
     if media_path.suffix.lower() not in IMAGE_EXTENSIONS | VIDEO_EXTENSIONS:
         raise ValueError(f"Unsupported media type for clip render: {media_path.suffix}")
     return media_path

@@ -10,14 +10,22 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Coroutine, Iterable
+from concurrent.futures import Future
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 
-from server.db.renders import insert_render, mark_render_cancelled, mark_render_failed, mark_render_finished
+from server.db.renders import (
+    insert_render,
+    mark_render_cancelled,
+    mark_render_failed,
+    mark_render_finished,
+)
 from server.domain.project import Project, load_project
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
@@ -29,7 +37,13 @@ from server.pipeline.filtergraph import (
     build_compose_command,
     visual_items_bottom_to_top,
 )
-from server.pipeline.render_progress import RenderLogEvent, RenderProgressEvent, RenderStage, publish_log, publish_progress
+from server.pipeline.render_progress import (
+    RenderLogEvent,
+    RenderProgressEvent,
+    RenderStage,
+    publish_log,
+    publish_progress,
+)
 from server.pipeline.srt import write_srt
 
 
@@ -51,6 +65,13 @@ class RenderResult(BaseModel):
 @dataclass
 class _SyncProcessState:
     proc: subprocess.Popen[str] | None = None
+
+
+@dataclass(frozen=True)
+class _RenderMediaStats:
+    fps: float | None = None
+    speed: float | None = None
+    frame_count: int | None = None
 
 
 class RenderError(Exception):
@@ -100,6 +121,7 @@ def active_render_count() -> int:
 
 def _create_job(*, project_dir: Path, preset: RenderPreset) -> RenderJob:
     project = load_project(project_dir)
+    preset_config = PRESETS[preset]
     render_id = _new_render_id()
     output_path = _output_path(project_dir, preset, render_id)
     started_at = datetime.now(UTC)
@@ -109,6 +131,12 @@ def _create_job(*, project_dir: Path, preset: RenderPreset) -> RenderJob:
         output_path=output_path,
         preset=preset,
         started_at=started_at,
+        resolution=preset_config.resolution,
+        width=int(preset_config.resolution.split("x", maxsplit=1)[0]),
+        height=int(preset_config.resolution.split("x", maxsplit=1)[1]),
+        video_crf=preset_config.crf,
+        video_preset=preset_config.x264_preset,
+        audio_bitrate_kbps=int(preset_config.audio_bitrate.removesuffix("k")),
     )
     return RenderJob(
         render_id=render_id,
@@ -143,7 +171,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             output_path=job.output_path,
             preset=job.preset,
         )
-        await _run_ffmpeg(
+        media_stats = await _run_ffmpeg(
             _with_progress(command),
             job.output_path,
             render_id=job.render_id,
@@ -185,6 +213,10 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             render_id=job.render_id,
             finished_at=datetime.now(UTC),
             duration_s=duration_s,
+            output_path=job.output_path,
+            fps=media_stats.fps,
+            speed=media_stats.speed,
+            frame_count=media_stats.frame_count,
         )
         await _emit(
             job.render_id,
@@ -269,7 +301,7 @@ async def _run_ffmpeg(
     *,
     render_id: str,
     total_s: float,
-) -> None:
+) -> _RenderMediaStats:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -278,8 +310,12 @@ async def _run_ffmpeg(
             stderr=asyncio.subprocess.PIPE,
         )
     except NotImplementedError:
-        await _run_ffmpeg_threaded(command, output_path, render_id=render_id, total_s=total_s)
-        return
+        return await _run_ffmpeg_threaded(
+            command,
+            output_path,
+            render_id=render_id,
+            total_s=total_s,
+        )
     if proc.stdout is None or proc.stderr is None:
         raise RenderError(500, "FFMPEG_FAILED", "ffmpeg progress pipes were not available.")
 
@@ -319,6 +355,7 @@ async def _run_ffmpeg(
         raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
     if not output_path.is_file() or output_path.stat().st_size == 0:
         raise RenderError(500, "OUTPUT_MISSING", "ffmpeg did not produce an output file.")
+    return _stats_from_progress(progress)
 
 
 async def _run_ffmpeg_threaded(
@@ -327,14 +364,14 @@ async def _run_ffmpeg_threaded(
     *,
     render_id: str,
     total_s: float,
-) -> None:
+) -> _RenderMediaStats:
     loop = asyncio.get_running_loop()
     state = _SyncProcessState()
     task = asyncio.create_task(
         asyncio.to_thread(_run_ffmpeg_sync, command, output_path, render_id, total_s, loop, state)
     )
     try:
-        await asyncio.shield(task)
+        return await asyncio.shield(task)
     except asyncio.CancelledError:
         await asyncio.to_thread(_terminate_sync_process, state.proc)
         with suppress(Exception):
@@ -349,7 +386,7 @@ def _run_ffmpeg_sync(
     total_s: float,
     loop: asyncio.AbstractEventLoop,
     state: _SyncProcessState,
-) -> None:
+) -> _RenderMediaStats:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
         command,
@@ -390,6 +427,7 @@ def _run_ffmpeg_sync(
         raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
     if not output_path.is_file() or output_path.stat().st_size == 0:
         raise RenderError(500, "OUTPUT_MISSING", "ffmpeg did not produce an output file.")
+    return _stats_from_progress(progress)
 
 
 def _terminate_sync_process(proc: subprocess.Popen[str] | None) -> None:
@@ -455,7 +493,7 @@ async def _relay_stderr(
 
 
 def _relay_stderr_sync(
-    stream: object,
+    stream: Iterable[str],
     render_id: str,
     sink: list[str],
     loop: asyncio.AbstractEventLoop,
@@ -470,8 +508,11 @@ def _relay_stderr_sync(
         _publish_from_thread(loop, _emit_log(render_id, line))
 
 
-def _publish_from_thread(loop: asyncio.AbstractEventLoop, coro: object) -> None:
-    future = asyncio.run_coroutine_threadsafe(coro, loop)
+def _publish_from_thread(
+    loop: asyncio.AbstractEventLoop,
+    coro: Coroutine[Any, Any, None],
+) -> None:
+    future: Future[None] = asyncio.run_coroutine_threadsafe(coro, loop)
     with suppress(Exception):
         future.result(timeout=2)
 
@@ -525,6 +566,25 @@ def _eta_seconds(total_s: float, out_time_s: float, speed: str | None) -> int | 
     if speed_value <= 0:
         return None
     return max(0, round((total_s - out_time_s) / speed_value))
+
+
+def _stats_from_progress(progress: dict[str, str]) -> _RenderMediaStats:
+    fps = _float_or_none(progress.get("fps"))
+    frame_count = _int_or_none(progress.get("frame"))
+    speed_value: float | None = None
+    speed = progress.get("speed")
+    if speed and speed.endswith("x"):
+        speed_value = _float_or_none(speed[:-1])
+    return _RenderMediaStats(fps=fps, speed=speed_value, frame_count=frame_count)
+
+
+def _float_or_none(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def _new_render_id() -> str:

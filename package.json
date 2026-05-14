@@ -16,6 +16,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
+    "check:generated-schemas": "node scripts/check-generated-schemas.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\" --ignore-path .gitignore",
     "gen:types": "pnpm -F @vc/shared-schemas gen:ts",
     "gen:py": "pnpm -F @vc/shared-schemas gen:py"

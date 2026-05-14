@@ -1,11 +1,12 @@
 """Render endpoints."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from server.db.projects import project_path_for_id
 from server.db.renders import (
@@ -13,8 +14,10 @@ from server.db.renders import (
     delete_renders,
     get_render,
     get_render_for_project,
-    list_renders as list_all_renders,
     list_renders_for_project,
+)
+from server.db.renders import (
+    list_renders as list_all_renders,
 )
 from server.pipeline import render as render_pipeline
 from server.pipeline.filtergraph import RenderPreset
@@ -46,7 +49,9 @@ class RenderHistoryResponse(BaseModel):
 
 
 class RenderCancelRequest(BaseModel):
-    jobId: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    job_id: str | None = Field(default=None, alias="jobId")
     render_id: str | None = None
 
 
@@ -114,7 +119,7 @@ async def get_render_job(render_id: str) -> RenderHistoryResponse | JSONResponse
 
 @router.post("/render/cancel", response_model=None)
 async def cancel_render_job(payload: RenderCancelRequest) -> dict[str, bool] | JSONResponse:
-    render_id = payload.jobId or payload.render_id
+    render_id = payload.job_id or payload.render_id
     if not render_id:
         return _error(422, "RENDER_ID_REQUIRED", "Render id is required.", {})
     canceled = await render_pipeline.cancel_render(render_id)
@@ -153,7 +158,12 @@ async def reveal_path(payload: SystemPathRequest) -> dict[str, bool] | JSONRespo
     try:
         path = _safe_workspace_path(payload.path)
     except ValueError:
-        return _error(403, "PATH_NOT_ALLOWED", "Path is outside the workspace.", {"path": payload.path})
+        return _error(
+            403,
+            "PATH_NOT_ALLOWED",
+            "Path is outside the workspace.",
+            {"path": payload.path},
+        )
     if not path.exists():
         return _error(404, "PATH_NOT_FOUND", "Path not found.", {"path": str(path)})
     render_pipeline.reveal_in_file_browser(path)
@@ -165,7 +175,12 @@ async def open_path(payload: SystemPathRequest) -> dict[str, bool] | JSONRespons
     try:
         path = _safe_workspace_path(payload.path)
     except ValueError:
-        return _error(403, "PATH_NOT_ALLOWED", "Path is outside the workspace.", {"path": payload.path})
+        return _error(
+            403,
+            "PATH_NOT_ALLOWED",
+            "Path is outside the workspace.",
+            {"path": payload.path},
+        )
     if not path.is_file():
         return _error(404, "PATH_NOT_FOUND", "File not found.", {"path": str(path)})
     render_pipeline.open_in_default_player(path)
@@ -299,7 +314,7 @@ async def play_render(
     row = get_render_for_project(render_id, project_dir)
     if row is None:
         return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
-    if row["status"] != "done":
+    if row["status"] != "rendered":
         return _error(
             409,
             "RENDER_NOT_PLAYABLE",
@@ -331,9 +346,10 @@ async def play_project_render(
     return await play_render(render_id=render_id, project=str(project_dir))
 
 
-def _render_history_response(row: dict[str, str | float | None]) -> RenderHistoryResponse:
+def _render_history_response(row: Mapping[str, object]) -> RenderHistoryResponse:
     output_path = _resolve_stored_path(str(row["output_path"]))
     output_exists = output_path.is_file()
+    duration = row["duration_s"]
     return RenderHistoryResponse(
         id=str(row["id"]),
         output_path=str(output_path),
@@ -341,7 +357,7 @@ def _render_history_response(row: dict[str, str | float | None]) -> RenderHistor
         preset=str(row["preset"]),
         started_at=str(row["started_at"]),
         finished_at=str(row["finished_at"]) if row["finished_at"] is not None else None,
-        duration_s=float(row["duration_s"]) if row["duration_s"] is not None else None,
+        duration_s=float(duration) if isinstance(duration, int | float | str) else None,
         status=str(row["status"]),
         message=str(row["message"]) if row["message"] is not None else None,
         file_size=output_path.stat().st_size if output_exists else None,

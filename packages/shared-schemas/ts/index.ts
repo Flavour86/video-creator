@@ -119,14 +119,6 @@ export interface Project {
   layers: (SubtitlesLayer | ForegroundLayer | PipLayer | BackgroundLayer)[];
   subtitles?: null | SubtitlesSettings;
   watermark?: null | Watermark;
-  ai?: null | {
-    [k: string]: unknown;
-  };
-  characters?:
-    | null
-    | {
-        [k: string]: unknown;
-      }[];
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -142,6 +134,18 @@ export interface Transcript {
  */
 export interface Output {
   preset: "draft" | "final";
+  resolution?: string;
+  width?: number;
+  height?: number;
+  fps?: number;
+  video_codec?: string;
+  video_crf?: number | null;
+  video_preset?: string | null;
+  audio_codec?: string;
+  audio_bitrate_kbps?: number | null;
+  audio_sample_rate?: number | null;
+  pixel_format?: string | null;
+  color_space?: string | null;
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -356,7 +360,7 @@ export interface RuntimeHealthResponse {
 export interface RecentProject {
   path: string;
   name: string;
-  last_opened_at: string;
+  last_render_at: string;
   voice_duration: string;
   sentence_count: number;
   media_count: number;
@@ -370,7 +374,7 @@ export interface RecentProject {
 export interface RecentProjectCard {
   project_id: string;
   name: string;
-  last_opened_at: string;
+  last_render_at: string;
   voice_duration: string;
   sentence_count: number;
   media_count: number;

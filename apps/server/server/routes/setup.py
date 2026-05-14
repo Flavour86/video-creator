@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,11 +9,15 @@ from pathlib import Path
 from fastapi import APIRouter, Query, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from schemas import (  # type: ignore[import-not-found]
+    DetectedTranscript,
+    DetectedVoice,
+    SetupAlignment,
+)
 
 from server.db.projects import touch_recent
-from server.domain.project import DetectedInputs, Project
+from server.domain.project import DetectedInputs, Project, ensure_project_layout
 from server.domain.timing import AlignmentResult
-from schemas import DetectedTranscript, DetectedVoice, SetupAlignment
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
 
@@ -62,6 +65,7 @@ async def scaffold_setup(payload: ScaffoldRequest) -> DetectedInputs | JSONRespo
 @router.get("/inspect", response_model=DetectedInputs)
 def inspect_setup(path: str = Query(...)) -> DetectedInputs:
     project_dir = Path(path)
+    ensure_project_layout(project_dir)
     project_data = _load_project_data(project_dir)
     project = _project_name(project_dir, project_data)
     voice_path = _voice_path(project_dir, project_data)
@@ -93,11 +97,7 @@ async def inspect_setup_ws(websocket: WebSocket, path: str = Query(...)) -> None
 
 
 def _write_project_scaffold(project_dir: Path, name: str, output_preset: str) -> None:
-    project_dir.mkdir(parents=True, exist_ok=True)
-    (project_dir / "media").mkdir(exist_ok=True)
-    (project_dir / "renders").mkdir(exist_ok=True)
-    (project_dir / ".vc").mkdir(exist_ok=True)
-    _import_root_media(project_dir)
+    ensure_project_layout(project_dir)
 
     project_file = project_dir / "project.json"
     if project_file.exists():
@@ -137,41 +137,76 @@ def _seed_default_layers(project_dir: Path) -> None:
         return
 
     media_dir = project_dir / "media"
-    media_files = {path.name.lower(): path.name for path in media_dir.iterdir() if path.is_file()} if media_dir.exists() else {}
+    media_files = (
+        {path.name.lower(): path.name for path in media_dir.iterdir() if path.is_file()}
+        if media_dir.exists()
+        else {}
+    )
     alignment = _load_alignment(project_dir)
     ranges = _sentence_ranges(alignment)
     duration = max((item[2] for item in ranges), default=30.0)
 
     foreground = media_files.get("foreground.png") or _first_media(media_files)
     pip = media_files.get("pip.png")
-    backgrounds = [media_files[name] for name in ("bg0.png", "bg1.png", "bg2.png") if name in media_files]
+    backgrounds = [
+        media_files[name]
+        for name in ("bg0.png", "bg1.png", "bg2.png")
+        if name in media_files
+    ]
 
     layers: list[dict[str, object]] = [
-        {"id": "subtitles", "kind": "sub", "name": "Subtitles", "items": [{"id": "sub-auto", "auto": True, "label": "Auto subtitles", "style": "default"}]},
+        {
+            "id": "subtitles",
+            "kind": "sub",
+            "name": "Subtitles",
+            "items": [
+                {
+                    "id": "sub-auto",
+                    "auto": True,
+                    "label": "Auto subtitles",
+                    "style": "default",
+                }
+            ],
+        },
     ]
     if pip is not None:
         start, end = _range_for(ranges, 2)
-        layers.append({
-            "id": "pip-z3",
-            "kind": "pip",
-            "name": "PiP z3",
-            "items": [_visual_item("pip-1", pip, [2, 2], start, end, pip=True)],
-        })
+        layers.append(
+            {
+                "id": "pip-z3",
+                "kind": "pip",
+                "name": "PiP z3",
+                "items": [_visual_item("pip-1", pip, [2, 2], start, end, pip=True)],
+            }
+        )
     if foreground is not None:
         start, end = _range_for(ranges, 1)
-        layers.append({
-            "id": "fg-z1",
-            "kind": "fg",
-            "name": "Foreground z1",
-            "items": [_visual_item("fg-1", foreground, [1, 1], start, end)],
-        })
+        layers.append(
+            {
+                "id": "fg-z1",
+                "kind": "fg",
+                "name": "Foreground z1",
+                "items": [_visual_item("fg-1", foreground, [1, 1], start, end)],
+            }
+        )
     if backgrounds:
-        layers.append({
-            "id": "bg-main",
-            "kind": "bg",
-            "name": "Background",
-            "items": [_visual_item("bg-1", backgrounds[0], [1, len(ranges) or 1], 0.0, duration, background=True)],
-        })
+        layers.append(
+            {
+                "id": "bg-main",
+                "kind": "bg",
+                "name": "Background",
+                "items": [
+                    _visual_item(
+                        "bg-1",
+                        backgrounds[0],
+                        [1, len(ranges) or 1],
+                        0.0,
+                        duration,
+                        background=True,
+                    )
+                ],
+            }
+        )
 
     data["layers"] = layers
     data["updated_at"] = datetime.now(UTC).isoformat()
@@ -278,47 +313,6 @@ def _find_voice_file(project_dir: Path) -> Path | None:
     return None
 
 
-def _import_root_media(project_dir: Path) -> None:
-    media_dir = project_dir / "media"
-    thumb_dir = project_dir / ".vc" / "thumbs"
-    media_dir.mkdir(exist_ok=True)
-    for path in project_dir.iterdir():
-        if not path.is_file() or path.name in {"project.json", "transcript.txt"} or path.name.startswith("voice."):
-            continue
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".webm"}:
-            continue
-        target = media_dir / path.name
-        if not target.exists():
-            shutil.copy2(path, target)
-        thumb = thumb_dir / f"{path.stem}.jpg"
-        if not thumb.exists():
-            _make_thumb(target, thumb)
-
-
-def _make_thumb(src: Path, thumb: Path) -> None:
-    thumb.parent.mkdir(parents=True, exist_ok=True)
-    vf = (
-        "scale=256:144:force_original_aspect_ratio=decrease,"
-        "pad=256:144:(ow-iw)/2:(oh-ih)/2:color=black"
-    )
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-ss",
-        "0",
-        "-i",
-        str(src),
-        "-vframes",
-        "1",
-        "-vf",
-        vf,
-        "-q:v",
-        "5",
-        str(thumb),
-    ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-
-
 def _detect_voice(path: Path) -> DetectedVoice | None:
     if not path.exists():
         return None
@@ -332,7 +326,7 @@ def _detect_voice(path: Path) -> DetectedVoice | None:
             state="copying",
         )
     try:
-        import soundfile
+        import soundfile  # type: ignore[import-untyped]
 
         info = soundfile.info(str(path))
     except Exception:

@@ -214,13 +214,13 @@ Shared schema contract
 
 ## Task 7: Add the `/uploads` media ingestion API
 
-**Description:** Add the spec-level upload surface that accepts render assets, returns stable `mediaId` values, stores all uploaded files under `{root}/uploads/`, and updates canonical config media metadata.
+**Description:** Add the spec-level upload surface that accepts render assets, returns stable `mediaId` values, and stores all uploaded files under `{root}/uploads/`. `POST /uploads` does not mutate project config directly; callers connect returned media IDs through `PUT /projects/:projectId/config`.
 
 **Acceptance criteria:**
 
 - [ ] `POST /uploads` accepts supported render assets, sanitizes filenames, prevents traversal, and returns `mediaId` plus metadata.
 - [ ] Uploaded bytes are written under `{root}/uploads/`, not `<project>/media/`.
-- [ ] Uploaded assets are represented in canonical `config.media[]` and can be addressed by layers/watermark.
+- [ ] Uploaded assets return schema-valid metadata and stable `mediaId` values that callers can persist in canonical `config.media[]` through `PUT /projects/:projectId/config`.
 - [ ] Existing `/projects/media` behavior is removed, redirected, or rewritten if it conflicts with root-level upload storage.
 
 **Verification:**

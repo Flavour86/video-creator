@@ -2,13 +2,16 @@ import asyncio
 import logging
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
+from server.db.app_db import AppDatabaseError
 from server.routes.alignment import router as alignment_router
 from server.routes.media import router as media_router
 from server.routes.projects import router as projects_router
 from server.routes.render import router as render_router
 from server.routes.setup import router as setup_router
+from server.routes.uploads import router as uploads_router
 from server.routes.ws import router as ws_router
 from server.runtime_status import RuntimeHealthResponse, collect_runtime_health
 from server.settings import settings
@@ -31,7 +34,22 @@ app.include_router(media_router)
 app.include_router(alignment_router)
 app.include_router(render_router)
 app.include_router(setup_router)
+app.include_router(uploads_router)
 app.include_router(ws_router)
+
+
+@app.exception_handler(AppDatabaseError)
+async def app_db_error_handler(_request: Request, _exc: AppDatabaseError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "APP_DB_UNAVAILABLE",
+                "message": "Application database is temporarily unavailable.",
+                "details": {},
+            }
+        },
+    )
 
 
 @app.get("/health", response_model=RuntimeHealthResponse)

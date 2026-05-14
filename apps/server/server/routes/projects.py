@@ -30,13 +30,14 @@ from server.domain.project import (
     ProjectStatus,
     RecentProject,
     RecentProjectCard,
+    ensure_project_layout,
     load_project,
 )
+from server.domain.timing import AlignmentResult
+from server.pipeline.cache import compute_alignment_hash
+from server.pipeline.chunker import segment
 from server.routes.alignment import get_alignment, run_alignment
 from server.routes.setup import inspect_setup
-from server.domain.timing import AlignmentResult
-from server.pipeline.cache import compute_alignment_hash, is_cached
-from server.pipeline.chunker import segment
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -67,7 +68,7 @@ def _error(status_code: int, code: str, message: str, details: dict[str, str]) -
     )
 
 
-def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") -> RecentProject:
+def _project_metadata(project_dir: Path, name: str, last_render_at: str = "") -> RecentProject:
     project = _load_recent_project(project_dir)
     audio_path = _audio_path(project_dir, project)
     transcript_path = _transcript_path(project_dir, project)
@@ -77,7 +78,7 @@ def _project_metadata(project_dir: Path, name: str, last_opened_at: str = "") ->
     return RecentProject(
         path=str(project_dir),
         name=name,
-        last_opened_at=last_opened_at,
+        last_render_at=last_render_at,
         voice_duration=_voice_duration(audio_path),
         sentence_count=_sentence_count(transcript_text, alignment, alignment_state),
         media_count=_media_count(project_dir),
@@ -97,7 +98,7 @@ def _project_card(row: dict[str, object]) -> RecentProjectCard:
     return RecentProjectCard(
         project_id=str(row["project_id"]),
         name=str(row["name"]),
-        last_opened_at=str(row["last_opened_at"]),
+        last_render_at=str(row["last_render_at"]),
         voice_duration=_voice_duration(audio_path),
         sentence_count=_sentence_count(transcript_text, alignment, alignment_state),
         media_count=_media_count(project_dir),
@@ -107,8 +108,8 @@ def _project_card(row: dict[str, object]) -> RecentProjectCard:
         current_config_hash=_optional_str(row.get("current_config_hash")),
         last_rendered_config_hash=_optional_str(row.get("last_rendered_config_hash")),
         has_unrendered_changes=bool(row.get("has_unrendered_changes")),
-        latest_render_id=_optional_str(row.get("latest_render_id")),
-        latest_render_status=row.get("latest_render_status"),
+        latest_render_id=None,
+        latest_render_status=None,
     )
 
 
@@ -325,10 +326,7 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
         }
     )
     try:
-        project_dir.mkdir(parents=True, exist_ok=True)
-        (project_dir / "media").mkdir(exist_ok=True)
-        (project_dir / "renders").mkdir(exist_ok=True)
-        (project_dir / ".vc").mkdir(exist_ok=True)
+        ensure_project_layout(project_dir)
     except PermissionError:
         return _error(
             403,
@@ -344,8 +342,15 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
             {"path": payload.path, "error": str(exc)},
         )
     touch_recent(project_dir, payload.name)
-    save_config_snapshot(project_dir, project.model_dump(mode="json", by_alias=True, exclude_none=False))
-    return ProjectResponse(project_id=project_id_for_path(project_dir), path=str(project_dir), name=payload.name)
+    save_config_snapshot(
+        project_dir,
+        project.model_dump(mode="json", by_alias=True, exclude_none=False),
+    )
+    return ProjectResponse(
+        project_id=project_id_for_path(project_dir),
+        path=str(project_dir),
+        name=payload.name,
+    )
 
 
 @router.get("", response_model=list[RecentProjectCard])
@@ -362,7 +367,7 @@ async def new_project(payload: CreateProjectRequest) -> ProjectResponse | JSONRe
 async def recent_projects() -> list[RecentProject]:
     rows = list_recent()
     return [
-        _project_metadata(Path(row["path"]), row["name"], row["last_opened_at"]) for row in rows
+        _project_metadata(Path(row["path"]), row["name"], row["last_render_at"]) for row in rows
     ]
 
 
@@ -376,6 +381,7 @@ async def open_project(payload: OpenProjectRequest) -> RecentProject | JSONRespo
             "Project folder is missing.",
             {"path": payload.path},
         )
+    ensure_project_layout(project_dir)
     config = latest_config_for_project_path(project_dir)
     if config is None:
         try:
@@ -439,7 +445,12 @@ async def load_project_data(project: str = Query(...)) -> JSONResponse:
         if project_json.exists():
             data = json.loads(project_json.read_text(encoding="utf-8"))
         else:
-            return _error(404, "PROJECT_NOT_FOUND", "Project config not found.", {"project": project})
+            return _error(
+                404,
+                "PROJECT_NOT_FOUND",
+                "Project config not found.",
+                {"project": project},
+            )
     return JSONResponse(data)
 
 
@@ -581,7 +592,9 @@ async def get_project_config(project_id: str) -> ProjectConfigLoadResponse | JSO
         project_id=project_id,
         config=Project.model_validate(config),
         config_hash=config_hash,
-        last_rendered_config_hash=_optional_str(row.get("last_rendered_config_hash")) if row else None,
+        last_rendered_config_hash=(
+            _optional_str(row.get("last_rendered_config_hash")) if row else None
+        ),
         has_unrendered_changes=bool(row.get("has_unrendered_changes")) if row else True,
     )
 

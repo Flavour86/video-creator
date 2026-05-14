@@ -12,6 +12,7 @@ from typing import Literal
 from server.domain.project import Project
 from server.domain.timing import AlignmentResult
 from server.pipeline.clip_render import ClipRenderItem, clip_cache_path_for_item
+from server.settings import uploads_root
 
 RenderPreset = Literal["draft", "final"]
 TRANSITION_SECONDS = 0.4
@@ -303,7 +304,10 @@ def _watermark_path(project_dir: Path, project: Project) -> Path | None:
     safe_name = Path(media_id).name
     if not media_id or safe_name != media_id or ".." in media_id:
         raise ValueError(f"Invalid watermark mediaId: {media_id}")
-    return project_dir / "media" / safe_name
+    project_path = project_dir / "media" / safe_name
+    if project_path.is_file():
+        return project_path
+    return uploads_root() / safe_name
 
 
 def _watermark_float(watermark: object, name: str) -> float:

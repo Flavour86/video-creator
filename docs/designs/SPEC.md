@@ -197,4 +197,9 @@ Never:
 - Add co-author or external attribution lines to commits.
 
 
-## open questions
+## open questions logs
+
+- [X] 2026-05-14: Backend-global Task 4 makes `projects.last_render_at` canonical and says not to preserve `last_opened_at`, while `packages/shared-schemas/project.schema.json` still exposes `RecentProject.last_opened_at` and `RecentProjectCard.last_opened_at`. Should the public API/shared schema be renamed to `last_render_at` now, or should `last_opened_at` remain as a temporary response alias backed by `last_render_at` for frontend compatibility?
+User: don't remain anything unused!
+- [X] 2026-05-14: Backend-global Task 7 defines global `POST /uploads` and requires uploaded assets to be represented in canonical `config.media[]`, but the API surface does not say how `POST /uploads` receives the target project context. Should `POST /uploads` require `project_id` as query/form data and update that project's config, or should it only store root-level assets and leave `config.media[]` updates to a separate project config save?
+User: `POST /uploads` stores root-level assets only. Project config is updated separately through `PUT /projects/:projectId/config` to connect the returned `mediaId`.

@@ -28,6 +28,18 @@ def _error(status_code: int, code: str, message: str, details: dict[str, str]) -
     )
 
 
+def _legacy_media_route_removed() -> JSONResponse:
+    return _error(
+        410,
+        "LEGACY_MEDIA_ROUTE_REMOVED",
+        (
+            "Legacy /projects/media storage is removed. Use POST /uploads and save media IDs "
+            "through PUT /projects/:projectId/config."
+        ),
+        {},
+    )
+
+
 def _sanitize(name: str) -> str:
     name = re.sub(r"[/\\]", "_", name)
     name = re.sub(r"\.{2,}", ".", name)
@@ -121,35 +133,7 @@ async def upload_media(
     files: Annotated[list[UploadFile], File(...)],
     project: str = Query(...),
 ) -> list[MediaItem] | JSONResponse:
-    result = _get_project(project)
-    if isinstance(result, JSONResponse):
-        return result
-    project_dir: Path = result
-
-    media_dir = project_dir / "media"
-    media_dir.mkdir(exist_ok=True)
-
-    items: list[MediaItem] = []
-    for upload in files:
-        name = _sanitize(upload.filename or "file")
-        ext = Path(name).suffix.lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            return _error(
-                400,
-                "UNSUPPORTED_TYPE",
-                f"File type {ext!r} is not supported.",
-                {"filename": upload.filename or ""},
-            )
-        final = _unique_name(media_dir, name)
-        data = await upload.read()
-        (media_dir / final).write_bytes(data)
-        await _make_thumb(
-            media_dir / final,
-            project_dir / ".vc" / "thumbs" / (Path(final).stem + ".jpg"),
-        )
-        items.append(_build_item(project_dir, media_dir / final))
-
-    return items
+    return _legacy_media_route_removed()
 
 
 @router.post("/projects/{project_id}/media", response_model=list[MediaItem])
@@ -157,36 +141,17 @@ async def upload_project_media(
     project_id: str,
     files: Annotated[list[UploadFile], File(...)],
 ) -> list[MediaItem] | JSONResponse:
-    result = _get_project_id(project_id)
-    if isinstance(result, JSONResponse):
-        return result
-    return await upload_media(files=files, project=str(result))
+    return _legacy_media_route_removed()
 
 
 @router.get("/projects/media", response_model=list[MediaItem])
 async def list_media(project: str = Query(...)) -> list[MediaItem] | JSONResponse:
-    result = _get_project(project)
-    if isinstance(result, JSONResponse):
-        return result
-    project_dir: Path = result
-
-    media_dir = project_dir / "media"
-    if not media_dir.exists():
-        return []
-
-    return [
-        _build_item(project_dir, f)
-        for f in sorted(media_dir.iterdir())
-        if f.is_file() and f.suffix.lower() in ALLOWED_EXTENSIONS
-    ]
+    return _legacy_media_route_removed()
 
 
 @router.get("/projects/{project_id}/media", response_model=list[MediaItem])
 async def list_project_media(project_id: str) -> list[MediaItem] | JSONResponse:
-    result = _get_project_id(project_id)
-    if isinstance(result, JSONResponse):
-        return result
-    return await list_media(project=str(result))
+    return _legacy_media_route_removed()
 
 
 _MEDIA_CONTENT_TYPES: dict[str, str] = {

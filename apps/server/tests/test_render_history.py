@@ -32,6 +32,9 @@ def test_render_history_records_finished_render(monkeypatch, tmp_path: Path) -> 
         output_path=output_path,
         preset="draft",
         started_at=started_at,
+        resolution="1280x720",
+        width=1280,
+        height=720,
     )
     mark_render_finished(
         render_id="r-test",
@@ -42,11 +45,11 @@ def test_render_history_records_finished_render(monkeypatch, tmp_path: Path) -> 
     rows = list_renders_for_project(project_dir)
     assert len(rows) == 1
     assert rows[0]["id"] == "r-test"
-    assert rows[0]["status"] == "done"
+    assert rows[0]["status"] == "rendered"
     assert rows[0]["duration_s"] == 60.0
     artifacts = list_render_artifacts("r-test")
-    assert artifacts[0]["kind"] == "draft_mp4"
-    assert artifacts[0]["playable"] == 0
+    assert artifacts[0]["kind"] == "output"
+    assert artifacts[0]["size_bytes"] is None
 
 
 def test_finished_render_marks_project_config_rendered(monkeypatch, tmp_path: Path) -> None:
@@ -76,6 +79,9 @@ def test_finished_render_marks_project_config_rendered(monkeypatch, tmp_path: Pa
         output_path=project_dir / "renders" / "final.mp4",
         preset="final",
         started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
     )
     mark_render_finished(
         render_id="r-rendered",
@@ -101,6 +107,9 @@ def test_render_history_records_failed_render(monkeypatch, tmp_path: Path) -> No
         output_path=project_dir / "renders" / "failed.mp4",
         preset="final",
         started_at=started_at,
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
     )
     mark_render_failed(
         render_id="r-failed",
@@ -110,7 +119,7 @@ def test_render_history_records_failed_render(monkeypatch, tmp_path: Path) -> No
 
     rows = list_renders_for_project(project_dir)
     assert len(rows) == 1
-    assert rows[0]["status"] == "error"
+    assert rows[0]["status"] == "failed"
     assert rows[0]["message"] == "ffmpeg failed"
 
 
@@ -126,32 +135,31 @@ def test_render_artifacts_and_events_round_trip(monkeypatch, tmp_path: Path) -> 
         output_path=output_path,
         preset="final",
         started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
     )
 
     artifact_id = add_render_artifact(
         render_id="r-artifacts",
-        project_path=project_dir,
-        kind="final_mp4",
+        kind="output",
         path=output_path,
-        playable=True,
-        reusable=True,
     )
     add_render_event(
         render_id="r-artifacts",
-        project_path=project_dir,
-        stage="mux MP4",
-        status="running",
+        phase="compose",
         message="encoding",
-        progress=0.5,
+        progress=50.0,
+        detail_json={"step": "mux"},
     )
 
     artifacts = list_render_artifacts("r-artifacts")
     events = list_render_events("r-artifacts")
-    assert artifacts[0]["artifact_id"] == artifact_id
-    assert artifacts[0]["size"] == 3
-    assert str(artifacts[0]["hash"]).startswith("sha256:")
-    assert events[0]["stage"] == "mux MP4"
-    assert events[0]["progress"] == 0.5
+    assert artifacts[0]["id"] == artifact_id
+    assert artifacts[0]["size_bytes"] == 3
+    assert events[0]["phase"] == "compose"
+    assert events[0]["progress"] == 50.0
+    assert events[0]["detail_json"] == '{"step":"mux"}'
 
 
 def test_delete_render_removes_generated_artifacts_and_rows(monkeypatch, tmp_path: Path) -> None:
@@ -169,28 +177,23 @@ def test_delete_render_removes_generated_artifacts_and_rows(monkeypatch, tmp_pat
         output_path=output_path,
         preset="final",
         started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
     )
     add_render_artifact(
         render_id="r-delete",
-        project_path=project_dir,
-        kind="final_mp4",
+        kind="output",
         path=output_path,
-        playable=True,
-        reusable=True,
     )
     add_render_artifact(
         render_id="r-delete",
-        project_path=project_dir,
-        kind="companion",
+        kind="thumbnail",
         path=source_path,
-        playable=False,
-        reusable=False,
     )
     add_render_event(
         render_id="r-delete",
-        project_path=project_dir,
-        stage="queued",
-        status="done",
+        phase="queued",
     )
 
     deleted = delete_render("r-delete")

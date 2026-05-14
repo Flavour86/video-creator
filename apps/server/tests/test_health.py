@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 import server.runtime_status as runtime_status
+from server.db.app_db import AppDatabaseError
 from server.db.projects import touch_recent
 from server.domain.project import CudaStatus, VersionedRuntimeStatus, WhisperXStatus
 from server.main import app
@@ -146,3 +147,21 @@ async def test_health_returns_cached_project_count(
 
     assert response.status_code == 200
     assert response.json()["cached_projects"] == 1
+
+
+@pytest.mark.asyncio
+async def test_health_hides_raw_app_db_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_db_error() -> int:
+        raise AppDatabaseError("Migration 5 checksum mismatch: database disk image is malformed")
+
+    monkeypatch.setattr(runtime_status, "count_cached_projects", _raise_db_error, raising=False)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "APP_DB_UNAVAILABLE"
+    assert "checksum mismatch" not in body["error"]["message"].lower()
+    assert "malformed" not in body["error"]["message"].lower()
