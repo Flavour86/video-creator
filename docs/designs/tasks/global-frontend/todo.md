@@ -38,13 +38,13 @@
 
 ## Phase 4: Acceptance Gate
 
-- [ ] Task 8: Run the frontend-global acceptance gate
+- [x] Task 8: Run the frontend-global acceptance gate
   - Acceptance: functional shell/storage/shortcut requirements pass; shell visual parity passes; screenshot inventory coverage is enforced.
   - Verify: `rtk pnpm test`, `rtk pnpm lint`, `rtk pnpm build`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/web test:visual -- shell`
-- [ ] Checkpoint: Complete
+- [x] Checkpoint: Complete
   - Acceptance: frontend-global shell contract is covered by unit/component tests and shell visual parity; module-specific parity owners are declared for Launcher, Editor, and Render screenshots.
 
 ## Open Decisions
 
-- [ ] Decide whether full Launcher/Editor/Render parity cases are implemented under this global plan or under their module-specific plans.
-- [ ] Decide whether brand/home should be a semantic link or a router-backed button.
+- [x] Full Launcher/Editor/Render parity cases are owned by their module-specific suites through `visual-manifest.ts`.
+- [x] Brand/home is implemented as a semantic link to `/`.

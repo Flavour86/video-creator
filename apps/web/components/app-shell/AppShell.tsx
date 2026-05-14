@@ -29,7 +29,7 @@ function AppShellChrome({ children }: AppShellChromeProps) {
   return (
     <div className="min-h-screen bg-(--bg-0) pb-(--space-10) text-(--text)">
       <header className="relative h-11 w-full border-b border-(--line) bg-(--bg-1)">
-        <div className="flex h-full items-center justify-between gap-(--space-4) px-(--space-4)">
+        <div className="flex h-full items-center justify-between gap-(--space-4) px-(--space-5)">
           <Link
             aria-label={t("nav.launcher")}
             className="flex shrink-0 items-center gap-(--space-3) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
@@ -38,7 +38,7 @@ function AppShellChrome({ children }: AppShellChromeProps) {
           >
             <span
               aria-hidden="true"
-              className="vc-type-caption flex h-7 w-7 items-center justify-center rounded-(--r-sm) bg-(--text) font-bold text-(--bg-0)"
+              className="vc-type-caption flex h-6 w-6 items-center justify-center rounded-(--r-sm) bg-(--text) font-bold text-(--bg-0)"
             >
               {t("brand.mark")}
             </span>
