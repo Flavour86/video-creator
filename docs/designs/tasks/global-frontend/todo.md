@@ -30,10 +30,10 @@
 - [x] Task 6: Cover shell dark/light visual parity
   - Acceptance: exactly one parity test covers `shell-dark.png`; exactly one covers `shell-light.png`; both pass with SSIM >= 0.98.
   - Verify: `rtk pnpm -F @vc/web test:visual -- shell`
-- [ ] Task 7: Enforce split-spec screenshot coverage inventory
+- [x] Task 7: Enforce split-spec screenshot coverage inventory
   - Acceptance: all split-spec `docs/designs/visuals/*.png` references have exactly one declared parity owner; frontend-global owns shell screenshots only.
   - Verify: `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`, `rtk pnpm -F @vc/web test:visual -- shell`
-- [ ] Checkpoint: Visual Foundation
+- [x] Checkpoint: Visual Foundation
   - Acceptance: shell parity passes and missing module-specific parity ownership is explicit.
 
 ## Phase 4: Acceptance Gate
