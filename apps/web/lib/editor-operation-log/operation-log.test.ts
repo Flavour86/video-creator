@@ -4,7 +4,6 @@ import {
   appendOperation,
   clearOperationLog,
   editorOperationStorageKey,
-  isTextEditingTarget,
   recoverWorkingState,
   redoLast,
   undoLast,
@@ -94,19 +93,5 @@ describe("editor operation log", () => {
     expect(recoverWorkingState("p_demo", BASE_STATE)).toEqual(BASE_STATE);
     clearOperationLog("p_demo");
     expect(window.localStorage.getItem(editorOperationStorageKey("p_demo"))).toBeNull();
-  });
-
-  it("detects typing targets for shortcut guards", () => {
-    const input = document.createElement("input");
-    const textarea = document.createElement("textarea");
-    const select = document.createElement("select");
-    const editable = document.createElement("div");
-    editable.setAttribute("contenteditable", "true");
-
-    expect(isTextEditingTarget(input)).toBe(true);
-    expect(isTextEditingTarget(textarea)).toBe(true);
-    expect(isTextEditingTarget(select)).toBe(true);
-    expect(isTextEditingTarget(editable)).toBe(true);
-    expect(isTextEditingTarget(document.createElement("button"))).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import type { Project } from "@vc/shared-schemas";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+export { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 
 export type EditorWorkingState = {
   layers: Layer[];
@@ -111,13 +112,6 @@ export function applyOperation(state: EditorWorkingState, op: EditorOperation): 
   if (op.type === "subtitle_settings_update") return { ...state, subtitles: op.after };
   if (op.type === "watermark_update") return { ...state, watermark: op.after };
   return { ...state, layers: applyLayerOperation(state.layers, op) };
-}
-
-export function isTextEditingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable || target.getAttribute("contenteditable") === "true") return true;
-  const tagName = target.tagName.toLowerCase();
-  return tagName === "input" || tagName === "textarea" || tagName === "select";
 }
 
 function applyLayerOperation(layers: Layer[], op: Exclude<EditorOperation, { type: "global_config_update" | "subtitle_settings_update" | "watermark_update" }>): Layer[] {

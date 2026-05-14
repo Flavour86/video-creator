@@ -13,7 +13,7 @@
 
 ## Phase 2: Storage And Shortcut Boundaries
 
-- [ ] Task 3: Centralize shortcut-boundary detection
+- [x] Task 3: Centralize shortcut-boundary detection
   - Acceptance: shared helper guards input, textarea, select, contenteditable, and contenteditable descendants; editor and render shortcuts consume it.
   - Verify: `rtk pnpm -F @vc/web test -- lib/shortcuts`, `rtk pnpm -F @vc/web test -- app/editor/page.test.tsx app/render/page.test.tsx lib/render/useRenderHotkeys.test.ts`
 - [ ] Task 4: Lock the browser-storage ownership contract

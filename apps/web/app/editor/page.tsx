@@ -17,9 +17,10 @@ import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
 import { Button } from "@/components/ui";
 import { request } from "@/lib/api/server";
-import { clearOperationLog, isTextEditingTarget, recoverWorkingState, redoLast, undoLast } from "@/lib/editor-operation-log/operation-log";
+import { clearOperationLog, recoverWorkingState, redoLast, undoLast } from "@/lib/editor-operation-log/operation-log";
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 
 function EditorContent() {
   const t = useTranslations("pages.editor");

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 import type { RenderJob } from "./types";
 
 export function useRenderHotkeys({
@@ -16,8 +17,7 @@ export function useRenderHotkeys({
 }) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select")) return;
+      if (isTextEditingTarget(event.target)) return;
       const mod = event.ctrlKey || event.metaKey;
       if (event.key === "Escape") return;
       if (mod && event.key.toLowerCase() === "b") {
