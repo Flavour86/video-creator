@@ -42,6 +42,7 @@ build/
 coverage*/
 playwright-report/
 test-results/
+apps/web/tests/visual/artifacts/
 graphify-out/cache/
 app/web/graphify-out/cache/
 .graphify*
