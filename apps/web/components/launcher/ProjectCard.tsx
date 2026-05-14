@@ -28,7 +28,7 @@ export function ProjectCard({ onClick, onPlayLatest, project }: ProjectCardProps
           <Meta label={t("voice")} value={project.voice_duration || "--"} />
           <Meta label={t("sentences")} value={project.sentence_count} />
           <Meta label={t("media")} value={project.media_count} />
-          <Meta label={t("opened")} value={formatRelativeTime(project.last_opened_at)} />
+          <Meta label={t("opened")} value={formatRelativeTime(project.last_render_at)} />
         </span>
       </span>
       <span className="flex items-center gap-(--space-3)">

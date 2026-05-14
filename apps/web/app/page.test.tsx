@@ -101,7 +101,7 @@ describe("LauncherPage", () => {
         {
           project_id: "p_demo",
           name: "Demo",
-          last_opened_at: "2026-05-07T00:00:00Z",
+          last_render_at: "2026-05-07T00:00:00Z",
           voice_duration: "",
           sentence_count: 0,
           media_count: 3,
@@ -127,7 +127,7 @@ describe("LauncherPage", () => {
         {
           project_id: "p_done",
           name: "Rendered",
-          last_opened_at: "2026-05-07T00:00:00Z",
+          last_render_at: "2026-05-07T00:00:00Z",
           voice_duration: "01:10",
           sentence_count: 12,
           media_count: 3,
