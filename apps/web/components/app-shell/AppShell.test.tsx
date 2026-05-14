@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { useLanguageStore } from "@/lib/i18n/language-store";
-import { useThemeStore } from "@/lib/theme/theme-store";
+import { LANGUAGE_STORAGE_KEY, useLanguageStore } from "@/lib/i18n/language-store";
+import { dictionaries } from "@/lib/i18n/messages";
+import { THEME_STORAGE_KEY, useThemeStore } from "@/lib/theme/theme-store";
 import { AppShell } from "./AppShell";
 
 vi.mock("next/navigation", () => ({
@@ -52,6 +53,58 @@ describe("AppShell", () => {
 
     expect(screen.getByRole("button", { name: "Theme" })).toBeInTheDocument();
     expect(screen.getByRole("radiogroup", { name: "Language" })).toBeInTheDocument();
+  });
+
+  test("persists theme from shell control and re-applies on remount", async () => {
+    const view = render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Theme" }));
+
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
+
+    view.unmount();
+    useThemeStore.setState({ hydrated: false, theme: "dark" });
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(useThemeStore.getState().theme).toBe("light");
+    });
+    expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  test("persists language from shell control and re-renders translated copy on remount", async () => {
+    const view = render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "中文" }));
+
+    expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe("zh");
+    expect(document.documentElement.lang).toBe("zh");
+
+    view.unmount();
+    useLanguageStore.setState({ hydrated: false, language: "en" });
+    render(
+      <AppShell>
+        <main>Page content</main>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: dictionaries.zh.appShell.nav.launcher })).toBeInTheDocument();
+    });
+    expect(document.documentElement.lang).toBe("zh");
   });
 
   test("renders a compact full-width tokenized header surface", () => {

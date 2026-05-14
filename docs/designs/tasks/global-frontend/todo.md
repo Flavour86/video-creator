@@ -5,7 +5,7 @@
 - [x] Task 1: Make the topbar match the frontend-global shell contract
   - Acceptance: brand/title routes to `/`; no visible global nav or phase suffix; theme and language controls appear on the right; bottom bar remains command pill plus version badge.
   - Verify: `rtk pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`
-- [ ] Task 2: Prove theme and language persistence through the shell controls
+- [x] Task 2: Prove theme and language persistence through the shell controls
   - Acceptance: `vc.theme` and `vc.language` persist to browser storage; DOM theme/lang re-apply on reload; `ThemeInitScript` remains before `AppShell`.
   - Verify: `rtk pnpm -F @vc/web test -- lib/theme/theme-store.test.ts lib/i18n/language-store.test.ts components/app-shell/AppShell.test.tsx components/app-shell/ThemeInitScript.test.tsx`
 - [ ] Checkpoint: Shell

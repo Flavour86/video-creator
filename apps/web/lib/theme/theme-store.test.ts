@@ -24,6 +24,15 @@ describe("theme store", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
   });
 
+  test("setting dark clears the theme dataset marker", () => {
+    useThemeStore.getState().setTheme("light");
+    useThemeStore.getState().setTheme("dark");
+
+    expect(useThemeStore.getState().theme).toBe("dark");
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+  });
+
   test("hydrates from localStorage", () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, "light");
 
