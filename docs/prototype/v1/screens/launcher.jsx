@@ -1,6 +1,26 @@
 const LauncherScreen = ({ go }) => {
+  const renderStatusMeta = {
+    rendered: { tone: "ok", label: "rendered" },
+    rendering: { tone: "warn", label: "rendering" },
+    queued: { tone: "info", label: "queued" },
+    failed: { tone: "err", label: "failed" },
+    unrendered: { tone: "warn", label: "unrendered" },
+  };
   const [playingProject, setPlayingProject] = React.useState(null);
+  const [pageSize, setPageSize] = React.useState(4);
+  const [page, setPage] = React.useState(1);
   const openProject = (p) => go("editor");
+  const totalProjects = PROJECTS.length;
+  const totalPages = Math.max(1, Math.ceil(totalProjects / pageSize));
+
+  React.useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  const pageStart = (page - 1) * pageSize;
+  const pageProjects = PROJECTS.slice(pageStart, pageStart + pageSize);
+  const rangeStart = totalProjects === 0 ? 0 : pageStart + 1;
+  const rangeEnd = Math.min(totalProjects, pageStart + pageProjects.length);
 
   return (
     <div className="screen" data-screen-label="01 Launcher">
@@ -16,7 +36,9 @@ const LauncherScreen = ({ go }) => {
         </div>
 
         <div className="project-list">
-          {PROJECTS.map((p, i) => (
+          {pageProjects.map((p, i) => {
+            const status = renderStatusMeta[p.renderStatus] || renderStatusMeta.unrendered;
+            return (
             <div key={i} role="button" tabIndex={0} className="proj-card"
             onClick={() => openProject(p)}
             onKeyDown={(e) => {if (e.key === "Enter" || e.key === " ") openProject(p);}}>
@@ -38,11 +60,49 @@ const LauncherScreen = ({ go }) => {
                 </div>
               </div>
               <div className="proj-state">
-                <span className="tag ok"><span className="dot ok"/>aligned</span>
+                <span className={"tag " + status.tone}><span className={"dot " + status.tone}/>{status.label}</span>
                 <Icon name="chevRight" />
               </div>
             </div>
-          ))}
+            );
+          })}
+        </div>
+
+        <div className="launcher-pagination" aria-label="Project list pagination">
+          <div className="launcher-pagination-left">
+            <label htmlFor="launcher-page-size">Page size</label>
+            <select
+              id="launcher-page-size"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {[5, 10, 20, 40].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </div>
+          <div className="launcher-pagination-right">
+            <button
+              className="btn"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page === 1}
+            >
+              <Icon name="skipBack" />
+              Previous
+            </button>
+            <span className="launcher-page">Page {page} / {totalPages}</span>
+            <button
+              className="btn"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={page === totalPages}
+            >
+              Next
+              <Icon name="skipFwd" />
+            </button>
+          </div>
         </div>
       </div>
 

@@ -1,3 +1,3 @@
 # Repository Guidelines
 
-@instruction.md
+@docs/designs/SPEC.md

@@ -1,3 +1,3 @@
 # CLAUDE.md
 
-@instruction.md
+@docs/designs/SPEC.md
