@@ -29,6 +29,8 @@ describe("AppShell", () => {
     );
 
     expect(screen.getByRole("banner")).toBeInTheDocument();
+    const brandLink = screen.getByRole("link", { name: "Launcher" });
+    expect(brandLink).toHaveAttribute("href", "/");
     expect(screen.getByTestId("brand-cluster")).toHaveTextContent("VCVideo Creator");
     expect(screen.queryByText("phase 1 路 local")).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
@@ -41,15 +43,15 @@ describe("AppShell", () => {
     expect(screen.getByText("Page content")).toBeInTheDocument();
   });
 
-  test("hides persistent theme and language controls from normal product chrome", () => {
+  test("shows accessible theme and language controls in the topbar", () => {
     render(
       <AppShell>
         <main>Page content</main>
       </AppShell>,
     );
 
-    expect(screen.queryByRole("button", { name: "Toggle theme" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup", { name: "Language" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Theme" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Language" })).toBeInTheDocument();
   });
 
   test("renders a compact full-width tokenized header surface", () => {

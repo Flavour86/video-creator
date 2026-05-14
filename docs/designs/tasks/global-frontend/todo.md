@@ -2,7 +2,7 @@
 
 ## Phase 1: Shell Behavior
 
-- [ ] Task 1: Make the topbar match the frontend-global shell contract
+- [x] Task 1: Make the topbar match the frontend-global shell contract
   - Acceptance: brand/title routes to `/`; no visible global nav or phase suffix; theme and language controls appear on the right; bottom bar remains command pill plus version badge.
   - Verify: `rtk pnpm -F @vc/web test -- components/app-shell/AppShell.test.tsx`
 - [ ] Task 2: Prove theme and language persistence through the shell controls
