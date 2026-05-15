@@ -10,11 +10,15 @@ from typing import Any
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
+from schemas import (  # type: ignore[import-not-found]
+    LauncherRenderStatusTag,
+    PaginationMeta,
+)
 
 from server.db.project_configs import latest_config_for_project_path, save_config_snapshot
 from server.db.projects import (
     get_project_by_path,
-    list_projects,
+    list_project_index as list_projects,
     list_recent,
     project_id_for_path,
     project_path_for_id,
@@ -30,6 +34,7 @@ from server.domain.project import (
     ProjectStatus,
     RecentProject,
     RecentProjectCard,
+    RecentProjectsPage,
     ensure_project_layout,
     load_project,
 )
@@ -69,7 +74,7 @@ def _error(status_code: int, code: str, message: str, details: dict[str, str]) -
 
 
 def _project_metadata(project_dir: Path, name: str, last_render_at: str = "") -> RecentProject:
-    project = _load_recent_project(project_dir)
+    project = _load_recent_card_project(project_dir)
     audio_path = _audio_path(project_dir, project)
     transcript_path = _transcript_path(project_dir, project)
     transcript_text = _read_text(transcript_path)
@@ -89,7 +94,7 @@ def _project_metadata(project_dir: Path, name: str, last_render_at: str = "") ->
 
 def _project_card(row: dict[str, object]) -> RecentProjectCard:
     project_dir = Path(str(row["path"]))
-    project = _load_recent_project(project_dir)
+    project = _load_recent_card_project(project_dir)
     audio_path = _audio_path(project_dir, project)
     transcript_path = _transcript_path(project_dir, project)
     transcript_text = _read_text(transcript_path)
@@ -108,8 +113,9 @@ def _project_card(row: dict[str, object]) -> RecentProjectCard:
         current_config_hash=_optional_str(row.get("current_config_hash")),
         last_rendered_config_hash=_optional_str(row.get("last_rendered_config_hash")),
         has_unrendered_changes=bool(row.get("has_unrendered_changes")),
-        latest_render_id=None,
-        latest_render_status=None,
+        latest_render_id=_optional_str(row.get("latest_render_id")),
+        latest_render_status=_render_status_for_contract(row.get("latest_render_status")),
+        render_status_tag=_launcher_render_status(row),
     )
 
 
@@ -119,6 +125,59 @@ def _project_status(project_dir: Path, project: Project | None) -> ProjectStatus
     if project is None:
         return ProjectStatus.corrupt
     return ProjectStatus.ready
+
+
+def _is_valid_recent_row(row: dict[str, object]) -> bool:
+    project_dir = Path(str(row["path"]))
+    if not project_dir.is_dir():
+        return False
+    return _load_recent_card_project(project_dir) is not None
+
+
+def _valid_project_rows() -> list[dict[str, object]]:
+    rows = list_projects()
+    valid_rows: list[dict[str, object]] = []
+    for row in rows:
+        if _is_valid_recent_row(row):
+            valid_rows.append(row)
+        else:
+            remove_recent(Path(str(row["path"])))
+    return valid_rows
+
+
+def _render_status_for_contract(status: object) -> str | None:
+    if status is None:
+        return None
+    value = str(status)
+    mapping = {
+        "queued": "queued",
+        "running": "running",
+        "rendering": "running",
+        "done": "done",
+        "rendered": "done",
+        "error": "error",
+        "failed": "error",
+        "cancelled": "cancelled",
+        "partial": "partial",
+    }
+    return mapping.get(value)
+
+
+def _launcher_render_status(row: dict[str, object]) -> LauncherRenderStatusTag | None:
+    status = row.get("latest_render_status")
+    if status is None:
+        return LauncherRenderStatusTag.unrendered
+    mapping = {
+        "queued": LauncherRenderStatusTag.queued,
+        "running": LauncherRenderStatusTag.rendering,
+        "rendering": LauncherRenderStatusTag.rendering,
+        "done": LauncherRenderStatusTag.rendered,
+        "rendered": LauncherRenderStatusTag.rendered,
+        "error": LauncherRenderStatusTag.failed,
+        "failed": LauncherRenderStatusTag.failed,
+        "cancelled": LauncherRenderStatusTag.cancelled,
+    }
+    return mapping.get(str(status), LauncherRenderStatusTag.failed)
 
 
 def _optional_str(value: object) -> str | None:
@@ -150,6 +209,19 @@ def _load_recent_project(project_dir: Path) -> Project | None:
         return load_project(project_dir)
     except (OSError, json.JSONDecodeError, ValidationError):
         return None
+
+
+def _load_recent_card_project(project_dir: Path) -> Project | None:
+    try:
+        config = latest_config_for_project_path(project_dir)
+    except (OSError, json.JSONDecodeError, ValidationError, ValueError):
+        return None
+    if config is not None:
+        try:
+            return Project.model_validate(config)
+        except ValidationError:
+            return None
+    return _load_recent_project(project_dir)
 
 
 def _audio_path(project_dir: Path, project: Project | None) -> Path:
@@ -353,9 +425,25 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
     )
 
 
-@router.get("", response_model=list[RecentProjectCard])
-async def projects(limit: int = Query(default=20, ge=1, le=500)) -> list[RecentProjectCard]:
-    return [_project_card(row) for row in list_projects(limit=limit)]
+@router.get("", response_model=RecentProjectsPage)
+async def projects(
+    page_size: int = Query(default=20, ge=1, le=100),
+    page_index: int = Query(default=0, ge=0),
+) -> RecentProjectsPage:
+    rows = _valid_project_rows()
+    total_count = len(rows)
+    start = page_index * page_size
+    page_rows = rows[start:start + page_size]
+    total_pages = (total_count + page_size - 1) // page_size if total_count else 0
+    return RecentProjectsPage(
+        items=[_project_card(row) for row in page_rows],
+        pagination=PaginationMeta(
+            page_size=page_size,
+            page_index=page_index,
+            total_count=total_count,
+            total_pages=total_pages,
+        ),
+    )
 
 
 @router.post("/new", response_model=ProjectResponse)

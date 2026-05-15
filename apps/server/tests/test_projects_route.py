@@ -53,8 +53,12 @@ async def test_create_project(tmp_path) -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/projects", json={"path": str(target), "name": "Test"})
+        list_response = await client.get("/projects")
     assert response.status_code == 200
-    assert response.json()["project_id"].startswith("p_")
+    project_id = response.json()["project_id"]
+    assert project_id.startswith("p_")
+    assert list_response.status_code == 200
+    assert [item["project_id"] for item in list_response.json()["items"]] == [project_id]
     assert (target / "media").is_dir()
     assert (target / "renders").is_dir()
     assert (target / ".vc").is_dir()
@@ -157,7 +161,9 @@ async def test_projects_list_returns_project_id_cards_without_paths(
         response = await client.get("/projects")
 
     assert response.status_code == 200
-    project = response.json()[0]
+    payload = response.json()
+    assert payload["pagination"]["total_count"] == 1
+    project = payload["items"][0]
     assert project["project_id"].startswith("p_")
     assert "path" not in project
     assert project["name"] == "Rich Metadata"
@@ -185,9 +191,98 @@ async def test_projects_list_represents_missing_and_corrupt_projects(
         response = await client.get("/projects")
 
     assert response.status_code == 200
-    by_name = {project["name"]: project for project in response.json()}
-    assert by_name["Missing"]["status"] == "missing"
-    assert by_name["Corrupt"]["status"] == "corrupt"
+    assert response.json()["items"] == []
+    with connection() as conn:
+        count_row = conn.execute("SELECT COUNT(*) AS c FROM projects").fetchone()
+    assert count_row is not None
+    assert int(count_row["c"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_projects_list_paginates_and_sorts_by_last_render_time(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    for name in ("alpha", "bravo", "charlie"):
+        project_dir = tmp_path / name
+        _write_project(project_dir, f"{name} sentence.")
+        touch_recent(project_dir, name.title())
+
+    with connection() as conn:
+        conn.execute(
+            "UPDATE projects SET last_render_at = ? WHERE project_name = ?",
+            ("2026-05-07T12:00:00+00:00", "Alpha"),
+        )
+        conn.execute(
+            "UPDATE projects SET last_render_at = ? WHERE project_name = ?",
+            ("2026-05-08T12:00:00+00:00", "Bravo"),
+        )
+        conn.execute(
+            "UPDATE projects SET last_render_at = ? WHERE project_name = ?",
+            ("2026-05-06T12:00:00+00:00", "Charlie"),
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        first = await client.get("/projects", params={"page_size": 2, "page_index": 0})
+        second = await client.get("/projects", params={"page_size": 2, "page_index": 1})
+
+    assert first.status_code == 200
+    assert first.json()["pagination"] == {
+        "page_size": 2,
+        "page_index": 0,
+        "total_count": 3,
+        "total_pages": 2,
+    }
+    assert [project["name"] for project in first.json()["items"]] == ["Bravo", "Alpha"]
+    assert [project["name"] for project in second.json()["items"]] == ["Charlie"]
+
+
+@pytest.mark.asyncio
+async def test_projects_list_maps_render_status_tag(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "rendered"
+    _write_project(project_dir, "First sentence.")
+    touch_recent(project_dir, "Rendered")
+    project_id = ""
+    with connection() as conn:
+        row = conn.execute("SELECT project_id FROM projects WHERE project_path = ?", (str(project_dir.resolve()),)).fetchone()
+        assert row is not None
+        project_id = str(row["project_id"])
+        conn.execute(
+            """
+            INSERT INTO render_history (
+                id, project_id, output_path, preset, resolution, width, height, status, started_at, finished_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "r_done",
+                project_id,
+                str(project_dir / "renders" / "final.mp4"),
+                "final",
+                "1920x1080",
+                1920,
+                1080,
+                "rendered",
+                "2026-05-08T12:00:00+00:00",
+                "2026-05-08T12:01:00+00:00",
+            ),
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects")
+
+    assert response.status_code == 200
+    project = response.json()["items"][0]
+    assert project["latest_render_id"] == "r_done"
+    assert project["latest_render_status"] == "done"
+    assert project["render_status_tag"] == "rendered"
 
 
 @pytest.mark.asyncio
@@ -202,7 +297,7 @@ async def test_project_id_config_inspect_and_delete_routes(
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        projects = (await client.get("/projects")).json()
+        projects = (await client.get("/projects")).json()["items"]
         project_id = projects[0]["project_id"]
 
         config_response = await client.get(f"/projects/{project_id}/config")
@@ -348,7 +443,7 @@ async def test_put_project_config_uses_single_canonical_row_and_stable_hash(
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        project_id = (await client.get("/projects")).json()[0]["project_id"]
+        project_id = (await client.get("/projects")).json()["items"][0]["project_id"]
         base = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
         first = await client.put(f"/projects/{project_id}/config", json={"config": base})
         reordered = {
@@ -385,7 +480,7 @@ async def test_put_project_config_updates_hash_and_dirty_state(
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        project_id = (await client.get("/projects")).json()[0]["project_id"]
+        project_id = (await client.get("/projects")).json()["items"][0]["project_id"]
         base = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
         initial = await client.put(f"/projects/{project_id}/config", json={"config": base})
         first_hash = initial.json()["config_hash"]
@@ -425,7 +520,7 @@ async def test_put_project_config_rejects_schema_invalid_without_partial_write(
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        project_id = (await client.get("/projects")).json()[0]["project_id"]
+        project_id = (await client.get("/projects")).json()["items"][0]["project_id"]
         base = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
         ok = await client.put(f"/projects/{project_id}/config", json={"config": base})
         before_hash = ok.json()["config_hash"]

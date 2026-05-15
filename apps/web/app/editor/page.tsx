@@ -1,7 +1,7 @@
 "use client";
 
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { Project, ProjectConfigLoadResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
@@ -22,11 +22,25 @@ import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignm
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 
+function projectIdFromPathname(pathname: string): string {
+  const prefix = "/editor/";
+  if (!pathname.startsWith(prefix)) {
+    return "";
+  }
+  const segment = pathname.slice(prefix.length).split("/")[0] ?? "";
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
 function EditorContent() {
   const t = useTranslations("pages.editor");
   const router = useRouter();
   const params = useSearchParams();
-  const requestedProjectId = params.get("projectId") ?? "";
+  const pathname = usePathname();
+  const requestedProjectId = params.get("projectId") || projectIdFromPathname(pathname);
   const projectId = isValidProjectId(requestedProjectId) ? requestedProjectId : "";
   const { state: alignmentState } = useProjectAlignment(projectId);
   const [project, setProject] = useState<Project | null>(null);

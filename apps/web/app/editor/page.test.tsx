@@ -6,14 +6,17 @@ import messages from "@/lib/i18n/messages/en.json";
 
 // Mutable so individual tests can override the "projectId" param value
 let _projectIdParam: string | null = null;
+let _pathname = "/editor";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => ({ get: (k: string) => (k === "projectId" ? _projectIdParam : null) }),
+  usePathname: () => _pathname,
 }));
 
 beforeEach(() => {
   _projectIdParam = null;
+  _pathname = "/editor";
   global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
   Element.prototype.scrollIntoView = vi.fn();
 });
@@ -48,6 +51,12 @@ it("shows project id in toolbar when project id param is present", () => {
   expect(screen.getByText("projectId: p_demo")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
+});
+
+it("reads project id from the dynamic editor path", () => {
+  _pathname = "/editor/p_path_demo";
+  renderEditor();
+  expect(screen.getByText("projectId: p_path_demo")).toBeInTheDocument();
 });
 
 const TEST_PROJECT_ID = "p_test01";

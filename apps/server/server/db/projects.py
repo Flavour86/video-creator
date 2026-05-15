@@ -54,7 +54,7 @@ def list_recent(limit: int = 20) -> list[dict[str, str]]:
     return [dict(row) for row in rows]
 
 
-def list_projects(limit: int = 20) -> list[dict[str, object]]:
+def list_projects(limit: int = 20, offset: int = 0) -> list[dict[str, object]]:
     with connection() as conn:
         rows = conn.execute(
             """
@@ -73,12 +73,71 @@ def list_projects(limit: int = 20) -> list[dict[str, object]]:
                 media_count,
                 palette_seed,
                 project_mtime,
-                last_error
+                last_error,
+                (
+                    SELECT rh.id
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_id,
+                (
+                    SELECT rh.status
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_status
             FROM projects
-            ORDER BY last_render_at DESC
-            LIMIT ?
+            ORDER BY last_render_at DESC, created_at DESC, project_id ASC
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
+            (limit, offset),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_project_index() -> list[dict[str, object]]:
+    with connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                project_id,
+                project_path AS path,
+                project_name AS name,
+                thumbnail_path,
+                current_config_hash,
+                last_rendered_config_hash,
+                has_unrendered_changes,
+                created_at,
+                last_render_at,
+                voice_duration_s,
+                sentence_count,
+                media_count,
+                palette_seed,
+                project_mtime,
+                last_error,
+                (
+                    SELECT rh.id
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_id,
+                (
+                    SELECT rh.status
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_status
+            FROM projects
+            ORDER BY last_render_at DESC, created_at DESC, project_id ASC
+            """
         ).fetchall()
     return [dict(row) for row in rows]
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RecentProjectCard, RuntimeHealthResponse } from "@vc/shared-schemas";
+import type { RecentProjectCard, RecentProjectsPage, RuntimeHealthResponse } from "@vc/shared-schemas";
 import { dictionaries } from "@/lib/i18n/messages";
 import LauncherPage from "./page";
 
@@ -32,30 +32,40 @@ function renderLauncher() {
   );
 }
 
+function projectsPage(items: RecentProjectCard[], pageIndex = 0, pageSize = 6): RecentProjectsPage {
+  return {
+    items,
+    pagination: {
+      page_index: pageIndex,
+      page_size: pageSize,
+      total_count: items.length,
+      total_pages: items.length > pageSize ? Math.ceil(items.length / pageSize) : items.length === 0 ? 0 : 1,
+    },
+  };
+}
+
 function mockServer({
-  createOk = true,
-  createPayload = { project_id: "p_new_cut", path: "E:\\video-projects\\new-cut", name: "new-cut" },
   recent,
   recentOk = true,
+  pages,
 }: {
-  createOk?: boolean;
-  createPayload?: unknown;
   recent: RecentProjectCard[];
   recentOk?: boolean;
+  pages?: Record<string, RecentProjectsPage>;
 }) {
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.endsWith("/projects")) {
+    if (url.includes("/projects?page_size=") && (!init || init.method === undefined)) {
+      const pageIndex = new URL(url, "http://test").searchParams.get("page_index") ?? "0";
       return {
         ok: recentOk,
-        json: async () => recent,
+        json: async () => pages?.[pageIndex] ?? projectsPage(recent, Number(pageIndex)),
       } as Response;
     }
-    if (url.endsWith("/projects/new-folder") && init?.method === "POST") {
+    if (url.includes("/projects/") && init?.method === "DELETE") {
       return {
-        ok: createOk,
-        status: createOk ? 200 : 409,
-        json: async () => createPayload,
+        ok: true,
+        json: async () => ({ ok: true }),
       } as Response;
     }
     if (url.endsWith("/play") && init?.method === "POST") {
@@ -81,7 +91,7 @@ describe("LauncherPage", () => {
     renderLauncher();
     expect(screen.getByRole("heading", { name: "Recent projects" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /New project/ }).className).toContain("bg-(--blue)");
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith("/api/server/projects"));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith("/api/server/projects?page_size=6&page_index=0"));
     expect(screen.queryByText("Tokyo Essay")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create another project" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open folder…" })).not.toBeInTheDocument();
@@ -158,6 +168,7 @@ describe("LauncherPage", () => {
           has_unrendered_changes: false,
           latest_render_id: "r_latest",
           latest_render_status: "done",
+          render_status_tag: "rendered",
         },
       ],
     });
@@ -171,46 +182,105 @@ describe("LauncherPage", () => {
     );
   });
 
-  it("opens the folder boundary instead of routing straight to setup", async () => {
+  it("routes new projects directly to setup", async () => {
     renderLauncher();
     fireEvent.click(screen.getByRole("button", { name: /New project/ }));
-    expect(push).not.toHaveBeenCalled();
-    expect(screen.getByRole("form", { name: "Choose a local folder" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.getByText("Folder selection cancelled.")).toBeInTheDocument();
+    expect(push).toHaveBeenCalledWith("/setup");
   });
 
-  it("creates the selected folder before entering setup", async () => {
-    renderLauncher();
-    fireEvent.click(screen.getByRole("button", { name: /New project/ }));
-    fireEvent.change(screen.getByLabelText("Folder path"), { target: { value: "E:\\video-projects\\new-cut" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
-
-    await waitFor(() =>
-      expect(push).toHaveBeenCalledWith("/setup?projectId=p_new_cut&path=E%3A%5Cvideo-projects%5Cnew-cut"),
-    );
-    expect(global.fetch).toHaveBeenCalledWith(
-      "/api/server/projects/new-folder",
-      expect.objectContaining({
-        body: JSON.stringify({ path: "E:\\video-projects\\new-cut", name: "new-cut" }),
-        method: "POST",
-      }),
-    );
-  });
-
-  it("keeps non-empty folder errors on the launcher", async () => {
+  it("opens project cards in the editor route", async () => {
     mockServer({
-      createOk: false,
-      createPayload: { error: { code: "NOT_EMPTY", message: "Project directory already exists.", details: {} } },
-      recent: [],
+      recent: [
+        {
+          project_id: "p_editor",
+          name: "Editor Ready",
+          last_render_at: "2026-05-07T00:00:00Z",
+          voice_duration: "00:45",
+          sentence_count: 4,
+          media_count: 1,
+          alignment_state: "pending",
+          status: "ready",
+          has_unrendered_changes: false,
+          render_status_tag: "unrendered",
+        },
+      ],
     });
     renderLauncher();
-    fireEvent.click(screen.getByRole("button", { name: /New project/ }));
-    fireEvent.change(screen.getByLabelText("Folder path"), { target: { value: "E:\\video-projects\\used" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Editor Ready" }));
+    expect(push).toHaveBeenCalledWith("/editor/p_editor");
+  });
 
-    await waitFor(() => expect(screen.getByText("Folder is not empty.")).toBeInTheDocument());
-    expect(push).not.toHaveBeenCalled();
+  it("deletes a project card and reloads the current page", async () => {
+    mockServer({
+      recent: [
+        {
+          project_id: "p_delete",
+          name: "Delete Me",
+          last_render_at: "2026-05-07T00:00:00Z",
+          voice_duration: "00:45",
+          sentence_count: 4,
+          media_count: 1,
+          alignment_state: "pending",
+          status: "ready",
+          has_unrendered_changes: false,
+          render_status_tag: "unrendered",
+        },
+      ],
+    });
+    renderLauncher();
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Delete Me" }));
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/server/projects/p_delete",
+        expect.objectContaining({ method: "DELETE" }),
+      ),
+    );
+  });
+
+  it("switches recent project pages", async () => {
+    mockServer({
+      recent: [],
+      pages: {
+        "0": {
+          items: [
+            {
+              project_id: "p_page_one",
+              name: "Page One",
+              last_render_at: "2026-05-07T00:00:00Z",
+              voice_duration: "00:45",
+              sentence_count: 4,
+              media_count: 1,
+              alignment_state: "aligned",
+              status: "ready",
+              has_unrendered_changes: false,
+              render_status_tag: "rendered",
+            },
+          ],
+          pagination: { page_index: 0, page_size: 1, total_count: 2, total_pages: 2 },
+        },
+        "1": {
+          items: [
+            {
+              project_id: "p_page_two",
+              name: "Page Two",
+              last_render_at: "2026-05-06T00:00:00Z",
+              voice_duration: "00:30",
+              sentence_count: 3,
+              media_count: 2,
+              alignment_state: "pending",
+              status: "ready",
+              has_unrendered_changes: true,
+              render_status_tag: "unrendered",
+            },
+          ],
+          pagination: { page_index: 1, page_size: 1, total_count: 2, total_pages: 2 },
+        },
+      },
+    });
+    renderLauncher();
+    expect(await screen.findByText("Page One")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Page Two")).toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
   });
 });

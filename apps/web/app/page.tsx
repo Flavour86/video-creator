@@ -3,52 +3,50 @@
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
-import type { RecentProjectCard } from "@vc/shared-schemas";
+import { useCallback, useEffect, useState } from "react";
+import type { PaginationMeta, RecentProjectCard, RecentProjectsPage } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { ProjectCard } from "@/components/launcher/ProjectCard";
-import { Button, Field, TextInput } from "@/components/ui";
-import { request, ServerRequestError } from "@/lib/api/server";
+import { Button } from "@/components/ui";
+import { request } from "@/lib/api/server";
 
-type FolderPickerState = "idle" | "selecting" | "creating" | "cancelled" | "error";
-
-type ProjectCreateResponse = {
-  project_id: string;
-  path: string;
-  name: string;
+const PAGE_SIZE = 6;
+const emptyPagination: PaginationMeta = {
+  page_index: 0,
+  page_size: PAGE_SIZE,
+  total_count: 0,
+  total_pages: 0,
 };
 
 export default function LauncherPage() {
   const t = useTranslations("pages.launcher");
   const router = useRouter();
   const [projects, setProjects] = useState<RecentProjectCard[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
+  const [pageIndex, setPageIndex] = useState(0);
   const [recentError, setRecentError] = useState(false);
-  const [pickerState, setPickerState] = useState<FolderPickerState>("idle");
-  const [folderPath, setFolderPath] = useState("");
-  const [folderError, setFolderError] = useState("");
-  const projectName = useMemo(() => nameFromPath(folderPath), [folderPath]);
+
+  const loadRecent = useCallback(async (nextPageIndex = pageIndex) => {
+    try {
+      const response = await request<RecentProjectsPage>(
+        `/projects?page_size=${PAGE_SIZE}&page_index=${nextPageIndex}` as `/${string}`,
+      );
+      setProjects(response.items);
+      setPagination(response.pagination);
+      setRecentError(false);
+    } catch {
+      setProjects([]);
+      setPagination({ ...emptyPagination, page_index: nextPageIndex });
+      setRecentError(true);
+    }
+  }, [pageIndex]);
 
   useEffect(() => {
-    async function loadRecent() {
-      try {
-        const recent = await request<RecentProjectCard[]>("/projects");
-        setProjects(recent);
-        setRecentError(false);
-      } catch {
-        setProjects([]);
-        setRecentError(true);
-      }
-    }
-
-    void loadRecent();
-  }, []);
+    void loadRecent(pageIndex);
+  }, [loadRecent, pageIndex]);
 
   function openProject(project: RecentProjectCard) {
-    if (project.alignment_state === "aligned" && project.status === "ready") {
-      router.push(`/editor?projectId=${encodeURIComponent(project.project_id)}`);
-      return;
-    }
-    router.push(`/setup?projectId=${encodeURIComponent(project.project_id)}`);
+    router.push(`/editor/${encodeURIComponent(project.project_id)}`);
   }
 
   async function playLatestRender(project: RecentProjectCard) {
@@ -60,39 +58,14 @@ export default function LauncherPage() {
     });
   }
 
-  function startFolderSelection() {
-    setPickerState("selecting");
-    setFolderError("");
-  }
-
-  function cancelFolderSelection() {
-    setPickerState("cancelled");
-    setFolderError("Folder selection cancelled.");
-  }
-
-  async function createSelectedFolder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const selectedPath = folderPath.trim();
-    if (!selectedPath) {
-      setPickerState("error");
-      setFolderError("Choose a folder before continuing.");
-      return;
-    }
-
-    setPickerState("creating");
-    setFolderError("");
+  async function deleteProject(project: RecentProjectCard) {
     try {
-      const created = await request<ProjectCreateResponse>("/projects/new-folder", {
-        method: "POST",
-        body: { path: selectedPath, name: projectName || "Untitled Project" },
-      });
-      if (!created.project_id) {
-        throw new Error("Missing project id");
-      }
-      router.push(`/setup?projectId=${encodeURIComponent(created.project_id)}&path=${encodeURIComponent(created.path)}`);
-    } catch (error) {
-      setPickerState("error");
-      setFolderError(folderPickerError(error));
+      await request(`/projects/${encodeURIComponent(project.project_id)}` as `/${string}`, { method: "DELETE" });
+      const nextPageIndex = projects.length === 1 && pageIndex > 0 ? pageIndex - 1 : pageIndex;
+      setPageIndex(nextPageIndex);
+      await loadRecent(nextPageIndex);
+    } catch {
+      setRecentError(true);
     }
   }
 
@@ -104,46 +77,13 @@ export default function LauncherPage() {
           <h1 className="vc-type-display">{t("title")}</h1>
         </div>
         <div className="flex gap-(--space-3)">
-          <Button onClick={startFolderSelection} variant="primary">
+          <Button onClick={() => router.push("/setup")} variant="primary">
             <Plus aria-hidden="true" className="h-(--space-4) w-(--space-4)" />
             {t("newProject")}
           </Button>
         </div>
       </header>
       <section className="space-y-2.5">
-        {pickerState !== "idle" ? (
-          <form
-            aria-label="Choose a local folder"
-            className="space-y-(--space-4) rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-6)"
-            onSubmit={(event) => void createSelectedFolder(event)}
-          >
-            <Field label="Folder path">
-              <TextInput
-                aria-label="Folder path"
-                autoFocus
-                onChange={(event) => setFolderPath(event.target.value)}
-                placeholder="E:\\video-projects\\new-project"
-                value={folderPath}
-              />
-            </Field>
-            {folderError ? (
-              <div
-                className="rounded-(--r-sm) border border-(--amber-line) bg-(--amber-bg) px-(--space-4) py-(--space-3) text-xs text-(--text-2)"
-                role="status"
-              >
-                {folderError}
-              </div>
-            ) : null}
-            <div className="flex justify-end gap-(--space-3)">
-              <Button onClick={cancelFolderSelection} variant="ghost">
-                Cancel
-              </Button>
-              <Button disabled={pickerState === "creating"} type="submit" variant="primary">
-                {pickerState === "creating" ? "Creating" : "Create project"}
-              </Button>
-            </div>
-          </form>
-        ) : null}
         {recentError ? (
           <div className="rounded-(--r) border border-(--amber-line) bg-(--amber-bg) px-(--space-5) py-(--space-4) text-xs text-(--text-2)">
             {t("recentUnavailable")}
@@ -158,43 +98,38 @@ export default function LauncherPage() {
           <ProjectCard
             key={project.project_id}
             onClick={() => openProject(project)}
+            onDelete={() => void deleteProject(project)}
             onPlayLatest={() => void playLatestRender(project)}
             project={project}
           />
         ))}
+        {pagination.total_pages > 1 ? (
+          <nav
+            aria-label="Recent projects pagination"
+            className="flex items-center justify-end gap-(--space-3) pt-(--space-4)"
+          >
+            <Button
+              disabled={pageIndex <= 0}
+              onClick={() => setPageIndex((value) => Math.max(0, value - 1))}
+              size="small"
+              variant="ghost"
+            >
+              Previous
+            </Button>
+            <span className="text-xs font-medium text-(--text-3)">
+              Page {pagination.page_index + 1} of {pagination.total_pages}
+            </span>
+            <Button
+              disabled={pagination.page_index + 1 >= pagination.total_pages}
+              onClick={() => setPageIndex((value) => value + 1)}
+              size="small"
+              variant="ghost"
+            >
+              Next
+            </Button>
+          </nav>
+        ) : null}
       </section>
     </PageChrome>
   );
-}
-
-function nameFromPath(path: string): string {
-  return path.trim().split(/[\\/]/).filter(Boolean).pop() ?? "";
-}
-
-function folderPickerError(error: unknown): string {
-  if (!(error instanceof ServerRequestError)) {
-    return "Folder could not be selected.";
-  }
-  const code = errorCode(error.payload);
-  if (code === "NOT_EMPTY") {
-    return "Folder is not empty.";
-  }
-  if (code === "INVALID_PATH") {
-    return "Folder path is invalid.";
-  }
-  if (code === "PERMISSION_DENIED") {
-    return "Folder permission denied.";
-  }
-  return "Folder could not be selected.";
-}
-
-function errorCode(payload: unknown): string {
-  if (!payload || typeof payload !== "object" || !("error" in payload)) {
-    return "";
-  }
-  const error = payload.error;
-  if (!error || typeof error !== "object" || !("code" in error)) {
-    return "";
-  }
-  return typeof error.code === "string" ? error.code : "";
 }
