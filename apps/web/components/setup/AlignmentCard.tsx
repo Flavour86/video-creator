@@ -7,15 +7,16 @@ import { formatDuration, truncateHash } from "@/lib/format";
 
 type AlignmentCardProps = {
   alignment: SetupAlignment;
+  canRun?: boolean;
   onRun: () => void;
   transcript: DetectedTranscript | null;
   voice: DetectedVoice | null;
 };
 
-export function AlignmentCard({ alignment, onRun, transcript, voice }: AlignmentCardProps) {
+export function AlignmentCard({ alignment, canRun: canRunOverride, onRun, transcript, voice }: AlignmentCardProps) {
   const t = useTranslations("pages.setup.alignment");
   const checks = useTranslations("pages.setup.checks");
-  const canRun = Boolean(voice && transcript && alignment.status !== "running");
+  const canRun = canRunOverride ?? Boolean(voice && transcript && alignment.status !== "running");
   const running = alignment.status === "running";
   const ActionIcon = running ? Loader2 : Play;
   const voiceFile = fileName(voice?.path) ?? t("voiceFile");

@@ -4,30 +4,49 @@ import type { SetupDraft } from "@vc/shared-schemas";
 
 type StepperProps = {
   draft: SetupDraft;
-  onFolderClick?: () => void;
-  onInputsClick?: () => void;
+  onAlignmentClick?: () => void;
+  onProjectClick?: () => void;
+  onSubtitleClick?: () => void;
+  onVoiceClick?: () => void;
 };
 
-export function Stepper({ draft, onFolderClick, onInputsClick }: StepperProps) {
+export function Stepper({ draft, onAlignmentClick, onProjectClick, onSubtitleClick, onVoiceClick }: StepperProps) {
   const t = useTranslations("pages.setup.steps");
-  const folderDone = Boolean(draft.path);
-  const inputsDone = Boolean(draft.voice && draft.transcript);
+  const projectDone = Boolean(draft.name.trim());
+  const voiceDone = draft.voice?.state === "copied";
+  const subtitleDone = draft.subtitle_generation.status === "succeeded";
   const alignmentDone = draft.alignment.status === "aligned";
 
   return (
     <ol className="sticky top-0 m-0 flex list-none flex-col gap-(--space-1) p-0">
-      <StepButton done={folderDone} index={1} onClick={onFolderClick} state={folderDone ? "done" : "active"} sub={draft.path} title={t("folder")} />
       <StepButton
-        done={inputsDone}
+        done={projectDone}
+        index={1}
+        onClick={onProjectClick}
+        state={projectDone ? "done" : "active"}
+        sub={projectDone ? draft.name : t("projectNameSub")}
+        title={t("projectName")}
+      />
+      <StepButton
+        done={voiceDone}
         index={2}
-        onClick={onInputsClick}
-        state={inputsDone ? "done" : "active"}
-        sub={t("voiceTranscriptSub")}
-        title={t("voiceTranscript")}
+        onClick={onVoiceClick}
+        state={voiceDone ? "done" : "active"}
+        sub={t("voiceSub")}
+        title={t("voice")}
+      />
+      <StepButton
+        done={subtitleDone}
+        index={3}
+        onClick={onSubtitleClick}
+        state={subtitleDone ? "done" : "active"}
+        sub={t("subtitleSub")}
+        title={t("subtitle")}
       />
       <StepButton
         done={alignmentDone}
-        index={3}
+        index={4}
+        onClick={onAlignmentClick}
         state={alignmentDone ? "done" : "active"}
         sub={t("alignmentSub")}
         title={t("alignment")}

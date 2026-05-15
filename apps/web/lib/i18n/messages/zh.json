@@ -169,13 +169,16 @@
     "setup": {
       "eyebrow": "????",
       "title": "???????",
-      "continueToEditor": "?? ? ???",
+      "createProject": "Create project",
       "steps": {
-        "folder": "???",
-        "voiceTranscript": "?? + ??",
-        "voiceTranscriptSub": "??????",
+        "projectName": "Project Name",
+        "projectNameSub": "required",
+        "voice": "Voice",
+        "voiceSub": "voice file selected",
+        "subtitle": "Subtitle",
+        "subtitleSub": "subtitles.srt generated",
         "alignment": "??",
-        "alignmentSub": "WhisperX ????"
+        "alignmentSub": "subtitle alignment"
       },
       "fields": {
         "projectName": "????",
@@ -185,6 +188,11 @@
         "final": "??? ? 1080p ? CRF 18",
         "draft": "?? ? 720p ? ultrafast",
         "vertical": "?? ? 9:16 ? 1080w"
+      },
+      "presetShort": {
+        "draft": "720p",
+        "final": "1080p",
+        "vertical": "9:16"
       },
       "path": {
         "willBeCreated": "project.json ? media/ ? renders/ ? .vc/ ??????"
@@ -231,6 +239,20 @@
         "introDynamic": "WhisperX timestamps the provided transcript against <mono></mono>. The text is the reference; ASR never runs.",
         "hashDynamic": "sha256({voice} + {transcript}) = {hash}",
         "voiceFile": "voice file"
+      },
+      "subtitle": {
+        "title": "Subtitle Generate",
+        "filename": "subtitles.srt",
+        "pending": "Waiting for project name and voice",
+        "summary": "{count} cues ? {duration}",
+        "generate": "Generate subtitle",
+        "running": "Generating subtitle...",
+        "state": {
+          "ready": "ready",
+          "running": "running",
+          "succeeded": "succeeded",
+          "failed": "failed"
+        }
       },
       "checks": {
         "transcriptReadable": "???? ? {count} ?",

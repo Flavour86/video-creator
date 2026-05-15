@@ -45,6 +45,10 @@ const emptySubtitleGeneration: SetupSubtitleGenerationResult = {
   error_message: null,
 };
 
+type SetupInspectResponse = DetectedInputs & {
+  subtitle_generation?: SetupSubtitleGenerationResult;
+};
+
 export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetupDraftState {
   const [path, setPathState] = useState(initialPath);
   const [projectId, setProjectId] = useState(initialProjectId);
@@ -56,23 +60,32 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
     name: nameFromPath(initialPath),
   });
   const [alignmentStatus, setAlignmentStatus] = useState<SetupAlignmentState>("pending");
+  const [subtitleGeneration, setSubtitleGeneration] = useState<SetupSubtitleGenerationResult>(emptySubtitleGeneration);
 
   const inspect = useCallback(async () => {
     if (!path) {
       setDetected({ ...emptyDetectedInputs, path: "", name: "" });
       setAlignmentStatus("pending");
+      setSubtitleGeneration(emptySubtitleGeneration);
       return;
     }
     try {
       const result = projectId
-        ? await request<DetectedInputs>(`/projects/${encodeURIComponent(projectId)}/inspect` as `/${string}`, { method: "POST" })
-        : await request<DetectedInputs>(`/setup/inspect?path=${encodeURIComponent(path)}` as `/${string}`);
+        ? await request<SetupInspectResponse>(
+            `/projects/${encodeURIComponent(projectId)}/inspect` as `/${string}`,
+            { method: "POST" },
+          )
+        : await request<SetupInspectResponse>(
+            `/setup/inspect?path=${encodeURIComponent(path)}` as `/${string}`,
+          );
       setDetected(result);
       setName(result.name);
       setAlignmentStatus(result.alignment.status);
+      setSubtitleGeneration(result.subtitle_generation ?? emptySubtitleGeneration);
     } catch {
       setDetected({ ...emptyDetectedInputs, path, name: name || nameFromPath(path) });
       setAlignmentStatus("pending");
+      setSubtitleGeneration(emptySubtitleGeneration);
     }
   }, [name, path, projectId]);
 
@@ -88,17 +101,17 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
       output_preset: outputPreset,
       voice: detected.voice,
       transcript: detected.transcript,
-      subtitle_generation: emptySubtitleGeneration,
+      subtitle_generation: subtitleGeneration,
       alignment: {
         ...detected.alignment,
         status: alignmentStatus,
       },
     }),
-    [alignmentStatus, detected, name, outputPreset, path, projectId],
+    [alignmentStatus, detected, name, outputPreset, path, projectId, subtitleGeneration],
   );
 
   const runAlignment = useCallback(async () => {
-    if (!detected.voice || !detected.transcript) {
+    if (!detected.voice || !detected.transcript || subtitleGeneration.status !== "succeeded") {
       return;
     }
     setAlignmentStatus("running");
@@ -112,10 +125,18 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
     } catch {
       setAlignmentStatus("failed");
     }
-  }, [detected.transcript, detected.voice, draft.path, draft.project_id, inspect]);
+  }, [detected.transcript, detected.voice, draft.path, draft.project_id, inspect, subtitleGeneration.status]);
+
+  const canContinue = Boolean(
+    name.trim()
+      && projectId
+      && detected.voice?.state === "copied"
+      && subtitleGeneration.status === "succeeded"
+      && alignmentStatus === "aligned",
+  );
 
   return {
-    canContinue: alignmentStatus === "aligned" && Boolean(projectId),
+    canContinue,
     draft,
     inspect,
     runAlignment,
@@ -125,6 +146,7 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
       setPathState(nextPath);
       setProjectId("");
       setName(nameFromPath(nextPath));
+      setSubtitleGeneration(emptySubtitleGeneration);
     },
   };
 }

@@ -1,16 +1,23 @@
 "use client";
 
-import { Image as ImageIcon } from "lucide-react";
+import { FileText, Image as ImageIcon, Loader2, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef } from "react";
-import type { SetupOutputPreset } from "@vc/shared-schemas";
+import type { SetupOutputPreset, SetupSubtitleGenerationResult } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AlignmentCard } from "@/components/setup/AlignmentCard";
 import { PathCard } from "@/components/setup/PathCard";
 import { StatusTile, type StatusTileState } from "@/components/setup/StatusTile";
 import { Stepper } from "@/components/setup/Stepper";
-import { Button, Field, Select, TextInput } from "@/components/ui";
+import {
+  Button,
+  Field,
+  SegmentedControl,
+  StatusTag,
+  type StatusTagVariant,
+  TextInput,
+} from "@/components/ui";
 import { formatDuration } from "@/lib/format";
 import { useSetupDraft } from "@/lib/setup/useSetupDraft";
 
@@ -29,9 +36,27 @@ function SetupScreen() {
   const common = useTranslations("globalControls.buttons");
   const router = useRouter();
   const searchParams = useSearchParams();
-  const inputsRef = useRef<HTMLDivElement>(null);
+  const projectRef = useRef<HTMLDivElement>(null);
+  const voiceRef = useRef<HTMLDivElement>(null);
+  const subtitleRef = useRef<HTMLDivElement>(null);
+  const alignmentRef = useRef<HTMLDivElement>(null);
   const setup = useSetupDraft(searchParams.get("path") ?? "", searchParams.get("projectId") ?? "");
   const { draft } = setup;
+  const steps = {
+    projectName: Boolean(draft.name.trim()),
+    voice: draft.voice?.state === "copied",
+    subtitle: draft.subtitle_generation.status === "succeeded",
+    alignment: draft.alignment.status === "aligned",
+  };
+  const canRunAlignment = steps.projectName && steps.voice && steps.subtitle && draft.alignment.status !== "running";
+  const canCreateProject = setup.canContinue && Boolean(draft.project_id);
+
+  function createProject() {
+    if (!canCreateProject || !draft.project_id) {
+      return;
+    }
+    router.push(`/editor/${encodeURIComponent(draft.project_id)}`);
+  }
 
   return (
     <PageChrome className="mx-auto grid max-w-[1500px] grid-cols-[220px_minmax(0,1fr)_320px] gap-[18px] p-(--space-9)">
@@ -45,20 +70,22 @@ function SetupScreen() {
             {common("cancel")}
           </Button>
           <Button
-            disabled={!setup.canContinue}
-            onClick={() => router.push(`/editor?projectId=${encodeURIComponent(draft.project_id ?? "")}`)}
+            disabled={!canCreateProject}
+            onClick={createProject}
             variant="primary"
           >
-            {t("continueToEditor")}
+            {t("createProject")}
           </Button>
         </div>
       </header>
       <Stepper
         draft={draft}
-        onFolderClick={() => window.scrollTo({ behavior: "smooth", top: 0 })}
-        onInputsClick={() => inputsRef.current?.scrollIntoView({ behavior: "smooth" })}
+        onAlignmentClick={() => alignmentRef.current?.scrollIntoView({ behavior: "smooth" })}
+        onProjectClick={() => projectRef.current?.scrollIntoView({ behavior: "smooth" })}
+        onSubtitleClick={() => subtitleRef.current?.scrollIntoView({ behavior: "smooth" })}
+        onVoiceClick={() => voiceRef.current?.scrollIntoView({ behavior: "smooth" })}
       />
-      <section className="rounded-(--r) border border-(--line) bg-(--bg-2) p-[18px]">
+      <section className="rounded-(--r) border border-(--line) bg-(--bg-2) p-[18px]" ref={projectRef}>
         <div className="grid grid-cols-[1fr_200px] gap-(--space-6)">
           <Field label={t("fields.projectName")}>
             <TextInput
@@ -69,28 +96,29 @@ function SetupScreen() {
             />
           </Field>
           <Field label={t("fields.outputPreset")}>
-            <Select
-              aria-label={t("fields.outputPreset")}
-              className="h-[33px] rounded-(--r-sm) bg-(--bg-1) text-[12.5px]"
-              onChange={(event) => {
-                if (isSetupOutputPreset(event.target.value)) {
-                  setup.setOutputPreset(event.target.value);
+            <SegmentedControl
+              ariaLabel={t("fields.outputPreset")}
+              className="w-full"
+              items={outputPresets.map((preset) => ({
+                label: t(`presetShort.${preset}`),
+                value: preset,
+              }))}
+              onValueChange={(value) => {
+                if (isSetupOutputPreset(value)) {
+                  setup.setOutputPreset(value);
                 }
               }}
+              tone="accent"
               value={draft.output_preset}
-            >
-              {outputPresets.map((preset) => (
-                <option key={preset} value={preset}>
-                  {t(`presets.${preset}`)}
-                </option>
-              ))}
-            </Select>
+            />
           </Field>
         </div>
-        <div className="mt-[18px]">
-          <PathCard onChange={() => router.push("/")} path={draft.path} />
-        </div>
-        <div className="mt-[18px] border-t border-(--line-soft) pt-[18px]" ref={inputsRef}>
+        {draft.path ? (
+          <div className="mt-[18px]">
+            <PathCard onChange={() => router.push("/")} path={draft.path} />
+          </div>
+        ) : null}
+        <div className="mt-[18px] border-t border-(--line-soft) pt-[18px]" ref={voiceRef}>
           <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-normal text-(--text-2)">
             {t("inputs.title")}
           </h3>
@@ -109,7 +137,11 @@ function SetupScreen() {
             <StatusTile
               filename={fileName(draft.transcript?.path)}
               kind="transcript"
-              meta={draft.transcript ? t("inputs.transcriptDetected", { count: draft.transcript.sentence_count }) : undefined}
+              meta={
+                draft.transcript
+                  ? t("inputs.transcriptDetected", { count: draft.transcript.sentence_count })
+                  : undefined
+              }
               state={transcriptTileState(draft.transcript?.state)}
             />
             <div className="flex flex-col items-center gap-(--space-3) rounded-(--r-sm) border border-dashed border-(--bg-5) bg-(--bg-1) px-(--space-6) py-(--space-8) text-center text-(--text-3)">
@@ -123,12 +155,23 @@ function SetupScreen() {
           </div>
         </div>
       </section>
-      <AlignmentCard
-        alignment={draft.alignment}
-        onRun={() => void setup.runAlignment()}
-        transcript={draft.transcript}
-        voice={draft.voice}
-      />
+      <div className="flex flex-col gap-[18px]">
+        <div ref={subtitleRef}>
+          <SubtitleGenerateCard
+            canGenerate={steps.projectName && steps.voice}
+            generation={draft.subtitle_generation}
+          />
+        </div>
+        <div ref={alignmentRef}>
+          <AlignmentCard
+            alignment={draft.alignment}
+            canRun={canRunAlignment}
+            onRun={() => void setup.runAlignment()}
+            transcript={draft.transcript}
+            voice={draft.voice}
+          />
+        </div>
+      </div>
     </PageChrome>
   );
 }
@@ -163,4 +206,55 @@ function channelLabel(channels: number): string {
 
 function fileName(path: string | undefined): string | undefined {
   return path?.split(/[\\/]/).pop();
+}
+
+function SubtitleGenerateCard({
+  canGenerate,
+  generation,
+}: {
+  canGenerate: boolean;
+  generation: SetupSubtitleGenerationResult;
+}) {
+  const t = useTranslations("pages.setup.subtitle");
+  const running = generation.status === "running";
+  const ActionIcon = running ? Loader2 : Play;
+
+  return (
+    <aside className="rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-7)">
+      <div className="mb-(--space-5) flex items-center justify-between gap-(--space-4)">
+        <h3 className="vc-type-eyebrow text-(--text-2)">{t("title")}</h3>
+        <StatusTag variant={subtitleVariant(generation.status)}>{t(`state.${generation.status}`)}</StatusTag>
+      </div>
+      <div className="rounded-(--r-sm) border border-(--line) bg-(--bg-1) p-(--space-5)">
+        <div className="mb-(--space-4) flex items-center gap-(--space-3)">
+          <FileText aria-hidden="true" className="h-(--space-6) w-(--space-6) text-(--blue)" />
+          <div>
+            <strong className="block text-sm font-semibold text-(--text)">{t("filename")}</strong>
+            <span className="text-[11px] text-(--text-3)">
+              {generation.status === "succeeded"
+                ? t("summary", {
+                    count: generation.cue_count,
+                    duration: formatDuration(generation.total_duration_s),
+                  })
+                : t("pending")}
+            </span>
+          </div>
+        </div>
+        <Button className="w-full" disabled={!canGenerate || running} onClick={() => undefined} variant="render">
+          <ActionIcon aria-hidden="true" className={`h-(--space-4) w-(--space-4) ${running ? "animate-spin" : ""}`} />
+          {running ? t("running") : t("generate")}
+        </Button>
+      </div>
+    </aside>
+  );
+}
+
+function subtitleVariant(status: SetupSubtitleGenerationResult["status"]): StatusTagVariant {
+  if (status === "succeeded") {
+    return "ready";
+  }
+  if (status === "running") {
+    return "info";
+  }
+  return status === "failed" ? "error" : "warning";
 }

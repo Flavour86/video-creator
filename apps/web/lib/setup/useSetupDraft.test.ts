@@ -19,6 +19,13 @@ describe("useSetupDraft", () => {
           audio_duration: 0,
           cache_hit: false,
         },
+        subtitle_generation: {
+          status: "ready",
+          cue_count: 0,
+          total_duration_s: 0,
+          cache_state: "unknown",
+          error_message: null,
+        },
       }),
     });
   });
@@ -29,14 +36,21 @@ describe("useSetupDraft", () => {
     expect(result.current.canContinue).toBe(false);
   });
 
-  test("sets canContinue true for aligned inspection results", async () => {
+  test("sets canContinue true only when all four setup checks pass", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         path: "E:\\video-projects\\tokyo-essay",
         name: "Tokyo Essay",
-        voice: null,
+        voice: { path: "voice.wav", duration: 12, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
         transcript: null,
+        subtitle_generation: {
+          status: "succeeded",
+          cue_count: 3,
+          total_duration_s: 12,
+          cache_state: "miss",
+          error_message: null,
+        },
         alignment: {
           status: "aligned",
           hash: "abc",
@@ -49,6 +63,36 @@ describe("useSetupDraft", () => {
     });
     const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\tokyo-essay", "p_tokyo"));
     await waitFor(() => expect(result.current.canContinue).toBe(true));
+  });
+
+  test("keeps canContinue false without a canonical project id", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        path: "E:\\video-projects\\tokyo-essay",
+        name: "Tokyo Essay",
+        voice: { path: "voice.wav", duration: 12, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
+        transcript: null,
+        subtitle_generation: {
+          status: "succeeded",
+          cue_count: 3,
+          total_duration_s: 12,
+          cache_state: "miss",
+          error_message: null,
+        },
+        alignment: {
+          status: "aligned",
+          hash: "abc",
+          device: "cuda 路 fp16",
+          model: "large-v3",
+          audio_duration: 942,
+          cache_hit: true,
+        },
+      }),
+    });
+    const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\tokyo-essay"));
+    await waitFor(() => expect(result.current.draft.alignment.status).toBe("aligned"));
+    expect(result.current.canContinue).toBe(false);
   });
 
   test("does not inspect a fallback project when no folder is selected", async () => {
@@ -87,6 +131,13 @@ describe("useSetupDraft", () => {
               model: "large-v3",
               audio_duration: 12,
               cache_hit: true,
+            },
+            subtitle_generation: {
+              status: "succeeded",
+              cue_count: 2,
+              total_duration_s: 12,
+              cache_state: "miss",
+              error_message: null,
             },
           }),
         } as Response;
