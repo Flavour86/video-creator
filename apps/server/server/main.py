@@ -11,6 +11,7 @@ from server.routes.media import router as media_router
 from server.routes.projects import router as projects_router
 from server.routes.render import router as render_router
 from server.routes.setup import router as setup_router
+from server.routes.setup import subtitle_router
 from server.routes.uploads import router as uploads_router
 from server.routes.ws import router as ws_router
 from server.runtime_status import RuntimeHealthResponse, collect_runtime_health
@@ -34,6 +35,7 @@ app.include_router(media_router)
 app.include_router(alignment_router)
 app.include_router(render_router)
 app.include_router(setup_router)
+app.include_router(subtitle_router)
 app.include_router(uploads_router)
 app.include_router(ws_router)
 

@@ -21,6 +21,12 @@ class _Cue:
     words: list[AlignedWord]
 
 
+@dataclass(frozen=True)
+class SubtitleStats:
+    cue_count: int
+    total_duration_s: float
+
+
 def generate_srt(alignment: AlignmentResult) -> str:
     cues = _build_cues(alignment)
     blocks = [
@@ -40,9 +46,22 @@ def generate_srt(alignment: AlignmentResult) -> str:
 
 
 def write_srt(project_dir: Path, alignment: AlignmentResult) -> Path:
-    srt_path = project_dir / "subtitles.srt"
+    return write_srt_file(project_dir / "subtitles.srt", alignment)
+
+
+def write_srt_file(srt_path: Path, alignment: AlignmentResult) -> Path:
     srt_path.write_text(generate_srt(alignment), encoding="utf-8", newline="")
     return srt_path
+
+
+def subtitle_stats(alignment: AlignmentResult) -> SubtitleStats:
+    cues = _build_cues(alignment)
+    total_duration_s = sum(
+        max(0.0, cue.words[-1].end_s - cue.words[0].start_s)
+        for cue in cues
+        if cue.words
+    )
+    return SubtitleStats(cue_count=len(cues), total_duration_s=round(total_duration_s, 3))
 
 
 def _build_cues(alignment: AlignmentResult) -> list[_Cue]:

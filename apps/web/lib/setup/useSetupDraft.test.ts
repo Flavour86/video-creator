@@ -163,4 +163,136 @@ describe("useSetupDraft", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/setup/scaffold"))).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("force=true"))).toBe(false);
   });
+
+  test("runs subtitle generation and marks Subtitle checked only after success", async () => {
+    let resolveSubtitle: (value: Response) => void = () => undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/projects/p_tokyo/inspect")) {
+        return {
+          ok: true,
+          json: async () => ({
+            path: "E:\\video-projects\\tokyo-essay",
+            name: "Tokyo Essay",
+            voice: { path: "voice.wav", duration: 12, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
+            transcript: { path: "transcript.txt", sentence_count: 2, state: "parsed" },
+            subtitle_generation: {
+              status: "ready",
+              cue_count: 0,
+              total_duration_s: 0,
+              cache_state: "unknown",
+              error_message: null,
+            },
+            alignment: {
+              status: "aligned",
+              hash: "abc",
+              device: "cuda 路 fp16",
+              model: "large-v3",
+              audio_duration: 12,
+              cache_hit: true,
+            },
+          }),
+        } as Response;
+      }
+      if (url.endsWith("/subtitle") && init?.method === "POST") {
+        return await new Promise<Response>((resolve) => {
+          resolveSubtitle = resolve;
+        });
+      }
+      return { ok: false, json: async () => ({}) } as Response;
+    });
+    global.fetch = fetchMock;
+
+    const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\tokyo-essay", "p_tokyo"));
+    await waitFor(() => expect(result.current.draft.voice).not.toBeNull());
+
+    let runPromise: Promise<void> = Promise.resolve();
+    act(() => {
+      runPromise = result.current.runSubtitle();
+    });
+
+    expect(result.current.draft.subtitle_generation.status).toBe("running");
+    expect(result.current.draft.alignment.status).toBe("pending");
+    resolveSubtitle({
+      ok: true,
+      json: async () => ({
+        status: "succeeded",
+        cue_count: 2,
+        total_duration_s: 12,
+        cache_state: "miss",
+        error_message: null,
+      }),
+    } as Response);
+    await act(async () => {
+      await runPromise;
+    });
+
+    expect(result.current.draft.subtitle_generation.status).toBe("succeeded");
+    expect(result.current.draft.subtitle_generation.cue_count).toBe(2);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/server/subtitle",
+      expect.objectContaining({
+        body: JSON.stringify({ project_id: "p_tokyo" }),
+        method: "POST",
+      }),
+    );
+  });
+
+  test("keeps Subtitle unchecked when generation fails", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/projects/p_tokyo/inspect")) {
+        return {
+          ok: true,
+          json: async () => ({
+            path: "E:\\video-projects\\tokyo-essay",
+            name: "Tokyo Essay",
+            voice: { path: "voice.wav", duration: 12, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
+            transcript: { path: "transcript.txt", sentence_count: 2, state: "parsed" },
+            subtitle_generation: {
+              status: "ready",
+              cue_count: 0,
+              total_duration_s: 0,
+              cache_state: "unknown",
+              error_message: null,
+            },
+            alignment: {
+              status: "pending",
+              hash: "abc",
+              device: "cuda 路 fp16",
+              model: "large-v3",
+              audio_duration: 12,
+              cache_hit: false,
+            },
+          }),
+        } as Response;
+      }
+      if (url.endsWith("/subtitle") && init?.method === "POST") {
+        return { ok: false, json: async () => ({ error: { code: "FAILED" } }) } as Response;
+      }
+      return { ok: false, json: async () => ({}) } as Response;
+    });
+    global.fetch = fetchMock;
+
+    const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\tokyo-essay", "p_tokyo"));
+    await waitFor(() => expect(result.current.draft.voice).not.toBeNull());
+    await act(async () => {
+      await result.current.runSubtitle();
+    });
+
+    expect(result.current.draft.subtitle_generation.status).toBe("failed");
+    expect(result.current.canContinue).toBe(false);
+  });
+
+  test("does not call subtitle API without a copied voice", async () => {
+    const { result } = renderHook(() => useSetupDraft("E:\\video-projects\\tokyo-essay", "p_tokyo"));
+    await waitFor(() => expect(result.current.draft.voice).toBeNull());
+    await act(async () => {
+      await result.current.runSubtitle();
+    });
+
+    expect(
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([url]) => String(url).includes("/subtitle")),
+    ).toBe(false);
+  });
 });

@@ -7,7 +7,9 @@ import httpx
 import pytest
 
 from server.db.app_db import connection
+from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
 from server.main import app
+from server.pipeline import transcribe
 from server.settings import settings
 
 
@@ -19,6 +21,24 @@ def _write_wav(path: Path) -> None:
         wav.setsampwidth(2)
         wav.setframerate(sample_rate)
         wav.writeframes(struct.pack(f"<{sample_count * 2}h", *([0] * sample_count * 2)))
+
+
+def _subtitle_alignment() -> AlignmentResult:
+    return AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text="Hello world.",
+                start_s=0.0,
+                end_s=1.0,
+                confidence_avg=0.95,
+            )
+        ],
+        words=[
+            AlignedWord(sentence_index=1, text="Hello", start_s=0.0, end_s=0.5, confidence=0.9),
+            AlignedWord(sentence_index=1, text="world.", start_s=0.5, end_s=1.0, confidence=0.9),
+        ],
+    )
 
 
 @pytest.mark.asyncio
@@ -199,6 +219,166 @@ async def test_setup_draft_stages_artifacts_without_creating_final_project(tmp_p
         row = conn.execute("SELECT COUNT(*) AS c FROM projects").fetchone()
     assert row is not None
     assert int(row["c"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_subtitle_generate_stages_srt_and_uses_voice_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "source-files"
+    source_dir.mkdir()
+    voice_source = source_dir / "voice.wav"
+    _write_wav(voice_source)
+    final_project_dir = tmp_path / "projects" / "future-project"
+    final_project_dir.parent.mkdir()
+    calls = 0
+
+    async def fake_transcribe_audio(*args, **kwargs) -> AlignmentResult:
+        nonlocal calls
+        calls += 1
+        return _subtitle_alignment()
+
+    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe_audio)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post(
+            "/setup/drafts",
+            json={
+                "path": str(final_project_dir),
+                "name": "Future Project",
+                "output_preset": "draft",
+            },
+        )
+        assert create_response.status_code == 200
+        setup_id = create_response.json()["setup_id"]
+
+        first = await client.post(
+            "/subtitle",
+            json={"setup_id": setup_id, "voice_path": str(voice_source)},
+        )
+        second = await client.post("/subtitle", json={"setup_id": setup_id})
+        draft_response = await client.get(f"/setup/drafts/{setup_id}")
+
+    assert first.status_code == 200
+    assert first.json() == {
+        "status": "succeeded",
+        "cue_count": 1,
+        "total_duration_s": 1.0,
+        "cache_state": "miss",
+        "error_message": None,
+    }
+    assert second.status_code == 200
+    assert second.json()["cache_state"] == "hit"
+    assert calls == 1
+    draft_payload = draft_response.json()
+    staged_subtitles = Path(draft_payload["artifacts"]["subtitles_path"])
+    assert staged_subtitles.is_file()
+    assert staged_subtitles.read_bytes() == (
+        b"1\r\n00:00:00,000 --> 00:00:01,000\r\nHello world.\r\n"
+    )
+    assert draft_payload["draft"]["subtitle_generation"]["status"] == "succeeded"
+    assert final_project_dir.exists() is False
+
+
+@pytest.mark.asyncio
+async def test_subtitle_generate_returns_staged_file_error_for_missing_voice(
+    tmp_path: Path,
+) -> None:
+    final_project_dir = tmp_path / "projects" / "future-project"
+    final_project_dir.parent.mkdir()
+    missing_voice = tmp_path / "source-files" / "missing.wav"
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post(
+            "/setup/drafts",
+            json={"path": str(final_project_dir), "name": "Future Project"},
+        )
+        assert create_response.status_code == 200
+        setup_id = create_response.json()["setup_id"]
+
+        response = await client.post(
+            "/subtitle",
+            json={"setup_id": setup_id, "voice_path": str(missing_voice)},
+        )
+        draft_response = await client.get(f"/setup/drafts/{setup_id}")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_STAGED_FILE"
+    assert draft_response.json()["draft"]["subtitle_generation"]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_subtitle_generate_regenerates_when_cache_metadata_is_corrupt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "source-files"
+    source_dir.mkdir()
+    voice_source = source_dir / "voice.wav"
+    _write_wav(voice_source)
+    final_project_dir = tmp_path / "projects" / "future-project"
+    final_project_dir.parent.mkdir()
+    calls = 0
+
+    async def fake_transcribe_audio(*args, **kwargs) -> AlignmentResult:
+        nonlocal calls
+        calls += 1
+        return _subtitle_alignment()
+
+    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe_audio)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post(
+            "/setup/drafts",
+            json={"path": str(final_project_dir), "name": "Future Project"},
+        )
+        assert create_response.status_code == 200
+        setup_id = create_response.json()["setup_id"]
+
+        first = await client.post(
+            "/subtitle",
+            json={"setup_id": setup_id, "voice_path": str(voice_source)},
+        )
+        draft_response = await client.get(f"/setup/drafts/{setup_id}")
+        staged_subtitles = Path(draft_response.json()["artifacts"]["subtitles_path"])
+        metadata_path = staged_subtitles.parent.parent / "subtitle.json"
+        metadata_path.write_text("{", encoding="utf-8")
+
+        second = await client.post("/subtitle", json={"setup_id": setup_id})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["cache_state"] == "miss"
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_subtitle_generate_rejects_unsupported_voice_codec(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source-files"
+    source_dir.mkdir()
+    voice_source = source_dir / "voice.ogg"
+    voice_source.write_bytes(b"ogg")
+    final_project_dir = tmp_path / "projects" / "future-project"
+    final_project_dir.parent.mkdir()
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post(
+            "/setup/drafts",
+            json={"path": str(final_project_dir), "name": "Future Project"},
+        )
+        assert create_response.status_code == 200
+        response = await client.post(
+            "/subtitle",
+            json={"setup_id": create_response.json()["setup_id"], "voice_path": str(voice_source)},
+        )
+
+    assert response.status_code == 415
+    assert response.json()["error"]["code"] == "UNSUPPORTED_VOICE_CODEC"
 
 
 @pytest.mark.asyncio

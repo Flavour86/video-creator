@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import secrets
 import shutil
 import subprocess
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -23,14 +25,18 @@ from schemas import (  # type: ignore[import-not-found]
     SetupSubtitleGenerationState,
 )
 
-from server.db.projects import touch_recent
+from server.db.projects import project_path_for_id, touch_recent
 from server.domain.project import DetectedInputs, Project, ensure_project_layout
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
+from server.pipeline.srt import subtitle_stats, write_srt_file
 from server.settings import settings
 
 router = APIRouter(prefix="/setup", tags=["setup"])
+subtitle_router = APIRouter(tags=["subtitle"])
+
+SUPPORTED_SUBTITLE_VOICE_SUFFIXES = {".mp3", ".wav", ".m4a"}
 
 
 class ScaffoldRequest(BaseModel):
@@ -57,6 +63,13 @@ class SetupDraftUpdateRequest(BaseModel):
     subtitle_generation: SetupSubtitleGenerationResult | None = None
     alignment: SetupAlignment | None = None
     alignment_result: dict[str, Any] | None = None
+
+
+class SubtitleGenerateRequest(BaseModel):
+    setup_id: str | None = None
+    project_id: str | None = None
+    path: str | None = None
+    voice_path: str | None = None
 
 
 class SetupDraftArtifacts(BaseModel):
@@ -114,6 +127,15 @@ class _SetupDraftRecord(BaseModel):
         default_factory=_default_setup_subtitle_generation
     )
     alignment: SetupAlignment = Field(default_factory=_default_setup_alignment)
+
+
+@dataclass(frozen=True)
+class _SubtitleTarget:
+    voice_path: Path
+    subtitles_path: Path
+    hash_path: Path
+    metadata_path: Path
+    setup_record: _SetupDraftRecord | None = None
 
 
 def _error(status_code: int, code: str, message: str, details: dict[str, str]) -> JSONResponse:
@@ -448,6 +470,254 @@ async def delete_setup_draft(setup_id: str) -> dict[str, bool] | JSONResponse:
         )
     shutil.rmtree(draft_dir)
     return {"ok": True}
+
+
+@subtitle_router.post("/subtitle", response_model=SetupSubtitleGenerationResult)
+async def generate_subtitle(
+    payload: SubtitleGenerateRequest,
+) -> SetupSubtitleGenerationResult | JSONResponse:
+    target_or_error = _resolve_subtitle_target(payload)
+    if isinstance(target_or_error, JSONResponse):
+        return target_or_error
+
+    target = target_or_error
+    voice_error = _validate_subtitle_voice(target.voice_path)
+    if voice_error is not None:
+        _save_failed_subtitle_generation(target, "Unsupported or missing voice file.")
+        return voice_error
+
+    running = SetupSubtitleGenerationResult(
+        status=SetupSubtitleGenerationState.running,
+        cue_count=0,
+        total_duration_s=0.0,
+        cache_state=SetupSubtitleCacheState.unknown,
+        error_message=None,
+    )
+    _save_subtitle_generation(target, running)
+    try:
+        from server.pipeline import transcribe
+
+        voice_hash = _file_sha256(target.voice_path)
+        cached = _cached_subtitle_generation(target, voice_hash)
+        if cached is not None:
+            return cached
+
+        alignment = await transcribe.transcribe_audio(target.voice_path)
+        target.subtitles_path.parent.mkdir(parents=True, exist_ok=True)
+        write_srt_file(target.subtitles_path, alignment)
+        stats = subtitle_stats(alignment)
+        result = SetupSubtitleGenerationResult(
+            status=SetupSubtitleGenerationState.succeeded,
+            cue_count=stats.cue_count,
+            total_duration_s=stats.total_duration_s,
+            cache_state=SetupSubtitleCacheState.miss,
+            error_message=None,
+        )
+        target.hash_path.parent.mkdir(parents=True, exist_ok=True)
+        target.hash_path.write_text(voice_hash, encoding="utf-8")
+        _write_subtitle_metadata(target.metadata_path, result)
+        _save_subtitle_generation(target, result)
+        return result
+    except Exception as exc:
+        failed = _save_failed_subtitle_generation(target, str(exc))
+        return _error(
+            500,
+            "SUBTITLE_GENERATION_FAILED",
+            "Subtitle generation failed.",
+            {"error": failed.error_message or "unknown"},
+        )
+
+
+def _resolve_subtitle_target(payload: SubtitleGenerateRequest) -> _SubtitleTarget | JSONResponse:
+    if payload.setup_id:
+        record = _load_setup_draft_record(payload.setup_id)
+        if record is None:
+            return _error(
+                404,
+                "SETUP_DRAFT_NOT_FOUND",
+                "Setup draft was not found.",
+                {"setup_id": payload.setup_id},
+            )
+        if payload.voice_path is not None:
+            artifacts_dir = _setup_artifacts_dir(record.setup_id)
+            suffix = Path(payload.voice_path).suffix.lower() or ".wav"
+            try:
+                _apply_staged_path(
+                    record,
+                    source_value=payload.voice_path,
+                    source_attr="voice_source_path",
+                    staged_attr="voice_staged_path",
+                    destination=artifacts_dir / f"voice{suffix}",
+                )
+            except ValueError as exc:
+                record.subtitle_generation = SetupSubtitleGenerationResult(
+                    status=SetupSubtitleGenerationState.failed,
+                    cue_count=0,
+                    total_duration_s=0.0,
+                    cache_state=SetupSubtitleCacheState.unknown,
+                    error_message=str(exc),
+                )
+                record.alignment = _default_setup_alignment()
+                _save_setup_draft_record(record)
+                return _error(
+                    400,
+                    "INVALID_STAGED_FILE",
+                    "Could not stage voice file.",
+                    {"path": payload.voice_path, "error": str(exc)},
+                )
+            record.subtitle_generation = _default_setup_subtitle_generation()
+            record.alignment = _default_setup_alignment()
+        if record.voice_staged_path is None:
+            return _error(
+                400,
+                "VOICE_NOT_SELECTED",
+                "Select a voice file before generating subtitles.",
+                {"setup_id": record.setup_id},
+            )
+        artifacts_dir = _setup_artifacts_dir(record.setup_id)
+        record.subtitles_staged_path = str(artifacts_dir / "subtitles.srt")
+        return _SubtitleTarget(
+            voice_path=Path(record.voice_staged_path),
+            subtitles_path=Path(record.subtitles_staged_path),
+            hash_path=_setup_draft_dir(record.setup_id) / "subtitle.hash",
+            metadata_path=_setup_draft_dir(record.setup_id) / "subtitle.json",
+            setup_record=record,
+        )
+
+    if payload.project_id:
+        project_dir = project_path_for_id(payload.project_id)
+        if project_dir is None:
+            return _error(
+                404,
+                "PROJECT_NOT_FOUND",
+                "Project not found.",
+                {"project_id": payload.project_id},
+            )
+    elif payload.path:
+        project_dir = Path(payload.path)
+    else:
+        return _error(
+            400,
+            "SUBTITLE_TARGET_REQUIRED",
+            "Provide setup_id, project_id, or path.",
+            {},
+        )
+
+    voice_path = Path(payload.voice_path) if payload.voice_path else _find_voice_file(project_dir)
+    if voice_path is None:
+        return _error(
+            400,
+            "VOICE_NOT_SELECTED",
+            "Select a voice file before generating subtitles.",
+            {"path": str(project_dir)},
+        )
+    vc_dir = project_dir / ".vc"
+    return _SubtitleTarget(
+        voice_path=voice_path,
+        subtitles_path=project_dir / "subtitles.srt",
+        hash_path=vc_dir / "subtitle.hash",
+        metadata_path=vc_dir / "subtitle.json",
+    )
+
+
+def _validate_subtitle_voice(voice_path: Path) -> JSONResponse | None:
+    if voice_path.suffix.lower() not in SUPPORTED_SUBTITLE_VOICE_SUFFIXES:
+        return _error(
+            415,
+            "UNSUPPORTED_VOICE_CODEC",
+            "Subtitle generation accepts .mp3, .wav, or .m4a voice files.",
+            {"path": str(voice_path)},
+        )
+    voice = _detect_voice(voice_path)
+    if voice is None:
+        return _error(
+            404,
+            "VOICE_NOT_FOUND",
+            "Voice file not found.",
+            {"path": str(voice_path)},
+        )
+    if voice.state.value != "copied":
+        return _error(
+            422,
+            "VOICE_NOT_READY",
+            "Voice file is not ready for subtitle generation.",
+            {"path": str(voice_path), "state": voice.state.value},
+        )
+    return None
+
+
+def _cached_subtitle_generation(
+    target: _SubtitleTarget,
+    voice_hash: str,
+) -> SetupSubtitleGenerationResult | None:
+    try:
+        if (
+            not target.hash_path.is_file()
+            or not target.metadata_path.is_file()
+            or not target.subtitles_path.is_file()
+            or target.hash_path.read_text(encoding="utf-8").strip() != voice_hash
+        ):
+            return None
+        cached = SetupSubtitleGenerationResult.model_validate_json(
+            target.metadata_path.read_text(encoding="utf-8")
+        )
+    except Exception:
+        _invalidate_subtitle_cache(target)
+        return None
+    result = cached.model_copy(update={"cache_state": SetupSubtitleCacheState.hit})
+    _save_subtitle_generation(target, result)
+    return result
+
+
+def _invalidate_subtitle_cache(target: _SubtitleTarget) -> None:
+    for path in (target.hash_path, target.metadata_path):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _save_failed_subtitle_generation(
+    target: _SubtitleTarget,
+    message: str,
+) -> SetupSubtitleGenerationResult:
+    failed = SetupSubtitleGenerationResult(
+        status=SetupSubtitleGenerationState.failed,
+        cue_count=0,
+        total_duration_s=0.0,
+        cache_state=SetupSubtitleCacheState.unknown,
+        error_message=message,
+    )
+    _save_subtitle_generation(target, failed)
+    return failed
+
+
+def _save_subtitle_generation(
+    target: _SubtitleTarget,
+    generation: SetupSubtitleGenerationResult,
+) -> None:
+    if target.setup_record is None:
+        return
+    target.setup_record.subtitle_generation = generation
+    if generation.status != SetupSubtitleGenerationState.succeeded:
+        target.setup_record.alignment = _default_setup_alignment()
+    _save_setup_draft_record(target.setup_record)
+
+
+def _write_subtitle_metadata(
+    metadata_path: Path,
+    result: SetupSubtitleGenerationResult,
+) -> None:
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(result.model_dump_json(), encoding="utf-8")
+
+
+def _file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 @router.post("/scaffold", response_model=DetectedInputs)

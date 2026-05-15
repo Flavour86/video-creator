@@ -160,6 +160,7 @@ function SetupScreen() {
           <SubtitleGenerateCard
             canGenerate={steps.projectName && steps.voice}
             generation={draft.subtitle_generation}
+            onGenerate={() => void setup.runSubtitle()}
           />
         </div>
         <div ref={alignmentRef}>
@@ -211,9 +212,11 @@ function fileName(path: string | undefined): string | undefined {
 function SubtitleGenerateCard({
   canGenerate,
   generation,
+  onGenerate,
 }: {
   canGenerate: boolean;
   generation: SetupSubtitleGenerationResult;
+  onGenerate: () => void;
 }) {
   const t = useTranslations("pages.setup.subtitle");
   const running = generation.status === "running";
@@ -236,11 +239,13 @@ function SubtitleGenerateCard({
                     count: generation.cue_count,
                     duration: formatDuration(generation.total_duration_s),
                   })
+                : generation.status === "failed" && generation.error_message
+                  ? generation.error_message
                 : t("pending")}
             </span>
           </div>
         </div>
-        <Button className="w-full" disabled={!canGenerate || running} onClick={() => undefined} variant="render">
+        <Button className="w-full" disabled={!canGenerate || running} onClick={onGenerate} variant="render">
           <ActionIcon aria-hidden="true" className={`h-(--space-4) w-(--space-4) ${running ? "animate-spin" : ""}`} />
           {running ? t("running") : t("generate")}
         </Button>

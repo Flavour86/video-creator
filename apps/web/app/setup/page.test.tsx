@@ -129,3 +129,111 @@ it("routes Create project only with a canonical project id", async () => {
 
   expect(mocks.push).toHaveBeenCalledWith("/editor/p_tokyo");
 });
+
+it("generates subtitles before enabling alignment", async () => {
+  global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/projects/p_tokyo/inspect")) {
+      return {
+        ok: true,
+        json: async () => ({
+          path: "E:\\video-projects\\tokyo-essay",
+          name: "Tokyo Essay",
+          voice: { path: "voice.wav", duration: 942, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
+          transcript: { path: "transcript.txt", sentence_count: 164, state: "parsed" },
+          subtitle_generation: {
+            status: "ready",
+            cue_count: 0,
+            total_duration_s: 0,
+            cache_state: "unknown",
+            error_message: null,
+          },
+          alignment: {
+            status: "pending",
+            hash: "8a3f2c1df91c",
+            device: "cuda 路 fp16",
+            model: "large-v3",
+            audio_duration: 942,
+            cache_hit: false,
+          },
+        }),
+      } as Response;
+    }
+    if (url.endsWith("/subtitle") && init?.method === "POST") {
+      return {
+        ok: true,
+        json: async () => ({
+          status: "succeeded",
+          cue_count: 164,
+          total_duration_s: 942,
+          cache_state: "miss",
+          error_message: null,
+        }),
+      } as Response;
+    }
+    return { ok: false, json: async () => ({}) } as Response;
+  });
+
+  renderSetup();
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeEnabled());
+  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Generate subtitle" }));
+
+  await waitFor(() => expect(screen.getByText(/164 cues/)).toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeEnabled();
+  expect(global.fetch).toHaveBeenCalledWith(
+    "/api/server/subtitle",
+    expect.objectContaining({
+      body: JSON.stringify({ project_id: "p_tokyo" }),
+      method: "POST",
+    }),
+  );
+});
+
+it("keeps alignment disabled when subtitle generation fails", async () => {
+  global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/projects/p_tokyo/inspect")) {
+      return {
+        ok: true,
+        json: async () => ({
+          path: "E:\\video-projects\\tokyo-essay",
+          name: "Tokyo Essay",
+          voice: { path: "voice.wav", duration: 942, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
+          transcript: { path: "transcript.txt", sentence_count: 164, state: "parsed" },
+          subtitle_generation: {
+            status: "ready",
+            cue_count: 0,
+            total_duration_s: 0,
+            cache_state: "unknown",
+            error_message: null,
+          },
+          alignment: {
+            status: "pending",
+            hash: "8a3f2c1df91c",
+            device: "cuda 路 fp16",
+            model: "large-v3",
+            audio_duration: 942,
+            cache_hit: false,
+          },
+        }),
+      } as Response;
+    }
+    if (url.endsWith("/subtitle") && init?.method === "POST") {
+      return {
+        ok: false,
+        json: async () => ({ error: { code: "SUBTITLE_GENERATION_FAILED" } }),
+      } as Response;
+    }
+    return { ok: false, json: async () => ({}) } as Response;
+  });
+
+  renderSetup();
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Generate subtitle" }));
+
+  await waitFor(() => expect(screen.getByText("failed")).toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeDisabled();
+});

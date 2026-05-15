@@ -32,6 +32,7 @@ export type UseSetupDraftState = {
   draft: SetupDraft;
   inspect: () => Promise<void>;
   runAlignment: () => Promise<void>;
+  runSubtitle: () => Promise<void>;
   setName: (name: string) => void;
   setOutputPreset: (preset: SetupOutputPreset) => void;
   setPath: (path: string) => void;
@@ -127,6 +128,38 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
     }
   }, [detected.transcript, detected.voice, draft.path, draft.project_id, inspect, subtitleGeneration.status]);
 
+  const runSubtitle = useCallback(async () => {
+    if (!name.trim() || detected.voice?.state !== "copied") {
+      return;
+    }
+    setSubtitleGeneration({
+      status: "running",
+      cue_count: 0,
+      total_duration_s: 0,
+      cache_state: "unknown",
+      error_message: null,
+    });
+    setAlignmentStatus("pending");
+    try {
+      const body = draft.project_id
+        ? { project_id: draft.project_id }
+        : { path: draft.path, voice_path: detected.voice.path };
+      const result = await request<SetupSubtitleGenerationResult>("/subtitle", {
+        body,
+        method: "POST",
+      });
+      setSubtitleGeneration(result);
+    } catch {
+      setSubtitleGeneration({
+        status: "failed",
+        cue_count: 0,
+        total_duration_s: 0,
+        cache_state: "unknown",
+        error_message: "Subtitle generation failed.",
+      });
+    }
+  }, [detected.voice, draft.path, draft.project_id, name]);
+
   const canContinue = Boolean(
     name.trim()
       && projectId
@@ -140,6 +173,7 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
     draft,
     inspect,
     runAlignment,
+    runSubtitle,
     setName,
     setOutputPreset,
     setPath: (nextPath: string) => {
