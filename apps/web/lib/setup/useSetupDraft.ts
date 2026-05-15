@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { DetectedInputs, SetupAlignmentState, SetupDraft } from "@vc/shared-schemas";
+import type {
+  DetectedInputs,
+  SetupAlignmentState,
+  SetupDraft,
+  SetupOutputPreset,
+  SetupSubtitleGenerationResult,
+} from "@vc/shared-schemas";
 import { request } from "@/lib/api/server";
 
 export const defaultSetupPath = "E:\\claude\\video-creator\\projects\\test01";
@@ -27,15 +33,23 @@ export type UseSetupDraftState = {
   inspect: () => Promise<void>;
   runAlignment: () => Promise<void>;
   setName: (name: string) => void;
-  setOutputPreset: (preset: string) => void;
+  setOutputPreset: (preset: SetupOutputPreset) => void;
   setPath: (path: string) => void;
+};
+
+const emptySubtitleGeneration: SetupSubtitleGenerationResult = {
+  status: "ready",
+  cue_count: 0,
+  total_duration_s: 0,
+  cache_state: "unknown",
+  error_message: null,
 };
 
 export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetupDraftState {
   const [path, setPathState] = useState(initialPath);
   const [projectId, setProjectId] = useState(initialProjectId);
   const [name, setName] = useState(() => nameFromPath(initialPath));
-  const [outputPreset, setOutputPreset] = useState("final");
+  const [outputPreset, setOutputPreset] = useState<SetupOutputPreset>("final");
   const [detected, setDetected] = useState<DetectedInputs>({
     ...emptyDetectedInputs,
     path: initialPath,
@@ -74,6 +88,7 @@ export function useSetupDraft(initialPath = "", initialProjectId = ""): UseSetup
       output_preset: outputPreset,
       voice: detected.voice,
       transcript: detected.transcript,
+      subtitle_generation: emptySubtitleGeneration,
       alignment: {
         ...detected.alignment,
         status: alignmentStatus,

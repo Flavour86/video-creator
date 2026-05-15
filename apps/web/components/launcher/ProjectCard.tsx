@@ -16,6 +16,7 @@ type ProjectCardProps = {
 export function ProjectCard({ onClick, onPlayLatest, project }: ProjectCardProps) {
   const t = useTranslations("pages.launcher");
   const canPlay = project.latest_render_status === "done" && Boolean(project.latest_render_id);
+  const openedAt = project.last_render_at ? formatRelativeTime(project.last_render_at) : null;
 
   return (
     <article className="grid w-full grid-cols-[130px_1fr_auto] items-center gap-(--space-7) rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-6) transition-[background,border,transform] duration-150 hover:-translate-y-px hover:border-(--bg-5) hover:bg-(--bg-3)">
@@ -28,7 +29,7 @@ export function ProjectCard({ onClick, onPlayLatest, project }: ProjectCardProps
           <Meta label={t("voice")} value={project.voice_duration || "--"} />
           <Meta label={t("sentences")} value={project.sentence_count} />
           <Meta label={t("media")} value={project.media_count} />
-          <Meta label={t("opened")} value={formatRelativeTime(project.last_render_at)} />
+          {openedAt ? <Meta label={t("opened")} value={openedAt} /> : null}
         </span>
       </span>
       <span className="flex items-center gap-(--space-3)">

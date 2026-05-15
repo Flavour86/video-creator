@@ -13,6 +13,7 @@ from schemas import (  # type: ignore[import-not-found]
     DetectedTranscript,
     DetectedVoice,
     SetupAlignment,
+    SetupOutputPreset,
 )
 
 from server.db.projects import touch_recent
@@ -27,7 +28,7 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 class ScaffoldRequest(BaseModel):
     path: str = Field(min_length=1)
     name: str = Field(min_length=1, max_length=200)
-    output_preset: str = "final"
+    output_preset: SetupOutputPreset = SetupOutputPreset.final
     force: bool = False
 
 
@@ -96,7 +97,7 @@ async def inspect_setup_ws(websocket: WebSocket, path: str = Query(...)) -> None
         await asyncio.sleep(1)
 
 
-def _write_project_scaffold(project_dir: Path, name: str, output_preset: str) -> None:
+def _write_project_scaffold(project_dir: Path, name: str, output_preset: SetupOutputPreset) -> None:
     ensure_project_layout(project_dir)
 
     project_file = project_dir / "project.json"
@@ -115,7 +116,7 @@ def _write_project_scaffold(project_dir: Path, name: str, output_preset: str) ->
             "updated_at": now,
             "audio": audio_path.name if audio_path is not None else "voice.wav",
             "transcript": {"kind": "plain_text", "path": transcript_path.name},
-            "output": {"preset": "draft" if output_preset == "draft" else "final"},
+            "output": _project_output_for_setup_preset(output_preset),
             "layers": [],
             "subtitles": None,
             "watermark": None,
@@ -126,6 +127,19 @@ def _write_project_scaffold(project_dir: Path, name: str, output_preset: str) ->
         encoding="utf-8",
     )
     _seed_default_layers(project_dir)
+
+
+def _project_output_for_setup_preset(output_preset: SetupOutputPreset) -> dict[str, object]:
+    if output_preset == SetupOutputPreset.draft:
+        return {"preset": "draft"}
+    if output_preset == SetupOutputPreset.vertical:
+        return {
+            "preset": "final",
+            "resolution": "1080x1920",
+            "width": 1080,
+            "height": 1920,
+        }
+    return {"preset": "final"}
 
 
 def _seed_default_layers(project_dir: Path) -> None:

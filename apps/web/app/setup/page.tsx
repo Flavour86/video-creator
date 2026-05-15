@@ -4,6 +4,7 @@ import { Image as ImageIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef } from "react";
+import type { SetupOutputPreset } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AlignmentCard } from "@/components/setup/AlignmentCard";
 import { PathCard } from "@/components/setup/PathCard";
@@ -13,7 +14,7 @@ import { Button, Field, Select, TextInput } from "@/components/ui";
 import { formatDuration } from "@/lib/format";
 import { useSetupDraft } from "@/lib/setup/useSetupDraft";
 
-const outputPresets = ["final", "draft"] as const;
+const outputPresets: SetupOutputPreset[] = ["draft", "final", "vertical"];
 
 export default function SetupPage() {
   return (
@@ -71,7 +72,11 @@ function SetupScreen() {
             <Select
               aria-label={t("fields.outputPreset")}
               className="h-[33px] rounded-(--r-sm) bg-(--bg-1) text-[12.5px]"
-              onChange={(event) => setup.setOutputPreset(event.target.value)}
+              onChange={(event) => {
+                if (isSetupOutputPreset(event.target.value)) {
+                  setup.setOutputPreset(event.target.value);
+                }
+              }}
               value={draft.output_preset}
             >
               {outputPresets.map((preset) => (
@@ -126,6 +131,10 @@ function SetupScreen() {
       />
     </PageChrome>
   );
+}
+
+function isSetupOutputPreset(value: string): value is SetupOutputPreset {
+  return outputPresets.includes(value as SetupOutputPreset);
 }
 
 function voiceTileState(state: string | undefined): StatusTileState {

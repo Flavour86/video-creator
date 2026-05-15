@@ -69,9 +69,17 @@
       "title": "RenderStatus",
       "enum": ["queued", "running", "done", "error", "cancelled", "partial"]
     },
+    "LauncherRenderStatusTag": {
+      "title": "LauncherRenderStatusTag",
+      "enum": ["unrendered", "queued", "rendering", "rendered", "failed", "cancelled"]
+    },
     "RenderPreset": {
       "title": "RenderPreset",
       "enum": ["draft", "final"]
+    },
+    "SetupOutputPreset": {
+      "title": "SetupOutputPreset",
+      "enum": ["draft", "final", "vertical"]
     },
     "RenderArtifactKind": {
       "title": "RenderArtifactKind",
@@ -222,7 +230,6 @@
       "required": [
         "project_id",
         "name",
-        "last_render_at",
         "voice_duration",
         "sentence_count",
         "media_count",
@@ -233,7 +240,7 @@
       "properties": {
         "project_id": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1 },
-        "last_render_at": { "type": "string" },
+        "last_render_at": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
         "voice_duration": { "type": "string" },
         "sentence_count": { "type": "integer", "minimum": 0 },
         "media_count": { "type": "integer", "minimum": 0 },
@@ -244,7 +251,30 @@
         "last_rendered_config_hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
         "has_unrendered_changes": { "type": "boolean" },
         "latest_render_id": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
-        "latest_render_status": { "oneOf": [{ "$ref": "#/$defs/RenderStatus" }, { "type": "null" }] }
+        "latest_render_status": { "oneOf": [{ "$ref": "#/$defs/RenderStatus" }, { "type": "null" }] },
+        "render_status_tag": { "oneOf": [{ "$ref": "#/$defs/LauncherRenderStatusTag" }, { "type": "null" }] }
+      }
+    },
+    "PaginationMeta": {
+      "title": "PaginationMeta",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page_size", "page_index", "total_count", "total_pages"],
+      "properties": {
+        "page_size": { "type": "integer", "minimum": 1 },
+        "page_index": { "type": "integer", "minimum": 0 },
+        "total_count": { "type": "integer", "minimum": 0 },
+        "total_pages": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "RecentProjectsPage": {
+      "title": "RecentProjectsPage",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "pagination"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "#/$defs/RecentProjectCard" } },
+        "pagination": { "$ref": "#/$defs/PaginationMeta" }
       }
     },
     "DetectedVoice": {
@@ -287,6 +317,27 @@
         "error": { "type": "string" }
       }
     },
+    "SetupSubtitleGenerationState": {
+      "title": "SetupSubtitleGenerationState",
+      "enum": ["ready", "running", "succeeded", "failed"]
+    },
+    "SetupSubtitleCacheState": {
+      "title": "SetupSubtitleCacheState",
+      "enum": ["unknown", "hit", "miss"]
+    },
+    "SetupSubtitleGenerationResult": {
+      "title": "SetupSubtitleGenerationResult",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "cue_count", "total_duration_s", "cache_state"],
+      "properties": {
+        "status": { "$ref": "#/$defs/SetupSubtitleGenerationState" },
+        "cue_count": { "type": "integer", "minimum": 0 },
+        "total_duration_s": { "type": "number", "minimum": 0 },
+        "cache_state": { "$ref": "#/$defs/SetupSubtitleCacheState" },
+        "error_message": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
+      }
+    },
     "DetectedInputs": {
       "title": "DetectedInputs",
       "type": "object",
@@ -304,14 +355,15 @@
       "title": "SetupDraft",
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "name", "output_preset", "voice", "transcript", "alignment"],
+      "required": ["path", "name", "output_preset", "voice", "transcript", "subtitle_generation", "alignment"],
       "properties": {
         "project_id": { "type": "string", "minLength": 1 },
         "path": { "type": "string" },
         "name": { "type": "string" },
-        "output_preset": { "type": "string" },
+        "output_preset": { "$ref": "#/$defs/SetupOutputPreset" },
         "voice": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedVoice" }] },
         "transcript": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/DetectedTranscript" }] },
+        "subtitle_generation": { "$ref": "#/$defs/SetupSubtitleGenerationResult" },
         "alignment": { "$ref": "#/$defs/SetupAlignment" }
       }
     },

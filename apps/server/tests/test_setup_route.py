@@ -1,3 +1,4 @@
+import json
 import struct
 import wave
 from pathlib import Path
@@ -78,3 +79,21 @@ async def test_setup_inspect_completes_partial_layout_without_overwriting_media(
     assert (tmp_path / ".vc" / "drafts").is_dir()
     assert (tmp_path / ".vc" / "thumbs").is_dir()
     assert (tmp_path / ".vc" / "logs").is_dir()
+
+
+@pytest.mark.asyncio
+async def test_setup_scaffold_preserves_vertical_output_intent(tmp_path: Path) -> None:
+    project_dir = tmp_path / "vertical-output"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/setup/scaffold",
+            json={"path": str(project_dir), "name": "Vertical", "output_preset": "vertical"},
+        )
+
+    assert response.status_code == 200
+    project_json = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+    assert project_json["output"]["preset"] == "final"
+    assert project_json["output"]["resolution"] == "1080x1920"
+    assert project_json["output"]["width"] == 1080
+    assert project_json["output"]["height"] == 1920

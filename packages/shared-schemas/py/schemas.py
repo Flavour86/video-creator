@@ -68,9 +68,24 @@ class RenderStatus(Enum):
     partial = 'partial'
 
 
+class LauncherRenderStatusTag(Enum):
+    unrendered = 'unrendered'
+    queued = 'queued'
+    rendering = 'rendering'
+    rendered = 'rendered'
+    failed = 'failed'
+    cancelled = 'cancelled'
+
+
 class RenderPreset(Enum):
     draft = 'draft'
     final = 'final'
+
+
+class SetupOutputPreset(Enum):
+    draft = 'draft'
+    final = 'final'
+    vertical = 'vertical'
 
 
 class RenderArtifactKind(Enum):
@@ -211,7 +226,7 @@ class RecentProjectCard(BaseModel):
     )
     project_id: constr(min_length=1)
     name: constr(min_length=1)
-    last_render_at: str
+    last_render_at: str | None = None
     voice_duration: str
     sentence_count: conint(ge=0)
     media_count: conint(ge=0)
@@ -223,6 +238,27 @@ class RecentProjectCard(BaseModel):
     has_unrendered_changes: bool
     latest_render_id: str | None = None
     latest_render_status: RenderStatus | None = None
+    render_status_tag: LauncherRenderStatusTag | None = None
+
+
+class PaginationMeta(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    page_size: conint(ge=1)
+    page_index: conint(ge=0)
+    total_count: conint(ge=0)
+    total_pages: conint(ge=0)
+
+
+class RecentProjectsPage(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    items: list[RecentProjectCard]
+    pagination: PaginationMeta
 
 
 class DetectedVoice(BaseModel):
@@ -262,6 +298,31 @@ class SetupAlignment(BaseModel):
     error: str | None = None
 
 
+class SetupSubtitleGenerationState(Enum):
+    ready = 'ready'
+    running = 'running'
+    succeeded = 'succeeded'
+    failed = 'failed'
+
+
+class SetupSubtitleCacheState(Enum):
+    unknown = 'unknown'
+    hit = 'hit'
+    miss = 'miss'
+
+
+class SetupSubtitleGenerationResult(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    status: SetupSubtitleGenerationState
+    cue_count: conint(ge=0)
+    total_duration_s: confloat(ge=0.0)
+    cache_state: SetupSubtitleCacheState
+    error_message: str | None = None
+
+
 class DetectedInputs(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -282,9 +343,10 @@ class SetupDraft(BaseModel):
     project_id: constr(min_length=1) | None = None
     path: str
     name: str
-    output_preset: str
+    output_preset: SetupOutputPreset
     voice: DetectedVoice | None
     transcript: DetectedTranscript | None
+    subtitle_generation: SetupSubtitleGenerationResult
     alignment: SetupAlignment
 
 

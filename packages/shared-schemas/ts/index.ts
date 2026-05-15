@@ -84,9 +84,19 @@ export type ProjectStatus = "ready" | "missing" | "corrupt" | "alignment_pending
 export type RenderStatus = "queued" | "running" | "done" | "error" | "cancelled" | "partial";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "LauncherRenderStatusTag".
+ */
+export type LauncherRenderStatusTag = "unrendered" | "queued" | "rendering" | "rendered" | "failed" | "cancelled";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "RenderPreset".
  */
 export type RenderPreset = "draft" | "final";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SetupOutputPreset".
+ */
+export type SetupOutputPreset = "draft" | "final" | "vertical";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "RenderArtifactKind".
@@ -100,6 +110,16 @@ export type RenderArtifactKind =
   | "subtitles"
   | "thumbnail"
   | "companion";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SetupSubtitleGenerationState".
+ */
+export type SetupSubtitleGenerationState = "ready" | "running" | "succeeded" | "failed";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SetupSubtitleCacheState".
+ */
+export type SetupSubtitleCacheState = "unknown" | "hit" | "miss";
 
 export interface Project {
   version: 1;
@@ -374,7 +394,7 @@ export interface RecentProject {
 export interface RecentProjectCard {
   project_id: string;
   name: string;
-  last_render_at: string;
+  last_render_at?: string | null;
   voice_duration: string;
   sentence_count: number;
   media_count: number;
@@ -386,6 +406,25 @@ export interface RecentProjectCard {
   has_unrendered_changes: boolean;
   latest_render_id?: string | null;
   latest_render_status?: RenderStatus | null;
+  render_status_tag?: LauncherRenderStatusTag | null;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "PaginationMeta".
+ */
+export interface PaginationMeta {
+  page_size: number;
+  page_index: number;
+  total_count: number;
+  total_pages: number;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RecentProjectsPage".
+ */
+export interface RecentProjectsPage {
+  items: RecentProjectCard[];
+  pagination: PaginationMeta;
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -423,6 +462,17 @@ export interface SetupAlignment {
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SetupSubtitleGenerationResult".
+ */
+export interface SetupSubtitleGenerationResult {
+  status: SetupSubtitleGenerationState;
+  cue_count: number;
+  total_duration_s: number;
+  cache_state: SetupSubtitleCacheState;
+  error_message?: string | null;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "DetectedInputs".
  */
 export interface DetectedInputs {
@@ -440,9 +490,10 @@ export interface SetupDraft {
   project_id?: string;
   path: string;
   name: string;
-  output_preset: string;
+  output_preset: SetupOutputPreset;
   voice: null | DetectedVoice;
   transcript: null | DetectedTranscript;
+  subtitle_generation: SetupSubtitleGenerationResult;
   alignment: SetupAlignment;
 }
 /**

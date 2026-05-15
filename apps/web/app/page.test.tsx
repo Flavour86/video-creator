@@ -121,6 +121,28 @@ describe("LauncherPage", () => {
     expect(screen.getByText("pending")).toBeInTheDocument();
   });
 
+  it("hides opened metadata when last render time is null", async () => {
+    mockServer({
+      recent: [
+        {
+          project_id: "p_no_time",
+          name: "No Time",
+          last_render_at: null,
+          voice_duration: "00:45",
+          sentence_count: 4,
+          media_count: 1,
+          alignment_state: "aligned",
+          status: "ready",
+          has_unrendered_changes: false,
+        },
+      ],
+    });
+    renderLauncher();
+    await waitFor(() => expect(screen.getByText("No Time")).toBeInTheDocument());
+    const card = screen.getByText("No Time").closest("article");
+    expect(card).not.toHaveTextContent("opened");
+  });
+
   it("plays the latest successful render from a project card", async () => {
     mockServer({
       recent: [
