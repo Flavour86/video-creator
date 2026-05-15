@@ -8,12 +8,20 @@ import { formatDuration, truncateHash } from "@/lib/format";
 type AlignmentCardProps = {
   alignment: SetupAlignment;
   canRun?: boolean;
+  correctionsApplied?: number | null;
   onRun: () => void;
   transcript: DetectedTranscript | null;
   voice: DetectedVoice | null;
 };
 
-export function AlignmentCard({ alignment, canRun: canRunOverride, onRun, transcript, voice }: AlignmentCardProps) {
+export function AlignmentCard({
+  alignment,
+  canRun: canRunOverride,
+  correctionsApplied = null,
+  onRun,
+  transcript,
+  voice,
+}: AlignmentCardProps) {
   const t = useTranslations("pages.setup.alignment");
   const checks = useTranslations("pages.setup.checks");
   const canRun = canRunOverride ?? Boolean(voice && transcript && alignment.status !== "running");
@@ -21,12 +29,13 @@ export function AlignmentCard({ alignment, canRun: canRunOverride, onRun, transc
   const ActionIcon = running ? Loader2 : Play;
   const voiceFile = fileName(voice?.path) ?? t("voiceFile");
   const transcriptFile = fileName(transcript?.path) ?? "transcript.txt";
+  const statusLabel = displayStatusLabel(alignment.status);
 
   return (
     <aside className="rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-7)">
       <div className="mb-(--space-5) flex items-center justify-between gap-(--space-4)">
         <h3 className="vc-type-eyebrow text-(--text-2)">{t("title")}</h3>
-        <StatusTag variant={alignmentVariant(alignment.status)}>{t(`state.${alignment.status}`)}</StatusTag>
+        <StatusTag variant={alignmentVariant(alignment.status)}>{statusLabel}</StatusTag>
       </div>
       <p className="text-xs leading-relaxed text-(--text-3)">
         {t.rich("introDynamic", {
@@ -43,6 +52,14 @@ export function AlignmentCard({ alignment, canRun: canRunOverride, onRun, transc
         <p className="break-all font-mono text-[10.5px] text-(--text-4)">
           {t("hashDynamic", { hash: truncateHash(alignment.hash, 8), transcript: transcriptFile, voice: voiceFile })}
         </p>
+        {alignment.status === "aligned" && correctionsApplied !== null ? (
+          <p className="text-[11px] text-(--text-2)">Corrections applied: {correctionsApplied}</p>
+        ) : null}
+        {alignment.error && alignment.status !== "running" ? (
+          <p className={`text-[11px] ${alignment.status === "failed" ? "text-(--red)" : "text-(--amber)"}`}>
+            {alignment.error}
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 gap-x-(--space-8)">
           <KV label={t("kv.device")} value={alignment.device} />
           <KV label={t("kv.model")} value={alignment.model} />
@@ -101,4 +118,14 @@ function alignmentVariant(status: SetupAlignmentState): StatusTagVariant {
     return "info";
   }
   return status === "failed" ? "error" : "warning";
+}
+
+function displayStatusLabel(status: SetupAlignmentState): string {
+  if (status === "pending") {
+    return "ready";
+  }
+  if (status === "aligned") {
+    return "succeeded";
+  }
+  return status;
 }

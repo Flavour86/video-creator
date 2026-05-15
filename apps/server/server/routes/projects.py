@@ -4,15 +4,16 @@ import hashlib
 import importlib
 import json
 import mimetypes
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Cookie, Query, Response
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from schemas import (  # type: ignore[import-not-found]
     LauncherRenderStatusTag,
     PaginationMeta,
@@ -49,14 +50,20 @@ from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
 from server.routes.alignment import get_alignment, run_alignment
-from server.routes.setup import inspect_setup
+from server.routes.setup import (
+    SETUP_SESSION_COOKIE,
+    _is_valid_setup_id,
+    _load_setup_draft_record,
+    _setup_draft_dir,
+    clear_setup_session_cookie,
+    inspect_setup,
+)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 class CreateProjectRequest(BaseModel):
-    path: str = Field(min_length=1)
-    name: str = Field(min_length=1, max_length=200)
+    model_config = ConfigDict(extra="allow")
 
 
 class ProjectResponse(BaseModel):
@@ -297,6 +304,186 @@ def _write_valid_project_config(project_dir: Path, data: dict[str, Any]) -> str:
     )
 
 
+def _output_for_setup_preset(output_preset: object) -> dict[str, object]:
+    preset_value = str(getattr(output_preset, "value", output_preset))
+    if preset_value == "draft":
+        return {"preset": "draft"}
+    if preset_value == "vertical":
+        return {
+            "preset": "final",
+            "resolution": "1080x1920",
+            "width": 1080,
+            "height": 1920,
+        }
+    return {"preset": "final"}
+
+
+def _watermark_kind_from_name(name: str) -> str:
+    suffix = Path(name).suffix.lower()
+    return "watermark_video" if suffix in {".mp4", ".mov", ".webm"} else "watermark_image"
+
+
+def _discard_setup_draft(setup_id: str) -> None:
+    if not _is_valid_setup_id(setup_id):
+        return
+    shutil.rmtree(_setup_draft_dir(setup_id), ignore_errors=True)
+
+
+def _materialize_project_from_setup_draft(setup_id: str) -> ProjectResponse | JSONResponse:
+    record = _load_setup_draft_record(setup_id)
+    if record is None:
+        return _error(
+            404,
+            "SETUP_DRAFT_NOT_FOUND",
+            "Setup draft was not found.",
+            {"setup_id": setup_id},
+        )
+
+    if not record.name.strip():
+        return _error(
+            400,
+            "PROJECT_NAME_REQUIRED",
+            "Project name is required.",
+            {"setup_id": setup_id},
+        )
+    if (
+        record.voice_staged_path is None
+        or record.transcript_staged_path is None
+        or record.subtitles_staged_path is None
+    ):
+        return _error(
+            400,
+            "SETUP_INCOMPLETE",
+            "Setup artifacts are incomplete. Provide voice, transcript, and subtitles.",
+            {"setup_id": setup_id},
+        )
+    alignment_status = getattr(record.alignment.status, "value", record.alignment.status)
+    if alignment_status != "aligned":
+        return _error(
+            400,
+            "SETUP_INCOMPLETE",
+            "Setup alignment must succeed before creating project.",
+            {"setup_id": setup_id},
+        )
+
+    project_dir = Path(record.path)
+    if not project_dir.is_absolute() or not project_dir.parent.exists():
+        return _error(
+            400,
+            "INVALID_PATH",
+            "Project path must be absolute and its parent directory must exist.",
+            {"path": record.path},
+        )
+    if project_dir.exists() and any(project_dir.iterdir()):
+        return _error(
+            409,
+            "NOT_EMPTY",
+            "Project directory already exists and is not empty.",
+            {"path": record.path},
+        )
+
+    voice_source = Path(record.voice_staged_path)
+    transcript_source = Path(record.transcript_staged_path)
+    subtitles_source = Path(record.subtitles_staged_path)
+    if (
+        not voice_source.is_file()
+        or not transcript_source.is_file()
+        or not subtitles_source.is_file()
+    ):
+        return _error(
+            400,
+            "SETUP_INCOMPLETE",
+            "Setup artifacts are missing from staging.",
+            {"setup_id": setup_id},
+        )
+
+    existed_before = project_dir.exists()
+    now = datetime.now(UTC).isoformat()
+    try:
+        ensure_project_layout(project_dir)
+        voice_target = project_dir / "voice.wav"
+        transcript_target = project_dir / "transcript.txt"
+        subtitles_target = project_dir / "subtitles.srt"
+        shutil.copy2(voice_source, voice_target)
+        shutil.copy2(transcript_source, transcript_target)
+        shutil.copy2(subtitles_source, subtitles_target)
+
+        media_entries: list[dict[str, object]] = []
+        watermark_payload: dict[str, object] | None = None
+        if record.watermark_staged_path is not None:
+            watermark_source = Path(record.watermark_staged_path)
+            if watermark_source.is_file():
+                watermark_name = Path(record.watermark_source_path or watermark_source.name).name
+                watermark_target = project_dir / "media" / watermark_name
+                watermark_target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(watermark_source, watermark_target)
+                media_id = "watermark-1"
+                media_entries.append(
+                    {
+                        "id": media_id,
+                        "name": watermark_name,
+                        "kind": _watermark_kind_from_name(watermark_name),
+                        "path": f"media/{watermark_name}",
+                        "import_mode": "copy",
+                        "imported_at": now,
+                    }
+                )
+                watermark_payload = {
+                    "mediaId": media_id,
+                    "posX": 100,
+                    "posY": 100,
+                    "scale": 0.08,
+                    "opacity": 60,
+                }
+
+        project = Project.model_validate(
+            {
+                "version": 1,
+                "name": record.name,
+                "created_at": now,
+                "updated_at": now,
+                "audio": "voice.wav",
+                "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+                "output": _output_for_setup_preset(record.output_preset),
+                "media": media_entries,
+                "layers": [],
+                "subtitles": None,
+                "watermark": watermark_payload,
+            }
+        )
+        save_config_snapshot(
+            project_dir,
+            project.model_dump(mode="json", by_alias=True, exclude_none=False),
+        )
+        if record.alignment_staged_path is not None:
+            alignment_source = Path(record.alignment_staged_path)
+            if alignment_source.is_file():
+                shutil.copy2(alignment_source, project_dir / ".vc" / "alignment.json")
+                if record.alignment.hash:
+                    (project_dir / ".vc" / "alignment.hash").write_text(
+                        record.alignment.hash,
+                        encoding="utf-8",
+                    )
+        touch_recent(project_dir, record.name)
+        set_project_thumbnail(project_dir, _ensure_placeholder_thumbnail(project_dir, record.name))
+        _discard_setup_draft(setup_id)
+        return ProjectResponse(
+            project_id=project_id_for_path(project_dir),
+            path=str(project_dir),
+            name=record.name,
+        )
+    except Exception as exc:
+        if not existed_before and project_dir.exists():
+            shutil.rmtree(project_dir, ignore_errors=True)
+        remove_recent(project_dir)
+        return _error(
+            500,
+            "PROJECT_CREATE_FAILED",
+            "Project creation failed.",
+            {"error": str(exc)},
+        )
+
+
 def _project_path_or_error(project_id: str) -> Path | JSONResponse:
     project_dir = project_path_for_id(project_id)
     if project_dir is None or not project_dir.is_dir():
@@ -469,66 +656,34 @@ def _sentence_count(
 
 
 @router.post("", response_model=ProjectResponse)
-async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSONResponse:
-    project_dir = Path(payload.path)
-    if not project_dir.is_absolute() or not project_dir.parent.exists():
+async def create_project(
+    response: Response,
+    payload: CreateProjectRequest | None = None,
+    setup_session_id: str | None = Cookie(default=None, alias=SETUP_SESSION_COOKIE),
+) -> ProjectResponse | JSONResponse:
+    if payload is not None and payload.model_extra:
         return _error(
             400,
-            "INVALID_PATH",
-            "Project path must be absolute and its parent directory must exist.",
-            {"path": payload.path},
+            "PROJECT_CREATE_PAYLOAD_FORBIDDEN",
+            "Create projects from the active Setup session; do not send path, name, or setup_id.",
+            {},
         )
 
-    if project_dir.exists() and any(project_dir.iterdir()):
-        return _error(
-            409,
-            "NOT_EMPTY",
-            "Project directory already exists and is not empty.",
-            {"path": payload.path},
-        )
-
-    now = datetime.now(UTC).isoformat()
-    project = Project.model_validate(
-        {
-            "version": 1,
-            "name": payload.name,
-            "created_at": now,
-            "updated_at": now,
-            "audio": "",
-            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
-            "output": {"preset": "draft"},
-            "layers": [],
-            "subtitles": None,
-            "watermark": None,
-        }
-    )
-    try:
-        ensure_project_layout(project_dir)
-    except PermissionError:
-        return _error(
-            403,
-            "PERMISSION_DENIED",
-            "Project folder cannot be created because permission was denied.",
-            {"path": payload.path},
-        )
-    except OSError as exc:
+    if setup_session_id is None:
         return _error(
             400,
-            "INVALID_PATH",
-            "Project folder could not be created.",
-            {"path": payload.path, "error": str(exc)},
+            "SETUP_SESSION_REQUIRED",
+            "Complete Setup before creating a project.",
+            {},
         )
-    touch_recent(project_dir, payload.name)
-    set_project_thumbnail(project_dir, _ensure_placeholder_thumbnail(project_dir, payload.name))
-    save_config_snapshot(
-        project_dir,
-        project.model_dump(mode="json", by_alias=True, exclude_none=False),
-    )
-    return ProjectResponse(
-        project_id=project_id_for_path(project_dir),
-        path=str(project_dir),
-        name=payload.name,
-    )
+
+    result = _materialize_project_from_setup_draft(setup_session_id)
+    if isinstance(result, JSONResponse):
+        _discard_setup_draft(setup_session_id)
+        clear_setup_session_cookie(result)
+        return result
+    clear_setup_session_cookie(response)
+    return result
 
 
 @router.get("", response_model=RecentProjectsPage)
@@ -570,11 +725,6 @@ async def project_thumbnail(project_id: str, filename: str) -> FileResponse | JS
         return _error(404, "THUMBNAIL_NOT_FOUND", "Thumbnail not found.", {"filename": filename})
     media_type = mimetypes.guess_type(thumb.name)[0] or "application/octet-stream"
     return FileResponse(str(thumb), media_type=media_type)
-
-
-@router.post("/new", response_model=ProjectResponse)
-async def new_project(payload: CreateProjectRequest) -> ProjectResponse | JSONResponse:
-    return await create_project(payload)
 
 
 @router.get("/recent", response_model=list[RecentProject])
@@ -742,11 +892,6 @@ async def put_watermark(
     data["updated_at"] = datetime.now(UTC).isoformat()
     _write_valid_project_config(project_dir, data)
     return PutWatermarkResponse(watermark=data["watermark"])
-
-
-@router.post("/new-folder", response_model=ProjectResponse)
-async def new_folder_project(payload: CreateProjectRequest) -> ProjectResponse | JSONResponse:
-    return await create_project(payload)
 
 
 @router.delete("/{project_id}", response_model=None)

@@ -27,6 +27,12 @@ class SubtitleStats:
     total_duration_s: float
 
 
+@dataclass(frozen=True)
+class SubtitleAlignmentUpdate:
+    corrections_applied: int
+    cue_count: int
+
+
 def generate_srt(alignment: AlignmentResult) -> str:
     cues = _build_cues(alignment)
     blocks = [
@@ -52,6 +58,20 @@ def write_srt(project_dir: Path, alignment: AlignmentResult) -> Path:
 def write_srt_file(srt_path: Path, alignment: AlignmentResult) -> Path:
     srt_path.write_text(generate_srt(alignment), encoding="utf-8", newline="")
     return srt_path
+
+
+def write_aligned_srt_file(srt_path: Path, alignment: AlignmentResult) -> SubtitleAlignmentUpdate:
+    previous_content = ""
+    if srt_path.is_file():
+        previous_content = srt_path.read_text(encoding="utf-8")
+
+    next_content = generate_srt(alignment)
+    corrections = _count_cue_level_corrections(previous_content, next_content)
+    srt_path.write_text(next_content, encoding="utf-8", newline="")
+    return SubtitleAlignmentUpdate(
+        corrections_applied=corrections,
+        cue_count=len(_parse_srt_cues(next_content)),
+    )
 
 
 def subtitle_stats(alignment: AlignmentResult) -> SubtitleStats:
@@ -139,3 +159,42 @@ def _format_timestamp(seconds: float) -> str:
     minutes, remainder = divmod(remainder, 60_000)
     secs, ms = divmod(remainder, 1000)
     return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
+
+
+def _count_cue_level_corrections(previous: str, current: str) -> int:
+    previous_cues = _parse_srt_cues(previous)
+    current_cues = _parse_srt_cues(current)
+    return _cue_edit_distance(previous_cues, current_cues)
+
+
+def _parse_srt_cues(content: str) -> list[tuple[str, str]]:
+    blocks = [block for block in content.replace("\r\n", "\n").split("\n\n") if block.strip()]
+    cues: list[tuple[str, str]] = []
+    for block in blocks:
+        lines = [line.strip() for line in block.split("\n") if line.strip()]
+        if len(lines) < 2:
+            continue
+        timing = lines[1]
+        text = " ".join(lines[2:]).strip()
+        cues.append((timing, text))
+    return cues
+
+
+def _cue_edit_distance(
+    previous_cues: list[tuple[str, str]],
+    current_cues: list[tuple[str, str]],
+) -> int:
+    previous_len = len(previous_cues)
+    current_len = len(current_cues)
+    previous_row = list(range(current_len + 1))
+    for left in range(1, previous_len + 1):
+        current_row = [left] + [0] * current_len
+        for right in range(1, current_len + 1):
+            replace_cost = 0 if previous_cues[left - 1] == current_cues[right - 1] else 1
+            current_row[right] = min(
+                previous_row[right] + 1,
+                current_row[right - 1] + 1,
+                previous_row[right - 1] + replace_cost,
+            )
+        previous_row = current_row
+    return previous_row[current_len]

@@ -270,20 +270,20 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] `POST /subtitle/alignment` is enabled only after Project Name, Voice, and Subtitle are checked.
-- [ ] Alignment uses the selected transcript plus generated `subtitles.srt`, not an old project-folder transcript assumption.
-- [ ] Status cycles through `ready -> running -> succeeded` or `failed`.
-- [ ] On success, the response reports the number of cue-level corrections applied to `subtitles.srt`.
-- [ ] Changing voice or transcript hash invalidates cached alignment and re-runs alignment.
-- [ ] WhisperX missing, CUDA unavailable, CUDA OOM, long silence, and mismatched text surface recoverable errors or CPU fallback where possible.
-- [ ] Setup marks Alignment checked only after alignment succeeds.
+- [X] `POST /subtitle/alignment` is enabled only after Project Name, Voice, and Subtitle are checked.
+- [X] Alignment uses the selected transcript plus generated `subtitles.srt`, not an old project-folder transcript assumption.
+- [X] Status cycles through `ready -> running -> succeeded` or `failed`.
+- [X] On success, the response reports the number of cue-level corrections applied to `subtitles.srt`.
+- [X] Changing voice or transcript hash invalidates cached alignment and re-runs alignment.
+- [X] WhisperX missing, CUDA unavailable, CUDA OOM, long silence, and mismatched text surface recoverable errors or CPU fallback where possible.
+- [X] Setup marks Alignment checked only after alignment succeeds.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/server test -- test_alignment_subtitles.py`
-- [ ] `rtk pnpm -F @vc/server test -- test_alignment_integration.py`
-- [ ] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/web test -- AlignmentCard`
+- [X] `rtk pnpm -F @vc/server test -- test_alignment_subtitles.py`
+- [X] `rtk pnpm -F @vc/server test -- test_alignment_integration.py`
+- [X] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
+- [X] `rtk pnpm -F @vc/web test -- AlignmentCard`
 
 **Dependencies:** Task 6
 
@@ -303,20 +303,20 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] `POST /projects` creates a project only from a completed Setup draft/session.
-- [ ] The final project layout includes `voice.wav`, `transcript.txt`, `subtitles.srt`, `media/`, `renders/`, and `.vc/` artifacts required by the global spec.
-- [ ] The selected output preset persists into the project config.
-- [ ] Optional watermark persists when selected and is absent when not selected.
-- [ ] Fallback thumbnail generation runs if no successful render thumbnail exists.
-- [ ] Setup `Create project` calls the final API and navigates to `/editor/:projectId` on success.
-- [ ] Failed creation does not leave a partial canonical project entry.
+- [X] `POST /projects` creates a project only from a completed Setup draft/session.
+- [X] The final project layout includes `voice.wav`, `transcript.txt`, `subtitles.srt`, `media/`, `renders/`, and `.vc/` artifacts required by the global spec.
+- [X] The selected output preset persists into the project config.
+- [X] Optional watermark persists when selected and is absent when not selected.
+- [X] Fallback thumbnail generation runs if no successful render thumbnail exists.
+- [X] Setup `Create project` calls the final API and navigates to `/editor/:projectId` on success.
+- [X] Failed creation does not leave a partial canonical project entry.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/server test -- test_projects_route.py`
-- [ ] `rtk pnpm -F @vc/server test -- test_project_schema.py`
-- [ ] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/web test -- useSetupDraft.test.ts`
+- [X] `rtk pnpm -F @vc/server test -- test_projects_route.py`
+- [X] `rtk pnpm -F @vc/server test -- test_project_schema.py`
+- [X] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
+- [X] `rtk pnpm -F @vc/web test -- useSetupDraft.test.ts`
 
 **Dependencies:** Task 7; backend-global project/config persistence work if not already landed
 
@@ -332,9 +332,9 @@ Frontend-global visual harness
 
 ### Checkpoint: Setup
 
-- [ ] A user can complete all four Setup checks from Launcher and land in Editor.
-- [ ] No final project files or DB rows are created before `Create project`.
-- [ ] Subtitle generation and alignment failures are recoverable from the Setup screen.
+- [X] A user can complete all four Setup checks from Launcher and land in Editor.
+- [X] No final project files or DB rows are created before `Create project`.
+- [X] Subtitle generation and alignment failures are recoverable from the Setup screen.
 
 ### Phase 4: Hardening, Visuals, And Acceptance
 
@@ -344,16 +344,16 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] Setup covers project name missing/provided, voice missing/selected/invalid, transcript missing/empty/invalid, watermark absent/selected, Subtitle Generate ready/running/succeeded/failed, and Alignment ready/running/succeeded/failed.
-- [ ] Backend covers voice missing, transcript missing, unsupported voice codec, empty transcript, long paragraph transcript, segmentation mismatch, WhisperX missing, CUDA unavailable, CUDA OOM, long silence/mismatched-text alignment failure, and user edits voice/transcript after assigning clips.
-- [ ] Launcher covers no recent projects, missing/corrupt project config cleanup, pagination changes, and every status tag state.
-- [ ] User-triggered failures show non-blocking messages with a clear next action.
+- [X] Setup covers project name missing/provided, voice missing/selected/invalid, transcript missing/empty/invalid, watermark absent/selected, Subtitle Generate ready/running/succeeded/failed, and Alignment ready/running/succeeded/failed.
+- [X] Backend covers voice missing, transcript missing, unsupported voice codec, empty transcript, long paragraph transcript, segmentation mismatch, WhisperX missing, CUDA unavailable, CUDA OOM, long silence/mismatched-text alignment failure, and user edits voice/transcript after assigning clips.
+- [X] Launcher covers no recent projects, missing/corrupt project config cleanup, pagination changes, and every status tag state.
+- [X] User-triggered failures show non-blocking messages with a clear next action.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test`
-- [ ] `rtk pnpm -F @vc/server test`
-- [ ] `rtk pnpm lint`
+- [X] `rtk pnpm -F @vc/web test`
+- [X] `rtk pnpm -F @vc/server test`
+- [X] `rtk pnpm lint`
 
 **Dependencies:** Tasks 3-8
 
@@ -489,5 +489,5 @@ Frontend-global visual harness
 
 - `New project` enters Setup directly; the old Launcher folder form is removed from the primary flow.
 - Setup final creation is the only step that materializes the canonical project folder.
-- Legacy routes may remain temporarily for compatibility tests, but the required public surface for this spec is `GET /projects`, `DELETE /projects/:projectId`, `POST /subtitle`, `POST /subtitle/alignment`, and `POST /projects`.
+- Legacy direct project creation routes are not part of this Launcher/Setup surface. `POST /projects` creates only from the active completed Setup draft/session and does not accept `path`, `name`, or `setup_id` in the final create payload.
 - Launcher/Setup visual parity belongs to this plan; the shared visual tooling belongs to the frontend-global plan.

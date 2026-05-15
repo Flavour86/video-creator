@@ -5,13 +5,15 @@ import { StatusTag, type StatusTagVariant } from "@/components/ui";
 export type StatusTileState = "pending" | "copying" | "detected" | "invalid";
 
 type StatusTileProps = {
+  actionLabel?: string;
   filename?: string;
   kind: "voice" | "transcript";
   meta?: string;
+  onChoose?: () => void;
   state: StatusTileState;
 };
 
-export function StatusTile({ filename, kind, meta, state }: StatusTileProps) {
+export function StatusTile({ actionLabel = "Choose", filename, kind, meta, onChoose, state }: StatusTileProps) {
   const t = useTranslations("pages.setup.inputs");
   const Icon = iconFor(kind, state);
   const displayName = filename ?? (kind === "voice" ? t("voiceFile") : "transcript.txt");
@@ -22,6 +24,15 @@ export function StatusTile({ filename, kind, meta, state }: StatusTileProps) {
       <strong className="text-sm font-semibold text-(--text)">{displayName}</strong>
       <span className="font-mono text-[11px] text-(--text-3)">{meta ?? t(`${kind}Pending`)}</span>
       <StatusTag variant={tagVariant(state)}>{t(stateLabel(kind, state))}</StatusTag>
+      {onChoose ? (
+        <button
+          className="rounded-(--r-pill) border border-(--line) px-(--space-3) py-(--space-1) text-[11px] font-medium text-(--text-2) transition-colors hover:border-(--line-strong) hover:text-(--text)"
+          onClick={onChoose}
+          type="button"
+        >
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   );
 }

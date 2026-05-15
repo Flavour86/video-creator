@@ -3,15 +3,16 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import secrets
 import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Query, WebSocket
+from fastapi import APIRouter, File, Query, Request, Response, UploadFile, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from schemas import (  # type: ignore[import-not-found]
@@ -30,13 +31,17 @@ from server.domain.project import DetectedInputs, Project, ensure_project_layout
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
-from server.pipeline.srt import subtitle_stats, write_srt_file
-from server.settings import settings
+from server.pipeline.srt import subtitle_stats, write_aligned_srt_file, write_srt_file
+from server.settings import app_root, settings
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 subtitle_router = APIRouter(tags=["subtitle"])
 
 SUPPORTED_SUBTITLE_VOICE_SUFFIXES = {".mp3", ".wav", ".m4a"}
+SUPPORTED_TRANSCRIPT_SUFFIXES = {".txt", ".md", ".srt"}
+SUPPORTED_WATERMARK_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+SETUP_SESSION_COOKIE = "vc_setup_id"
+ArtifactKind = Literal["voice", "transcript", "watermark"]
 
 
 class ScaffoldRequest(BaseModel):
@@ -47,14 +52,14 @@ class ScaffoldRequest(BaseModel):
 
 
 class SetupDraftCreateRequest(BaseModel):
-    path: str = Field(min_length=1)
-    name: str = Field(min_length=1, max_length=200)
+    path: str | None = Field(default=None, min_length=1)
+    name: str = Field(default="", max_length=200)
     output_preset: SetupOutputPreset = SetupOutputPreset.final
 
 
 class SetupDraftUpdateRequest(BaseModel):
     path: str | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=200)
+    name: str | None = Field(default=None, max_length=200)
     output_preset: SetupOutputPreset | None = None
     voice_path: str | None = None
     transcript_path: str | None = None
@@ -70,6 +75,26 @@ class SubtitleGenerateRequest(BaseModel):
     project_id: str | None = None
     path: str | None = None
     voice_path: str | None = None
+
+
+class SubtitleAlignmentRequest(BaseModel):
+    setup_id: str
+
+
+class SubtitleAlignmentResponse(BaseModel):
+    status: Literal["ready", "running", "succeeded", "failed"]
+    corrections_applied: int = 0
+    alignment: SetupAlignment
+    error_code: str | None = None
+    error_message: str | None = None
+
+
+class RecoverableAlignmentError(RuntimeError):
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
 
 
 class SetupDraftArtifacts(BaseModel):
@@ -108,6 +133,122 @@ def _default_setup_alignment() -> SetupAlignment:
         audio_duration=0.0,
         cache_hit=False,
     )
+
+
+def set_setup_session_cookie(response: Response, setup_id: str) -> None:
+    response.set_cookie(
+        SETUP_SESSION_COOKIE,
+        setup_id,
+        httponly=True,
+        max_age=60 * 60 * 24,
+        path="/",
+        samesite="lax",
+    )
+
+
+def clear_setup_session_cookie(response: Response) -> None:
+    response.delete_cookie(SETUP_SESSION_COOKIE, path="/")
+
+
+def _alignment_response(
+    *,
+    status: Literal["ready", "running", "succeeded", "failed"],
+    alignment: SetupAlignment,
+    corrections_applied: int = 0,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> SubtitleAlignmentResponse:
+    return SubtitleAlignmentResponse(
+        status=status,
+        corrections_applied=corrections_applied,
+        alignment=alignment,
+        error_code=error_code,
+        error_message=error_message,
+    )
+
+
+def _is_cuda_related_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "cuda" in message or "cudnn" in message
+
+
+def _is_cuda_oom_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "cuda out of memory" in message or (
+        "out of memory" in message and "cuda" in message
+    )
+
+
+def _recoverable_alignment_error(exc: Exception) -> tuple[int, str, str]:
+    if isinstance(exc, RecoverableAlignmentError):
+        return (exc.status_code, exc.code, exc.message)
+    if isinstance(exc, (ImportError, ModuleNotFoundError)) and "whisperx" in str(exc).lower():
+        return (
+            503,
+            "WHISPERX_UNAVAILABLE",
+            "WhisperX is unavailable. Install WhisperX and retry alignment.",
+        )
+
+    message = str(exc).lower()
+    if _is_cuda_oom_error(exc):
+        return (
+            422,
+            "CUDA_OOM",
+            "CUDA ran out of memory while aligning subtitles.",
+        )
+    if _is_cuda_related_error(exc):
+        return (
+            422,
+            "CUDA_UNAVAILABLE",
+            "CUDA is unavailable for alignment. Retry on CPU.",
+        )
+    if "silence" in message:
+        return (
+            422,
+            "LONG_SILENCE",
+            "Alignment could not lock timestamps because the voice track contains long silence.",
+        )
+    if (
+        "mismatch" in message
+        or "low confidence" in message
+        or "does not match" in message
+        or "verify transcript and voice match" in message
+    ):
+        return (
+            422,
+            "MISMATCHED_TEXT",
+            "Transcript text does not match the spoken audio closely enough for alignment.",
+        )
+    return (500, "SUBTITLE_ALIGNMENT_FAILED", "Subtitle alignment failed.")
+
+
+def _alignment_quality_error(result: AlignmentResult) -> tuple[int, str, str] | None:
+    if not result.words:
+        return (
+            422,
+            "LONG_SILENCE",
+            "Alignment produced no timed words. Check for long silence in the voice track.",
+        )
+    if not result.sentences:
+        return (
+            422,
+            "MISMATCHED_TEXT",
+            "Alignment produced no sentence timings. Verify transcript and voice match.",
+        )
+    avg_confidence = (
+        sum(sentence.confidence_avg for sentence in result.sentences)
+        / len(result.sentences)
+    )
+    if avg_confidence < 0.3:
+        return (
+            422,
+            "MISMATCHED_TEXT",
+            (
+                f"Alignment confidence is very low ({avg_confidence:.2f}). "
+                "Verify transcript matches audio."
+            ),
+        )
+    return None
 
 
 class _SetupDraftRecord(BaseModel):
@@ -160,7 +301,13 @@ def _is_valid_setup_id(setup_id: str) -> bool:
 
 
 def _setup_draft_dir(setup_id: str) -> Path:
-    return _setup_cache_root() / setup_id
+    if not _is_valid_setup_id(setup_id):
+        raise ValueError("Invalid setup id.")
+    cache_root = _setup_cache_root().resolve()
+    draft_dir = (cache_root / setup_id).resolve(strict=False)
+    if not draft_dir.is_relative_to(cache_root):
+        raise ValueError("Invalid setup id.")
+    return draft_dir
 
 
 def _setup_artifacts_dir(setup_id: str) -> Path:
@@ -185,6 +332,21 @@ def _invalid_draft_project_path_response(path_value: str) -> JSONResponse:
         "Draft project path must be absolute and its parent directory must exist.",
         {"path": path_value},
     )
+
+
+def _safe_project_folder_name(name: str) -> str:
+    cleaned = "".join(
+        char if char.isalnum() or char in {" ", "-", "_"} else "-"
+        for char in name.strip()
+    )
+    normalized = "-".join(cleaned.split()).strip("-_")
+    return normalized or "untitled-project"
+
+
+def _default_draft_project_path(name: str) -> str:
+    projects_root = app_root() / "projects"
+    projects_root.mkdir(parents=True, exist_ok=True)
+    return str(projects_root / _safe_project_folder_name(name))
 
 
 def _new_setup_id() -> str:
@@ -241,17 +403,22 @@ def _validate_source_file(path_value: str) -> Path:
 
 def _stage_copy(source_path: str, destination: Path) -> str:
     source = _validate_source_file(source_path)
+    temp_path = destination.parent / f".{destination.name}.{secrets.token_hex(6)}.staging"
     try:
         source_resolved = source.resolve(strict=True)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination_resolved = destination.resolve(strict=False)
         if source_resolved == destination_resolved:
             return str(destination)
-        shutil.copy2(source, destination)
+        shutil.copy2(source, temp_path)
+        os.replace(temp_path, destination)
     except shutil.SameFileError:
         return str(destination)
     except OSError as exc:
         raise ValueError("Could not copy setup draft artifact.") from exc
+    finally:
+        if temp_path.exists():
+            temp_path.unlink(missing_ok=True)
     return str(destination)
 
 
@@ -282,6 +449,8 @@ def _apply_setup_draft_update(record: _SetupDraftRecord, payload: SetupDraftUpda
         record.path = payload.path
     if "name" in payload.model_fields_set and payload.name is not None:
         record.name = payload.name
+        if "path" not in payload.model_fields_set:
+            record.path = _default_draft_project_path(payload.name)
     if "output_preset" in payload.model_fields_set and payload.output_preset is not None:
         record.output_preset = payload.output_preset
 
@@ -353,6 +522,39 @@ def _apply_setup_draft_update(record: _SetupDraftRecord, payload: SetupDraftUpda
             record.alignment_staged_path = str(alignment_path)
 
 
+def _reset_setup_pipeline_state(record: _SetupDraftRecord) -> None:
+    record.subtitle_generation = _default_setup_subtitle_generation()
+    record.alignment = _default_setup_alignment()
+    _clear_staged_file(record.setup_id, record.subtitles_staged_path)
+    record.subtitles_staged_path = None
+    _clear_staged_file(record.setup_id, record.alignment_staged_path)
+    record.alignment_staged_path = None
+
+
+def _sanitize_artifact_filename(filename: str | None, fallback: str) -> str:
+    if not filename:
+        return fallback
+    cleaned = Path(filename).name.strip()
+    return cleaned or fallback
+
+
+async def _stage_upload_file(file: UploadFile, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = destination.parent / f".{destination.name}.{secrets.token_hex(6)}.uploading"
+    try:
+        with temp_path.open("wb") as handle:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+        os.replace(temp_path, destination)
+    finally:
+        await file.close()
+        if temp_path.exists():
+            temp_path.unlink(missing_ok=True)
+
+
 def _setup_draft_session(record: _SetupDraftRecord) -> SetupDraftSession:
     voice_path = Path(record.voice_staged_path) if record.voice_staged_path is not None else None
     transcript_path = (
@@ -389,17 +591,22 @@ def _setup_draft_session(record: _SetupDraftRecord) -> SetupDraftSession:
 
 
 @router.post("/drafts", response_model=SetupDraftSession)
-async def create_setup_draft(payload: SetupDraftCreateRequest) -> SetupDraftSession | JSONResponse:
-    if not _is_valid_draft_project_path(payload.path):
-        return _invalid_draft_project_path_response(payload.path)
+async def create_setup_draft(
+    payload: SetupDraftCreateRequest,
+    response: Response,
+) -> SetupDraftSession | JSONResponse:
+    path = payload.path or _default_draft_project_path(payload.name)
+    if not _is_valid_draft_project_path(path):
+        return _invalid_draft_project_path_response(path)
     setup_id = _new_setup_id()
     record = _SetupDraftRecord(
         setup_id=setup_id,
-        path=payload.path,
+        path=path,
         name=payload.name,
         output_preset=payload.output_preset,
     )
     _save_setup_draft_record(record)
+    set_setup_session_cookie(response, setup_id)
     return _setup_draft_session(record)
 
 
@@ -451,8 +658,96 @@ async def patch_setup_draft(
     return _setup_draft_session(record)
 
 
+@router.post("/drafts/{setup_id}/artifacts/{kind}", response_model=SetupDraftSession)
+async def upload_setup_draft_artifact(
+    setup_id: str,
+    kind: ArtifactKind,
+    file: Annotated[UploadFile, File()],
+) -> SetupDraftSession | JSONResponse:
+    record = _load_setup_draft_record(setup_id)
+    if record is None:
+        return _error(
+            404,
+            "SETUP_DRAFT_NOT_FOUND",
+            "Setup draft was not found.",
+            {"setup_id": setup_id},
+        )
+
+    suffix = Path(file.filename or "").suffix.lower()
+    try:
+        if kind == "voice":
+            if suffix not in SUPPORTED_SUBTITLE_VOICE_SUFFIXES:
+                return _error(
+                    415,
+                    "UNSUPPORTED_VOICE_CODEC",
+                    "Voice upload accepts .mp3, .wav, or .m4a files.",
+                    {"filename": file.filename or ""},
+                )
+            destination = _setup_artifacts_dir(record.setup_id) / f"voice{suffix or '.wav'}"
+            previous_staged = record.voice_staged_path
+            record.voice_source_path = _sanitize_artifact_filename(file.filename, destination.name)
+            await _stage_upload_file(file, destination)
+            record.voice_staged_path = str(destination)
+            if previous_staged is not None and previous_staged != record.voice_staged_path:
+                _clear_staged_file(record.setup_id, previous_staged)
+            _reset_setup_pipeline_state(record)
+        elif kind == "transcript":
+            if suffix and suffix not in SUPPORTED_TRANSCRIPT_SUFFIXES:
+                return _error(
+                    415,
+                    "UNSUPPORTED_TRANSCRIPT_FORMAT",
+                    "Transcript upload accepts .txt, .md, or .srt files.",
+                    {"filename": file.filename or ""},
+                )
+            destination = _setup_artifacts_dir(record.setup_id) / f"transcript{suffix or '.txt'}"
+            previous_staged = record.transcript_staged_path
+            record.transcript_source_path = _sanitize_artifact_filename(
+                file.filename,
+                destination.name,
+            )
+            await _stage_upload_file(file, destination)
+            record.transcript_staged_path = str(destination)
+            if previous_staged is not None and previous_staged != record.transcript_staged_path:
+                _clear_staged_file(record.setup_id, previous_staged)
+            record.alignment = _default_setup_alignment()
+            _clear_staged_file(record.setup_id, record.alignment_staged_path)
+            record.alignment_staged_path = None
+        else:
+            if suffix and suffix not in SUPPORTED_WATERMARK_SUFFIXES:
+                return _error(
+                    415,
+                    "UNSUPPORTED_WATERMARK_FORMAT",
+                    "Watermark upload accepts .png, .jpg, .jpeg, or .webp files.",
+                    {"filename": file.filename or ""},
+                )
+            destination = _setup_artifacts_dir(record.setup_id) / f"watermark{suffix or '.png'}"
+            previous_staged = record.watermark_staged_path
+            record.watermark_source_path = _sanitize_artifact_filename(
+                file.filename,
+                destination.name,
+            )
+            await _stage_upload_file(file, destination)
+            record.watermark_staged_path = str(destination)
+            if previous_staged is not None and previous_staged != record.watermark_staged_path:
+                _clear_staged_file(record.setup_id, previous_staged)
+    except OSError as exc:
+        return _error(
+            500,
+            "SETUP_ARTIFACT_UPLOAD_FAILED",
+            "Uploading setup artifact failed.",
+            {"error": str(exc)},
+        )
+
+    _save_setup_draft_record(record)
+    return _setup_draft_session(record)
+
+
 @router.delete("/drafts/{setup_id}", response_model=None)
-async def delete_setup_draft(setup_id: str) -> dict[str, bool] | JSONResponse:
+async def delete_setup_draft(
+    setup_id: str,
+    request: Request,
+    response: Response,
+) -> dict[str, bool] | JSONResponse:
     if not _is_valid_setup_id(setup_id):
         return _error(
             404,
@@ -469,6 +764,8 @@ async def delete_setup_draft(setup_id: str) -> dict[str, bool] | JSONResponse:
             {"setup_id": setup_id},
         )
     shutil.rmtree(draft_dir)
+    if request.cookies.get(SETUP_SESSION_COOKIE) == setup_id:
+        clear_setup_session_cookie(response)
     return {"ok": True}
 
 
@@ -528,6 +825,216 @@ async def generate_subtitle(
         )
 
 
+@subtitle_router.post("/subtitle/alignment", response_model=SubtitleAlignmentResponse)
+async def run_setup_alignment(
+    payload: SubtitleAlignmentRequest,
+) -> SubtitleAlignmentResponse | JSONResponse:
+    record = _load_setup_draft_record(payload.setup_id)
+    if record is None:
+        return _error(
+            404,
+            "SETUP_DRAFT_NOT_FOUND",
+            "Setup draft was not found.",
+            {"setup_id": payload.setup_id},
+        )
+    if not record.name.strip():
+        return _alignment_response(
+            status="ready",
+            alignment=record.alignment,
+            error_code="PROJECT_NAME_REQUIRED",
+            error_message="Enter a project name before running alignment.",
+        )
+    if record.voice_staged_path is None:
+        return _alignment_response(
+            status="ready",
+            alignment=record.alignment,
+            error_code="VOICE_NOT_SELECTED",
+            error_message="Select a voice file before running alignment.",
+        )
+    if record.transcript_staged_path is None:
+        return _alignment_response(
+            status="ready",
+            alignment=record.alignment,
+            error_code="TRANSCRIPT_NOT_SELECTED",
+            error_message="Select a transcript file before running alignment.",
+        )
+    if record.subtitles_staged_path is None:
+        return _alignment_response(
+            status="ready",
+            alignment=record.alignment,
+            error_code="SUBTITLE_NOT_GENERATED",
+            error_message="Generate subtitles before running alignment.",
+        )
+    if record.subtitle_generation.status != SetupSubtitleGenerationState.succeeded:
+        return _alignment_response(
+            status="ready",
+            alignment=record.alignment,
+            error_code="SUBTITLE_NOT_READY",
+            error_message="Generate subtitles successfully before running alignment.",
+        )
+    if record.alignment.status == "running":
+        return _alignment_response(status="running", alignment=record.alignment)
+
+    voice_path = Path(record.voice_staged_path)
+    transcript_path = Path(record.transcript_staged_path)
+    subtitles_path = Path(record.subtitles_staged_path)
+    if not voice_path.is_file():
+        record.alignment = record.alignment.model_copy(
+            update={"status": "failed", "error": "Voice file not found."}
+        )
+        _save_setup_draft_record(record)
+        return _alignment_response(
+            status="failed",
+            alignment=record.alignment,
+            error_code="VOICE_NOT_SELECTED",
+            error_message="Select a voice file before running alignment.",
+        )
+    if not transcript_path.is_file():
+        record.alignment = record.alignment.model_copy(
+            update={"status": "failed", "error": "Transcript file not found."}
+        )
+        _save_setup_draft_record(record)
+        return _alignment_response(
+            status="failed",
+            alignment=record.alignment,
+            error_code="TRANSCRIPT_NOT_SELECTED",
+            error_message="Select a transcript file before running alignment.",
+        )
+    if not subtitles_path.is_file():
+        record.alignment = record.alignment.model_copy(
+            update={"status": "failed", "error": "Generated subtitles are missing."}
+        )
+        _save_setup_draft_record(record)
+        return _alignment_response(
+            status="failed",
+            alignment=record.alignment,
+            error_code="SUBTITLE_NOT_GENERATED",
+            error_message="Generate subtitles before running alignment.",
+        )
+    transcript_text = transcript_path.read_text(encoding="utf-8")
+    if not transcript_text.strip():
+        record.alignment = record.alignment.model_copy(
+            update={"status": "failed", "error": "Transcript file is empty."}
+        )
+        _save_setup_draft_record(record)
+        return _alignment_response(
+            status="failed",
+            alignment=record.alignment,
+            error_code="TRANSCRIPT_EMPTY",
+            error_message="Transcript file is empty.",
+        )
+
+    voice = _detect_voice(voice_path)
+    audio_duration = voice.duration if voice is not None else 0.0
+    current_hash = compute_alignment_hash(voice_path, transcript_text)
+    draft_dir = _setup_draft_dir(record.setup_id)
+    alignment_hash_path = draft_dir / "alignment.hash"
+    alignment_path = _setup_artifacts_dir(record.setup_id) / "alignment.json"
+    if (
+        alignment_path.is_file()
+        and alignment_hash_path.is_file()
+        and alignment_hash_path.read_text(encoding="utf-8").strip() == current_hash
+    ):
+        cached = AlignmentResult.model_validate_json(alignment_path.read_text(encoding="utf-8"))
+        update = write_aligned_srt_file(subtitles_path, cached)
+        record.alignment = SetupAlignment(
+            status="aligned",
+            hash=current_hash,
+            device="cuda fp16",
+            model="large-v3",
+            audio_duration=audio_duration,
+            cache_hit=True,
+        )
+        record.alignment_staged_path = str(alignment_path)
+        _save_setup_draft_record(record)
+        return _alignment_response(
+            status="succeeded",
+            corrections_applied=update.corrections_applied,
+            alignment=record.alignment,
+        )
+
+    try:
+        from server.pipeline.transcribe import align
+
+        sentences = segment(transcript_text)
+        if not sentences:
+            record.alignment = SetupAlignment(
+                status="failed",
+                hash=current_hash,
+                device="cuda fp16",
+                model="large-v3",
+                audio_duration=audio_duration,
+                cache_hit=False,
+                error="Transcript file is empty.",
+            )
+            _save_setup_draft_record(record)
+            return _alignment_response(
+                status="failed",
+                alignment=record.alignment,
+                error_code="TRANSCRIPT_EMPTY",
+                error_message="Transcript file is empty.",
+            )
+        record.alignment = SetupAlignment(
+            status="running",
+            hash=current_hash,
+            device="cuda fp16",
+            model="large-v3",
+            audio_duration=audio_duration,
+            cache_hit=False,
+        )
+        _save_setup_draft_record(record)
+        fallback_to_cpu = False
+        try:
+            result = await align(voice_path, sentences)
+        except Exception as exc:
+            if _is_cuda_related_error(exc):
+                fallback_to_cpu = True
+                result = await align(voice_path, sentences, device="cpu")
+            else:
+                raise
+
+        quality_error = _alignment_quality_error(result)
+        if quality_error is not None:
+            raise RecoverableAlignmentError(*quality_error)
+
+        alignment_path.write_text(result.model_dump_json(), encoding="utf-8")
+        alignment_hash_path.write_text(current_hash, encoding="utf-8")
+        update = write_aligned_srt_file(subtitles_path, result)
+        record.alignment = SetupAlignment(
+            status="aligned",
+            hash=current_hash,
+            device="cpu fp32" if fallback_to_cpu else "cuda fp16",
+            model="large-v3",
+            audio_duration=audio_duration,
+            cache_hit=False,
+        )
+        record.alignment_staged_path = str(alignment_path)
+        _save_setup_draft_record(record)
+        return _alignment_response(
+            status="succeeded",
+            corrections_applied=update.corrections_applied,
+            alignment=record.alignment,
+        )
+    except Exception as exc:
+        record.alignment = SetupAlignment(
+            status="failed",
+            hash=current_hash,
+            device="cuda fp16",
+            model="large-v3",
+            audio_duration=audio_duration,
+            cache_hit=False,
+            error=str(exc),
+        )
+        _save_setup_draft_record(record)
+        _, code, message = _recoverable_alignment_error(exc)
+        return _alignment_response(
+            status="failed",
+            alignment=record.alignment,
+            error_code=code,
+            error_message=message,
+        )
+
+
 def _resolve_subtitle_target(payload: SubtitleGenerateRequest) -> _SubtitleTarget | JSONResponse:
     if payload.setup_id:
         record = _load_setup_draft_record(payload.setup_id)
@@ -539,34 +1046,12 @@ def _resolve_subtitle_target(payload: SubtitleGenerateRequest) -> _SubtitleTarge
                 {"setup_id": payload.setup_id},
             )
         if payload.voice_path is not None:
-            artifacts_dir = _setup_artifacts_dir(record.setup_id)
-            suffix = Path(payload.voice_path).suffix.lower() or ".wav"
-            try:
-                _apply_staged_path(
-                    record,
-                    source_value=payload.voice_path,
-                    source_attr="voice_source_path",
-                    staged_attr="voice_staged_path",
-                    destination=artifacts_dir / f"voice{suffix}",
-                )
-            except ValueError as exc:
-                record.subtitle_generation = SetupSubtitleGenerationResult(
-                    status=SetupSubtitleGenerationState.failed,
-                    cue_count=0,
-                    total_duration_s=0.0,
-                    cache_state=SetupSubtitleCacheState.unknown,
-                    error_message=str(exc),
-                )
-                record.alignment = _default_setup_alignment()
-                _save_setup_draft_record(record)
-                return _error(
-                    400,
-                    "INVALID_STAGED_FILE",
-                    "Could not stage voice file.",
-                    {"path": payload.voice_path, "error": str(exc)},
-                )
-            record.subtitle_generation = _default_setup_subtitle_generation()
-            record.alignment = _default_setup_alignment()
+            return _error(
+                400,
+                "VOICE_PATH_FORBIDDEN",
+                "Use setup draft artifact upload endpoints for voice files.",
+                {"setup_id": payload.setup_id},
+            )
         if record.voice_staged_path is None:
             return _error(
                 400,

@@ -49,35 +49,108 @@ def _write_project(project_dir: Path, transcript: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_project(tmp_path) -> None:
+async def test_create_project_rejects_legacy_path_name_payload(tmp_path) -> None:
     target = tmp_path / "newproj"
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/projects", json={"path": str(target), "name": "Test"})
         list_response = await client.get("/projects")
-    assert response.status_code == 200
-    project_id = response.json()["project_id"]
-    assert project_id.startswith("p_")
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "PROJECT_CREATE_PAYLOAD_FORBIDDEN"
     assert list_response.status_code == 200
-    card = list_response.json()["items"][0]
-    assert card["project_id"] == project_id
-    assert card["thumbnail_path"].endswith("/project-placeholder.svg")
-    assert (target / "media").is_dir()
-    assert (target / "renders").is_dir()
-    assert (target / ".vc").is_dir()
-    assert (target / "transcript.txt").is_file()
-    assert (target / "voice.wav").is_file()
-    assert (target / "subtitles.srt").is_file()
-    assert (target / ".vc" / "alignment.json").is_file()
-    assert (target / ".vc" / "clips").is_dir()
-    assert (target / ".vc" / "drafts").is_dir()
-    assert (target / ".vc" / "thumbs").is_dir()
-    assert (target / ".vc" / "thumbs" / "project-placeholder.svg").is_file()
-    assert (target / ".vc" / "logs").is_dir()
+    assert list_response.json()["items"] == []
+    assert not target.exists()
 
 
 @pytest.mark.asyncio
-async def test_new_folder_project_alias(tmp_path) -> None:
+async def test_create_project_invalid_setup_cookie_does_not_delete_outside_cache() -> None:
+    victim = settings.app_db_path.parent / "victim"
+    victim.mkdir()
+    keep = victim / "keep.txt"
+    keep.write_text("keep", encoding="utf-8")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/projects", headers={"Cookie": "vc_setup_id=../victim"})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "SETUP_DRAFT_NOT_FOUND"
+    assert keep.read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.asyncio
+async def test_create_project_from_setup_draft_materializes_final_layout(tmp_path: Path) -> None:
+    source_dir = tmp_path / "sources"
+    source_dir.mkdir()
+    voice_source = source_dir / "voice.wav"
+    transcript_source = source_dir / "transcript.txt"
+    subtitles_source = source_dir / "subtitles.srt"
+    watermark_source = source_dir / "watermark.png"
+    _write_wav(voice_source, duration_secs=1.0)
+    transcript_source.write_text("Hello world.", encoding="utf-8")
+    subtitles_source.write_text(
+        "1\r\n00:00:00,000 --> 00:00:01,000\r\nHello world.\r\n",
+        encoding="utf-8",
+    )
+    watermark_source.write_bytes(b"png")
+    target = tmp_path / "from-setup"
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        draft = await client.post(
+            "/setup/drafts",
+            json={"path": str(target), "name": "From Setup", "output_preset": "vertical"},
+        )
+        assert draft.status_code == 200
+        setup_id = draft.json()["setup_id"]
+
+        staged = await client.patch(
+            f"/setup/drafts/{setup_id}",
+            json={
+                "voice_path": str(voice_source),
+                "transcript_path": str(transcript_source),
+                "watermark_path": str(watermark_source),
+                "subtitles_path": str(subtitles_source),
+                "subtitle_generation": {
+                    "status": "succeeded",
+                    "cue_count": 1,
+                    "total_duration_s": 1.0,
+                    "cache_state": "miss",
+                    "error_message": None,
+                },
+                "alignment": {
+                    "status": "aligned",
+                    "hash": "abc123",
+                    "device": "cpu fp32",
+                    "model": "large-v3",
+                    "audio_duration": 1.0,
+                    "cache_hit": False,
+                },
+            },
+        )
+        assert staged.status_code == 200
+
+        created = await client.post("/projects")
+        assert created.status_code == 200
+        project_id = created.json()["project_id"]
+        config = await client.get(f"/projects/{project_id}/config")
+
+    assert target.is_dir()
+    assert (target / "voice.wav").is_file()
+    assert (target / "transcript.txt").is_file()
+    assert (target / "subtitles.srt").is_file()
+    assert (target / "media" / "watermark.png").is_file()
+    assert (target / ".vc" / "thumbs" / "project-placeholder.svg").is_file()
+    assert config.status_code == 200
+    payload = config.json()["config"]
+    assert payload["output"]["resolution"] == "1080x1920"
+    assert payload["watermark"]["mediaId"] == "watermark-1"
+    assert payload["media"][0]["name"] == "watermark.png"
+    assert not (settings.app_db_path.parent / "setup-cache" / setup_id).exists()
+
+
+@pytest.mark.asyncio
+async def test_new_folder_project_alias_is_not_a_creation_surface(tmp_path) -> None:
     target = tmp_path / "new-folder"
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -85,55 +158,76 @@ async def test_new_folder_project_alias(tmp_path) -> None:
             "/projects/new-folder",
             json={"path": str(target), "name": "New Folder"},
         )
-    assert response.status_code == 200
-    assert response.json()["project_id"].startswith("p_")
+    assert response.status_code == 405
+    assert not target.exists()
 
 
 @pytest.mark.asyncio
-async def test_create_project_rejects_non_empty_directory(tmp_path) -> None:
+async def test_create_project_failure_consumes_setup_session(tmp_path) -> None:
     target = tmp_path / "newproj"
     target.mkdir()
     (target / "existing.txt").write_text("x", encoding="utf-8")
+    source_dir = tmp_path / "sources"
+    source_dir.mkdir()
+    voice_source = source_dir / "voice.wav"
+    transcript_source = source_dir / "transcript.txt"
+    subtitles_source = source_dir / "subtitles.srt"
+    _write_wav(voice_source)
+    transcript_source.write_text("Hello world.", encoding="utf-8")
+    subtitles_source.write_text(
+        "1\r\n00:00:00,000 --> 00:00:01,000\r\nHello world.\r\n",
+        encoding="utf-8",
+    )
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/projects", json={"path": str(target), "name": "Test"})
+        draft = await client.post(
+            "/setup/drafts",
+            json={"path": str(target), "name": "Blocked", "output_preset": "final"},
+        )
+        setup_id = draft.json()["setup_id"]
+        staged = await client.patch(
+            f"/setup/drafts/{setup_id}",
+            json={
+                "voice_path": str(voice_source),
+                "transcript_path": str(transcript_source),
+                "subtitles_path": str(subtitles_source),
+                "subtitle_generation": {
+                    "status": "succeeded",
+                    "cue_count": 1,
+                    "total_duration_s": 1.0,
+                    "cache_state": "miss",
+                    "error_message": None,
+                },
+                "alignment": {
+                    "status": "aligned",
+                    "hash": "abc123",
+                    "device": "cpu fp32",
+                    "model": "large-v3",
+                    "audio_duration": 1.0,
+                    "cache_hit": False,
+                },
+            },
+        )
+        assert staged.status_code == 200
+
+        response = await client.post("/projects")
+        retry = await client.post("/projects")
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "NOT_EMPTY"
-
-
-@pytest.mark.asyncio
-async def test_new_folder_reports_permission_denied(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    target = tmp_path / "denied"
-    real_mkdir = Path.mkdir
-
-    def deny_target(path: Path, *args: object, **kwargs: object) -> None:
-        if path == target:
-            raise PermissionError("denied")
-        return real_mkdir(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "mkdir", deny_target)
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/projects/new-folder",
-            json={"path": str(target), "name": "Denied"},
-        )
-
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "PERMISSION_DENIED"
+    assert retry.status_code == 400
+    assert retry.json()["error"]["code"] == "SETUP_SESSION_REQUIRED"
+    assert not (settings.app_db_path.parent / "setup-cache" / setup_id).exists()
 
 
 @pytest.mark.asyncio
 async def test_recent_open_and_remove_project(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
     target = tmp_path / "newproj"
+    _write_project(target, "One sentence.")
+    touch_recent(target, "Test")
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        create_response = await client.post(
-            "/projects", json={"path": str(target), "name": "Test"}
-        )
-        assert create_response.status_code == 200
-
         recent_response = await client.get("/projects/recent")
         assert recent_response.status_code == 200
         assert recent_response.json()[0]["name"] == "Test"

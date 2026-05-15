@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
-from server.pipeline.srt import generate_srt
+from server.pipeline.srt import generate_srt, write_aligned_srt_file
 
 
 def _alignment() -> AlignmentResult:
@@ -103,6 +103,20 @@ def test_timestamps_use_srt_format() -> None:
 
     assert re.search(r"00:00:00,000 --> 00:00:01,200", srt)
     assert re.search(r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}", srt)
+
+
+def test_aligned_srt_correction_count_handles_cue_resegmentation(tmp_path) -> None:
+    previous_srt = (
+        "1\r\n00:00:00,000 --> 00:00:00,500\r\nHello\r\n\r\n"
+        "2\r\n00:00:00,500 --> 00:00:01,200\r\nworld.\r\n"
+    )
+    srt_path = tmp_path / "subtitles.srt"
+    srt_path.write_text(previous_srt, encoding="utf-8", newline="")
+
+    update = write_aligned_srt_file(srt_path, _alignment())
+
+    assert update.corrections_applied >= 1
+    assert update.corrections_applied < update.cue_count + 2
 
 
 def _seconds(timestamp: str) -> float:

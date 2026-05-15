@@ -3,11 +3,10 @@
 import { FileText, Image as ImageIcon, Loader2, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useRef } from "react";
+import { Suspense, useRef, type ChangeEvent } from "react";
 import type { SetupOutputPreset, SetupSubtitleGenerationResult } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AlignmentCard } from "@/components/setup/AlignmentCard";
-import { PathCard } from "@/components/setup/PathCard";
 import { StatusTile, type StatusTileState } from "@/components/setup/StatusTile";
 import { Stepper } from "@/components/setup/Stepper";
 import {
@@ -40,6 +39,9 @@ function SetupScreen() {
   const voiceRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
   const alignmentRef = useRef<HTMLDivElement>(null);
+  const voiceInputRef = useRef<HTMLInputElement>(null);
+  const transcriptInputRef = useRef<HTMLInputElement>(null);
+  const watermarkInputRef = useRef<HTMLInputElement>(null);
   const setup = useSetupDraft(searchParams.get("path") ?? "", searchParams.get("projectId") ?? "");
   const { draft } = setup;
   const steps = {
@@ -49,13 +51,44 @@ function SetupScreen() {
     alignment: draft.alignment.status === "aligned",
   };
   const canRunAlignment = steps.projectName && steps.voice && steps.subtitle && draft.alignment.status !== "running";
-  const canCreateProject = setup.canContinue && Boolean(draft.project_id);
+  const canCreateProject = setup.canContinue;
 
-  function createProject() {
-    if (!canCreateProject || !draft.project_id) {
+  async function createProject() {
+    if (!canCreateProject) {
       return;
     }
-    router.push(`/editor/${encodeURIComponent(draft.project_id)}`);
+    const projectId = await setup.createProject();
+    if (!projectId) {
+      return;
+    }
+    router.push(`/editor/${encodeURIComponent(projectId)}`);
+  }
+
+  async function uploadVoice(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    await setup.uploadVoice(file);
+    event.target.value = "";
+  }
+
+  async function uploadTranscript(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    await setup.uploadTranscript(file);
+    event.target.value = "";
+  }
+
+  async function uploadWatermark(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    await setup.uploadWatermark(file);
+    event.target.value = "";
   }
 
   return (
@@ -71,13 +104,21 @@ function SetupScreen() {
           </Button>
           <Button
             disabled={!canCreateProject}
-            onClick={createProject}
+            onClick={() => { void createProject(); }}
             variant="primary"
           >
             {t("createProject")}
           </Button>
         </div>
       </header>
+      {setup.creationError ? (
+        <div
+          className="col-span-full rounded-(--r) border border-(--red-line) bg-(--red-bg) px-(--space-5) py-(--space-4) text-xs text-(--text-2)"
+          role="alert"
+        >
+          {setup.creationError}
+        </div>
+      ) : null}
       <Stepper
         draft={draft}
         onAlignmentClick={() => alignmentRef.current?.scrollIntoView({ behavior: "smooth" })}
@@ -113,11 +154,6 @@ function SetupScreen() {
             />
           </Field>
         </div>
-        {draft.path ? (
-          <div className="mt-[18px]">
-            <PathCard onChange={() => router.push("/")} path={draft.path} />
-          </div>
-        ) : null}
         <div className="mt-[18px] border-t border-(--line-soft) pt-[18px]" ref={voiceRef}>
           <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-normal text-(--text-2)">
             {t("inputs.title")}
@@ -125,16 +161,19 @@ function SetupScreen() {
           <p className="mb-(--space-5) text-xs leading-relaxed text-(--text-3)">{t("inputs.body")}</p>
           <div className="grid grid-cols-3 gap-2.5">
             <StatusTile
+              actionLabel="Choose"
               filename={fileName(draft.voice?.path)}
               kind="voice"
               meta={
                 draft.voice
-                  ? `${formatDuration(draft.voice.duration)} · ${draft.voice.sample_rate / 1000}kHz · ${channelLabel(draft.voice.channels)}`
+                  ? `${formatDuration(draft.voice.duration)} / ${draft.voice.sample_rate / 1000}kHz / ${channelLabel(draft.voice.channels)}`
                   : undefined
               }
+              onChoose={() => voiceInputRef.current?.click()}
               state={voiceTileState(draft.voice?.state)}
             />
             <StatusTile
+              actionLabel="Choose"
               filename={fileName(draft.transcript?.path)}
               kind="transcript"
               meta={
@@ -142,17 +181,21 @@ function SetupScreen() {
                   ? t("inputs.transcriptDetected", { count: draft.transcript.sentence_count })
                   : undefined
               }
+              onChoose={() => transcriptInputRef.current?.click()}
               state={transcriptTileState(draft.transcript?.state)}
             />
             <div className="flex flex-col items-center gap-(--space-3) rounded-(--r-sm) border border-dashed border-(--bg-5) bg-(--bg-1) px-(--space-6) py-(--space-8) text-center text-(--text-3)">
               <ImageIcon aria-hidden="true" className="h-(--space-8) w-(--space-8)" />
               <strong className="text-sm font-semibold text-(--text)">watermark.png</strong>
               <span className="font-mono text-[11px] text-(--text-3)">optional</span>
-              <Button size="extra-small" variant="ghost">
+              <Button onClick={() => watermarkInputRef.current?.click()} size="extra-small" variant="ghost">
                 Choose
               </Button>
             </div>
           </div>
+          <input accept=".mp3,.wav,.m4a" className="hidden" onChange={(event) => { void uploadVoice(event); }} ref={voiceInputRef} type="file" />
+          <input accept=".txt,.md,.srt" className="hidden" onChange={(event) => { void uploadTranscript(event); }} ref={transcriptInputRef} type="file" />
+          <input accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={(event) => { void uploadWatermark(event); }} ref={watermarkInputRef} type="file" />
         </div>
       </section>
       <div className="flex flex-col gap-[18px]">
@@ -167,6 +210,7 @@ function SetupScreen() {
           <AlignmentCard
             alignment={draft.alignment}
             canRun={canRunAlignment}
+            correctionsApplied={setup.alignmentCorrections}
             onRun={() => void setup.runAlignment()}
             transcript={draft.transcript}
             voice={draft.voice}

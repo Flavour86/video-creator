@@ -27,8 +27,12 @@ export async function request<T>(path: `/${string}`, options: ServerRequestOptio
   const headers = new Headers(requestOptions.headers);
   const init: RequestInit = { ...requestOptions, headers };
   if (body !== undefined) {
-    headers.set("Content-Type", "application/json");
-    init.body = JSON.stringify(body);
+    if (body instanceof FormData) {
+      init.body = body;
+    } else {
+      headers.set("Content-Type", "application/json");
+      init.body = JSON.stringify(body);
+    }
   }
 
   const response = await fetch(`/api/server${path}`, init);

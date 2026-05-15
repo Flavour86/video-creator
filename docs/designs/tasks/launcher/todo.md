@@ -30,18 +30,18 @@
 - [X] Task 6: Implement Subtitle Generate vertical slice
   - Acceptance: `POST /subtitle` generates `subtitles.srt`, reports cue count/duration/status/cache, and checks Subtitle only after success.
   - Verify: `rtk pnpm -F @vc/server test -- test_transcribe.py`, `rtk pnpm -F @vc/server test -- test_setup_route.py`, `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
-- [ ] Task 7: Implement Subtitle Alignment vertical slice
+- [X] Task 7: Implement Subtitle Alignment vertical slice
   - Acceptance: `POST /subtitle/alignment` uses selected transcript plus generated subtitles, reports correction count, invalidates stale cache, and checks Alignment only after success.
   - Verify: `rtk pnpm -F @vc/server test -- test_alignment_subtitles.py`, `rtk pnpm -F @vc/server test -- test_alignment_integration.py`, `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
-- [ ] Task 8: Create the final project and hand off to Editor
+- [X] Task 8: Create the final project and hand off to Editor
   - Acceptance: `POST /projects` materializes the final layout only after all four checks, persists preset/watermark/config/thumbnail, and routes to `/editor/:projectId`.
   - Verify: `rtk pnpm -F @vc/server test -- test_projects_route.py`, `rtk pnpm -F @vc/server test -- test_project_schema.py`, `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
-- [ ] Checkpoint: Setup
+- [X] Checkpoint: Setup
   - Acceptance: Launcher -> Setup -> subtitle generation -> alignment -> create project -> Editor works without premature project persistence.
 
 ## Phase 4: Hardening, Visuals, And Acceptance
 
-- [ ] Task 9: Cover Launcher and Setup edge cases
+- [X] Task 9: Cover Launcher and Setup edge cases
   - Acceptance: all spec-listed Launcher, Setup, subtitle generation, alignment, CUDA/WhisperX, transcript, and voice error states have focused tests and recoverable UI errors.
   - Verify: `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`, `rtk pnpm lint`
 - [ ] Task 10: Add Launcher and Setup visual parity coverage
