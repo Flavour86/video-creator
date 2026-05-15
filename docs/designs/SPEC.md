@@ -199,6 +199,7 @@ Never:
 
 ## open questions logs
 
+- [ ] 2026-05-15: Launcher Task 5 has conflicting acceptance detail. `todo.md` only requires the four-step Setup state/layout, but `plan.md` and `SPEC_LAUNCHER.md` require Voice/Transcript/Watermark cards to open a native file picker. Current `/setup` can only call draft/subtitle APIs with filesystem paths, while browser file inputs do not expose absolute source paths. Should Setup use a desktop/native file-picker bridge now, a backend browse/stage endpoint, or keep path-based mocks until the later E2E/native boundary task?
 - [X] 2026-05-14: Backend-global Task 4 makes `projects.last_render_at` canonical and says not to preserve `last_opened_at`, while `packages/shared-schemas/project.schema.json` still exposes `RecentProject.last_opened_at` and `RecentProjectCard.last_opened_at`. Should the public API/shared schema be renamed to `last_render_at` now, or should `last_opened_at` remain as a temporary response alias backed by `last_render_at` for frontend compatibility?
 User: don't remain anything unused!
 - [X] 2026-05-14: Backend-global Task 7 defines global `POST /uploads` and requires uploaded assets to be represented in canonical `config.media[]`, but the API surface does not say how `POST /uploads` receives the target project context. Should `POST /uploads` require `project_id` as query/form data and update that project's config, or should it only store root-level assets and leave `config.media[]` updates to a separate project config save?
