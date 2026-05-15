@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket
 from fastapi.responses import JSONResponse
@@ -13,7 +16,11 @@ from schemas import (  # type: ignore[import-not-found]
     DetectedTranscript,
     DetectedVoice,
     SetupAlignment,
+    SetupDraft,
     SetupOutputPreset,
+    SetupSubtitleCacheState,
+    SetupSubtitleGenerationResult,
+    SetupSubtitleGenerationState,
 )
 
 from server.db.projects import touch_recent
@@ -21,6 +28,7 @@ from server.domain.project import DetectedInputs, Project, ensure_project_layout
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
+from server.settings import settings
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
@@ -32,11 +40,414 @@ class ScaffoldRequest(BaseModel):
     force: bool = False
 
 
+class SetupDraftCreateRequest(BaseModel):
+    path: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=200)
+    output_preset: SetupOutputPreset = SetupOutputPreset.final
+
+
+class SetupDraftUpdateRequest(BaseModel):
+    path: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    output_preset: SetupOutputPreset | None = None
+    voice_path: str | None = None
+    transcript_path: str | None = None
+    watermark_path: str | None = None
+    subtitles_path: str | None = None
+    subtitle_generation: SetupSubtitleGenerationResult | None = None
+    alignment: SetupAlignment | None = None
+    alignment_result: dict[str, Any] | None = None
+
+
+class SetupDraftArtifacts(BaseModel):
+    voice_source_path: str | None = None
+    voice_path: str | None = None
+    transcript_source_path: str | None = None
+    transcript_path: str | None = None
+    subtitles_path: str | None = None
+    watermark_source_path: str | None = None
+    watermark_path: str | None = None
+    alignment_path: str | None = None
+
+
+class SetupDraftSession(BaseModel):
+    setup_id: str
+    draft: SetupDraft
+    artifacts: SetupDraftArtifacts
+
+
+def _default_setup_subtitle_generation() -> SetupSubtitleGenerationResult:
+    return SetupSubtitleGenerationResult(
+        status=SetupSubtitleGenerationState.ready,
+        cue_count=0,
+        total_duration_s=0.0,
+        cache_state=SetupSubtitleCacheState.unknown,
+        error_message=None,
+    )
+
+
+def _default_setup_alignment() -> SetupAlignment:
+    return SetupAlignment(
+        status="pending",
+        hash="",
+        device="cuda fp16",
+        model="large-v3",
+        audio_duration=0.0,
+        cache_hit=False,
+    )
+
+
+class _SetupDraftRecord(BaseModel):
+    setup_id: str
+    path: str
+    name: str
+    output_preset: SetupOutputPreset
+    voice_source_path: str | None = None
+    voice_staged_path: str | None = None
+    transcript_source_path: str | None = None
+    transcript_staged_path: str | None = None
+    subtitles_staged_path: str | None = None
+    watermark_source_path: str | None = None
+    watermark_staged_path: str | None = None
+    alignment_staged_path: str | None = None
+    subtitle_generation: SetupSubtitleGenerationResult = Field(
+        default_factory=_default_setup_subtitle_generation
+    )
+    alignment: SetupAlignment = Field(default_factory=_default_setup_alignment)
+
+
 def _error(status_code: int, code: str, message: str, details: dict[str, str]) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message, "details": details}},
     )
+
+
+def _setup_cache_root() -> Path:
+    root = settings.app_db_path.parent / "setup-cache"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _is_valid_setup_id(setup_id: str) -> bool:
+    return (
+        setup_id.startswith("setup_")
+        and len(setup_id) > 6
+        and setup_id.replace("_", "").isalnum()
+    )
+
+
+def _setup_draft_dir(setup_id: str) -> Path:
+    return _setup_cache_root() / setup_id
+
+
+def _setup_artifacts_dir(setup_id: str) -> Path:
+    artifacts_dir = _setup_draft_dir(setup_id) / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    return artifacts_dir
+
+
+def _setup_record_path(setup_id: str) -> Path:
+    return _setup_draft_dir(setup_id) / "draft.json"
+
+
+def _is_valid_draft_project_path(path_value: str) -> bool:
+    draft_path = Path(path_value)
+    return draft_path.is_absolute() and draft_path.parent.is_dir()
+
+
+def _invalid_draft_project_path_response(path_value: str) -> JSONResponse:
+    return _error(
+        400,
+        "INVALID_PATH",
+        "Draft project path must be absolute and its parent directory must exist.",
+        {"path": path_value},
+    )
+
+
+def _new_setup_id() -> str:
+    return f"setup_{secrets.token_hex(8)}"
+
+
+def _load_setup_draft_record(setup_id: str) -> _SetupDraftRecord | None:
+    if not _is_valid_setup_id(setup_id):
+        return None
+    record_path = _setup_record_path(setup_id)
+    if not record_path.is_file():
+        return None
+    try:
+        return _SetupDraftRecord.model_validate_json(record_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _save_setup_draft_record(record: _SetupDraftRecord) -> None:
+    draft_dir = _setup_draft_dir(record.setup_id)
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    _setup_artifacts_dir(record.setup_id)
+    payload = json.dumps(record.model_dump(mode="json"), indent=2)
+    _setup_record_path(record.setup_id).write_text(payload, encoding="utf-8")
+
+
+def _clear_staged_file(setup_id: str, path_value: str | None) -> None:
+    if path_value is None:
+        return
+    try:
+        draft_dir = _setup_draft_dir(setup_id).resolve()
+        target = Path(path_value).resolve(strict=False)
+    except OSError:
+        return
+
+    if not target.is_relative_to(draft_dir):
+        return
+    if not target.is_file():
+        return
+    try:
+        target.unlink()
+    except OSError as exc:
+        raise ValueError("Could not remove staged setup artifact.") from exc
+
+
+def _validate_source_file(path_value: str) -> Path:
+    source = Path(path_value)
+    if not source.is_absolute():
+        raise ValueError("Staged source path must be absolute.")
+    if not source.is_file():
+        raise ValueError(f"Staged source file does not exist: {path_value}")
+    return source
+
+
+def _stage_copy(source_path: str, destination: Path) -> str:
+    source = _validate_source_file(source_path)
+    try:
+        source_resolved = source.resolve(strict=True)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination_resolved = destination.resolve(strict=False)
+        if source_resolved == destination_resolved:
+            return str(destination)
+        shutil.copy2(source, destination)
+    except shutil.SameFileError:
+        return str(destination)
+    except OSError as exc:
+        raise ValueError("Could not copy setup draft artifact.") from exc
+    return str(destination)
+
+
+def _apply_staged_path(
+    record: _SetupDraftRecord,
+    *,
+    source_value: str | None,
+    source_attr: str,
+    staged_attr: str,
+    destination: Path,
+) -> None:
+    staged_before = getattr(record, staged_attr)
+    if source_value is None:
+        _clear_staged_file(record.setup_id, staged_before)
+        setattr(record, source_attr, None)
+        setattr(record, staged_attr, None)
+        return
+
+    staged_path = _stage_copy(source_value, destination)
+    if staged_before is not None and staged_before != staged_path:
+        _clear_staged_file(record.setup_id, staged_before)
+    setattr(record, source_attr, source_value)
+    setattr(record, staged_attr, staged_path)
+
+
+def _apply_setup_draft_update(record: _SetupDraftRecord, payload: SetupDraftUpdateRequest) -> None:
+    if "path" in payload.model_fields_set and payload.path is not None:
+        record.path = payload.path
+    if "name" in payload.model_fields_set and payload.name is not None:
+        record.name = payload.name
+    if "output_preset" in payload.model_fields_set and payload.output_preset is not None:
+        record.output_preset = payload.output_preset
+
+    artifacts_dir = _setup_artifacts_dir(record.setup_id)
+    if "voice_path" in payload.model_fields_set:
+        voice_source = payload.voice_path
+        voice_suffix = ".wav"
+        if voice_source is not None:
+            voice_suffix = Path(voice_source).suffix.lower() or ".wav"
+        _apply_staged_path(
+            record,
+            source_value=voice_source,
+            source_attr="voice_source_path",
+            staged_attr="voice_staged_path",
+            destination=artifacts_dir / f"voice{voice_suffix}",
+        )
+    if "transcript_path" in payload.model_fields_set:
+        transcript_source = payload.transcript_path
+        transcript_suffix = ".txt"
+        if transcript_source is not None:
+            transcript_suffix = Path(transcript_source).suffix.lower() or ".txt"
+        _apply_staged_path(
+            record,
+            source_value=transcript_source,
+            source_attr="transcript_source_path",
+            staged_attr="transcript_staged_path",
+            destination=artifacts_dir / f"transcript{transcript_suffix}",
+        )
+    if "watermark_path" in payload.model_fields_set:
+        watermark_source = payload.watermark_path
+        watermark_suffix = ".png"
+        if watermark_source is not None:
+            watermark_suffix = Path(watermark_source).suffix.lower() or ".png"
+        _apply_staged_path(
+            record,
+            source_value=watermark_source,
+            source_attr="watermark_source_path",
+            staged_attr="watermark_staged_path",
+            destination=artifacts_dir / f"watermark{watermark_suffix}",
+        )
+    if "subtitles_path" in payload.model_fields_set:
+        subtitles_source = payload.subtitles_path
+        if subtitles_source is None:
+            _clear_staged_file(record.setup_id, record.subtitles_staged_path)
+            record.subtitles_staged_path = None
+        else:
+            record.subtitles_staged_path = _stage_copy(
+                subtitles_source,
+                artifacts_dir / "subtitles.srt",
+            )
+
+    if (
+        "subtitle_generation" in payload.model_fields_set
+        and payload.subtitle_generation is not None
+    ):
+        record.subtitle_generation = payload.subtitle_generation
+    if "alignment" in payload.model_fields_set and payload.alignment is not None:
+        record.alignment = payload.alignment
+    if "alignment_result" in payload.model_fields_set:
+        if payload.alignment_result is None:
+            _clear_staged_file(record.setup_id, record.alignment_staged_path)
+            record.alignment_staged_path = None
+        else:
+            alignment_path = artifacts_dir / "alignment.json"
+            alignment_path.write_text(
+                json.dumps(payload.alignment_result, indent=2),
+                encoding="utf-8",
+            )
+            record.alignment_staged_path = str(alignment_path)
+
+
+def _setup_draft_session(record: _SetupDraftRecord) -> SetupDraftSession:
+    voice_path = Path(record.voice_staged_path) if record.voice_staged_path is not None else None
+    transcript_path = (
+        Path(record.transcript_staged_path) if record.transcript_staged_path is not None else None
+    )
+
+    voice = _detect_voice(voice_path) if voice_path is not None else None
+    transcript = _detect_transcript(transcript_path) if transcript_path is not None else None
+    alignment = record.alignment
+    if voice is not None and alignment.audio_duration <= 0:
+        alignment = alignment.model_copy(update={"audio_duration": voice.duration})
+
+    draft = SetupDraft(
+        project_id=None,
+        path=record.path,
+        name=record.name,
+        output_preset=record.output_preset,
+        voice=voice,
+        transcript=transcript,
+        subtitle_generation=record.subtitle_generation,
+        alignment=alignment,
+    )
+    artifacts = SetupDraftArtifacts(
+        voice_source_path=record.voice_source_path,
+        voice_path=record.voice_staged_path,
+        transcript_source_path=record.transcript_source_path,
+        transcript_path=record.transcript_staged_path,
+        subtitles_path=record.subtitles_staged_path,
+        watermark_source_path=record.watermark_source_path,
+        watermark_path=record.watermark_staged_path,
+        alignment_path=record.alignment_staged_path,
+    )
+    return SetupDraftSession(setup_id=record.setup_id, draft=draft, artifacts=artifacts)
+
+
+@router.post("/drafts", response_model=SetupDraftSession)
+async def create_setup_draft(payload: SetupDraftCreateRequest) -> SetupDraftSession | JSONResponse:
+    if not _is_valid_draft_project_path(payload.path):
+        return _invalid_draft_project_path_response(payload.path)
+    setup_id = _new_setup_id()
+    record = _SetupDraftRecord(
+        setup_id=setup_id,
+        path=payload.path,
+        name=payload.name,
+        output_preset=payload.output_preset,
+    )
+    _save_setup_draft_record(record)
+    return _setup_draft_session(record)
+
+
+@router.get("/drafts/{setup_id}", response_model=SetupDraftSession)
+def get_setup_draft(setup_id: str) -> SetupDraftSession | JSONResponse:
+    record = _load_setup_draft_record(setup_id)
+    if record is None:
+        return _error(
+            404,
+            "SETUP_DRAFT_NOT_FOUND",
+            "Setup draft was not found.",
+            {"setup_id": setup_id},
+        )
+    return _setup_draft_session(record)
+
+
+@router.patch("/drafts/{setup_id}", response_model=SetupDraftSession)
+async def patch_setup_draft(
+    setup_id: str,
+    payload: SetupDraftUpdateRequest,
+) -> SetupDraftSession | JSONResponse:
+    record = _load_setup_draft_record(setup_id)
+    if record is None:
+        return _error(
+            404,
+            "SETUP_DRAFT_NOT_FOUND",
+            "Setup draft was not found.",
+            {"setup_id": setup_id},
+        )
+
+    if (
+        "path" in payload.model_fields_set
+        and payload.path is not None
+        and not _is_valid_draft_project_path(payload.path)
+    ):
+        return _invalid_draft_project_path_response(payload.path)
+
+    try:
+        _apply_setup_draft_update(record, payload)
+    except ValueError as exc:
+        return _error(
+            400,
+            "INVALID_STAGED_FILE",
+            "Setup draft artifact staging failed.",
+            {"error": str(exc)},
+        )
+
+    _save_setup_draft_record(record)
+    return _setup_draft_session(record)
+
+
+@router.delete("/drafts/{setup_id}", response_model=None)
+async def delete_setup_draft(setup_id: str) -> dict[str, bool] | JSONResponse:
+    if not _is_valid_setup_id(setup_id):
+        return _error(
+            404,
+            "SETUP_DRAFT_NOT_FOUND",
+            "Setup draft was not found.",
+            {"setup_id": setup_id},
+        )
+    draft_dir = _setup_draft_dir(setup_id)
+    if not draft_dir.is_dir():
+        return _error(
+            404,
+            "SETUP_DRAFT_NOT_FOUND",
+            "Setup draft was not found.",
+            {"setup_id": setup_id},
+        )
+    shutil.rmtree(draft_dir)
+    return {"ok": True}
 
 
 @router.post("/scaffold", response_model=DetectedInputs)
