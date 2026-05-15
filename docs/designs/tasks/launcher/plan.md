@@ -67,17 +67,17 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] Generated types include the three Setup output presets: `720p Draft`, `1080p Final`, and `1080p vertical 9:16`, represented by stable machine values.
-- [ ] Generated types include Launcher card fields for thumbnail URL/path, voice duration, sentence count, media count, optional last rendering time, optional render status tag, and pagination metadata.
-- [ ] Generated types include Setup subtitle generation result state with cue count, total duration, cache state, and recoverable error message.
-- [ ] Existing backend/frontend imports compile against regenerated TS/Python outputs without hand-editing generated files.
+- [X] Generated types include the three Setup output presets: `720p Draft`, `1080p Final`, and `1080p vertical 9:16`, represented by stable machine values.
+- [X] Generated types include Launcher card fields for thumbnail URL/path, voice duration, sentence count, media count, optional last rendering time, optional render status tag, and pagination metadata.
+- [X] Generated types include Setup subtitle generation result state with cue count, total duration, cache state, and recoverable error message.
+- [X] Existing backend/frontend imports compile against regenerated TS/Python outputs without hand-editing generated files.
 
 **Verification:**
 
-- [ ] `rtk pnpm gen:types`
-- [ ] `rtk pnpm gen:py`
-- [ ] `rtk pnpm -F @vc/web test`
-- [ ] `rtk pnpm -F @vc/server test`
+- [X] `rtk pnpm gen:types`
+- [X] `rtk pnpm gen:py`
+- [X] `rtk pnpm -F @vc/web test`
+- [X] `rtk pnpm -F @vc/server test`
 
 **Dependencies:** None
 
@@ -97,15 +97,15 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] Setup draft state can track project name, output preset, voice file, generated `subtitles.srt`, transcript file, optional watermark, and alignment result.
-- [ ] Draft artifacts live in an internal setup/cache location, not under `{root}/projects/<project>`.
-- [ ] Cancelled or abandoned drafts can be cleaned up without deleting user-selected source files.
-- [ ] Final project directories are not created by voice selection, subtitle generation, or alignment.
+- [X] Setup draft state can track project name, output preset, voice file, generated `subtitles.srt`, transcript file, optional watermark, and alignment result.
+- [X] Draft artifacts live in an internal setup/cache location, not under `{root}/projects/<project>`.
+- [X] Cancelled or abandoned drafts can be cleaned up without deleting user-selected source files.
+- [X] Final project directories are not created by voice selection, subtitle generation, or alignment.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/server test -- test_setup_route.py`
-- [ ] `rtk pnpm -F @vc/server lint`
+- [X] `rtk pnpm -F @vc/server test -- test_setup_route.py`
+- [X] `rtk pnpm -F @vc/server lint`
 
 **Dependencies:** Task 1
 
@@ -121,9 +121,9 @@ Frontend-global visual harness
 
 ### Checkpoint: Contracts
 
-- [ ] Shared schema generation passes.
-- [ ] Backend tests prove Setup draft artifacts do not materialize a final project.
-- [ ] Existing app routes still compile against the generated contracts.
+- [X] Shared schema generation passes.
+- [X] Backend tests prove Setup draft artifacts do not materialize a final project.
+- [X] Existing app routes still compile against the generated contracts.
 
 ### Phase 2: Launcher Recents And Preview
 
@@ -133,20 +133,20 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] `GET /projects` supports page size and page index and returns deterministic pagination metadata.
-- [ ] Recents sort by latest render time descending, with a stable fallback for projects that have never rendered.
-- [ ] Missing or corrupt project config rows are deleted or excluded according to the spec and covered by tests.
-- [ ] Launcher renders `Local workspace`, `Recent projects`, `New project`, recents grid/list, and bottom pagination.
-- [ ] Project cards show thumbnail, project name, voice duration, sentence count, media count, optional last rendering time, and optional status tag.
-- [ ] The primary Launcher UI never renders a raw folder path.
-- [ ] Clicking a project card opens `/editor/:projectId` for valid projects.
-- [ ] Clicking `New project` enters Setup directly.
+- [X] `GET /projects` supports page size and page index and returns deterministic pagination metadata.
+- [X] Recents sort by latest render time descending, with a stable fallback for projects that have never rendered.
+- [X] Missing or corrupt project config rows are deleted or excluded according to the spec and covered by tests.
+- [X] Launcher renders `Local workspace`, `Recent projects`, `New project`, recents grid/list, and bottom pagination.
+- [X] Project cards show thumbnail, project name, voice duration, sentence count, media count, optional last rendering time, and optional status tag.
+- [X] The primary Launcher UI never renders a raw folder path.
+- [X] Clicking a project card opens `/editor/:projectId` for valid projects.
+- [X] Clicking `New project` enters Setup directly.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/server test -- test_projects_route.py`
-- [ ] `rtk pnpm -F @vc/web test -- page.test.tsx`
-- [ ] `rtk pnpm -F @vc/web lint`
+- [X] `rtk pnpm -F @vc/server test -- test_projects_route.py`
+- [X] `rtk pnpm -F @vc/web test -- page.test.tsx`
+- [X] `rtk pnpm -F @vc/web lint`
 
 **Dependencies:** Task 1; backend-global project-index work if not already landed
 
@@ -166,17 +166,17 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] New projects get a deterministic three-color fallback thumbnail stored or cached under the project/internal thumbnail location.
-- [ ] Projects with a latest successful rendered video prefer a first-frame thumbnail from that render.
-- [ ] The thumbnail play icon is shown only when a playable latest successful render exists.
-- [ ] Clicking the thumbnail play icon opens an in-app modal that plays the rendered video.
-- [ ] The modal has dark and light visual states matching `../../visuals/Launcher-play-dark.png` and `../../visuals/Launcher-play-light.png`.
+- [X] New projects get a deterministic three-color fallback thumbnail stored or cached under the project/internal thumbnail location.
+- [X] Projects with a latest successful rendered video prefer a first-frame thumbnail from that render.
+- [X] The thumbnail play icon is shown only when a playable latest successful render exists.
+- [X] Clicking the thumbnail play icon opens an in-app modal that plays the rendered video.
+- [X] The modal has dark and light visual states matching `../../visuals/Launcher-play-dark.png` and `../../visuals/Launcher-play-light.png`.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/server test -- test_projects_route.py`
-- [ ] `rtk pnpm -F @vc/web test -- page.test.tsx`
-- [ ] `rtk pnpm -F @vc/web test -- ProjectCard`
+- [X] `rtk pnpm -F @vc/server test -- test_projects_route.py`
+- [X] `rtk pnpm -F @vc/web test -- page.test.tsx`
+- [X] `rtk pnpm -F @vc/web test -- ProjectCard`
 
 **Dependencies:** Task 3; render artifact persistence from backend-global/render work
 
@@ -192,9 +192,9 @@ Frontend-global visual harness
 
 ### Checkpoint: Launcher
 
-- [ ] Launcher works with empty, populated, missing/corrupt, and paginated recents.
-- [ ] Project cards meet the field and path-hiding requirements.
-- [ ] Thumbnail preview modal works for a project with a successful render.
+- [X] Launcher works with empty, populated, missing/corrupt, and paginated recents.
+- [X] Project cards meet the field and path-hiding requirements.
+- [X] Thumbnail preview modal works for a project with a successful render.
 
 ### Phase 3: Four-Step Setup Flow
 
@@ -204,20 +204,20 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] Setup header shows `New project`, `SetUp`, and `Cancel`.
-- [ ] Left stepper/checklist contains `Project Name`, `Voice`, `Subtitle`, and `Alignment`.
-- [ ] Project Name is checked only when a non-empty name is present.
-- [ ] Output preset is a segmented control with `720p (Draft)`, `1080p (Final)`, and `1080p / vertical (9:16)`.
+- [X] Setup header shows `New project`, `SetUp`, and `Cancel`.
+- [X] Left stepper/checklist contains `Project Name`, `Voice`, `Subtitle`, and `Alignment`.
+- [X] Project Name is checked only when a non-empty name is present.
+- [X] Output preset is a segmented control with `720p (Draft)`, `1080p (Final)`, and `1080p / vertical (9:16)`.
 - [ ] Voice card opens the file picker, accepts `.mp3`, `.wav`, and `.m4a`, rejects unsupported files with a non-blocking error, and shows a green border after valid selection.
 - [ ] Transcript and optional watermark use the same picker pattern in the Subtitle Alignment section.
-- [ ] `Create project` remains disabled until all four checks pass.
-- [ ] `Cancel` returns to Launcher without persisting partial Setup state.
+- [X] `Create project` remains disabled until all four checks pass.
+- [X] `Cancel` returns to Launcher without persisting partial Setup state.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/web test -- useSetupDraft.test.ts`
-- [ ] `rtk pnpm -F @vc/web lint`
+- [X] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
+- [X] `rtk pnpm -F @vc/web test -- useSetupDraft.test.ts`
+- [X] `rtk pnpm -F @vc/web lint`
 
 **Dependencies:** Task 1, Task 2
 
@@ -237,20 +237,20 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] `POST /subtitle` accepts `.mp3`, `.wav`, and `.m4a` voice input and rejects unsupported codecs with a clear recoverable error.
-- [ ] Subtitle generation status cycles through `ready -> running -> succeeded` or `failed`.
-- [ ] On success, the response includes cue count and total subtitle duration.
-- [ ] Cue durations sum to voice duration within +/-200 ms in backend tests.
-- [ ] Re-running with unchanged voice hash is a cache hit and does not reload the model.
-- [ ] Setup enables `Generate subtitle` only after Project Name and Voice are checked.
-- [ ] Setup marks Subtitle checked only after generation succeeds and displays cue count and duration in the right panel.
+- [X] `POST /subtitle` accepts `.mp3`, `.wav`, and `.m4a` voice input and rejects unsupported codecs with a clear recoverable error.
+- [X] Subtitle generation status cycles through `ready -> running -> succeeded` or `failed`.
+- [X] On success, the response includes cue count and total subtitle duration.
+- [X] Cue durations sum to voice duration within +/-200 ms in backend tests.
+- [X] Re-running with unchanged voice hash is a cache hit and does not reload the model.
+- [X] Setup enables `Generate subtitle` only after Project Name and Voice are checked.
+- [X] Setup marks Subtitle checked only after generation succeeds and displays cue count and duration in the right panel.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/server test -- test_transcribe.py`
-- [ ] `rtk pnpm -F @vc/server test -- test_setup_route.py`
-- [ ] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/web test -- useSetupDraft.test.ts`
+- [X] `rtk pnpm -F @vc/server test -- test_transcribe.py`
+- [X] `rtk pnpm -F @vc/server test -- test_setup_route.py`
+- [X] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
+- [X] `rtk pnpm -F @vc/web test -- useSetupDraft.test.ts`
 
 **Dependencies:** Task 2, Task 5
 
