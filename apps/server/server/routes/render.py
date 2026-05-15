@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from server.db.projects import project_path_for_id
@@ -344,6 +344,32 @@ async def play_project_render(
     if isinstance(project_dir, JSONResponse):
         return project_dir
     return await play_render(render_id=render_id, project=str(project_dir))
+
+
+@router.get("/projects/{project_id}/renders/{render_id}/file", response_model=None)
+async def get_project_render_file(project_id: str, render_id: str) -> FileResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    if row["status"] != "rendered":
+        return _error(
+            409,
+            "RENDER_NOT_PLAYABLE",
+            "Render is not playable.",
+            {"render_id": render_id},
+        )
+    output_path = _resolve_stored_path(str(row["output_path"]))
+    if not output_path.is_file():
+        return _error(
+            404,
+            "OUTPUT_NOT_FOUND",
+            "Render output not found.",
+            {"path": str(output_path)},
+        )
+    return FileResponse(str(output_path), media_type="video/mp4")
 
 
 def _render_history_response(row: Mapping[str, object]) -> RenderHistoryResponse:

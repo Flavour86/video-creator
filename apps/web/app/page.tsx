@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -25,6 +25,7 @@ export default function LauncherPage() {
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [pageIndex, setPageIndex] = useState(0);
   const [recentError, setRecentError] = useState(false);
+  const [previewProject, setPreviewProject] = useState<RecentProjectCard | null>(null);
 
   const loadRecent = useCallback(async (nextPageIndex = pageIndex) => {
     try {
@@ -49,13 +50,10 @@ export default function LauncherPage() {
     router.push(`/editor/${encodeURIComponent(project.project_id)}`);
   }
 
-  async function playLatestRender(project: RecentProjectCard) {
-    if (!project.latest_render_id) {
-      return;
+  function openPreview(project: RecentProjectCard) {
+    if (project.latest_render_id) {
+      setPreviewProject(project);
     }
-    await request(`/projects/${encodeURIComponent(project.project_id)}/renders/${encodeURIComponent(project.latest_render_id)}/play`, {
-      method: "POST",
-    });
   }
 
   async function deleteProject(project: RecentProjectCard) {
@@ -99,7 +97,7 @@ export default function LauncherPage() {
             key={project.project_id}
             onClick={() => openProject(project)}
             onDelete={() => void deleteProject(project)}
-            onPlayLatest={() => void playLatestRender(project)}
+            onPreview={() => openPreview(project)}
             project={project}
           />
         ))}
@@ -130,6 +128,36 @@ export default function LauncherPage() {
           </nav>
         ) : null}
       </section>
+      {previewProject ? (
+        <div
+          aria-label={`Preview ${previewProject.name}`}
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-(--space-8)"
+          role="dialog"
+        >
+          <div className="w-full max-w-250 rounded-(--r) border border-(--line) bg-(--bg) p-(--space-5) shadow-(--shadow-pop)">
+            <div className="mb-(--space-4) flex items-center justify-between gap-(--space-4)">
+              <h2 className="truncate text-base font-semibold tracking-normal text-(--text)">{previewProject.name}</h2>
+              <Button onClick={() => setPreviewProject(null)} size="small" variant="ghost">
+                <X aria-hidden="true" className="h-(--space-4) w-(--space-4)" />
+                Close
+              </Button>
+            </div>
+            <video
+              aria-label={`Video preview for ${previewProject.name}`}
+              className="aspect-video w-full rounded-(--r-sm) bg-black"
+              controls
+              src={previewVideoSrc(previewProject)}
+            />
+          </div>
+        </div>
+      ) : null}
     </PageChrome>
   );
+}
+
+function previewVideoSrc(project: RecentProjectCard): string {
+  return project.latest_render_id
+    ? `/api/server/projects/${encodeURIComponent(project.project_id)}/renders/${encodeURIComponent(project.latest_render_id)}/file`
+    : "";
 }

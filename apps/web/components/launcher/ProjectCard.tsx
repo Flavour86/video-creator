@@ -10,26 +10,45 @@ import { ProjectThumb } from "./ProjectThumb";
 type ProjectCardProps = {
   onClick: () => void;
   onDelete: () => void;
-  onPlayLatest: () => void;
+  onPreview: () => void;
   project: RecentProjectCard;
 };
 
-export function ProjectCard({ onClick, onDelete, onPlayLatest, project }: ProjectCardProps) {
+export function ProjectCard({ onClick, onDelete, onPreview, project }: ProjectCardProps) {
   const t = useTranslations("pages.launcher");
   const canPlay = project.latest_render_status === "done" && Boolean(project.latest_render_id);
   const openedAt = project.last_render_at ? formatRelativeTime(project.last_render_at) : null;
 
   return (
     <article
-      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-(--space-7) rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-6) transition-[background,border,transform] duration-150 hover:-translate-y-px hover:border-(--bg-5) hover:bg-(--bg-3)"
+      className="grid w-full grid-cols-[130px_minmax(0,1fr)_auto] items-center gap-(--space-7) rounded-(--r) border border-(--line) bg-(--bg-2) p-(--space-6) transition-[background,border,transform] duration-150 hover:-translate-y-px hover:border-(--bg-5) hover:bg-(--bg-3)"
     >
+      <span className="relative">
+        <button
+          aria-label={`Open ${project.name} thumbnail`}
+          className="block w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
+          onClick={onClick}
+          type="button"
+        >
+          <ProjectThumb seed={project.name} thumbnailPath={project.thumbnail_path} />
+        </button>
+        {canPlay ? (
+          <button
+            aria-label={`Preview ${project.name}`}
+            className="absolute bottom-(--space-2) right-(--space-2) grid h-(--space-8) w-(--space-8) place-items-center rounded-(--r-pill) border border-white/45 bg-black/55 text-white shadow-(--shadow-soft) hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
+            onClick={onPreview}
+            type="button"
+          >
+            <Play aria-hidden="true" className="h-(--space-4) w-(--space-4)" />
+          </button>
+        ) : null}
+      </span>
       <button
         aria-label={`Open ${project.name}`}
-        className="grid min-w-0 grid-cols-[130px_minmax(0,1fr)] items-center gap-(--space-7) text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
+        className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
         onClick={onClick}
         type="button"
       >
-        <ProjectThumb seed={project.name} />
         <span className="min-w-0">
           <span className="mb-0.5 block text-base font-semibold leading-tight tracking-normal text-(--text)">
             {project.name}
@@ -49,16 +68,6 @@ export function ProjectCard({ onClick, onDelete, onPlayLatest, project }: Projec
           </StatusTag>
         ) : null}
         <StatusTag variant={statusVariant(project.alignment_state)}>{t(`status.${project.alignment_state}`)}</StatusTag>
-        {canPlay ? (
-          <button
-            className="inline-flex h-(--space-9) items-center gap-(--space-2) rounded-(--r-sm) border border-(--line) px-(--space-3) text-xs font-semibold text-(--text-2) hover:bg-(--bg-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
-            onClick={onPlayLatest}
-            type="button"
-          >
-            <Play aria-hidden="true" className="h-(--space-3) w-(--space-3)" />
-            Play render
-          </button>
-        ) : null}
         <button
           aria-label={`Delete ${project.name}`}
           className="grid h-(--space-9) w-(--space-9) place-items-center rounded-(--r-pill) text-(--text-3) hover:bg-(--bg-3) hover:text-(--red) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"

@@ -79,9 +79,28 @@ def list_projects(limit: int = 20, offset: int = 0) -> list[dict[str, object]]:
                     FROM render_history rh
                     WHERE rh.project_id = projects.project_id
                       AND rh.excluded = 0
+                      AND rh.status IN ('rendered', 'done')
                     ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
                     LIMIT 1
                 ) AS latest_render_id,
+                (
+                    SELECT rh.output_path
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                      AND rh.status IN ('rendered', 'done')
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_output_path,
+                (
+                    SELECT rh.status
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                      AND rh.status IN ('rendered', 'done')
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_status,
                 (
                     SELECT rh.status
                     FROM render_history rh
@@ -89,7 +108,7 @@ def list_projects(limit: int = 20, offset: int = 0) -> list[dict[str, object]]:
                       AND rh.excluded = 0
                     ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
                     LIMIT 1
-                ) AS latest_render_status
+                ) AS last_render_status
             FROM projects
             ORDER BY last_render_at DESC, created_at DESC, project_id ASC
             LIMIT ? OFFSET ?
@@ -124,9 +143,28 @@ def list_project_index() -> list[dict[str, object]]:
                     FROM render_history rh
                     WHERE rh.project_id = projects.project_id
                       AND rh.excluded = 0
+                      AND rh.status IN ('rendered', 'done')
                     ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
                     LIMIT 1
                 ) AS latest_render_id,
+                (
+                    SELECT rh.output_path
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                      AND rh.status IN ('rendered', 'done')
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_output_path,
+                (
+                    SELECT rh.status
+                    FROM render_history rh
+                    WHERE rh.project_id = projects.project_id
+                      AND rh.excluded = 0
+                      AND rh.status IN ('rendered', 'done')
+                    ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
+                    LIMIT 1
+                ) AS latest_render_status,
                 (
                     SELECT rh.status
                     FROM render_history rh
@@ -134,7 +172,7 @@ def list_project_index() -> list[dict[str, object]]:
                       AND rh.excluded = 0
                     ORDER BY COALESCE(rh.finished_at, rh.started_at, rh.created_at) DESC, rh.id DESC
                     LIMIT 1
-                ) AS latest_render_status
+                ) AS last_render_status
             FROM projects
             ORDER BY last_render_at DESC, created_at DESC, project_id ASC
             """
@@ -217,6 +255,18 @@ def mark_project_rendered(project_path: Path) -> None:
             WHERE project_path = ? AND current_config_hash IS NOT NULL
             """,
             (now, str(project_path.resolve())),
+        )
+
+
+def set_project_thumbnail(project_path: Path, thumbnail_path: Path) -> None:
+    with connection() as conn:
+        conn.execute(
+            """
+            UPDATE projects
+            SET thumbnail_path = ?
+            WHERE project_path = ?
+            """,
+            (str(thumbnail_path.resolve()), str(project_path.resolve())),
         )
 
 

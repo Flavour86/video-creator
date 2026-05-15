@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
+import mimetypes
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 from schemas import (  # type: ignore[import-not-found]
     LauncherRenderStatusTag,
@@ -18,13 +21,17 @@ from schemas import (  # type: ignore[import-not-found]
 from server.db.project_configs import latest_config_for_project_path, save_config_snapshot
 from server.db.projects import (
     get_project_by_path,
-    list_project_index as list_projects,
     list_recent,
     project_id_for_path,
     project_path_for_id,
     remove_recent,
+    set_project_thumbnail,
     touch_recent,
 )
+from server.db.projects import (
+    list_project_index as list_projects,
+)
+from server.db.renders import add_render_artifact, list_render_artifacts
 from server.domain.project import (
     AlignmentState,
     DetectedInputs,
@@ -109,7 +116,7 @@ def _project_card(row: dict[str, object]) -> RecentProjectCard:
         media_count=_media_count(project_dir),
         alignment_state=alignment_state,
         status=_project_status(project_dir, project),
-        thumbnail_path=_optional_str(row.get("thumbnail_path")),
+        thumbnail_path=_thumbnail_for_card(row, project_dir),
         current_config_hash=_optional_str(row.get("current_config_hash")),
         last_rendered_config_hash=_optional_str(row.get("last_rendered_config_hash")),
         has_unrendered_changes=bool(row.get("has_unrendered_changes")),
@@ -145,6 +152,104 @@ def _valid_project_rows() -> list[dict[str, object]]:
     return valid_rows
 
 
+def _thumbnail_for_card(row: dict[str, object], project_dir: Path) -> str:
+    render_thumb = _latest_render_thumbnail(row, project_dir)
+    if render_thumb is not None:
+        set_project_thumbnail(project_dir, render_thumb)
+        return _thumbnail_url(str(row["project_id"]), render_thumb.name)
+    stored_thumb = _stored_project_thumbnail(row, project_dir)
+    if stored_thumb is not None:
+        return _thumbnail_url(str(row["project_id"]), stored_thumb.name)
+    placeholder = _ensure_placeholder_thumbnail(project_dir, str(row["name"]))
+    set_project_thumbnail(project_dir, placeholder)
+    return _thumbnail_url(str(row["project_id"]), placeholder.name)
+
+
+def _latest_render_thumbnail(row: dict[str, object], project_dir: Path) -> Path | None:
+    render_id = _optional_str(row.get("latest_render_id"))
+    if render_id is None or _render_status_for_contract(row.get("latest_render_status")) != "done":
+        return None
+    thumbs_dir = _thumbs_dir(project_dir)
+    for artifact in list_render_artifacts(render_id):
+        if str(artifact.get("kind")) != "thumbnail":
+            continue
+        artifact_path = Path(str(artifact.get("path", "")))
+        if artifact_path.is_file() and artifact_path.parent.resolve() == thumbs_dir.resolve():
+            return artifact_path
+
+    output_path = _optional_str(row.get("latest_render_output_path"))
+    if output_path is None:
+        return None
+    source = Path(output_path)
+    if not source.is_file():
+        return None
+    target = thumbs_dir / f"render-{_safe_thumb_stem(render_id)}.jpg"
+    if target.is_file():
+        return target
+    thumbs_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(source), "-frames:v", "1", "-q:v", "3", str(target)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if target.is_file() and target.stat().st_size > 0:
+        add_render_artifact(render_id=render_id, kind="thumbnail", path=target)
+        return target
+    return None
+
+
+def _stored_project_thumbnail(row: dict[str, object], project_dir: Path) -> Path | None:
+    stored = _optional_str(row.get("thumbnail_path"))
+    if stored is None:
+        return None
+    thumb = Path(stored)
+    if thumb.is_file() and thumb.parent.resolve() == _thumbs_dir(project_dir).resolve():
+        return thumb
+    return None
+
+
+def _ensure_placeholder_thumbnail(project_dir: Path, seed: str) -> Path:
+    thumbs_dir = _thumbs_dir(project_dir)
+    thumbs_dir.mkdir(parents=True, exist_ok=True)
+    target = thumbs_dir / "project-placeholder.svg"
+    if not target.exists():
+        colors = _placeholder_colors(seed)
+        target.write_text(
+            (
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 180">'
+                f'<rect width="100" height="180" fill="{colors[0]}"/>'
+                f'<rect x="100" width="100" height="180" fill="{colors[1]}"/>'
+                f'<rect x="200" width="100" height="180" fill="{colors[2]}"/>'
+                "</svg>"
+            ),
+            encoding="utf-8",
+        )
+    return target
+
+
+def _placeholder_colors(seed: str) -> tuple[str, str, str]:
+    digest = hashlib.sha256(seed.casefold().encode("utf-8")).hexdigest()
+    return (f"#{digest[0:6]}", f"#{digest[6:12]}", f"#{digest[12:18]}")
+
+
+def _safe_thumb_stem(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in "-_" else "-" for char in value)
+    return safe or hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def _thumbs_dir(project_dir: Path) -> Path:
+    return project_dir / ".vc" / "thumbs"
+
+
+def _thumbnail_url(project_id: str, filename: str) -> str:
+    return f"/projects/{quote(project_id, safe='')}/thumbnail/{quote(filename, safe='')}"
+
+
 def _render_status_for_contract(status: object) -> str | None:
     if status is None:
         return None
@@ -164,7 +269,7 @@ def _render_status_for_contract(status: object) -> str | None:
 
 
 def _launcher_render_status(row: dict[str, object]) -> LauncherRenderStatusTag | None:
-    status = row.get("latest_render_status")
+    status = row.get("last_render_status") or row.get("latest_render_status")
     if status is None:
         return LauncherRenderStatusTag.unrendered
     mapping = {
@@ -414,6 +519,7 @@ async def create_project(payload: CreateProjectRequest) -> ProjectResponse | JSO
             {"path": payload.path, "error": str(exc)},
         )
     touch_recent(project_dir, payload.name)
+    set_project_thumbnail(project_dir, _ensure_placeholder_thumbnail(project_dir, payload.name))
     save_config_snapshot(
         project_dir,
         project.model_dump(mode="json", by_alias=True, exclude_none=False),
@@ -444,6 +550,26 @@ async def projects(
             total_pages=total_pages,
         ),
     )
+
+
+@router.get("/{project_id}/thumbnail/{filename}", response_model=None)
+async def project_thumbnail(project_id: str, filename: str) -> FileResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    safe_name = Path(filename).name
+    if safe_name != filename:
+        return _error(
+            400,
+            "INVALID_THUMBNAIL",
+            "Thumbnail filename is invalid.",
+            {"filename": filename},
+        )
+    thumb = _thumbs_dir(project_dir) / safe_name
+    if not thumb.is_file():
+        return _error(404, "THUMBNAIL_NOT_FOUND", "Thumbnail not found.", {"filename": filename})
+    media_type = mimetypes.guess_type(thumb.name)[0] or "application/octet-stream"
+    return FileResponse(str(thumb), media_type=media_type)
 
 
 @router.post("/new", response_model=ProjectResponse)

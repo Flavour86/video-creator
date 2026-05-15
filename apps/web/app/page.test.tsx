@@ -153,7 +153,7 @@ describe("LauncherPage", () => {
     expect(card).not.toHaveTextContent("opened");
   });
 
-  it("plays the latest successful render from a project card", async () => {
+  it("opens the latest successful render in the preview modal", async () => {
     mockServer({
       recent: [
         {
@@ -166,6 +166,7 @@ describe("LauncherPage", () => {
           alignment_state: "aligned",
           status: "ready",
           has_unrendered_changes: false,
+          thumbnail_path: "/projects/p_done/thumbnail/render-r_latest.jpg",
           latest_render_id: "r_latest",
           latest_render_status: "done",
           render_status_tag: "rendered",
@@ -173,13 +174,18 @@ describe("LauncherPage", () => {
       ],
     });
     renderLauncher();
-    fireEvent.click(await screen.findByRole("button", { name: "Play render" }));
-    await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith(
-        "/api/server/projects/p_done/renders/r_latest/play",
-        expect.objectContaining({ method: "POST" }),
-      ),
+    expect(await screen.findByRole("img", { name: "Rendered thumbnail" })).toHaveAttribute(
+      "src",
+      "/api/server/projects/p_done/thumbnail/render-r_latest.jpg",
     );
+    fireEvent.click(screen.getByRole("button", { name: "Preview Rendered" }));
+    expect(screen.getByRole("dialog", { name: "Preview Rendered" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Video preview for Rendered")).toHaveAttribute(
+      "src",
+      "/api/server/projects/p_done/renders/r_latest/file",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Preview Rendered" })).not.toBeInTheDocument();
   });
 
   it("routes new projects directly to setup", async () => {

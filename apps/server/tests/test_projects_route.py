@@ -9,6 +9,7 @@ import pytest
 
 from server.db.app_db import connection
 from server.db.projects import touch_recent
+from server.db.renders import add_render_artifact
 from server.main import app
 from server.pipeline.cache import compute_alignment_hash
 from server.settings import settings
@@ -58,7 +59,9 @@ async def test_create_project(tmp_path) -> None:
     project_id = response.json()["project_id"]
     assert project_id.startswith("p_")
     assert list_response.status_code == 200
-    assert [item["project_id"] for item in list_response.json()["items"]] == [project_id]
+    card = list_response.json()["items"][0]
+    assert card["project_id"] == project_id
+    assert card["thumbnail_path"].endswith("/project-placeholder.svg")
     assert (target / "media").is_dir()
     assert (target / "renders").is_dir()
     assert (target / ".vc").is_dir()
@@ -69,6 +72,7 @@ async def test_create_project(tmp_path) -> None:
     assert (target / ".vc" / "clips").is_dir()
     assert (target / ".vc" / "drafts").is_dir()
     assert (target / ".vc" / "thumbs").is_dir()
+    assert (target / ".vc" / "thumbs" / "project-placeholder.svg").is_file()
     assert (target / ".vc" / "logs").is_dir()
 
 
@@ -248,6 +252,9 @@ async def test_projects_list_maps_render_status_tag(
     project_dir = tmp_path / "rendered"
     _write_project(project_dir, "First sentence.")
     touch_recent(project_dir, "Rendered")
+    thumb = project_dir / ".vc" / "thumbs" / "render-r_done.jpg"
+    thumb.parent.mkdir(parents=True)
+    thumb.write_bytes(b"thumb")
     project_id = ""
     with connection() as conn:
         row = conn.execute("SELECT project_id FROM projects WHERE project_path = ?", (str(project_dir.resolve()),)).fetchone()
@@ -273,6 +280,27 @@ async def test_projects_list_maps_render_status_tag(
                 "2026-05-08T12:01:00+00:00",
             ),
         )
+        conn.execute(
+            """
+            INSERT INTO render_history (
+                id, project_id, output_path, preset, resolution, width, height, status, started_at, finished_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "r_failed",
+                project_id,
+                str(project_dir / "renders" / "failed.mp4"),
+                "final",
+                "1920x1080",
+                1920,
+                1080,
+                "failed",
+                "2026-05-08T12:02:00+00:00",
+                "2026-05-08T12:03:00+00:00",
+            ),
+        )
+    add_render_artifact(render_id="r_done", kind="thumbnail", path=thumb)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -282,7 +310,8 @@ async def test_projects_list_maps_render_status_tag(
     project = response.json()["items"][0]
     assert project["latest_render_id"] == "r_done"
     assert project["latest_render_status"] == "done"
-    assert project["render_status_tag"] == "rendered"
+    assert project["render_status_tag"] == "failed"
+    assert project["thumbnail_path"].endswith("/render-r_done.jpg")
 
 
 @pytest.mark.asyncio
