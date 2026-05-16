@@ -19,34 +19,43 @@ export type MediaImportMode = "copy" | "link" | "generated";
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "ForegroundItem".
  */
-export type ForegroundItem = VisualItemBase;
+export type ForegroundItem = VisualItemBase & VisualMediaRefConstraint;
+/**
+ * @minItems 2
+ * @maxItems 2
+ *
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SentenceRange".
+ */
+export type SentenceRange = [number, number];
 /**
  * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "VisualItemBase".
+ * via the `definition` "VisualCacheStatus".
  */
-export type VisualItemBase =
-  | {
-      mediaIds?: null;
-      [k: string]: unknown;
-    }
-  | {
-      mediaId?: null;
-      [k: string]: unknown;
-    };
+export type VisualCacheStatus = "warm" | "partial" | "cold" | "invalid" | "orphaned";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "VisualMediaRefConstraint".
+ */
+export type VisualMediaRefConstraint = {
+  [k: string]: unknown;
+};
 /**
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "PipItem".
  */
-export type PipItem = VisualItemBase & {
-  pip: PipPlacement;
-};
+export type PipItem = VisualItemBase &
+  VisualMediaRefConstraint & {
+    pip: PipPlacement;
+  };
 /**
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "BackgroundItem".
  */
-export type BackgroundItem = VisualItemBase & {
-  crossfade: number;
-};
+export type BackgroundItem = VisualItemBase &
+  VisualMediaRefConstraint & {
+    crossfade: number;
+  };
 /**
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "RuntimeState".
@@ -112,11 +121,6 @@ export type RenderArtifactKind =
   | "companion";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "VisualCacheStatus".
- */
-export type VisualCacheStatus = "warm" | "partial" | "cold" | "invalid" | "orphaned";
-/**
- * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "SetupSubtitleGenerationState".
  */
 export type SetupSubtitleGenerationState = "ready" | "running" | "succeeded" | "failed";
@@ -125,14 +129,6 @@ export type SetupSubtitleGenerationState = "ready" | "running" | "succeeded" | "
  * via the `definition` "SetupSubtitleCacheState".
  */
 export type SetupSubtitleCacheState = "unknown" | "hit" | "miss";
-/**
- * @minItems 2
- * @maxItems 2
- *
- * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "SentenceRange".
- */
-export type SentenceRange = [number, number];
 
 export interface Project {
   version: 1;
@@ -235,6 +231,45 @@ export interface ForegroundLayer {
   kind: "fg";
   name: string;
   items: ForegroundItem[];
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "VisualItemBase".
+ */
+export interface VisualItemBase {
+  id: string;
+  mediaId?: string;
+  /**
+   * @minItems 1
+   */
+  mediaIds?: [string, ...string[]];
+  anchor?: "sentences" | "time";
+  from?: string;
+  to?: string;
+  sentences: SentenceRange;
+  start: number;
+  end: number;
+  motion: Motion;
+  transitions: Transitions;
+  cache_status?: VisualCacheStatus;
+  orphaned?: boolean;
+  orphan_reason?: string | null;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Motion".
+ */
+export interface Motion {
+  kind: "none" | "static" | "ken_burns" | "ken_burns_strong" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
+  easing: "linear" | "ease_in" | "ease_out" | "ease_in_out";
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Transitions".
+ */
+export interface Transitions {
+  in: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
+  out: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -481,22 +516,6 @@ export interface AlignmentStateResponse {
   cache_hit: boolean;
   hash?: string | null;
   error?: string | null;
-}
-/**
- * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "Motion".
- */
-export interface Motion {
-  kind: "none" | "static" | "ken_burns" | "ken_burns_strong" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
-  easing: "linear" | "ease_in" | "ease_out" | "ease_in_out";
-}
-/**
- * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "Transitions".
- */
-export interface Transitions {
-  in: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
-  out: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema

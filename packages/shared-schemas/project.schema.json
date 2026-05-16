@@ -459,16 +459,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "sentences", "start", "end", "motion", "transitions"],
-      "oneOf": [
-        {
-          "required": ["mediaId"],
-          "properties": { "mediaIds": { "type": "null" } }
-        },
-        {
-          "required": ["mediaIds"],
-          "properties": { "mediaId": { "type": "null" } }
-        }
-      ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "mediaId": { "type": "string", "minLength": 1 },
@@ -490,9 +480,18 @@
         "orphan_reason": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
       }
     },
+    "VisualMediaRefConstraint": {
+      "title": "VisualMediaRefConstraint",
+      "type": "object",
+      "anyOf": [{ "required": ["mediaId"] }, { "required": ["mediaIds"] }],
+      "not": { "required": ["mediaId", "mediaIds"] }
+    },
     "ForegroundItem": {
       "title": "ForegroundItem",
-      "allOf": [{ "$ref": "#/$defs/VisualItemBase" }]
+      "allOf": [
+        { "$ref": "#/$defs/VisualItemBase" },
+        { "$ref": "#/$defs/VisualMediaRefConstraint" }
+      ]
     },
     "PipPlacement": {
       "title": "PipPlacement",
@@ -511,6 +510,7 @@
       "title": "PipItem",
       "allOf": [
         { "$ref": "#/$defs/VisualItemBase" },
+        { "$ref": "#/$defs/VisualMediaRefConstraint" },
         {
           "type": "object",
           "additionalProperties": false,
@@ -525,6 +525,7 @@
       "title": "BackgroundItem",
       "allOf": [
         { "$ref": "#/$defs/VisualItemBase" },
+        { "$ref": "#/$defs/VisualMediaRefConstraint" },
         {
           "type": "object",
           "additionalProperties": false,

@@ -290,48 +290,33 @@ def test_editor_schema_rejects_out_of_range_pip_and_subtitle_values() -> None:
         Project.model_validate(payload)
 
 
-def test_editor_schema_rejects_missing_visual_media_reference_mode() -> None:
-    base_item = {
-        "id": "fg-1",
-        "sentences": [1, 1],
-        "start": 0,
-        "end": 1,
-        "motion": {"kind": "none", "easing": "linear"},
-        "transitions": {"in": "cut", "out": "cut"},
-    }
-    base_project = {
-        "version": 1,
-        "name": "bad-media-ref",
-        "audio": "voice.wav",
-        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
-        "output": _phase1_output(),
-        "layers": [{"id": "L-fg", "kind": "fg", "name": "Foreground", "items": []}],
-    }
-
-    missing_ref = {
-        **base_project,
-        "layers": [
-            {
-                "id": "L-fg",
-                "kind": "fg",
-                "name": "Foreground",
-                "items": [{**base_item}],
-            }
-        ],
-    }
-    with pytest.raises(ValidationError):
-        Project.model_validate(missing_ref)
-
-
-def test_visual_item_schema_declares_exclusive_media_reference_modes() -> None:
+def test_editor_schema_declares_visual_media_reference_constraints() -> None:
     schema = json.loads(
         (Path(__file__).resolve().parents[3] / "packages" / "shared-schemas" / "project.schema.json").read_text(
             encoding="utf-8"
         )
     )
-    one_of = schema["$defs"]["VisualItemBase"]["oneOf"]
-    assert {"required": ["mediaId"], "properties": {"mediaIds": {"type": "null"}}} in one_of
-    assert {"required": ["mediaIds"], "properties": {"mediaId": {"type": "null"}}} in one_of
+    defs = schema["$defs"]
+    media_ref = defs["VisualMediaRefConstraint"]
+    assert {"required": ["mediaId"]} in media_ref["anyOf"]
+    assert {"required": ["mediaIds"]} in media_ref["anyOf"]
+    assert media_ref["not"] == {"required": ["mediaId", "mediaIds"]}
+
+    for item_name in ("ForegroundItem", "PipItem", "BackgroundItem"):
+        all_of = defs[item_name]["allOf"]
+        assert {"$ref": "#/$defs/VisualMediaRefConstraint"} in all_of
+
+
+def test_visual_item_schema_requires_one_media_reference_mode() -> None:
+    schema = json.loads(
+        (Path(__file__).resolve().parents[3] / "packages" / "shared-schemas" / "project.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    visual_schema = schema["$defs"]["VisualMediaRefConstraint"]
+    assert {"required": ["mediaId"]} in visual_schema["anyOf"]
+    assert {"required": ["mediaIds"]} in visual_schema["anyOf"]
+    assert visual_schema["not"] == {"required": ["mediaId", "mediaIds"]}
 
 
 def test_editor_schema_rejects_legacy_subtitle_and_resolution_values() -> None:
