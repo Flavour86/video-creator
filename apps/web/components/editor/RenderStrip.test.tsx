@@ -32,8 +32,8 @@ describe("RenderStrip", () => {
       onCancel,
     });
 
-    expect(screen.getByText("Rendering draft : Queued")).toBeInTheDocument();
-    expect(screen.getByText("cache_warm")).toBeInTheDocument();
+    expect(screen.getByText("Rendering draft : queued")).toBeInTheDocument();
+    expect(screen.getByText("verifying cache")).toBeInTheDocument();
     expect(screen.getByText("12%")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Draft render progress" })).toHaveAttribute("aria-valuenow", "12");
 
@@ -52,8 +52,24 @@ describe("RenderStrip", () => {
       },
     });
 
-    expect(screen.getByText("Rendering draft : Ready")).toBeInTheDocument();
+    expect(screen.getByText("Rendering draft : done")).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+  });
+
+  it("maps subtitles and compose stage messages to canonical labels", () => {
+    renderStrip({
+      job: {
+        phase: "cache_warm",
+        progress: 33,
+        renderId: "r-draft",
+        running: true,
+        status: "running",
+        message: "building subtitles.srt",
+      },
+    });
+
+    expect(screen.getByText("Rendering draft : running")).toBeInTheDocument();
+    expect(screen.getByText("building subtitles.srt")).toBeInTheDocument();
   });
 });

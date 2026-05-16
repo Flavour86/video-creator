@@ -32,6 +32,8 @@ export function EditorBar({
 }: EditorBarProps) {
   const t = useTranslations("pages.editor");
   const saveLabel = saveStatus === "saving" ? t("saving") : saveStatus === "saved" ? t("saved") : saveStatus === "failed" ? t("saveFailed") : t("save");
+  const renderStateLabel = renderJob.running ? "queued/running" : renderDisabled ? "disabled" : "ready";
+  const draftLabel = renderJob.running ? t("drafting", { progress: renderJob.progress }) : t("renderDraft");
 
   return (
     <div className="grid h-12 grid-cols-[minmax(280px,_1fr)_auto] items-center gap-[14px] border-b border-(--line) bg-(--bg-1) px-[14px]">
@@ -43,16 +45,16 @@ export function EditorBar({
         </div>
       </div>
       <div className="flex items-center justify-end gap-2">
-        <StatusTag title={cacheLabel} variant="ready">{cacheLabel}</StatusTag>
-        <Button disabled={saving} onClick={onSave} size="extra-small" variant="ghost">
+        <StatusTag aria-label={`Render cache status: ${cacheLabel}`} title={cacheLabel} variant="ready">{cacheLabel}</StatusTag>
+        <Button aria-label={`Save project config (${saveStatus})`} disabled={saving} onClick={onSave} size="extra-small" variant="ghost">
           <Save aria-hidden="true" className="h-4 w-4" />
           {saveLabel}
         </Button>
-        <Button disabled={renderJob.running || renderDisabled} onClick={onRenderDraft} size="extra-small" variant="ghost">
+        <Button aria-label={`Render draft (${renderStateLabel})`} disabled={renderJob.running || renderDisabled} onClick={onRenderDraft} size="extra-small" variant="ghost">
           <Clapperboard aria-hidden="true" className="h-4 w-4" />
-          {renderJob.running ? t("drafting", { progress: renderJob.progress }) : t("renderDraft")}
+          {draftLabel}
         </Button>
-        <Button disabled={renderJob.running || renderDisabled} onClick={onRenderFinal} size="extra-small" variant="render">
+        <Button aria-label={`Render final (${renderStateLabel})`} disabled={renderJob.running || renderDisabled} onClick={onRenderFinal} size="extra-small" variant="render">
           <Film aria-hidden="true" className="h-4 w-4" />
           {t("renderFinal")}
         </Button>

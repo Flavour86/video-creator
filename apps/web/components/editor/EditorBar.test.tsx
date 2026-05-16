@@ -36,9 +36,10 @@ describe("EditorBar", () => {
     expect(screen.getByText("Demo")).toBeInTheDocument();
     expect(screen.getByText("projectId: p_demo")).toBeInTheDocument();
     expect(screen.getByText("cache 2/3")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save project config/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
+    expect(screen.getByText("cache 2/3")).toHaveAttribute("aria-label", "Render cache status: cache 2/3");
   });
 
   it("omits subtitles and background toolbar actions", () => {
@@ -53,6 +54,8 @@ describe("EditorBar", () => {
 
     expect(screen.getByRole("button", { name: /render draft/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /render final/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /render draft \(disabled\)/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /render final \(disabled\)/i })).toBeInTheDocument();
   });
 
   it("calls home action from the home icon", () => {

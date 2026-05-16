@@ -13,15 +13,15 @@ export function RenderStrip({ job, onCancel }: RenderStripProps) {
 
   const percent = Math.max(0, Math.min(100, Math.round(job.progress)));
   const cancellable = (job.status === "queued" || job.status === "running") && Boolean(job.renderId);
-  const label = labelForStatus(job.status);
-  const stage = job.phase || job.message || label;
+  const statusLabel = statusLabelFor(job.status);
+  const stageLabel = stageLabelFor(job);
 
   return (
-    <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-(--line) bg-(--amber-bg) px-3 py-1.5 text-xs text-(--text-2)">
+    <div aria-live="polite" className="grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-(--line) bg-(--amber-bg) px-3 py-1.5 text-xs text-(--text-2)">
       <div className="min-w-0">
         <div className="mb-1 flex min-w-0 items-center gap-2 font-mono text-[11px]">
-          <span className="shrink-0 font-semibold uppercase text-(--text)">{t("renderStripDraft", { phase: label })}</span>
-          <span className="truncate">{stage}</span>
+          <span className="shrink-0 font-semibold uppercase text-(--text)">{t("renderStripDraft", { phase: statusLabel })}</span>
+          <span className="truncate">{stageLabel}</span>
           <span className="ml-auto shrink-0">{percent}%</span>
         </div>
         <div
@@ -44,19 +44,41 @@ export function RenderStrip({ job, onCancel }: RenderStripProps) {
   );
 }
 
-function labelForStatus(status: EditorRenderJob["status"]): string {
+function statusLabelFor(status: EditorRenderJob["status"]): string {
   switch (status) {
     case "queued":
-      return "Queued";
+      return "queued";
     case "running":
-      return "Running";
+      return "running";
     case "ready":
-      return "Ready";
+      return "done";
     case "failed":
-      return "Failed";
+      return "failed";
     case "cancelled":
-      return "Cancelled";
+      return "cancelled";
     case "idle":
       return "";
   }
+}
+
+function stageLabelFor(job: EditorRenderJob): string {
+  if (job.status === "failed") return "failed";
+  if (job.status === "cancelled") return "cancelled";
+  if (job.status === "ready") return "done";
+  const normalizedPhase = (job.phase || "").trim().toLowerCase();
+  const normalizedMessage = (job.message || "").trim().toLowerCase();
+  if (normalizedMessage.includes("building subtitles.srt")) return "building subtitles.srt";
+  if (normalizedMessage.includes("pre-rendering clips")) return "pre-rendering clips";
+  if (normalizedMessage.includes("verifying cache")) return "verifying cache";
+  if (normalizedMessage.includes("ffmpeg compose")) return "ffmpeg compose";
+  if (normalizedMessage.includes("muxing audio")) return "muxing audio";
+  if (normalizedPhase === "cache_warm") return "verifying cache";
+  if (normalizedPhase === "compose") return "ffmpeg compose";
+  if (normalizedPhase === "muxing") return "muxing audio";
+  if (normalizedPhase === "done" || normalizedPhase === "ready") return "done";
+  if (normalizedPhase === "failed" || normalizedPhase === "error") return "failed";
+  if (normalizedPhase === "cancelled") return "cancelled";
+  if (normalizedPhase === "queued") return "queued";
+  if (normalizedPhase) return normalizedPhase;
+  return statusLabelFor(job.status);
 }

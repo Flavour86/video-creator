@@ -53,6 +53,7 @@ class RenderJob:
     project_dir: Path
     project: Project
     preset: RenderPreset
+    resolution: str
     output_path: Path
     started_at: datetime
 
@@ -86,9 +87,23 @@ _active_projects: dict[str, str] = {}
 _active_tasks: dict[str, asyncio.Task[None]] = {}
 _active_jobs: dict[str, RenderJob] = {}
 
+_RESOLUTION_ALIASES: dict[str, str] = {
+    "1080p": "1920x1080",
+    "720p": "1280x720",
+    "9:16": "1080x1920",
+    "1920x1080": "1920x1080",
+    "1280x720": "1280x720",
+    "1080x1920": "1080x1920",
+}
 
-async def start_render_project(*, project_dir: Path, preset: RenderPreset) -> RenderResult:
-    job = _create_job(project_dir=project_dir, preset=preset)
+
+async def start_render_project(
+    *,
+    project_dir: Path,
+    preset: RenderPreset,
+    resolution: str | None = None,
+) -> RenderResult:
+    job = _create_job(project_dir=project_dir, preset=preset, resolution=resolution)
     project_key = str(project_dir.resolve())
     if project_key in _active_projects:
         raise RenderError(409, "RENDER_IN_PROGRESS", "Render already running for this project.")
@@ -101,8 +116,13 @@ async def start_render_project(*, project_dir: Path, preset: RenderPreset) -> Re
     return RenderResult(render_id=job.render_id, output_path=job.output_path)
 
 
-async def render_project(*, project_dir: Path, preset: RenderPreset) -> RenderResult:
-    job = _create_job(project_dir=project_dir, preset=preset)
+async def render_project(
+    *,
+    project_dir: Path,
+    preset: RenderPreset,
+    resolution: str | None = None,
+) -> RenderResult:
+    job = _create_job(project_dir=project_dir, preset=preset, resolution=resolution)
     await _run_job(job, raise_errors=True)
     return RenderResult(render_id=job.render_id, output_path=job.output_path)
 
@@ -119,9 +139,16 @@ def active_render_count() -> int:
     return len(_active_jobs)
 
 
-def _create_job(*, project_dir: Path, preset: RenderPreset) -> RenderJob:
+def _create_job(
+    *,
+    project_dir: Path,
+    preset: RenderPreset,
+    resolution: str | None = None,
+) -> RenderJob:
     project = load_project(project_dir)
     preset_config = PRESETS[preset]
+    resolved_resolution = _resolve_render_resolution(project, preset, resolution)
+    width, height = _resolution_dimensions(resolved_resolution)
     render_id = _new_render_id()
     output_path = _output_path(project_dir, preset, render_id)
     started_at = datetime.now(UTC)
@@ -131,9 +158,9 @@ def _create_job(*, project_dir: Path, preset: RenderPreset) -> RenderJob:
         output_path=output_path,
         preset=preset,
         started_at=started_at,
-        resolution=preset_config.resolution,
-        width=int(preset_config.resolution.split("x", maxsplit=1)[0]),
-        height=int(preset_config.resolution.split("x", maxsplit=1)[1]),
+        resolution=resolved_resolution,
+        width=width,
+        height=height,
         video_crf=preset_config.crf,
         video_preset=preset_config.x264_preset,
         audio_bitrate_kbps=int(preset_config.audio_bitrate.removesuffix("k")),
@@ -143,6 +170,7 @@ def _create_job(*, project_dir: Path, preset: RenderPreset) -> RenderJob:
         project_dir=project_dir,
         project=project,
         preset=preset,
+        resolution=resolved_resolution,
         output_path=output_path,
         started_at=started_at,
     )
@@ -153,12 +181,13 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
 
     try:
         await _emit(job.render_id, "cache_warm", 1.0, message="verifying cache")
+        await _emit(job.render_id, "cache_warm", 4.0, message="building subtitles.srt")
         alignment = await _ensure_alignment(job.project_dir, job.project)
         preset_config = PRESETS[job.preset]
         await _warm_clip_cache(
             project_dir=job.project_dir,
             project=job.project,
-            resolution=preset_config.resolution,
+            resolution=job.resolution,
             fps=preset_config.fps,
             crf=preset_config.crf,
             render_id=job.render_id,
@@ -170,6 +199,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             alignment=alignment,
             output_path=job.output_path,
             preset=job.preset,
+            resolution=job.resolution,
         )
         media_stats = await _run_ffmpeg(
             _with_progress(command),
@@ -589,6 +619,27 @@ def _float_or_none(value: str | None) -> float | None:
 
 def _new_render_id() -> str:
     return f"r-{datetime.now(UTC).strftime('%Y-%m-%d-%H%M')}-{secrets.token_hex(3)}"
+
+
+def _resolve_render_resolution(
+    project: Project,
+    preset: RenderPreset,
+    requested: str | None,
+) -> str:
+    output = getattr(project, "output", None)
+    output_resolution = getattr(output, "resolution", None) if output is not None else None
+    for candidate in (requested, output_resolution):
+        if candidate is None:
+            continue
+        mapped = _RESOLUTION_ALIASES.get(str(candidate))
+        if mapped is not None:
+            return mapped
+    return PRESETS[preset].resolution
+
+
+def _resolution_dimensions(resolution: str) -> tuple[int, int]:
+    width, height = resolution.split("x", maxsplit=1)
+    return int(width), int(height)
 
 
 def _output_path(project_dir: Path, preset: RenderPreset, render_id: str) -> Path:

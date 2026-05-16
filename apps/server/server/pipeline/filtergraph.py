@@ -52,8 +52,16 @@ def build_compose_command(
     alignment: AlignmentResult,
     output_path: Path,
     preset: RenderPreset,
+    resolution: str | None = None,
 ) -> list[str]:
-    config = PRESETS[preset]
+    preset_config = PRESETS[preset]
+    config = PresetConfig(
+        resolution=resolution or preset_config.resolution,
+        fps=preset_config.fps,
+        crf=preset_config.crf,
+        x264_preset=preset_config.x264_preset,
+        audio_bitrate=preset_config.audio_bitrate,
+    )
     items = visual_items_bottom_to_top(project)
     duration_s = _duration_s(
         project=project,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,8 +27,12 @@ from server.pipeline.render import RenderError
 router = APIRouter(tags=["render"])
 
 
+RenderResolution = Literal["1920x1080", "1280x720", "1080x1920"]
+
+
 class RenderRequest(BaseModel):
     preset: RenderPreset
+    resolution: RenderResolution | None = None
 
 
 class RenderResponse(BaseModel):
@@ -80,17 +85,25 @@ def _project_path_or_error(project_id: str) -> Path | JSONResponse:
 
 @router.post("/projects/render", response_model=RenderResponse)
 async def render_project(
-    payload: RenderRequest,
+    payload: RenderRequest | None = None,
     project: str = Query(...),
+    preset: RenderPreset | None = Query(default=None),
+    resolution: RenderResolution | None = Query(default=None),
 ) -> RenderResponse | JSONResponse:
     project_dir = Path(project)
     if not (project_dir / "project.json").exists():
         return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
 
+    resolved_preset = preset or (payload.preset if payload is not None else None)
+    if resolved_preset is None:
+        return _error(422, "RENDER_PRESET_REQUIRED", "Render preset is required.", {})
+    resolved_resolution = resolution or (payload.resolution if payload is not None else None)
+
     try:
         result = await render_pipeline.start_render_project(
             project_dir=project_dir,
-            preset=payload.preset,
+            preset=resolved_preset,
+            resolution=resolved_resolution,
         )
     except RenderError as exc:
         return _error(exc.status_code, exc.code, exc.message, {"project": project})
@@ -101,12 +114,19 @@ async def render_project(
 @router.post("/projects/{project_id}/render", response_model=RenderResponse)
 async def render_project_by_id(
     project_id: str,
-    payload: RenderRequest,
+    payload: RenderRequest | None = None,
+    preset: RenderPreset | None = Query(default=None),
+    resolution: RenderResolution | None = Query(default=None),
 ) -> RenderResponse | JSONResponse:
     project_dir = _project_path_or_error(project_id)
     if isinstance(project_dir, JSONResponse):
         return project_dir
-    return await render_project(payload=payload, project=str(project_dir))
+    return await render_project(
+        payload=payload,
+        project=str(project_dir),
+        preset=preset,
+        resolution=resolution,
+    )
 
 
 @router.get("/render/job/{render_id}", response_model=RenderHistoryResponse)

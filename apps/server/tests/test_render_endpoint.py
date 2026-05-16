@@ -37,9 +37,15 @@ def _write_project(project_dir: Path) -> None:
 async def test_render_endpoint_returns_render_result(monkeypatch, tmp_path: Path) -> None:
     _write_project(tmp_path)
 
-    async def fake_start_render_project(*, project_dir: Path, preset: str) -> RenderResult:
+    async def fake_start_render_project(
+        *,
+        project_dir: Path,
+        preset: str,
+        resolution: str | None = None,
+    ) -> RenderResult:
         assert project_dir == tmp_path
         assert preset == "draft"
+        assert resolution is None
         return RenderResult(
             render_id="r-test",
             output_path=tmp_path / ".vc" / "drafts" / "draft.mp4",
@@ -101,6 +107,46 @@ async def test_project_id_render_routes(monkeypatch, tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_render_endpoint_accepts_query_preset_and_resolution(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _write_project(tmp_path)
+
+    async def fake_start_render_project(
+        *,
+        project_dir: Path,
+        preset: str,
+        resolution: str | None = None,
+    ) -> RenderResult:
+        assert project_dir == tmp_path
+        assert preset == "final"
+        assert resolution == "1080x1920"
+        return RenderResult(
+            render_id="r-query",
+            output_path=tmp_path / "renders" / "final.mp4",
+        )
+
+    monkeypatch.setattr(render_pipeline, "start_render_project", fake_start_render_project)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/projects/render",
+            params={
+                "project": str(tmp_path),
+                "preset": "final",
+                "resolution": "1080x1920",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "render_id": "r-query",
+        "output_path": str(tmp_path / "renders" / "final.mp4"),
+    }
+
+
+@pytest.mark.asyncio
 async def test_project_id_cancel_render_route(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     _write_project(tmp_path)
@@ -144,7 +190,12 @@ async def test_render_endpoint_rejects_in_progress_error(
 ) -> None:
     _write_project(tmp_path)
 
-    async def busy_start_render_project(*, project_dir: Path, preset: str) -> RenderResult:
+    async def busy_start_render_project(
+        *,
+        project_dir: Path,
+        preset: str,
+        resolution: str | None = None,
+    ) -> RenderResult:
         raise RenderError(409, "RENDER_IN_PROGRESS", "Render already running.")
 
     monkeypatch.setattr(render_pipeline, "start_render_project", busy_start_render_project)

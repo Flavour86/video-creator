@@ -12,9 +12,10 @@ vi.mock("next/image", () => ({
 // Mutable so individual tests can override the "projectId" param value
 let _projectIdParam: string | null = null;
 let _pathname = "/editor";
+const _routerPush = vi.fn();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: _routerPush }),
   useSearchParams: () => ({ get: (k: string) => (k === "projectId" ? _projectIdParam : null) }),
   usePathname: () => _pathname,
 }));
@@ -22,6 +23,7 @@ vi.mock("next/navigation", () => ({
 beforeEach(() => {
   _projectIdParam = null;
   _pathname = "/editor";
+  _routerPush.mockReset();
   global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
   Element.prototype.scrollIntoView = vi.fn();
 });
@@ -142,14 +144,32 @@ const TEST_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"
   thumb_url: `/projects/thumb?project=test01&filename=${filename.replace(/\.[^.]+$/, ".jpg")}`,
 }));
 
-function mockTest01Fetch(options: { hasUnrenderedChanges?: boolean } = {}) {
+function mockTest01Fetch(options: {
+  hasUnrenderedChanges?: boolean;
+  lastRenderedConfigHash?: string | null;
+  project?: typeof TEST_PROJECT;
+  saveHasUnrenderedChanges?: boolean;
+} = {}) {
   const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
+  const lastRenderedConfigHash = options.lastRenderedConfigHash ?? null;
+  const project = options.project ?? TEST_PROJECT;
+  const saveHasUnrenderedChanges = options.saveHasUnrenderedChanges ?? true;
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/projects")) return ok([{ project_id: TEST_PROJECT_ID, path: "E:/projects/test01" }]);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(TEST_ALIGNMENT);
-    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") return ok({ project_id: TEST_PROJECT_ID, config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: true });
-    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`)) return ok({ project_id: TEST_PROJECT_ID, config: TEST_PROJECT, config_hash: "h1", has_unrendered_changes: hasUnrenderedChanges });
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") {
+      return ok({ project_id: TEST_PROJECT_ID, config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: saveHasUnrenderedChanges });
+    }
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/config`)) {
+      return ok({
+        project_id: TEST_PROJECT_ID,
+        config: project,
+        config_hash: "h1",
+        last_rendered_config_hash: lastRenderedConfigHash,
+        has_unrendered_changes: hasUnrenderedChanges,
+      });
+    }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/media`)) return ok(TEST_MEDIA);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/renders/r-test01/cancel`)) return ok({ ok: true });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render`)) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
@@ -233,15 +253,83 @@ it("keeps draft render progress in the editor and can cancel it", async () => {
   renderEditor();
 
   fireEvent.click(await screen.findByRole("button", { name: /render draft/i }));
-  expect(await screen.findByText("Rendering draft : Queued")).toBeInTheDocument();
+  expect(await screen.findByText("Rendering draft : queued")).toBeInTheDocument();
   expect(screen.getByRole("progressbar", { name: "Draft render progress" })).toHaveAttribute("aria-valuenow", "0");
 
   sockets[0]?.onmessage?.({ data: JSON.stringify({ type: "progress", render_id: "r-test01", stage: "compose", percent: 42, message: "ffmpeg compose" }) });
-  expect(await screen.findByText("Rendering draft : Running")).toBeInTheDocument();
+  expect(await screen.findByText("Rendering draft : running")).toBeInTheDocument();
   expect(screen.getByText("42%")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(await screen.findByText("Rendering draft : Cancelled")).toBeInTheDocument();
+  expect(await screen.findByText("Rendering draft : cancelled")).toBeInTheDocument();
+});
+
+it("enables render for aligned projects even without visual clips", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    hasUnrenderedChanges: true,
+    project: { ...TEST_PROJECT, layers: [{ id: "subtitles", kind: "sub", name: "Subtitles", items: [{ id: "sub-auto", auto: true, label: "Auto subtitles", style: "default" }] }] },
+  });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("button", { name: /render draft/i })).toBeEnabled();
+  expect(screen.getByRole("button", { name: /render final/i })).toBeEnabled();
+});
+
+it("disables render when working hash matches latest successful rendered hash", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: false, lastRenderedConfigHash: "h1" });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("button", { name: /render draft/i })).toBeDisabled();
+  expect(screen.getByRole("button", { name: /render final/i })).toBeDisabled();
+});
+
+it("Render Draft saves then queues draft with selected resolution", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: true, saveHasUnrenderedChanges: true });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("radio", { name: "9:16" }));
+  fireEvent.click(screen.getByRole("button", { name: /render draft/i }));
+
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    const renderCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/render`) && init?.method === "POST");
+    expect(putConfigCalls).toHaveLength(1);
+    expect(renderCalls).toHaveLength(1);
+  });
+
+  const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  const putIndex = calls.findIndex(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+  const renderIndex = calls.findIndex(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/render`) && init?.method === "POST");
+  expect(putIndex).toBeGreaterThanOrEqual(0);
+  expect(renderIndex).toBeGreaterThan(putIndex);
+  expect(String(calls[renderIndex]?.[0] ?? "")).toContain("preset=draft");
+  expect(String(calls[renderIndex]?.[0] ?? "")).toContain("resolution=1080x1920");
+});
+
+it("Render Final saves, queues final with selected resolution, and navigates to render path", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: true, saveHasUnrenderedChanges: true });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("radio", { name: "720p" }));
+  fireEvent.click(screen.getByRole("button", { name: /render final/i }));
+
+  await waitFor(() => expect(_routerPush).toHaveBeenCalledWith(`/render/${TEST_PROJECT_ID}/r-test01`));
+  const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  const renderCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/render`) && init?.method === "POST");
+  expect(renderCall).toBeDefined();
+  expect(String(renderCall?.[0] ?? "")).toContain("preset=final");
+  expect(String(renderCall?.[0] ?? "")).toContain("resolution=1280x720");
 });
 
 it("writes browser autosave recovery state without PUT config sync", async () => {
@@ -278,7 +366,7 @@ it("explicit Save syncs config via PUT and clears committed operations", async (
   renderEditor();
   await screen.findByText("test01");
 
-  fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
 
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;

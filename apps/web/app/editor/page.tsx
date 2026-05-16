@@ -3,7 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { Project, ProjectConfigLoadResponse } from "@vc/shared-schemas";
+import type { Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditorModal } from "@/components/editor/EditorModal";
@@ -62,6 +62,8 @@ function EditorContent() {
   const [projectPath, setProjectPath] = useState("");
   const [audioFile, setAudioFile] = useState("");
   const [hasUnrenderedChanges, setHasUnrenderedChanges] = useState(true);
+  const [latestConfigHash, setLatestConfigHash] = useState<string | null>(null);
+  const [lastRenderedConfigHash, setLastRenderedConfigHash] = useState<string | null>(null);
   const [layers, setLayers] = useState<Layer[]>([]);
   const [media, setMedia] = useState<EditorMediaItem[]>([]);
   const [selected, setSelected] = useState<EditorSelection>(null);
@@ -97,6 +99,13 @@ function EditorContent() {
     const active = sentences.find((sentence) => currentTime >= sentence.start_s && currentTime < sentence.end_s);
     return active ? [active.index, active.index] : [sentences[0]?.index ?? 1, sentences[0]?.index ?? 1];
   }, [currentTime, sentences]);
+  const renderHashDiffers = useMemo(() => {
+    if (!lastRenderedConfigHash) return true;
+    if (hasUnrenderedChanges) return true;
+    if (!latestConfigHash) return false;
+    return latestConfigHash !== lastRenderedConfigHash;
+  }, [hasUnrenderedChanges, lastRenderedConfigHash, latestConfigHash]);
+  const renderDisabled = saving || renderJob.running || !project || !renderHashDiffers;
 
   const loadProject = useCallback(async (id: string) => {
     try {
@@ -127,6 +136,8 @@ function EditorContent() {
       setAudioFile(workingConfig.audio ?? "");
       const dirty = response.has_unrendered_changes || operationLog.undo.length > 0;
       setHasUnrenderedChanges(dirty);
+      setLatestConfigHash(response.config_hash);
+      setLastRenderedConfigHash(response.last_rendered_config_hash ?? null);
       setSaveStatus(dirty ? "pending" : "saved");
       setLayers(working.layers);
       setMedia(mediaItems);
@@ -143,6 +154,8 @@ function EditorContent() {
       setSelected(null);
       setSelectedSentenceRange(null);
       setResolution("1080p");
+      setLatestConfigHash(null);
+      setLastRenderedConfigHash(null);
       setHasUnrenderedChanges(true);
       setSaveStatus("failed");
     }
@@ -206,13 +219,13 @@ function EditorContent() {
     seekTo(sentences[nextIndex]?.start_s ?? 0);
   }, [currentTime, seekTo, sentences]);
 
-  const saveNow = useCallback(async () => {
+  const saveNow = useCallback(async (): Promise<boolean> => {
     setSaving(true);
     setSaveStatus("saving");
     try {
       if (!canonicalProject || !project) {
         setSaveStatus("failed");
-        return;
+        return false;
       }
       const replayedProject = buildWorkingConfig(canonicalProject, projectId);
       const nextProject: Project = {
@@ -224,20 +237,23 @@ function EditorContent() {
       };
       if (!isValidProjectSaveConfig(nextProject)) {
         setSaveStatus("failed");
-        return;
+        return false;
       }
-      const response = await request<{ has_unrendered_changes: boolean }>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, {
+      const response = await request<ProjectConfigSaveResponse>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, {
         method: "PUT",
         body: { config: nextProject },
       });
       setCanonicalProject(nextProject);
       setProject(nextProject);
       setLayers((nextProject.layers ?? []) as Layer[]);
+      setLatestConfigHash(response.config_hash);
       setHasUnrenderedChanges(response.has_unrendered_changes);
       setSaveStatus("saved");
       clearOperationLog(projectId);
+      return true;
     } catch {
       setSaveStatus("failed");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -295,11 +311,16 @@ function EditorContent() {
   }, [layers, project, projectId, resolution]);
 
   const renderDraft = useCallback(async () => {
-    if (!hasUnrenderedChanges) return;
+    if (!projectId || !project || renderDisabled) return;
+    const synced = await saveNow();
+    if (!synced) return;
     renderSocketRef.current?.close();
-    setRenderJob({ phase: "starting", progress: 0, running: true, status: "queued" });
+    setRenderJob({ phase: "queued", progress: 0, running: true, status: "queued" });
     try {
-      const result = await request<{ render_id: string; output_path: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "draft" } });
+      const result = await request<{ render_id: string; output_path: string }>(
+        renderQueuePath(projectId, "draft", resolution),
+        { method: "POST" },
+      );
       setRenderJob({
         phase: "queued",
         progress: 0,
@@ -308,11 +329,14 @@ function EditorContent() {
         outputPath: result.output_path,
         renderId: result.render_id,
       });
-      renderSocketRef.current = connectDraftProgress(result.render_id, result.output_path, setRenderJob, () => setHasUnrenderedChanges(false));
+      renderSocketRef.current = connectDraftProgress(projectId, result.render_id, result.output_path, setRenderJob, () => {
+        setHasUnrenderedChanges(false);
+        setLastRenderedConfigHash((previous) => latestConfigHash ?? previous);
+      });
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false, status: "failed", message: "Render failed to start." });
     }
-  }, [hasUnrenderedChanges, projectId]);
+  }, [latestConfigHash, project, projectId, renderDisabled, resolution, saveNow]);
 
   const cancelDraft = useCallback(async () => {
     if (!renderJob.renderId || (renderJob.status !== "queued" && renderJob.status !== "running")) return;
@@ -327,16 +351,21 @@ function EditorContent() {
   }, [projectId, renderJob.renderId, renderJob.status]);
 
   const renderFinal = useCallback(async () => {
+    if (!projectId || !project || renderDisabled) return;
+    const synced = await saveNow();
+    if (!synced) return;
     try {
-      if (!hasUnrenderedChanges) return;
-      const result = await request<{ render_id: string }>(`/projects/${encodeURIComponent(projectId)}/render` as `/${string}`, { method: "POST", body: { preset: "final" } });
-      router.push(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(result.render_id)}`);
+      const result = await request<{ render_id: string }>(
+        renderQueuePath(projectId, "final", resolution),
+        { method: "POST" },
+      );
+      router.push(`/render/${encodeURIComponent(projectId)}/${encodeURIComponent(result.render_id)}` as Parameters<typeof router.push>[0]);
       return;
     } catch {
       // Render screen shows final status.
     }
-    router.push(`/render?projectId=${encodeURIComponent(projectId)}`);
-  }, [hasUnrenderedChanges, projectId, router]);
+    router.push(`/render?projectId=${encodeURIComponent(projectId)}` as Parameters<typeof router.push>[0]);
+  }, [project, projectId, renderDisabled, resolution, router, saveNow]);
 
   const matches = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -428,10 +457,10 @@ function EditorContent() {
         projectName={projectName}
         projectId={projectId}
         renderJob={renderJob}
-        renderDisabled={!hasUnrenderedChanges}
+        renderDisabled={renderDisabled}
         saveStatus={saveStatus}
-          saving={saving}
-        />
+        saving={saving}
+      />
       <RenderStrip job={renderJob} onCancel={cancelDraft} />
       <div className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] divide-x divide-(--line) bg-(--line)">
         <TranscriptPane
@@ -595,8 +624,14 @@ type DraftProgressEvent = {
   output_path?: string;
 };
 
-function connectDraftProgress(renderId: string, outputPath: string, setRenderJob: Dispatch<SetStateAction<EditorRenderJob>>, onReady: () => void): WebSocket {
-  const socket = new WebSocket(renderWsUrl(renderId));
+function connectDraftProgress(
+  projectId: string,
+  renderId: string,
+  outputPath: string,
+  setRenderJob: Dispatch<SetStateAction<EditorRenderJob>>,
+  onReady: () => void,
+): WebSocket {
+  const socket = new WebSocket(renderWsUrl(projectId, renderId));
   socket.onmessage = (message) => {
     const event = parseProgressEvent(message.data);
     if (!event) return;
@@ -675,8 +710,8 @@ function parseProgressEvent(data: unknown): DraftProgressEvent | null {
   }
 }
 
-function renderWsUrl(renderId: string): string {
-  const query = new URLSearchParams({ render_id: renderId });
+function renderWsUrl(projectId: string, renderId: string): string {
+  const query = new URLSearchParams({ project_id: projectId, render_id: renderId });
   const configured = process.env.NEXT_PUBLIC_SERVER_WS_URL;
   if (configured) {
     return `${configured.replace(/\/$/, "")}/projects/render/ws?${query.toString()}`;
@@ -686,6 +721,11 @@ function renderWsUrl(renderId: string): string {
   }
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}/api/server/projects/render/ws?${query.toString()}`;
+}
+
+function renderQueuePath(projectId: string, preset: "draft" | "final", resolution: string): `/${string}` {
+  const renderResolution = resolution === "9:16" ? "1080x1920" : resolution === "720p" ? "1280x720" : "1920x1080";
+  return `/projects/${encodeURIComponent(projectId)}/render?preset=${preset}&resolution=${renderResolution}` as `/${string}`;
 }
 
 export default function EditorPage() {
