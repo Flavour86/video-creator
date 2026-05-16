@@ -210,11 +210,18 @@ function EditorContent() {
     setSaving(true);
     setSaveStatus("saving");
     try {
-      if (!canonicalProject) {
+      if (!canonicalProject || !project) {
         setSaveStatus("failed");
         return;
       }
-      const nextProject = buildWorkingConfig(canonicalProject, projectId);
+      const replayedProject = buildWorkingConfig(canonicalProject, projectId);
+      const nextProject: Project = {
+        ...replayedProject,
+        layers: layers as Project["layers"],
+        output: project.output,
+        subtitles: project.subtitles,
+        watermark: project.watermark,
+      };
       if (!isValidProjectSaveConfig(nextProject)) {
         setSaveStatus("failed");
         return;
@@ -234,7 +241,7 @@ function EditorContent() {
     } finally {
       setSaving(false);
     }
-  }, [canonicalProject, projectId]);
+  }, [canonicalProject, layers, project, projectId]);
 
   useEffect(() => {
     if (!projectId || !project || !loadedProjectRef.current) {

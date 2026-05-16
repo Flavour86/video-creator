@@ -5,7 +5,7 @@
 - [x] Task 1: Align shared Editor config schema with the spec
   - Acceptance: media assets, visual items, PiP bounds, subtitle settings, and render resolution fields match `SPEC_EDITOR.md`; generated TS/Python outputs are refreshed.
   - Verify: `rtk pnpm gen:types`, `rtk pnpm gen:py`, `rtk pnpm -F @vc/server test -- tests/test_project_schema.py tests/test_shared_api_schemas.py`, `rtk pnpm -F @vc/web test -- lib/preview/resolveDisplay.test.ts lib/layers.test.ts`
-- [ ] Task 2: Make Editor config sync explicit and browser recovery incremental
+- [x] Task 2: Make Editor config sync explicit and browser recovery incremental
   - Acceptance: passive autosave writes browser operation/recovery state only; explicit Save syncs SQLite and clears committed operations; undo/redo do not save full configs.
   - Verify: `rtk pnpm -F @vc/web test -- lib/editor-operation-log app/editor/page.test.tsx`
 - [ ] Task 3: Wire toolbar save/render enablement and render queue contract
