@@ -14,8 +14,10 @@ type TranscriptPaneProps = {
   onQueryChange: (query: string) => void;
   onSearchKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onSeek: (time: number) => void;
+  onScrollPositionChange?: (scrollTop: number) => void;
   onSelectRange: (range: [number, number]) => void;
   query: string;
+  scrollContainerRef?: RefObject<HTMLDivElement | null>;
   searchInputRef: RefObject<HTMLInputElement | null>;
   selectedRange: [number, number] | null;
   sentences: AlignedSentence[];
@@ -30,8 +32,10 @@ export function TranscriptPane({
   onQueryChange,
   onSearchKeyDown,
   onSeek,
+  onScrollPositionChange,
   onSelectRange,
   query,
+  scrollContainerRef,
   searchInputRef,
   selectedRange,
   sentences,
@@ -87,7 +91,11 @@ export function TranscriptPane({
         </span>
         <StatusTag variant={selectedRange ? "ready" : "info"}>{formatRangeLabel(chipRange[0], chipRange[1])}</StatusTag>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto"
+        onScroll={(event) => onScrollPositionChange?.(event.currentTarget.scrollTop)}
+        ref={scrollContainerRef}
+      >
         {visibleSentences.map((sentence, index) => {
           const active = sentence.index >= activeRange[0] && sentence.index <= activeRange[1];
           const selected = selectedRange ? sentence.index >= selectedRange[0] && sentence.index <= selectedRange[1] : false;

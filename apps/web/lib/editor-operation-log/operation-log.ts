@@ -32,12 +32,27 @@ export type StoredOperationLog = {
   version: 1;
 };
 
+export type EditorRecoverySelection = { itemId: string; layerId: string } | null;
+export type EditorResolutionPreset = "1080p" | "720p" | "9:16";
+
+export type EditorRecoveryState = {
+  resolution: EditorResolutionPreset;
+  selected: EditorRecoverySelection;
+  selectedRange: [number, number] | null;
+  transcriptScrollTop: number;
+  version: 1;
+};
+
 export function emptyOperationLog(): StoredOperationLog {
   return { redo: [], undo: [], version: 1 };
 }
 
 export function editorOperationStorageKey(projectId: string): string {
   return `vc.editor.operations.${projectId}`;
+}
+
+export function editorRecoveryStorageKey(projectId: string): string {
+  return `vc.editor.recovery.${projectId}`;
 }
 
 export function loadOperationLog(projectId: string, storage = browserStorage()): StoredOperationLog {
@@ -63,9 +78,43 @@ export function saveOperationLog(projectId: string, log: StoredOperationLog, sto
   storage.setItem(editorOperationStorageKey(projectId), JSON.stringify(log));
 }
 
+export function ensureOperationLog(projectId: string, storage = browserStorage()): StoredOperationLog {
+  const log = loadOperationLog(projectId, storage);
+  saveOperationLog(projectId, log, storage);
+  return log;
+}
+
 export function clearOperationLog(projectId: string, storage = browserStorage()): void {
   if (!projectId || !storage) return;
   storage.removeItem(editorOperationStorageKey(projectId));
+}
+
+export function loadRecoveryState(projectId: string, storage = browserStorage()): EditorRecoveryState | null {
+  if (!projectId || !storage) return null;
+  const storageKey = editorRecoveryStorageKey(projectId);
+  try {
+    const raw = storage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<EditorRecoveryState>;
+    if (!isRecoveryState(parsed)) {
+      storage.removeItem(storageKey);
+      return null;
+    }
+    return parsed;
+  } catch {
+    storage.removeItem(storageKey);
+    return null;
+  }
+}
+
+export function saveRecoveryState(projectId: string, state: EditorRecoveryState, storage = browserStorage()): void {
+  if (!projectId || !storage) return;
+  storage.setItem(editorRecoveryStorageKey(projectId), JSON.stringify(state));
+}
+
+export function clearRecoveryState(projectId: string, storage = browserStorage()): void {
+  if (!projectId || !storage) return;
+  storage.removeItem(editorRecoveryStorageKey(projectId));
 }
 
 export function appendOperation(projectId: string, op: EditorOperation, storage = browserStorage()): StoredOperationLog {
@@ -81,6 +130,41 @@ export function appendOperation(projectId: string, op: EditorOperation, storage 
 
 export function recoverWorkingState(projectId: string, base: EditorWorkingState, storage = browserStorage()): EditorWorkingState {
   return loadOperationLog(projectId, storage).undo.reduce((state, entry) => applyOperation(state, entry.op), base);
+}
+
+export function buildWorkingConfig(project: Project, projectId: string, storage = browserStorage()): Project {
+  const working = recoverWorkingState(
+    projectId,
+    {
+      layers: (project.layers ?? []) as Layer[],
+      output: project.output,
+      subtitles: project.subtitles,
+      watermark: project.watermark,
+    },
+    storage,
+  );
+  return {
+    ...project,
+    layers: working.layers as Project["layers"],
+    output: working.output,
+    subtitles: working.subtitles,
+    watermark: working.watermark,
+  };
+}
+
+export function isValidProjectSaveConfig(value: unknown): value is Project {
+  if (typeof value !== "object" || value === null) return false;
+  const project = value as Partial<Project>;
+  return (
+    project.version === 1 &&
+    typeof project.name === "string" &&
+    typeof project.audio === "string" &&
+    typeof project.transcript === "object" &&
+    project.transcript !== null &&
+    typeof project.output === "object" &&
+    project.output !== null &&
+    Array.isArray(project.layers)
+  );
 }
 
 export function undoLast(projectId: string, state: EditorWorkingState, storage = browserStorage()): { log: StoredOperationLog; state: EditorWorkingState } {
@@ -142,6 +226,41 @@ function patchItem(items: Array<Record<string, unknown>>, itemId: string, patch:
 
 function browserStorage(): Storage | null {
   return typeof window === "undefined" ? null : window.localStorage;
+}
+
+function isRecoveryState(value: Partial<EditorRecoveryState>): value is EditorRecoveryState {
+  return (
+    value.version === 1 &&
+    isResolutionPreset(value.resolution) &&
+    isRecoverySelection(value.selected) &&
+    isRange(value.selectedRange) &&
+    typeof value.transcriptScrollTop === "number" &&
+    Number.isFinite(value.transcriptScrollTop) &&
+    value.transcriptScrollTop >= 0
+  );
+}
+
+function isRecoverySelection(value: unknown): value is EditorRecoverySelection {
+  if (value === null) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const selection = value as { itemId?: unknown; layerId?: unknown };
+  return typeof selection.itemId === "string" && typeof selection.layerId === "string";
+}
+
+function isRange(value: unknown): value is [number, number] | null {
+  return (
+    value === null ||
+    (Array.isArray(value) &&
+      value.length === 2 &&
+      typeof value[0] === "number" &&
+      Number.isFinite(value[0]) &&
+      typeof value[1] === "number" &&
+      Number.isFinite(value[1]))
+  );
+}
+
+function isResolutionPreset(value: unknown): value is EditorResolutionPreset {
+  return value === "1080p" || value === "720p" || value === "9:16";
 }
 
 function cryptoId(): string {

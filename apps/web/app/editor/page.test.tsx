@@ -1,8 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { Suspense } from "react";
+import { Suspense, type ImgHTMLAttributes } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
+import { editorOperationStorageKey } from "@/lib/editor-operation-log/operation-log";
+
+vi.mock("next/image", () => ({
+  default: (props: ImgHTMLAttributes<HTMLImageElement>) => <img {...props} alt={props.alt ?? ""} />,
+}));
 
 // Mutable so individual tests can override the "projectId" param value
 let _projectIdParam: string | null = null;
@@ -141,6 +146,7 @@ function mockTest01Fetch(options: { hasUnrenderedChanges?: boolean } = {}) {
   const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/projects")) return ok([{ project_id: TEST_PROJECT_ID, path: "E:/projects/test01" }]);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(TEST_ALIGNMENT);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") return ok({ project_id: TEST_PROJECT_ID, config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: true });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/config`)) return ok({ project_id: TEST_PROJECT_ID, config: TEST_PROJECT, config_hash: "h1", has_unrendered_changes: hasUnrenderedChanges });
@@ -169,7 +175,8 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getAllByText("PiP · z3").length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
   expect(screen.getByText("Background · 1 strip")).toBeInTheDocument();
-  expect(screen.getByText("posX 68 · posY 14 · size 30 · radius 12 · opacity 100")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
+  expect(screen.getByText(/posX 68.*posY 14.*size 30.*radius 12.*opacity 100/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByText("Crossfade 0.6s")).toBeInTheDocument();
 });
@@ -235,4 +242,98 @@ it("keeps draft render progress in the editor and can cancel it", async () => {
 
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(await screen.findByText("Rendering draft : Cancelled")).toBeInTheDocument();
+});
+
+it("writes browser autosave recovery state without PUT config sync", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(await screen.findByRole("button", { name: /assign media to sentence 5/i }));
+
+  await waitFor(() => {
+    expect(window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID))).not.toBeNull();
+    expect(window.localStorage.getItem(`vc.editor.recovery.${TEST_PROJECT_ID}`)).not.toBeNull();
+  });
+
+  const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  const putConfigCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+  expect(putConfigCalls).toHaveLength(0);
+});
+
+it("explicit Save syncs config via PUT and clears committed operations", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: false });
+  window.localStorage.setItem(
+    editorOperationStorageKey(TEST_PROJECT_ID),
+    JSON.stringify({
+      version: 1,
+      redo: [],
+      undo: [{ id: "op-1", at: "2026-05-11T00:00:00.000Z", op: { type: "global_config_update", before: { preset: "final" }, after: { preset: "final", resolution: "9:16" } } }],
+    }),
+  );
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCalls).toHaveLength(1);
+  });
+
+  const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+  expect(putConfigCall).toBeDefined();
+  const putBody = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+  expect(putBody.config.output.resolution).toBe("9:16");
+  expect(window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID))).toBeNull();
+});
+
+it("reload replays operation log and restores recovery range, scroll, and resolution", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: false });
+  window.localStorage.setItem(
+    editorOperationStorageKey(TEST_PROJECT_ID),
+    JSON.stringify({
+      version: 1,
+      redo: [],
+      undo: [{ id: "op-1", at: "2026-05-11T00:00:00.000Z", op: { type: "global_config_update", before: { preset: "final" }, after: { preset: "final", resolution: "9:16" } } }],
+    }),
+  );
+  window.localStorage.setItem(
+    `vc.editor.recovery.${TEST_PROJECT_ID}`,
+    JSON.stringify({
+      version: 1,
+      resolution: "9:16",
+      selected: null,
+      selectedRange: [2, 3],
+      transcriptScrollTop: 120,
+    }),
+  );
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("radio", { name: "9:16" })).toHaveAttribute("aria-checked", "true");
+  await waitFor(() => expect(screen.getByText("s2-s3")).toBeInTheDocument());
+
+  const transcriptSearch = screen.getByRole("searchbox", { name: /search transcript/i });
+  const transcriptScroller = transcriptSearch.closest("aside")?.querySelector(".overflow-y-auto") as HTMLDivElement | null;
+  expect(transcriptScroller).not.toBeNull();
+  await waitFor(() => expect(transcriptScroller?.scrollTop ?? 0).toBeGreaterThan(0));
+});
+
+it("discards malformed recovery state without blocking canonical project load", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: false });
+  window.localStorage.setItem(`vc.editor.recovery.${TEST_PROJECT_ID}`, "{bad json");
+
+  renderEditor();
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(window.localStorage.getItem(`vc.editor.recovery.${TEST_PROJECT_ID}`)).toBeNull();
 });

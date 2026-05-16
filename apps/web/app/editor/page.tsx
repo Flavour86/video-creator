@@ -17,7 +17,20 @@ import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
 import { Button } from "@/components/ui";
 import { request } from "@/lib/api/server";
-import { clearOperationLog, recoverWorkingState, redoLast, undoLast } from "@/lib/editor-operation-log/operation-log";
+import {
+  appendOperation,
+  buildWorkingConfig,
+  clearOperationLog,
+  ensureOperationLog,
+  isValidProjectSaveConfig,
+  loadOperationLog,
+  loadRecoveryState,
+  recoverWorkingState,
+  redoLast,
+  saveRecoveryState,
+  undoLast,
+  type EditorRecoverySelection,
+} from "@/lib/editor-operation-log/operation-log";
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
@@ -43,6 +56,7 @@ function EditorContent() {
   const requestedProjectId = params.get("projectId") || projectIdFromPathname(pathname);
   const projectId = isValidProjectId(requestedProjectId) ? requestedProjectId : "";
   const { state: alignmentState } = useProjectAlignment(projectId);
+  const [canonicalProject, setCanonicalProject] = useState<Project | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [projectName, setProjectName] = useState("test01");
   const [projectPath, setProjectPath] = useState("");
@@ -64,6 +78,9 @@ function EditorContent() {
   const [assignRange, setAssignRange] = useState<[number, number]>([1, 1]);
   const [saveStatus, setSaveStatus] = useState<"pending" | "saving" | "saved" | "failed">("pending");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollTopRef = useRef<number>(0);
+  const pendingSelectedRangeRef = useRef<[number, number] | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const loadedProjectRef = useRef(false);
   const skipAutosaveRef = useRef(false);
@@ -89,6 +106,8 @@ function EditorContent() {
       ]);
       const config = response.config;
       const resolvedProjectPath = await resolveProjectPath(id);
+      const recoveryState = loadRecoveryState(id);
+      const operationLog = loadOperationLog(id);
       const working = recoverWorkingState(id, {
         layers: (config.layers ?? []) as Layer[],
         output: config.output,
@@ -96,25 +115,34 @@ function EditorContent() {
         watermark: config.watermark,
       });
       const workingConfig = { ...config, layers: working.layers as Project["layers"], output: working.output, subtitles: working.subtitles, watermark: working.watermark };
+      const selected = selectRecoverySelection(recoveryState?.selected ?? null, working.layers);
       loadedProjectRef.current = true;
       skipAutosaveRef.current = true;
+      pendingScrollTopRef.current = recoveryState?.transcriptScrollTop ?? 0;
+      pendingSelectedRangeRef.current = recoveryState?.selectedRange ?? null;
+      setCanonicalProject(config);
       setProject(workingConfig);
       setProjectName(workingConfig.name ?? id);
       setProjectPath(resolvedProjectPath);
       setAudioFile(workingConfig.audio ?? "");
-      setHasUnrenderedChanges(response.has_unrendered_changes);
-      setSaveStatus(response.has_unrendered_changes ? "pending" : "saved");
+      const dirty = response.has_unrendered_changes || operationLog.undo.length > 0;
+      setHasUnrenderedChanges(dirty);
+      setSaveStatus(dirty ? "pending" : "saved");
       setLayers(working.layers);
       setMedia(mediaItems);
-      const firstSelectable = working.layers.flatMap((layer) => layer.kind === "sub" ? [] : layer.items.map((item) => ({ item, layer }))).find(({ item }) => "id" in item);
-      if (firstSelectable && "id" in firstSelectable.item) {
-        setSelected({ layerId: firstSelectable.layer.id, itemId: firstSelectable.item.id });
-      }
+      setSelected(selected);
+      setResolution(normalizeResolutionPreset(recoveryState?.resolution, config.output?.resolution));
     } catch {
       loadedProjectRef.current = false;
+      setCanonicalProject(null);
       setProject(null);
       setProjectName(id);
       setProjectPath("");
+      setLayers([]);
+      setMedia([]);
+      setSelected(null);
+      setSelectedSentenceRange(null);
+      setResolution("1080p");
       setHasUnrenderedChanges(true);
       setSaveStatus("failed");
     }
@@ -135,8 +163,18 @@ function EditorContent() {
 
   useEffect(() => {
     setSentences(alignmentSentences);
-    setSelectedSentenceRange(null);
+    setSelectedSentenceRange(pendingSelectedRangeRef.current);
+    pendingSelectedRangeRef.current = null;
   }, [alignmentSentences]);
+
+  useEffect(() => {
+    const container = transcriptScrollRef.current;
+    if (!container) return;
+    const top = pendingScrollTopRef.current;
+    if (top <= 0) return;
+    container.scrollTop = top;
+    pendingScrollTopRef.current = 0;
+  }, [sentences]);
 
   useEffect(() => {
     return () => {
@@ -172,10 +210,22 @@ function EditorContent() {
     setSaving(true);
     setSaveStatus("saving");
     try {
-      if (!project) return;
-      const nextProject: Project = { ...project, layers: layers as Project["layers"] };
-      const response = await request<{ has_unrendered_changes: boolean }>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, { method: "PUT", body: { config: nextProject } });
+      if (!canonicalProject) {
+        setSaveStatus("failed");
+        return;
+      }
+      const nextProject = buildWorkingConfig(canonicalProject, projectId);
+      if (!isValidProjectSaveConfig(nextProject)) {
+        setSaveStatus("failed");
+        return;
+      }
+      const response = await request<{ has_unrendered_changes: boolean }>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, {
+        method: "PUT",
+        body: { config: nextProject },
+      });
+      setCanonicalProject(nextProject);
       setProject(nextProject);
+      setLayers((nextProject.layers ?? []) as Layer[]);
       setHasUnrenderedChanges(response.has_unrendered_changes);
       setSaveStatus("saved");
       clearOperationLog(projectId);
@@ -184,7 +234,24 @@ function EditorContent() {
     } finally {
       setSaving(false);
     }
-  }, [layers, project, projectId]);
+  }, [canonicalProject, projectId]);
+
+  useEffect(() => {
+    if (!projectId || !project || !loadedProjectRef.current) {
+      return;
+    }
+    if (skipAutosaveRef.current) {
+      return;
+    }
+    ensureOperationLog(projectId);
+    saveRecoveryState(projectId, {
+      version: 1,
+      resolution: normalizeResolutionPreset(resolution),
+      selected: selected as EditorRecoverySelection,
+      selectedRange: selectedSentenceRange,
+      transcriptScrollTop: Math.max(0, transcriptScrollRef.current?.scrollTop ?? 0),
+    });
+  }, [layers, project, projectId, resolution, selected, selectedSentenceRange]);
 
   useEffect(() => {
     if (!projectId || !loadedProjectRef.current) {
@@ -196,11 +263,7 @@ function EditorContent() {
     }
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
-    const timeout = window.setTimeout(() => {
-      void saveNow();
-    }, 900);
-    return () => window.clearTimeout(timeout);
-  }, [layers, projectId, saveNow]);
+  }, [layers, projectId]);
 
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -216,12 +279,13 @@ function EditorContent() {
       const result = event.shiftKey ? redoLast(projectId, working) : undoLast(projectId, working);
       setLayers(result.state.layers);
       setProject({ ...project, layers: result.state.layers as Project["layers"], output: result.state.output, subtitles: result.state.subtitles, watermark: result.state.watermark });
+      setResolution(normalizeResolutionPreset(result.state.output?.resolution, resolution));
       setHasUnrenderedChanges(true);
       setSaveStatus("pending");
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [layers, project, projectId]);
+  }, [layers, project, projectId, resolution]);
 
   const renderDraft = useCallback(async () => {
     if (!hasUnrenderedChanges) return;
@@ -310,6 +374,33 @@ function EditorContent() {
     setSaveStatus("pending");
   }, [sentences]);
 
+  const onResolutionChange = useCallback((value: string) => {
+    const nextResolution = normalizeResolutionPreset(value, resolution);
+    setResolution(nextResolution);
+    if (!projectId || !project || project.output.resolution === nextResolution) return;
+    const nextOutput = { ...project.output, resolution: nextResolution };
+    appendOperation(projectId, {
+      type: "global_config_update",
+      before: project.output,
+      after: nextOutput,
+    });
+    setProject({ ...project, output: nextOutput });
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [project, projectId, resolution]);
+
+  const onTranscriptScroll = useCallback((scrollTop: number) => {
+    if (!projectId || !project || !loadedProjectRef.current || skipAutosaveRef.current) return;
+    ensureOperationLog(projectId);
+    saveRecoveryState(projectId, {
+      version: 1,
+      resolution: normalizeResolutionPreset(resolution),
+      selected: selected as EditorRecoverySelection,
+      selectedRange: selectedSentenceRange,
+      transcriptScrollTop: Math.max(0, scrollTop),
+    });
+  }, [project, projectId, resolution, selected, selectedSentenceRange]);
+
   if (!projectId) {
     return (
       <PageChrome variant="empty">
@@ -350,8 +441,10 @@ function EditorContent() {
           }}
           onSearchKeyDown={onSearchKeyDown}
           onSeek={seekTo}
+          onScrollPositionChange={onTranscriptScroll}
           onSelectRange={setSelectedSentenceRange}
           query={query}
+          scrollContainerRef={transcriptScrollRef}
           searchInputRef={searchInputRef}
           selectedRange={selectedSentenceRange}
           sentences={sentences}
@@ -373,7 +466,7 @@ function EditorContent() {
             <PreviewControls
               layerCount={layers.length}
               onLayers={() => setLayersOpen((value) => !value)}
-              onSetResolution={setResolution}
+              onSetResolution={onResolutionChange}
               resolution={resolution}
             />
             <LayersPopover layers={layers} onAdd={() => setModal("upload")} open={layersOpen} />
@@ -408,6 +501,28 @@ async function resolveProjectPath(projectId: string): Promise<string> {
 
 function isValidProjectId(value: string): boolean {
   return /^p_[A-Za-z0-9_-]+$/.test(value);
+}
+
+function normalizeResolutionPreset(candidate: unknown, fallback: unknown = "1080p"): "1080p" | "720p" | "9:16" {
+  if (candidate === "1080p" || candidate === "720p" || candidate === "9:16") {
+    return candidate;
+  }
+  if (fallback === "1080p" || fallback === "720p" || fallback === "9:16") {
+    return fallback;
+  }
+  return "1080p";
+}
+
+function selectRecoverySelection(selection: EditorRecoverySelection, layers: Layer[]): EditorSelection {
+  if (!selection) return null;
+  const layer = layers.find((entry) => entry.id === selection.layerId && entry.kind !== "sub");
+  if (!layer) return null;
+  const hasItem = layer.items.some((item) => hasVisualItemId(item) && item.id === selection.itemId);
+  return hasItem ? selection : null;
+}
+
+function hasVisualItemId(value: unknown): value is { id: string } {
+  return typeof value === "object" && value !== null && "id" in value && typeof value.id === "string";
 }
 
 function mergeSentences(sentences: AlignedSentence[], index: number): AlignedSentence[] {
