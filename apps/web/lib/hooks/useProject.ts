@@ -26,23 +26,14 @@ type ProjectStore = {
   saveWatermark: (watermark: WatermarkSettings | null) => Promise<void>;
 };
 
-export type SubtitlesSettings = {
-  burn_in: boolean;
-  style: {
-    font: string;
-    size: number;
-    position: "bottom-center" | "top-center";
-    max_chars_per_line: number;
-    bg_style: "none" | "shadow" | "box";
-  };
-};
+export type SubtitlesSettings = NonNullable<Project["subtitles"]>;
 
 export const DEFAULT_SUBTITLES: SubtitlesSettings = {
   burn_in: false,
   style: {
     font: "Arial",
     size: 28,
-    position: "bottom-center",
+    position: "bottom",
     max_chars_per_line: 42,
     bg_style: "shadow",
   },

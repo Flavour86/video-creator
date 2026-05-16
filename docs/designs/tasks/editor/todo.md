@@ -2,7 +2,7 @@
 
 ## Phase 1: Contracts And Persistence
 
-- [ ] Task 1: Align shared Editor config schema with the spec
+- [x] Task 1: Align shared Editor config schema with the spec
   - Acceptance: media assets, visual items, PiP bounds, subtitle settings, and render resolution fields match `SPEC_EDITOR.md`; generated TS/Python outputs are refreshed.
   - Verify: `rtk pnpm gen:types`, `rtk pnpm gen:py`, `rtk pnpm -F @vc/server test -- tests/test_project_schema.py tests/test_shared_api_schemas.py`, `rtk pnpm -F @vc/web test -- lib/preview/resolveDisplay.test.ts lib/layers.test.ts`
 - [ ] Task 2: Make Editor config sync explicit and browser recovery incremental
