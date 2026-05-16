@@ -219,13 +219,13 @@ function EditorContent() {
     seekTo(sentences[nextIndex]?.start_s ?? 0);
   }, [currentTime, seekTo, sentences]);
 
-  const saveNow = useCallback(async (): Promise<boolean> => {
+  const saveNow = useCallback(async (): Promise<string | null> => {
     setSaving(true);
     setSaveStatus("saving");
     try {
       if (!canonicalProject || !project) {
         setSaveStatus("failed");
-        return false;
+        return null;
       }
       const replayedProject = buildWorkingConfig(canonicalProject, projectId);
       const nextProject: Project = {
@@ -237,7 +237,7 @@ function EditorContent() {
       };
       if (!isValidProjectSaveConfig(nextProject)) {
         setSaveStatus("failed");
-        return false;
+        return null;
       }
       const response = await request<ProjectConfigSaveResponse>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, {
         method: "PUT",
@@ -250,10 +250,10 @@ function EditorContent() {
       setHasUnrenderedChanges(response.has_unrendered_changes);
       setSaveStatus("saved");
       clearOperationLog(projectId);
-      return true;
+      return response.config_hash;
     } catch {
       setSaveStatus("failed");
-      return false;
+      return null;
     } finally {
       setSaving(false);
     }
@@ -312,8 +312,8 @@ function EditorContent() {
 
   const renderDraft = useCallback(async () => {
     if (!projectId || !project || renderDisabled) return;
-    const synced = await saveNow();
-    if (!synced) return;
+    const savedConfigHash = await saveNow();
+    if (!savedConfigHash) return;
     renderSocketRef.current?.close();
     setRenderJob({ phase: "queued", progress: 0, running: true, status: "queued" });
     try {
@@ -331,12 +331,13 @@ function EditorContent() {
       });
       renderSocketRef.current = connectDraftProgress(projectId, result.render_id, result.output_path, setRenderJob, () => {
         setHasUnrenderedChanges(false);
-        setLastRenderedConfigHash((previous) => latestConfigHash ?? previous);
+        setLatestConfigHash(savedConfigHash);
+        setLastRenderedConfigHash(savedConfigHash);
       });
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false, status: "failed", message: "Render failed to start." });
     }
-  }, [latestConfigHash, project, projectId, renderDisabled, resolution, saveNow]);
+  }, [project, projectId, renderDisabled, resolution, saveNow]);
 
   const cancelDraft = useCallback(async () => {
     if (!renderJob.renderId || (renderJob.status !== "queued" && renderJob.status !== "running")) return;
@@ -352,13 +353,14 @@ function EditorContent() {
 
   const renderFinal = useCallback(async () => {
     if (!projectId || !project || renderDisabled) return;
-    const synced = await saveNow();
-    if (!synced) return;
+    const savedConfigHash = await saveNow();
+    if (!savedConfigHash) return;
     try {
       const result = await request<{ render_id: string }>(
         renderQueuePath(projectId, "final", resolution),
         { method: "POST" },
       );
+      setLatestConfigHash(savedConfigHash);
       router.push(`/render/${encodeURIComponent(projectId)}/${encodeURIComponent(result.render_id)}` as Parameters<typeof router.push>[0]);
       return;
     } catch {

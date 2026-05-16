@@ -315,6 +315,47 @@ it("Render Draft saves then queues draft with selected resolution", async () => 
   expect(String(calls[renderIndex]?.[0] ?? "")).toContain("resolution=1080x1920");
 });
 
+it("disables render actions after draft completes with the latest saved hash", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: true, saveHasUnrenderedChanges: true });
+  const sockets: MockWebSocket[] = [];
+  class MockWebSocket {
+    onerror: (() => void) | null = null;
+    onmessage: ((message: { data: string }) => void) | null = null;
+    url: string;
+
+    constructor(url: string) {
+      this.url = url;
+      sockets.push(this);
+    }
+
+    close = vi.fn();
+  }
+  vi.stubGlobal("WebSocket", MockWebSocket);
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: /render draft/i }));
+  await screen.findByText("Rendering draft : queued");
+
+  sockets[0]?.onmessage?.({
+    data: JSON.stringify({
+      type: "progress",
+      render_id: "r-test01",
+      stage: "done",
+      percent: 100,
+      message: "done",
+      output_path: "renders/r-test01.mp4",
+    }),
+  });
+
+  expect(await screen.findByText("Rendering draft : done")).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: /render draft/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /render final/i })).toBeDisabled();
+  });
+});
+
 it("Render Final saves, queues final with selected resolution, and navigates to render path", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({ hasUnrenderedChanges: true, saveHasUnrenderedChanges: true });
