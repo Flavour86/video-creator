@@ -22,7 +22,7 @@
 - [x] Task 5: Implement explicit media import and asset metadata for Editor
   - Acceptance: imports happen only by user action; full media metadata, progress, duplicates, unsupported/corrupt/huge/missing cases, and thumbnails are handled.
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_media_upload.py`, `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx app/editor/page.test.tsx`
-- [ ] Task 6: Add/Edit foreground and PiP clips from sentence ranges
+- [x] Task 6: Add/Edit foreground and PiP clips from sentence ranges
   - Acceptance: Assign/Edit modal creates and updates FG/PiP clips, validates ranges, packs layers, invalidates affected cache, selects item, and logs one operation.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx components/editor/Inspector.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/web test -- lib/layers.test.ts lib/editor-operation-log`
 - [ ] Task 7: Implement Background modal and background playlist behavior
