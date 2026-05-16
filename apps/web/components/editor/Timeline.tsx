@@ -21,6 +21,7 @@ type TimelineItem = {
   end: number;
   id: string;
   mediaId: string;
+  orphaned?: boolean;
   sentences?: [number, number];
   start: number;
 };
@@ -78,7 +79,7 @@ function TrackRow({ duration, layer, onSelect, selected }: { duration: number; l
           return (
             <button
               aria-label={clipLabel(item)}
-              className={`absolute top-1/2 h-6 -translate-y-1/2 rounded-sm border text-left font-mono text-[11px] text-(--text) ${clipClass(layer.kind)} ${isSelected ? "outline outline-2 outline-(--amber)" : ""}`}
+              className={`absolute top-1/2 h-6 -translate-y-1/2 rounded-sm border text-left font-mono text-[11px] text-(--text) ${clipClass(layer.kind, item.orphaned === true)} ${isSelected ? "outline outline-2 outline-(--amber)" : ""}`}
               key={item.id}
               onClick={(event) => {
                 event.stopPropagation();
@@ -96,7 +97,8 @@ function TrackRow({ duration, layer, onSelect, selected }: { duration: number; l
   );
 }
 
-function clipClass(kind: Layer["kind"]): string {
+function clipClass(kind: Layer["kind"], orphaned = false): string {
+  if (orphaned) return "border-(--red) bg-(--red)/20";
   if (kind === "sub") return "border-(--blue) bg-(--blue)/70";
   if (kind === "pip") return "border-(--violet) bg-(--violet)/70";
   if (kind === "bg") return "border-(--amber-2) bg-(--amber-2)/40";
