@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 
 type RenderPathPageProps = {
-  params: {
+  params: Promise<{
     projectId: string;
     renderId: string;
-  };
+  }>;
 };
 
-export default function RenderPathPage({ params }: RenderPathPageProps) {
-  redirect(`/render?projectId=${encodeURIComponent(params.projectId)}&job=${encodeURIComponent(params.renderId)}`);
+export default async function RenderPathPage({ params }: RenderPathPageProps) {
+  const resolvedParams = await params;
+  redirect(`/render?projectId=${encodeURIComponent(resolvedParams.projectId)}&job=${encodeURIComponent(resolvedParams.renderId)}`);
 }

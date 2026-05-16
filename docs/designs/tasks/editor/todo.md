@@ -8,7 +8,7 @@
 - [x] Task 2: Make Editor config sync explicit and browser recovery incremental
   - Acceptance: passive autosave writes browser operation/recovery state only; explicit Save syncs SQLite and clears committed operations; undo/redo do not save full configs.
   - Verify: `rtk pnpm -F @vc/web test -- lib/editor-operation-log app/editor/page.test.tsx`
-- [ ] Task 3: Wire toolbar save/render enablement and render queue contract
+- [x] Task 3: Wire toolbar save/render enablement and render queue contract
   - Acceptance: render enable rules hold; Draft/Final save before queueing; draft strip stages and final navigation match spec.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorBar.test.tsx components/editor/RenderStrip.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_render_endpoint.py tests/test_render_progress.py tests/test_projects_route.py`
 - [ ] Checkpoint: Contracts And Persistence
