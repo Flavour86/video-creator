@@ -1,0 +1,30 @@
+{
+  "setup_id": "setup_bb25d902914641c8",
+  "path": "C:\\Users\\Dianen\\AppData\\Local\\Temp\\tmp3u01g0va\\projects\\demo",
+  "name": "Demo",
+  "output_preset": "final",
+  "voice_source_path": null,
+  "voice_staged_path": null,
+  "transcript_source_path": null,
+  "transcript_staged_path": null,
+  "subtitles_staged_path": null,
+  "watermark_source_path": null,
+  "watermark_staged_path": null,
+  "alignment_staged_path": null,
+  "subtitle_generation": {
+    "status": "ready",
+    "cue_count": 0,
+    "total_duration_s": 0.0,
+    "cache_state": "unknown",
+    "error_message": null
+  },
+  "alignment": {
+    "status": "pending",
+    "hash": "",
+    "device": "cuda fp16",
+    "model": "large-v3",
+    "audio_duration": 0.0,
+    "cache_hit": false,
+    "error": null
+  }
+}
