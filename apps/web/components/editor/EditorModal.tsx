@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button, Checkbox, Field, NumberInput, Select } from "@/components/ui";
 import type { EditorMediaItem, EditorModal as EditorModalKind } from "./types";
+import Image from "next/image";
 
 type EditorModalProps = {
   assignRange: [number, number];
@@ -69,7 +70,7 @@ function MediaFields({ assignRange, media, projectPath, upload }: { assignRange:
         <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
           {media.map((item) => (
             <button aria-label={`Select ${item.filename}`} className="rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)" key={item.filename} type="button">
-              <img alt={item.filename} className="aspect-video w-full rounded-sm bg-(--bg-3) object-cover" src={mediaSrc(projectPath, item)} />
+              <Image alt={item.filename} className="aspect-video w-full rounded-sm bg-(--bg-3) object-cover" src={mediaSrc(projectPath, item)} />
               <div className="mt-2 truncate font-mono text-[11px] text-(--text-2)">{item.filename}</div>
             </button>
           ))}

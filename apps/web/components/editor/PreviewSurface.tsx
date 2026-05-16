@@ -2,6 +2,7 @@ import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { IconButton } from "@/components/ui";
 import { formatTimecode } from "@/lib/format";
+import Image from "next/image";
 import { resolveDisplay } from "@/lib/preview/resolveDisplay";
 import type { EditorStateProps } from "./types";
 
@@ -27,7 +28,7 @@ export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevio
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-(--bg-0)">
         <div className={`relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-md bg-(--bg-2) ${aspectClass}`}>
           {baseImage ? (
-            <img
+            <Image
               alt=""
               className="absolute inset-0 h-full w-full object-contain"
               src={mediaUrl(projectPath, baseImage)}
@@ -40,7 +41,7 @@ export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevio
             <div className="flex h-full items-center justify-center px-6 text-sm text-(--text-3)">No media assigned</div>
           )}
           {overlayForegrounds.map((layer, index) => (
-            <img
+            <Image
               alt=""
               className="absolute inset-0 h-full w-full object-contain"
               key={`${layer.mediaId}-${index}`}
@@ -52,7 +53,7 @@ export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevio
             />
           ))}
           {display.pip.map((layer, index) => (
-            <img
+            <Image
               alt=""
               className="absolute object-cover shadow-(--shadow-2)"
               key={`${layer.mediaId}-${index}`}

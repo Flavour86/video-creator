@@ -373,20 +373,20 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] Exactly one parity test covers `../../visuals/Launcher-dark.png`.
-- [ ] Exactly one parity test covers `../../visuals/Launcher-light.png`.
-- [ ] Exactly one parity test covers `../../visuals/Launcher-play-dark.png`.
-- [ ] Exactly one parity test covers `../../visuals/Launcher-play-light.png`.
-- [ ] Exactly one parity test covers `../../visuals/Setup-dark.png`.
-- [ ] Exactly one parity test covers `../../visuals/Setup-light.png`.
-- [ ] Setup parity covers selected, running, failed, and succeeded states for subtitle generation and alignment screenshots.![img](../../visuals/Setup-dark-alignment-running.png)
-- [ ] Launcher/Setup parity results meet the shared SSIM threshold.
+- [X] Exactly one parity test covers `../../visuals/Launcher-dark.png`.
+- [X] Exactly one parity test covers `../../visuals/Launcher-light.png`.
+- [X] Exactly one parity test covers `../../visuals/Launcher-play-dark.png`.
+- [X] Exactly one parity test covers `../../visuals/Launcher-play-light.png`.
+- [X] Exactly one parity test covers `../../visuals/Setup-dark.png`.
+- [X] Exactly one parity test covers `../../visuals/Setup-light.png`.
+- [X] Setup parity covers selected, running, failed, and succeeded states for subtitle generation and alignment screenshots.![img](../../visuals/Setup-dark-alignment-running.png)
+- [X] Launcher/Setup parity results meet the shared SSIM threshold.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test:visual -- launcher`
-- [ ] `rtk pnpm -F @vc/web test:visual -- setup`
-- [ ] `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`
+- [X] `rtk pnpm -F @vc/web test:visual -- launcher`
+- [X] `rtk pnpm -F @vc/web test:visual -- setup`
+- [X] `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`
 
 **Dependencies:** Tasks 3-8; frontend-global visual harness and screenshot inventory
 
@@ -405,19 +405,19 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] Flow 1 covers Launcher empty state -> `New project` -> Setup entry -> `Cancel` -> back to Launcher, and asserts no `POST /projects`.
-- [ ] Flow 2 covers populated Launcher behavior: recents order by `last_rendered`, card field visibility, pagination switch, thumbnail play modal open/close, and project-card navigation to `/editor/:projectId`.
-- [ ] Flow 3 covers full Setup happy path: step gating, valid voice selection, subtitle generation success, alignment success, and `Create project` navigation to `/editor/:projectId`.
-- [ ] Flow 4 covers Setup failure/recovery: unsupported voice validation, subtitle failure then retry success, alignment failure then retry success, all without reload.
-- [ ] Flow 5 covers dependency reset behavior: changing voice resets Subtitle+Alignment; changing transcript resets Alignment only; reruns re-enable `Create project`.
-- [ ] Flow 6 covers dark/light actionability smoke and writes Launcher+Setup checkpoint screenshots for parity baselines.
-- [ ] Flow implementations follow the spec format: one Playwright `test()` per flow with precondition -> actions -> assertions.
+- [X] Flow 1 covers Launcher empty state -> `New project` -> Setup entry -> `Cancel` -> back to Launcher, and asserts no `POST /projects`.
+- [X] Flow 2 covers populated Launcher behavior: recents order by `last_rendered`, card field visibility, pagination switch, thumbnail play modal open/close, and project-card navigation to `/editor/:projectId`.
+- [X] Flow 3 covers full Setup happy path: step gating, valid voice selection, subtitle generation success, alignment success, and `Create project` navigation to `/editor/:projectId`.
+- [X] Flow 4 covers Setup failure/recovery: unsupported voice validation, subtitle failure then retry success, alignment failure then retry success, all without reload.
+- [X] Flow 5 covers dependency reset behavior: changing voice resets Subtitle+Alignment; changing transcript resets Alignment only; reruns re-enable `Create project`.
+- [X] Flow 6 covers dark/light actionability smoke and writes Launcher+Setup checkpoint screenshots for parity baselines.
+- [X] Flow implementations follow the spec format: one Playwright `test()` per flow with precondition -> actions -> assertions.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test:e2e -- tests/e2e/launcher-setup-flows.spec.ts`
-- [ ] `rtk pnpm -F @vc/web test:e2e -- --grep \"Flow 1|Flow 2|Flow 3|Flow 4|Flow 5|Flow 6\"`
-- [ ] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
+- [X] `rtk pnpm -F @vc/web test:e2e -- tests/e2e/launcher-setup-flows.spec.ts`
+- [X] `rtk pnpm -F @vc/web test:e2e -- --grep \"Flow 1|Flow 2|Flow 3|Flow 4|Flow 5|Flow 6\"`
+- [X] `rtk pnpm -F @vc/web test -- setup/page.test.tsx`
 
 **Dependencies:** Tasks 3-8; Task 10 for shared screenshot/parity harness wiring
 
@@ -435,22 +435,22 @@ Frontend-global visual harness
 
 **Acceptance criteria:**
 
-- [ ] Launcher opens as the home page and persists recents across restarts.
-- [ ] Launcher card fields, thumbnail rules, status tags, pagination, empty state, deletion, and video modal meet the spec.
-- [ ] Setup enforces all four checks and only creates the on-disk project at final `Create project`.
-- [ ] Subtitle generation and subtitle alignment meet the specified behavior and recoverable error handling.
-- [ ] Output preset and optional watermark persist into the final project config.
-- [ ] Visual parity coverage exists for every Launcher and Setup screenshot.
-- [ ] Operational E2E Flows 1-6 are documented and runnable.
+- [X] Launcher opens as the home page and persists recents across restarts.
+- [X] Launcher card fields, thumbnail rules, status tags, pagination, empty state, deletion, and video modal meet the spec.
+- [X] Setup enforces all four checks and only creates the on-disk project at final `Create project`.
+- [X] Subtitle generation and subtitle alignment meet the specified behavior and recoverable error handling.
+- [X] Output preset and optional watermark persist into the final project config.
+- [X] Visual parity coverage exists for every Launcher and Setup screenshot.
+- [X] Operational E2E Flows 1-6 are documented and runnable.
 
 **Verification:**
 
-- [ ] `rtk pnpm test`
-- [ ] `rtk pnpm lint`
-- [ ] `rtk pnpm build`
-- [ ] `rtk pnpm -F @vc/web test`
-- [ ] `rtk pnpm -F @vc/server test`
-- [ ] `rtk pnpm -F @vc/web test:visual -- launcher setup`
+- [X] `rtk pnpm test`
+- [X] `rtk pnpm lint`
+- [X] `rtk pnpm build`
+- [X] `rtk pnpm -F @vc/web test`
+- [X] `rtk pnpm -F @vc/server test`
+- [X] `rtk pnpm -F @vc/web test:visual -- launcher setup`
 
 **Dependencies:** Tasks 1-11
 
@@ -462,10 +462,10 @@ Frontend-global visual harness
 
 ### Checkpoint: Complete
 
-- [ ] All Launcher/Setup functional acceptance criteria pass.
-- [ ] All Launcher/Setup quality gates have tests.
-- [ ] Visual and E2E coverage are either passing or explicitly documented behind local integration flags.
-- [ ] Ready for human review before implementation begins.
+- [X] All Launcher/Setup functional acceptance criteria pass.
+- [X] All Launcher/Setup quality gates have tests.
+- [X] Visual and E2E coverage are either passing or explicitly documented behind local integration flags.
+- [X] Ready for human review before implementation begins.
 
 ## Parallelization Opportunities
 

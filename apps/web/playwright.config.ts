@@ -7,7 +7,8 @@ const baseURL = VISUAL_BASE_URL || `http://127.0.0.1:${VISUAL_PORT}`;
 export default defineConfig({
   testDir: "./tests/visual",
   testMatch: "**/*.spec.ts",
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 1,
   reporter: "list",
   outputDir: "tests/visual/artifacts/test-results",
   use: {

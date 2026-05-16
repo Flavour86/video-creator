@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useState } from "react";
+import Image from "next/image";
 
 type MediaItem = { filename: string; kind: "image" | "video"; thumb_url: string };
 
@@ -138,7 +139,7 @@ export function BgModal({ media, existing, totalSentences, duration, onSave, chi
                     type="button"
                   >
                     {item.thumb_url ? (
-                      <img
+                      <Image
                         alt={item.filename}
                         className="h-full w-full object-cover"
                         src={`/api/server${item.thumb_url}`}

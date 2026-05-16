@@ -152,7 +152,7 @@ Routing rules:
 - [Editor](SPEC_EDITOR.md): editor toolbar, draft render strip, transcript pane, preview, timeline, inspector, modals, and media/layer model.
 - [Render](SPEC_RENDER.md): Render page layout, progress card, output panel, history, after-render actions, render states, and cancel behavior.
 
-### Performance Targets
+## Performance Targets
 
 Measured on dev baseline hardware (8-core x86 CPU, 16 GB RAM, integrated GPU, NVMe SSD, Node 22, Python 3.11, ffmpeg 6+, no other heavy workloads). Numbers may be tuned during implementation but cannot regress beyond 10% without an explicit SPEC revision.
 
@@ -195,6 +195,8 @@ Never:
 - Delete user media files when deleting clips unless explicitly requested.
 - Modify generated schema outputs by hand.
 - Add co-author or external attribution lines to commits.
+
+## pre-existing issues
 
 
 ## open questions logs

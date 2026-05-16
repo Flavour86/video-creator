@@ -95,4 +95,28 @@ describe("split-spec screenshot ownership inventory", () => {
 
     expect(problems, `Ownership mismatches:\n${problems.join("\n")}`).toEqual([]);
   });
+
+  it("keeps launcher/setup parity screenshots implemented under launcher ownership", () => {
+    const launcherSpecRefs = collectScreenshotRefs("docs/designs/tasks/launcher/SPEC_LAUNCHER.md");
+    const launcherVisualRefs = launcherSpecRefs.filter(
+      (screenshot) => screenshot.includes("/Launcher-") || screenshot.includes("/Setup-"),
+    );
+
+    const problems: string[] = [];
+    for (const screenshot of launcherVisualRefs) {
+      const entries = visualManifest.filter((entry) => entry.screenshot === screenshot);
+      if (entries.length !== 1) {
+        problems.push(`${screenshot} expected exactly one manifest entry, got ${entries.length}`);
+        continue;
+      }
+      const [entry] = entries;
+      if (entry && (entry.owner !== "launcher" || entry.status !== "implemented")) {
+        problems.push(
+          `${screenshot} expected owner=launcher/status=implemented actual owner=${entry.owner}/status=${entry.status}`,
+        );
+      }
+    }
+
+    expect(problems, `Launcher visual parity ownership mismatches:\n${problems.join("\n")}`).toEqual([]);
+  });
 });

@@ -2,6 +2,7 @@
 
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+import Image from "next/image";
 
 type MediaItem = { filename: string; kind: "image" | "video"; thumb_url: string };
 
@@ -176,7 +177,7 @@ export function InspectorPanel({
         type="button"
       >
         {thumbUrl && mediaEntry ? (
-          <img
+          <Image
             alt={item.mediaId}
             className="h-20 w-full object-cover"
             src={thumbUrl}

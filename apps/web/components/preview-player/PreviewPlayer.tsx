@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { resolveDisplay } from "@/lib/preview/resolveDisplay";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { WatermarkSettings } from "@/lib/hooks/useProject";
@@ -27,7 +28,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
     >
       {/* BG layer — always visible when set */}
       {spec.bg && (
-        <img
+        <Image
           alt=""
           className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
           src={fileUrl(spec.bg.mediaId)}
@@ -37,7 +38,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
 
       {/* FG layers — active item overlaid fullscreen */}
       {spec.fg.map((item) => (
-        <img
+        <Image
           alt=""
           className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
           key={item.mediaId}
@@ -48,7 +49,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
 
       {/* PiP layers */}
       {spec.pip.map((item) => (
-        <img
+        <Image
           alt=""
           className="absolute overflow-hidden object-cover transition-opacity duration-300"
           key={item.mediaId}
@@ -74,7 +75,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
       )}
 
       {watermark && (
-        <img
+        <Image
           alt=""
           className="absolute object-contain"
           src={fileUrl(watermark.mediaId)}

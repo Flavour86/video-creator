@@ -1,4 +1,5 @@
 import { paletteForSeed } from "@/lib/launcher/palettes";
+import Image from "next/image";
 
 type ProjectThumbProps = {
   seed: string;
@@ -13,7 +14,7 @@ export function ProjectThumb({ seed, thumbnailPath }: ProjectThumbProps) {
   return (
     <span className="relative grid h-[78px] overflow-hidden rounded-(--r-sm) bg-(--bg-4)">
       {src ? (
-        <img alt={`${seed} thumbnail`} className="h-full w-full object-cover" src={src} />
+        <Image alt={`${seed} thumbnail`} className="h-full w-full object-cover" src={src} />
       ) : (
         <span aria-hidden="true" className="grid h-full grid-cols-3 gap-0.5" data-testid="project-thumb-fallback">
           {stripes.map((stripe, index) => (

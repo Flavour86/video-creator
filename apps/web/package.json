@@ -11,7 +11,8 @@
     "tokens:audit": "node scripts/token-audit.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:visual": "node scripts/run-visual-tests.mjs"
+    "test:visual": "node scripts/run-visual-tests.mjs",
+    "test:e2e": "node scripts/run-e2e-tests.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

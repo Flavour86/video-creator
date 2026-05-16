@@ -44,20 +44,20 @@
 - [X] Task 9: Cover Launcher and Setup edge cases
   - Acceptance: all spec-listed Launcher, Setup, subtitle generation, alignment, CUDA/WhisperX, transcript, and voice error states have focused tests and recoverable UI errors.
   - Verify: `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`, `rtk pnpm lint`
-- [ ] Task 10: Add Launcher and Setup visual parity coverage
+- [X] Task 10: Add Launcher and Setup visual parity coverage
   - Acceptance: every Launcher/Setup screenshot in `SPEC_LAUNCHER.md` has exactly one parity owner and meets the shared SSIM threshold.
   - Verify: `rtk pnpm -F @vc/web test:visual -- launcher`, `rtk pnpm -F @vc/web test:visual -- setup`, `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`
-- [ ] Task 11: Add operational Launcher and Setup E2E browser flows
+- [X] Task 11: Add operational Launcher and Setup E2E browser flows
   - Acceptance: six spec-defined Playwright flows are implemented and runnable (Flow 1 empty->setup->cancel, Flow 2 populated Launcher + modal + pagination + editor nav, Flow 3 Setup happy path, Flow 4 failure/retry recovery, Flow 5 dependency resets, Flow 6 dark/light smoke + checkpoint screenshots).
   - Verify: `rtk pnpm -F @vc/web test:e2e -- tests/e2e/launcher-setup-flows.spec.ts`, `rtk pnpm -F @vc/web test:e2e -- --grep "Flow 1|Flow 2|Flow 3|Flow 4|Flow 5|Flow 6"`
-- [ ] Task 12: Run the Launcher and Setup acceptance gate
+- [X] Task 12: Run the Launcher and Setup acceptance gate
   - Acceptance: all Launcher/Setup functional, edge-case, visual, and E2E criteria are passing or documented behind explicit local integration flags.
   - Verify: `rtk pnpm test`, `rtk pnpm lint`, `rtk pnpm build`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`, `rtk pnpm -F @vc/web test:visual -- launcher setup`
-- [ ] Checkpoint: Complete
+- [X] Checkpoint: Complete
   - Acceptance: plan is ready for human review and implementation can proceed one task per commit.
 
 ## Coordination Notes
 
-- [ ] Backend-global project/config persistence tasks must land before or with Tasks 3 and 8.
-- [ ] Frontend-global visual harness and screenshot inventory must land before Task 10.
-- [ ] Tasks 3-8 (Launcher+Setup contracts and behavior) should be stable before Task 11 to avoid brittle E2E rewrites.
+- [X] Backend-global project/config persistence tasks must land before or with Tasks 3 and 8.
+- [X] Frontend-global visual harness and screenshot inventory must land before Task 10.
+- [X] Tasks 3-8 (Launcher+Setup contracts and behavior) should be stable before Task 11 to avoid brittle E2E rewrites.

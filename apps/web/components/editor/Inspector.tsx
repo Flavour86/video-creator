@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Button, NumberInput, Select } from "@/components/ui";
 import { formatImageMeta, formatRangeLabel } from "@/lib/format";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+import Image from "next/image";
 import type { EditorMediaItem, EditorSelection } from "./types";
 
 type InspectorProps = {
@@ -98,7 +99,7 @@ export function Inspector({ layers, media, onOpenBackground, onOpenUpload, proje
           type="button"
         >
           <div className="h-10 w-10 overflow-hidden rounded-sm bg-(--bg-3)">
-            {asset ? <img alt="" className="h-full w-full object-cover" src={mediaSrc(projectPath, asset)} /> : null}
+            {asset ? <Image alt="" className="h-full w-full object-cover" src={mediaSrc(projectPath, asset)} /> : null}
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate font-mono text-sm text-(--text)">{item.mediaId}</div>
@@ -134,7 +135,7 @@ export function Inspector({ layers, media, onOpenBackground, onOpenUpload, proje
           <div className="col-span-2 grid grid-cols-3 gap-2">
             {bgAssets.map((entry) => (
               <div className="min-w-0 overflow-hidden rounded border border-(--line) bg-(--bg-2)" key={entry.filename}>
-                <img alt={entry.filename} className="aspect-video w-full object-cover" src={mediaSrc(projectPath, entry)} />
+                <Image alt={entry.filename} className="aspect-video w-full object-cover" src={mediaSrc(projectPath, entry)} />
                 <div className="truncate px-1.5 py-1 font-mono text-[10px] text-(--text-3)">{entry.filename}</div>
               </div>
             ))}
