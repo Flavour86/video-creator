@@ -156,6 +156,21 @@ export interface Project {
 export interface Transcript {
   kind: "plain_text" | "pre_segmented";
   path: string;
+  /**
+   * @minItems 1
+   */
+  sentences?: [TranscriptSentenceCue, ...TranscriptSentenceCue[]];
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "TranscriptSentenceCue".
+ */
+export interface TranscriptSentenceCue {
+  index: number;
+  text: string;
+  start_s: number;
+  end_s: number;
+  confidence_avg?: number | null;
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema

@@ -368,13 +368,16 @@ class Kind(Enum):
     pre_segmented = 'pre_segmented'
 
 
-class Transcript(BaseModel):
+class TranscriptSentenceCue(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
         populate_by_name=True,
     )
-    kind: Kind
-    path: str
+    index: conint(ge=1)
+    text: constr(min_length=1)
+    start_s: confloat(ge=0.0)
+    end_s: confloat(ge=0.0)
+    confidence_avg: confloat(ge=0.0, le=1.0) | None = None
 
 
 class Preset(Enum):
@@ -678,6 +681,16 @@ class ProjectConfigSaveResponse(BaseModel):
 
 
 Layers = RootModel[SubtitlesLayer | ForegroundLayer | PipLayer | BackgroundLayer]
+
+
+class Transcript(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    kind: Kind
+    path: str
+    sentences: list[TranscriptSentenceCue] | None = Field(None, min_length=1)
 
 
 class Project(BaseModel):

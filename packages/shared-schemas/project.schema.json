@@ -388,7 +388,30 @@
       "required": ["kind", "path"],
       "properties": {
         "kind": { "enum": ["plain_text", "pre_segmented"] },
-        "path": { "type": "string" }
+        "path": { "type": "string" },
+        "sentences": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TranscriptSentenceCue" },
+          "minItems": 1
+        }
+      }
+    },
+    "TranscriptSentenceCue": {
+      "title": "TranscriptSentenceCue",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "text", "start_s", "end_s"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 },
+        "confidence_avg": {
+          "oneOf": [
+            { "type": "number", "minimum": 0, "maximum": 1 },
+            { "type": "null" }
+          ]
+        }
       }
     },
     "Output": {
