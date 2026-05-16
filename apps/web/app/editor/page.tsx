@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
+import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditorModal } from "@/components/editor/EditorModal";
 import { Inspector } from "@/components/editor/Inspector";
@@ -78,6 +79,7 @@ function EditorContent() {
   const [currentMatch, setCurrentMatch] = useState(0);
   const [renderJob, setRenderJob] = useState<EditorRenderJob>({ phase: "", progress: 0, running: false, status: "idle" });
   const [assignRange, setAssignRange] = useState<[number, number]>([1, 1]);
+  const [assignEdit, setAssignEdit] = useState<{ itemId?: string; layerId?: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<"pending" | "saving" | "saved" | "failed">("pending");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
@@ -415,9 +417,35 @@ function EditorContent() {
 
   const assignSentenceRange = useCallback((range: [number, number]) => {
     setAssignRange(range);
+    setAssignEdit(null);
     setSelectedSentenceRange(range);
     setModal("upload");
   }, []);
+
+  const openAssignEdit = useCallback((layerId: string, itemId: string, range: [number, number]) => {
+    setAssignRange(range);
+    setAssignEdit({ layerId, itemId });
+    setSelectedSentenceRange(range);
+    setModal("upload");
+  }, []);
+
+  const applyAssignedLayers = useCallback((updatedLayers: Layer[], newLayerId: string, newItemId: string) => {
+    if (!project) return;
+    const previousLayers = layers;
+    setLayers(updatedLayers);
+    setProject({ ...project, layers: updatedLayers as Project["layers"] });
+    setSelected({ layerId: newLayerId, itemId: newItemId });
+    setModal(null);
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "replace_layers",
+        before: previousLayers,
+        after: updatedLayers,
+      });
+    }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [layers, project, projectId]);
 
   const playFromSentence = useCallback((index: number) => {
     const sentence = sentences.find((item) => item.index === index);
@@ -591,11 +619,29 @@ function EditorContent() {
               onSetResolution={onResolutionChange}
               resolution={resolution}
             />
-            <LayersPopover layers={layers} onAdd={() => setModal("upload")} open={layersOpen} />
+            <LayersPopover
+              layers={layers}
+              onAdd={() => {
+                setAssignEdit(null);
+                setModal("upload");
+              }}
+              open={layersOpen}
+            />
           </div>
           <Timeline cacheLabel={cacheLabel} currentTime={currentTime} duration={duration} fps={30} layers={layers} onSeek={seekTo} onSelect={setSelected} selected={selected} />
         </main>
-        <Inspector layers={layers} media={media} onOpenBackground={() => setModal("background")} onOpenUpload={() => setModal("upload")} projectPath={projectPath} selected={selected} />
+        <Inspector
+          layers={layers}
+          media={media}
+          onOpenAssignEdit={openAssignEdit}
+          onOpenBackground={() => setModal("background")}
+          onOpenUpload={() => {
+            setAssignEdit(null);
+            setModal("upload");
+          }}
+          projectPath={projectPath}
+          selected={selected}
+        />
       </div>
       {audioFile && projectPath ? (
         <audio
@@ -607,14 +653,32 @@ function EditorContent() {
           src={`/api/server/projects/audio?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(audioFile)}`}
         />
       ) : null}
-      <EditorModal
-        assignRange={assignRange}
-        media={media}
-        modal={modal}
-        onClose={() => setModal(null)}
-        onImport={importMedia}
-        projectPath={projectPath}
-      />
+      {modal === "upload" ? (
+        <AssignModal
+          editItemId={assignEdit?.itemId}
+          editLayerId={assignEdit?.layerId}
+          fromSentence={assignRange[0]}
+          layers={layers}
+          media={media
+            .filter((entry) => entry.kind === "image" || entry.kind === "video")
+            .map((entry) => ({ filename: entry.filename, kind: entry.kind, thumb_url: entry.thumb_url }))}
+          onClose={() => setModal(null)}
+          onImport={importMedia}
+          onConfirm={applyAssignedLayers}
+          open
+          sentences={sentences}
+          toSentence={assignRange[1]}
+        />
+      ) : (
+        <EditorModal
+          assignRange={assignRange}
+          media={media}
+          modal={modal}
+          onClose={() => setModal(null)}
+          onImport={importMedia}
+          projectPath={projectPath}
+        />
+      )}
     </PageChrome>
   );
 }

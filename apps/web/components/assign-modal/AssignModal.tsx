@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import  Image from "next/image";
 import { buildFgItem, hasSentenceOverlap, nextZIndex } from "@/lib/layers";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
@@ -18,6 +18,7 @@ type Props = {
   media: MediaItem[];
   sentences: AlignedSentence[];
   layers: Layer[];
+  onImport?: (files: FileList | null) => Promise<void> | void;
   onConfirm: (updatedLayers: Layer[], newLayerId: string, newItemId: string) => void;
   onClose: () => void;
 };
@@ -47,6 +48,20 @@ const TRANSITION_OPTIONS = [
   { value: "dip_black", label: "dip to black" },
 ];
 
+const PIP_POSITION_OPTIONS = [
+  { value: "TL", label: "Top-left", posX: 12, posY: 12 },
+  { value: "TC", label: "Top-center", posX: 50, posY: 12 },
+  { value: "TR", label: "Top-right", posX: 88, posY: 12 },
+  { value: "ML", label: "Middle-left", posX: 12, posY: 50 },
+  { value: "MC", label: "Middle-center", posX: 50, posY: 50 },
+  { value: "MR", label: "Middle-right", posX: 88, posY: 50 },
+  { value: "BL", label: "Bottom-left", posX: 12, posY: 88 },
+  { value: "BC", label: "Bottom-center", posX: 50, posY: 88 },
+  { value: "BR", label: "Bottom-right", posX: 88, posY: 88 },
+] as const;
+
+type PipPositionValue = (typeof PIP_POSITION_OPTIONS)[number]["value"];
+
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
   const sec = (s % 60).toFixed(1).padStart(4, "0");
@@ -68,6 +83,16 @@ function parseClock(value: string): number | null {
   return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds) + Number(millis) / 1000;
 }
 
+function pipCoordsFromPreset(value: PipPositionValue): { posX: number; posY: number } {
+  const option = PIP_POSITION_OPTIONS.find((entry) => entry.value === value) ?? PIP_POSITION_OPTIONS[PIP_POSITION_OPTIONS.length - 1]!;
+  return { posX: option.posX, posY: option.posY };
+}
+
+function pipPresetFromCoords(posX: number, posY: number): PipPositionValue {
+  const match = PIP_POSITION_OPTIONS.find((entry) => entry.posX === posX && entry.posY === posY);
+  return match?.value ?? "BR";
+}
+
 export function AssignModal({
   open,
   fromSentence,
@@ -77,6 +102,7 @@ export function AssignModal({
   media,
   sentences,
   layers,
+  onImport,
   onConfirm,
   onClose,
 }: Props) {
@@ -92,7 +118,12 @@ export function AssignModal({
   const [easing, setEasing] = useState("ease_in_out");
   const [transIn, setTransIn] = useState("fade");
   const [transOut, setTransOut] = useState("fade");
+  const [pipPosition, setPipPosition] = useState<PipPositionValue>("BR");
+  const [pipSize, setPipSize] = useState(22);
+  const [pipRadius, setPipRadius] = useState(16);
+  const [pipOpacity, setPipOpacity] = useState(90);
   const [submitError, setSubmitError] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Sync state when modal opens with new props
   useEffect(() => {
@@ -115,6 +146,7 @@ export function AssignModal({
             sentences: [number, number];
             motion: { kind: string; easing: string };
             transitions: { in: string; out: string };
+            pip?: { posX: number; posY: number; size: number; radius: number; opacity: number };
           }
         | undefined;
 
@@ -129,6 +161,17 @@ export function AssignModal({
         setTransOut(item.transitions.out);
         setCompositing(layer?.kind === "pip" ? "pip" : "fg");
         setLayerId(editLayerId);
+        if (layer?.kind === "pip") {
+          setPipPosition(pipPresetFromCoords(item.pip?.posX ?? 88, item.pip?.posY ?? 88));
+          setPipSize(item.pip?.size ?? 22);
+          setPipRadius(item.pip?.radius ?? 16);
+          setPipOpacity(item.pip?.opacity ?? 90);
+        } else {
+          setPipPosition("BR");
+          setPipSize(22);
+          setPipRadius(16);
+          setPipOpacity(90);
+        }
       }
     } else {
       setSelectedMedia("");
@@ -140,6 +183,10 @@ export function AssignModal({
       setTransIn("fade");
       setTransOut("fade");
       setCompositing("fg");
+      setPipPosition("BR");
+      setPipSize(22);
+      setPipRadius(16);
+      setPipOpacity(90);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -171,6 +218,7 @@ export function AssignModal({
   const parsedFromTime = parseClock(fromTime);
   const parsedToTime = parseClock(toTime);
   const audioDuration = Math.max(0, ...sentences.map((sentence) => sentence.end_s));
+  const maxSentenceIndex = Math.max(1, ...sentences.map((sentence) => sentence.index));
   const rangeError =
     anchorMode === "time"
       ? parsedFromTime === null || parsedToTime === null
@@ -180,9 +228,13 @@ export function AssignModal({
           : parsedToTime > audioDuration
             ? '"To" must be within audio duration'
           : null
-      : from > to
-        ? '"From" must be ≤ "To"'
-        : null;
+      : from < 1 || to < 1
+        ? "Sentence range must start at 1"
+        : from > maxSentenceIndex || to > maxSentenceIndex
+          ? `Sentence range must be within 1-${maxSentenceIndex}`
+          : from > to
+            ? '"From" must be ≤ "To"'
+            : null;
 
   function handleConfirm() {
     if (rangeError) return;
@@ -208,7 +260,7 @@ export function AssignModal({
     const endTime = anchorMode === "time" ? parsedToTime! : toSentObj?.end_s ?? 0;
     const newItemId = editItemId ?? `item-${Date.now()}`;
 
-    const newItem = buildFgItem({
+    const newItemBase = buildFgItem({
       id: newItemId,
       mediaId: selectedMedia,
       from,
@@ -223,6 +275,20 @@ export function AssignModal({
       transIn,
       transOut,
     });
+    const pipPlacement = pipCoordsFromPreset(pipPosition);
+    const newItem =
+      compositing === "pip"
+        ? {
+            ...newItemBase,
+            pip: {
+              posX: pipPlacement.posX,
+              posY: pipPlacement.posY,
+              size: pipSize,
+              radius: pipRadius,
+              opacity: pipOpacity,
+            },
+          }
+        : newItemBase;
 
     let newLayerId = layerId;
     let updatedLayers: Layer[];
@@ -237,7 +303,7 @@ export function AssignModal({
               id: newLayerId,
               kind: "pip",
               name: `PiP · z${z}`,
-              items: [{ ...newItem, pip: { posX: 98, posY: 98, size: 22, radius: 16, opacity: 90 } }],
+              items: [newItem],
             };
 
       // Insert before BG layer (or at end)
@@ -279,10 +345,32 @@ export function AssignModal({
           <Dialog.Title className="text-lg font-semibold">
             {editItemId ? "Edit clip" : "Assign media"}
           </Dialog.Title>
+          <Dialog.Description className="sr-only">Assign media to a sentence range.</Dialog.Description>
 
           {/* ── Asset picker ── */}
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">Asset</p>
+            {onImport ? (
+              <div className="mb-2">
+                <button
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-100"
+                  onClick={() => inputRef.current?.click()}
+                  type="button"
+                >
+                  Import from disk...
+                </button>
+                <input
+                  className="hidden"
+                  multiple
+                  onChange={(event) => {
+                    void onImport(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                  ref={inputRef}
+                  type="file"
+                />
+              </div>
+            ) : null}
             {media.length === 0 ? (
               <p className="text-sm opacity-50">No media added yet.</p>
             ) : (
@@ -407,6 +495,66 @@ export function AssignModal({
               </label>
             </div>
           </div>
+
+          {compositing === "pip" ? (
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
+                  Placement
+                </span>
+                <select
+                  className="rounded border border-neutral-200 px-2 py-1.5"
+                  onChange={(event) => setPipPosition(event.target.value as PipPositionValue)}
+                  value={pipPosition}
+                >
+                  {PIP_POSITION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.value} - {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
+                  Size %
+                </span>
+                <input
+                  className="rounded border border-neutral-200 px-2 py-1.5"
+                  max={60}
+                  min={15}
+                  onChange={(event) => setPipSize(Math.max(15, Math.min(60, Number(event.target.value) || 15)))}
+                  type="number"
+                  value={pipSize}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
+                  Radius px
+                </span>
+                <input
+                  className="rounded border border-neutral-200 px-2 py-1.5"
+                  max={32}
+                  min={0}
+                  onChange={(event) => setPipRadius(Math.max(0, Math.min(32, Number(event.target.value) || 0)))}
+                  type="number"
+                  value={pipRadius}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
+                  Opacity %
+                </span>
+                <input
+                  className="rounded border border-neutral-200 px-2 py-1.5"
+                  max={100}
+                  min={10}
+                  onChange={(event) => setPipOpacity(Math.max(10, Math.min(100, Number(event.target.value) || 10)))}
+                  type="number"
+                  value={pipOpacity}
+                />
+              </label>
+            </div>
+          ) : null}
 
           {/* ── Layer dropdown ── */}
           <div>

@@ -10,6 +10,7 @@ import type { EditorMediaItem, EditorSelection } from "./types";
 type InspectorProps = {
   layers: Layer[];
   media: EditorMediaItem[];
+  onOpenAssignEdit: (layerId: string, itemId: string, range: [number, number]) => void;
   onOpenBackground: () => void;
   onOpenUpload: () => void;
   projectPath: string;
@@ -62,7 +63,7 @@ const transitionOptions = [
   { label: "dip to black", value: "dip_black" },
 ];
 
-export function Inspector({ layers, media, onOpenBackground, onOpenUpload, projectPath, selected }: InspectorProps) {
+export function Inspector({ layers, media, onOpenAssignEdit, onOpenBackground, onOpenUpload, projectPath, selected }: InspectorProps) {
   const t = useTranslations("pages.editor.inspector");
   const layer = selected ? layers.find((entry) => entry.id === selected.layerId) : layers.find((entry) => entry.kind === "bg");
   const selectedItem = selected && layer ? layer.items.find((entry) => hasId(entry) && entry.id === selected.itemId) : undefined;
@@ -94,7 +95,17 @@ export function Inspector({ layers, media, onOpenBackground, onOpenUpload, proje
         </h4>
         <button
           className="group flex w-full items-center gap-3 rounded-md border border-(--line) bg-(--bg-2) p-3 text-left hover:border-(--bg-5)"
-          onClick={isBackground ? onOpenBackground : onOpenUpload}
+          onClick={() => {
+            if (isBackground) {
+              onOpenBackground();
+              return;
+            }
+            if (hasId(item)) {
+              onOpenAssignEdit(layer.id, item.id, range);
+              return;
+            }
+            onOpenUpload();
+          }}
           title={t("change")}
           type="button"
         >

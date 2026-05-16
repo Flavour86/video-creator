@@ -321,6 +321,25 @@ it("imports media through POST /uploads and shows the imported asset in modal", 
   expect((await screen.findAllByText("new-upload.jpg")).length).toBeGreaterThan(0);
 });
 
+it("creates a foreground clip from assign modal and appends one replace_layers operation", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  fireEvent.click(await screen.findByRole("button", { name: "Assign media to sentence 5" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /assign media to range/i }));
+
+  fireEvent.click(screen.getByAltText("PIP.png").closest("button")!);
+  fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+
+  expect(await screen.findByRole("button", { name: "PIP.png over s5" })).toBeInTheDocument();
+  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
+  expect(raw).not.toBeNull();
+  const parsed = JSON.parse(raw ?? "{}");
+  expect(parsed.undo).toHaveLength(1);
+  expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
+});
+
 it("opens assign media with the clicked sentence range and real thumbnails", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
