@@ -19,7 +19,7 @@
 - [x] Task 4: Complete transcript selection, search, context menu, and merge behavior
   - Acceptance: rows, search, multi-select, context menu, play-from-here, merge, anchor remap, orphan state, and operation logging work.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/TranscriptPane.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_alignment_subtitles.py tests/test_srt.py`
-- [ ] Task 5: Implement explicit media import and asset metadata for Editor
+- [x] Task 5: Implement explicit media import and asset metadata for Editor
   - Acceptance: imports happen only by user action; full media metadata, progress, duplicates, unsupported/corrupt/huge/missing cases, and thumbnails are handled.
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_media_upload.py`, `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx app/editor/page.test.tsx`
 - [ ] Task 6: Add/Edit foreground and PiP clips from sentence ranges

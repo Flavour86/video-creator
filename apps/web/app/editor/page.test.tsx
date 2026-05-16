@@ -149,11 +149,13 @@ function mockTest01Fetch(options: {
   lastRenderedConfigHash?: string | null;
   project?: typeof TEST_PROJECT;
   saveHasUnrenderedChanges?: boolean;
+  uploadsResult?: Array<{ mediaId: string; media: Record<string, unknown> }>;
 } = {}) {
   const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
   const lastRenderedConfigHash = options.lastRenderedConfigHash ?? null;
   const project = options.project ?? TEST_PROJECT;
   const saveHasUnrenderedChanges = options.saveHasUnrenderedChanges ?? true;
+  const uploadsResult = options.uploadsResult ?? [];
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/projects")) return ok([{ project_id: TEST_PROJECT_ID, path: "E:/projects/test01" }]);
@@ -171,6 +173,7 @@ function mockTest01Fetch(options: {
       });
     }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/media`)) return ok(TEST_MEDIA);
+    if (url.endsWith("/uploads") && init?.method === "POST") return ok(uploadsResult);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/renders/r-test01/cancel`)) return ok({ ok: true });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render`)) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
     return { ok: false, json: async () => ({}) } as Response;
@@ -275,6 +278,47 @@ it("merges transcript sentences, remaps clip anchors, and appends one operation-
     expect(Array.isArray(payload.config?.transcript?.sentences)).toBe(true);
     expect(payload.config?.transcript?.sentences).toHaveLength(4);
   });
+});
+
+it("imports media through POST /uploads and shows the imported asset in modal", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    uploadsResult: [
+      {
+        mediaId: "new-upload.jpg",
+        media: {
+          id: "new-upload.jpg",
+          name: "new-upload.jpg",
+          kind: "image",
+          path: "uploads/new-upload.jpg",
+          thumb_path: "uploads/.thumbs/new-upload.jpg",
+          dimensions: { width: 1280, height: 720 },
+          duration: null,
+          size: 456789,
+          hash: "abc",
+          import_mode: "copy",
+          imported_at: "2026-05-16T00:00:00Z",
+          created_at: null,
+        },
+      },
+    ],
+  });
+
+  renderEditor();
+  fireEvent.click(await screen.findByRole("button", { name: "Assign media to sentence 5" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /assign media to range/i }));
+
+  const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+  expect(fileInput).not.toBeNull();
+  fireEvent.change(fileInput!, {
+    target: { files: [new File([new Uint8Array([1, 2])], "new-upload.jpg", { type: "image/jpeg" })] },
+  });
+
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some(([input, init]) => String(input).endsWith("/uploads") && init?.method === "POST")).toBe(true);
+  });
+  expect((await screen.findAllByText("new-upload.jpg")).length).toBeGreaterThan(0);
 });
 
 it("opens assign media with the clicked sentence range and real thumbnails", async () => {

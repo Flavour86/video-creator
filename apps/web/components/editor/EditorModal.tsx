@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useRef } from "react";
 import { Button, Checkbox, Field, NumberInput, Select } from "@/components/ui";
 import type { EditorMediaItem, EditorModal as EditorModalKind } from "./types";
 import Image from "next/image";
@@ -10,10 +11,11 @@ type EditorModalProps = {
   media: EditorMediaItem[];
   modal: EditorModalKind;
   onClose: () => void;
+  onImport: (files: FileList | null) => Promise<void> | void;
   projectPath: string;
 };
 
-export function EditorModal({ assignRange, media, modal, onClose, projectPath }: EditorModalProps) {
+export function EditorModal({ assignRange, media, modal, onClose, onImport, projectPath }: EditorModalProps) {
   const t = useTranslations("pages.editor.modals");
   const open = modal !== null;
   const title = modal === "subtitles" ? t("subtitlesTitle") : modal === "background" ? t("backgroundTitle") : t("uploadTitle");
@@ -32,7 +34,17 @@ export function EditorModal({ assignRange, media, modal, onClose, projectPath }:
             <button aria-label={t("close")} onClick={onClose} type="button"><X className="h-5 w-5" /></button>
           </header>
           <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
-            {modal === "subtitles" ? <SubtitlesFields /> : <MediaFields assignRange={assignRange} media={media} projectPath={projectPath} upload={modal === "upload"} />}
+            {modal === "subtitles" ? (
+              <SubtitlesFields />
+            ) : (
+              <MediaFields
+                assignRange={assignRange}
+                media={media}
+                onImport={onImport}
+                projectPath={projectPath}
+                upload={modal === "upload"}
+              />
+            )}
           </div>
           <footer className="flex items-center justify-end gap-2 border-t border-(--line) px-6 py-4">
             <Button onClick={onClose} variant="ghost">{t("cancel")}</Button>
@@ -62,16 +74,58 @@ function SubtitlesFields() {
   );
 }
 
-function MediaFields({ assignRange, media, projectPath, upload }: { assignRange: [number, number]; media: EditorMediaItem[]; projectPath: string; upload: boolean }) {
+function MediaFields({
+  assignRange,
+  media,
+  onImport,
+  projectPath,
+  upload,
+}: {
+  assignRange: [number, number];
+  media: EditorMediaItem[];
+  onImport: (files: FileList | null) => Promise<void> | void;
+  projectPath: string;
+  upload: boolean;
+}) {
   const t = useTranslations("pages.editor.modals");
+  const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <>
       <Field label={t("asset")}>
+        <div className="mb-3">
+          <Button onClick={() => inputRef.current?.click()} type="button" variant="ghost">
+            Import from disk...
+          </Button>
+          <input
+            className="hidden"
+            multiple
+            onChange={(event) => {
+              void onImport(event.target.files);
+              event.currentTarget.value = "";
+            }}
+            ref={inputRef}
+            type="file"
+          />
+        </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
           {media.map((item) => (
-            <button aria-label={`Select ${item.filename}`} className="rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)" key={item.filename} type="button">
+            <button
+              aria-label={`Select ${item.filename}`}
+              className="rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)"
+              disabled={item.importing}
+              key={item.filename}
+              type="button"
+            >
               <Image alt={item.filename} className="aspect-video w-full rounded-sm bg-(--bg-3) object-cover" src={mediaSrc(projectPath, item)} />
               <div className="mt-2 truncate font-mono text-[11px] text-(--text-2)">{item.filename}</div>
+              <div className="truncate font-mono text-[10px] text-(--text-3)">
+                {formatKindBadge(item)} · {formatBytes(item.size)}
+              </div>
+              <div className="truncate font-mono text-[10px] text-(--text-3)">{formatMeta(item)}</div>
+              {item.importing ? (
+                <div className="truncate font-mono text-[10px] text-(--blue)">Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%</div>
+              ) : null}
+              {item.import_error ? <div className="truncate font-mono text-[10px] text-(--red)">Import failed: {item.import_error}</div> : null}
             </button>
           ))}
         </div>
@@ -90,5 +144,44 @@ function MediaFields({ assignRange, media, projectPath, upload }: { assignRange:
 
 function mediaSrc(projectPath: string, item: EditorMediaItem): string {
   if (item.thumb_url) return `/api/server${item.thumb_url}`;
+  if (item.path.startsWith("uploads/")) {
+    return `/api/server/uploads/media-file?filename=${encodeURIComponent(item.mediaId)}`;
+  }
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(item.filename)}`;
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function formatKindBadge(item: EditorMediaItem): string {
+  const ext = fileExt(item.filename);
+  if (item.kind === "image") return "IMG";
+  if (item.kind === "video") {
+    if (ext === "mp4" || ext === "mov" || ext === "rmvb" || ext === "flv") return ext.toUpperCase();
+    return "VIDEO";
+  }
+  if (item.kind === "audio") return ext ? ext.toUpperCase() : "AUDIO";
+  return item.kind.toUpperCase();
+}
+
+function formatMeta(item: EditorMediaItem): string {
+  const dimensions = item.width && item.height ? `${item.width}x${item.height}` : null;
+  const duration = typeof item.duration === "number" && item.duration > 0 ? `${item.duration.toFixed(1)}s` : null;
+  return [dimensions, duration].filter(Boolean).join(" · ") || "No media metadata";
+}
+
+function fileExt(filename: string): string {
+  const name = filename.trim().toLowerCase();
+  const dot = name.lastIndexOf(".");
+  if (dot < 0 || dot === name.length - 1) return "";
+  return name.slice(dot + 1);
 }

@@ -201,6 +201,9 @@ Never:
 
 ## open questions logs
 
+- [X] 2026-05-16: Editor Task 5 requires handling huge video chunking plus too-small/corrupt media as recoverable states, but current API contract only has single-request `POST /uploads -> UploadResult[]` and no canonical thresholds/protocol for `huge` or `too-small`. Which contract should we implement now?
+User: Option A. Keep single-request `POST /uploads`; define deterministic server thresholds and UI import behavior. Confirmed constants and behavior: max upload bytes `10 MiB` per request payload, files above `10 MiB` upload in splits, files within `<= 20 MiB` split evenly, minimum image dimensions `5x5` px, and duplicate content returns the same response payload as the prior import.
+
 - [X] 2026-05-16: Editor Task 4 requires transcript merge to (1) persist merged sentence/subtitle model into `project_configs` on Save and (2) append exactly one operation-log entry. Current shared schema `Project.transcript` only has `{ kind, path }` and does not define any sentence/cue payload field, while `apps/web/lib/editor-operation-log/operation-log.ts` working state only tracks `layers/output/subtitles/watermark` (no transcript sentence model). Which canonical persistence contract should we implement for merged sentences?
 User: Option A. Extend shared schema/config with a transcript sentence/cue override payload persisted in `project_configs`.
 

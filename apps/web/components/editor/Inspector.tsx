@@ -104,7 +104,7 @@ export function Inspector({ layers, media, onOpenBackground, onOpenUpload, proje
           <div className="min-w-0 flex-1">
             <div className="truncate font-mono text-sm text-(--text)">{item.mediaId}</div>
             <div className="truncate font-mono text-[11px] text-(--text-3)">
-              {isBackground && asset ? formatImageMeta(4032, 2688, asset.size) : itemSummary(item)}
+              {isBackground && asset ? formatImageMeta(asset.width ?? 0, asset.height ?? 0, asset.size) : itemSummary(item)}
             </div>
           </div>
           <span className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-3) group-hover:text-(--text-2)">
@@ -210,6 +210,9 @@ function backgroundAssets(media: EditorMediaItem[]): EditorMediaItem[] {
 
 function mediaSrc(projectPath: string, item: EditorMediaItem): string {
   if (item.thumb_url) return `/api/server${item.thumb_url}`;
+  if (item.path.startsWith("uploads/")) {
+    return `/api/server/uploads/media-file?filename=${encodeURIComponent(item.mediaId)}`;
+  }
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(item.filename)}`;
 }
 

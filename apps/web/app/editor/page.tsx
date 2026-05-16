@@ -3,7 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
+import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditorModal } from "@/components/editor/EditorModal";
@@ -16,7 +16,7 @@ import { Timeline } from "@/components/editor/Timeline";
 import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
 import { Button } from "@/components/ui";
-import { request } from "@/lib/api/server";
+import { request, ServerRequestError } from "@/lib/api/server";
 import {
   appendOperation,
   buildWorkingConfig,
@@ -111,7 +111,7 @@ function EditorContent() {
     try {
       const [response, mediaItems] = await Promise.all([
         request<ProjectConfigLoadResponse>(`/projects/${encodeURIComponent(id)}/config` as `/${string}`),
-        request<EditorMediaItem[]>(`/projects/${encodeURIComponent(id)}/media` as `/${string}`),
+        request<EditorMediaItem[]>(`/projects/${encodeURIComponent(id)}/media` as `/${string}`).catch(() => []),
       ]);
       const config = response.config;
       const resolvedProjectPath = await resolveProjectPath(id);
@@ -148,7 +148,8 @@ function EditorContent() {
       setLastRenderedConfigHash(response.last_rendered_config_hash ?? null);
       setSaveStatus(dirty ? "pending" : "saved");
       setLayers(working.layers);
-      setMedia(mediaItems);
+      const configMedia = toEditorMediaItemsFromConfig(workingConfig.media ?? []);
+      setMedia(configMedia.length > 0 ? configMedia : normalizeEditorMediaItems(mediaItems));
       setSelected(selected);
       setResolution(normalizeResolutionPreset(recoveryState?.resolution, config.output?.resolution));
     } catch {
@@ -242,6 +243,7 @@ function EditorContent() {
       const nextProject: Project = {
         ...replayedProject,
         layers: layers as Project["layers"],
+        media: project.media,
         transcript: project.transcript,
         output: project.output,
         subtitles: project.subtitles,
@@ -475,6 +477,52 @@ function EditorContent() {
     });
   }, [project, projectId, resolution, selected, selectedSentenceRange]);
 
+  const importMedia = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0 || !project) return;
+    const incoming = Array.from(files);
+    const uploaded: MediaAsset[] = [];
+    const pendingIds = new Map<string, string>();
+    setMedia((previous) => {
+      let next = previous;
+      for (const file of incoming) {
+        const pending = pendingMediaItemFromFile(file);
+        pendingIds.set(pendingKeyForFile(file), pending.mediaId);
+        next = mergePendingItem(next, pending);
+      }
+      return next;
+    });
+    for (const file of incoming) {
+      const pendingId = pendingIds.get(pendingKeyForFile(file)) ?? `pending:${file.name}`;
+      try {
+        const response = await uploadFileWithSplits(file, {
+          onProgress: (value) => {
+            setMedia((previous) => updatePendingImportState(previous, pendingId, { import_progress: value, importing: true }));
+          },
+        });
+        for (const entry of response) {
+          uploaded.push(entry.media);
+        }
+        setMedia((previous) => previous.filter((entry) => entry.mediaId !== pendingId));
+      } catch (error) {
+        const message = parseServerErrorMessage(error);
+        setMedia((previous) =>
+          updatePendingImportState(previous, pendingId, {
+            import_error: message,
+            importing: false,
+            import_progress: 0,
+          }),
+        );
+      }
+    }
+    if (uploaded.length === 0) return;
+    const nextConfigMedia = mergeConfigMedia(project.media ?? [], uploaded);
+    const nextEditorMedia = toEditorMediaItemsFromConfig(nextConfigMedia);
+    setProject({ ...project, media: nextConfigMedia });
+    setMedia((previous) => mergeImportedMediaWithPending(nextEditorMedia, previous));
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [project]);
+
   if (!projectId) {
     return (
       <PageChrome variant="empty">
@@ -559,7 +607,14 @@ function EditorContent() {
           src={`/api/server/projects/audio?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(audioFile)}`}
         />
       ) : null}
-      <EditorModal assignRange={assignRange} media={media} modal={modal} onClose={() => setModal(null)} projectPath={projectPath} />
+      <EditorModal
+        assignRange={assignRange}
+        media={media}
+        modal={modal}
+        onClose={() => setModal(null)}
+        onImport={importMedia}
+        projectPath={projectPath}
+      />
     </PageChrome>
   );
 }
@@ -626,6 +681,220 @@ function sanitizeTranscriptSentences(transcript: Project["transcript"] | null | 
     }));
   return normalized;
 }
+
+function mergeConfigMedia(existing: MediaAsset[], incoming: MediaAsset[]): MediaAsset[] {
+  const byId = new Map(existing.map((entry) => [entry.id, entry]));
+  for (const entry of incoming) {
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()];
+}
+
+function normalizeEditorMediaItems(items: EditorMediaItem[]): EditorMediaItem[] {
+  return items.map((entry) => ({
+    ...entry,
+    mediaId: entry.mediaId || entry.filename,
+    path: entry.path || "",
+    import_mode: entry.import_mode ?? "copy",
+    imported_at: entry.imported_at ?? new Date().toISOString(),
+    importing: entry.importing ?? false,
+    import_progress: entry.import_progress ?? null,
+    import_error: entry.import_error ?? null,
+  }));
+}
+
+function toEditorMediaItemsFromConfig(configMedia: MediaAsset[]): EditorMediaItem[] {
+  return configMedia.map((entry) => {
+    const thumbUrl = resolveThumbUrl(entry);
+    return {
+      mediaId: entry.id,
+      filename: entry.name || entry.id,
+      kind: entry.kind,
+      path: entry.path,
+      thumb_path: entry.thumb_path ?? null,
+      thumb_url: thumbUrl,
+      width: entry.dimensions?.width ?? null,
+      height: entry.dimensions?.height ?? null,
+      duration: entry.duration ?? null,
+      size: entry.size ?? 0,
+      hash: entry.hash ?? null,
+      import_mode: entry.import_mode,
+      imported_at: entry.imported_at,
+      created_at: entry.created_at ?? null,
+      importing: false,
+      import_progress: null,
+      import_error: null,
+    };
+  });
+}
+
+function resolveThumbUrl(media: MediaAsset): string {
+  if (!media.thumb_path) return "";
+  const thumbName = PathFromUploadPath.fileName(media.thumb_path);
+  if (!thumbName) return "";
+  return `/uploads/thumb?filename=${encodeURIComponent(thumbName)}`;
+}
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+type UploadResponseEntry = { media: MediaAsset; mediaId: string };
+
+function pendingKeyForFile(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function pendingMediaIdForFile(file: File): string {
+  return `pending:${pendingKeyForFile(file)}`;
+}
+
+function pendingMediaItemFromFile(file: File): EditorMediaItem {
+  return {
+    mediaId: pendingMediaIdForFile(file),
+    filename: file.name,
+    kind: inferMediaKindFromFile(file),
+    path: "",
+    thumb_path: null,
+    thumb_url: "",
+    width: null,
+    height: null,
+    duration: null,
+    size: file.size,
+    hash: null,
+    import_mode: "copy",
+    imported_at: new Date().toISOString(),
+    created_at: null,
+    importing: true,
+    import_progress: 0,
+    import_error: null,
+  };
+}
+
+function mergePendingItem(existing: EditorMediaItem[], pending: EditorMediaItem): EditorMediaItem[] {
+  const withoutSameId = existing.filter((entry) => entry.mediaId !== pending.mediaId);
+  return [pending, ...withoutSameId];
+}
+
+function updatePendingImportState(
+  existing: EditorMediaItem[],
+  pendingId: string,
+  patch: Partial<Pick<EditorMediaItem, "import_error" | "import_progress" | "importing">>,
+): EditorMediaItem[] {
+  return existing.map((entry) => {
+    if (entry.mediaId !== pendingId) return entry;
+    return { ...entry, ...patch };
+  });
+}
+
+function mergeImportedMediaWithPending(imported: EditorMediaItem[], existing: EditorMediaItem[]): EditorMediaItem[] {
+  const failures = existing.filter((entry) => entry.mediaId.startsWith("pending:") && !!entry.import_error);
+  return [...failures, ...imported];
+}
+
+function inferMediaKindFromFile(file: File): EditorMediaItem["kind"] {
+  const type = (file.type || "").toLowerCase();
+  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("video/")) return "video";
+  if (type.startsWith("audio/")) return "audio";
+  const ext = file.name.toLowerCase().split(".").at(-1) ?? "";
+  if (["jpg", "jpeg", "png", "webp"].includes(ext)) return "image";
+  if (["mp4", "mov", "webm", "rmvb", "flv"].includes(ext)) return "video";
+  if (["wav", "mp3", "m4a", "aac", "ogg", "flac"].includes(ext)) return "audio";
+  return "video";
+}
+
+async function uploadFileWithSplits(
+  file: File,
+  options: { onProgress: (value: number) => void },
+): Promise<UploadResponseEntry[]> {
+  if (file.size <= MAX_UPLOAD_BYTES) {
+    options.onProgress(100);
+    return uploadSinglePart(file);
+  }
+  const chunks = chunkPlanForSize(file.size);
+  const uploadId = pendingMediaIdForFile(file);
+  let offset = 0;
+  let response: UploadResponseEntry[] = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunkSize = chunks[index] ?? 0;
+    const nextOffset = Math.min(file.size, offset + chunkSize);
+    const blob = file.slice(offset, nextOffset);
+    const chunkFile = new File([blob], file.name, { type: file.type || "application/octet-stream" });
+    response = await uploadChunk({
+      chunkCount: chunks.length,
+      chunkFile,
+      chunkIndex: index,
+      originalName: file.name,
+      originalSize: file.size,
+      uploadId,
+    });
+    offset = nextOffset;
+    options.onProgress(Math.round((offset / file.size) * 100));
+  }
+  return response;
+}
+
+async function uploadSinglePart(file: File): Promise<UploadResponseEntry[]> {
+  const body = new FormData();
+  body.append("files", file);
+  return request<UploadResponseEntry[]>("/uploads", { method: "POST", body });
+}
+
+function chunkPlanForSize(totalBytes: number): number[] {
+  if (totalBytes <= MAX_UPLOAD_BYTES) return [totalBytes];
+  if (totalBytes <= MAX_UPLOAD_BYTES * 2) {
+    const first = Math.ceil(totalBytes / 2);
+    return [first, totalBytes - first];
+  }
+  const chunks: number[] = [];
+  let remaining = totalBytes;
+  while (remaining > 0) {
+    const part = Math.min(MAX_UPLOAD_BYTES, remaining);
+    chunks.push(part);
+    remaining -= part;
+  }
+  return chunks;
+}
+
+async function uploadChunk(input: {
+  chunkCount: number;
+  chunkFile: File;
+  chunkIndex: number;
+  originalName: string;
+  originalSize: number;
+  uploadId: string;
+}): Promise<UploadResponseEntry[]> {
+  const body = new FormData();
+  body.append("files", input.chunkFile);
+  body.append("upload_id", input.uploadId);
+  body.append("chunk_index", String(input.chunkIndex));
+  body.append("chunk_count", String(input.chunkCount));
+  body.append("original_name", input.originalName);
+  body.append("original_size", String(input.originalSize));
+  return request<UploadResponseEntry[]>("/uploads", { method: "POST", body });
+}
+
+function parseServerErrorMessage(error: unknown): string {
+  if (error instanceof ServerRequestError) {
+    const payload = error.payload as { error?: { code?: string; details?: Record<string, unknown>; message?: string } };
+    const code = payload?.error?.code;
+    if (code === "FILE_TOO_LARGE" || code === "CHUNK_TOO_LARGE") return "file exceeds 10 MiB chunk limit";
+    if (code === "IMAGE_TOO_SMALL") return "image is smaller than 5x5";
+    if (code === "CORRUPT_MEDIA") return "corrupt or unreadable media";
+    if (code === "UNSUPPORTED_TYPE") return "unsupported file type";
+    if (code === "THUMB_NOT_FOUND") return "thumbnail unavailable";
+    return payload?.error?.message ?? `upload failed (${error.status})`;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return "upload failed";
+}
+
+const PathFromUploadPath = {
+  fileName(value: string): string | null {
+    const normalized = value.replace(/\\/g, "/").trim();
+    const name = normalized.split("/").at(-1) ?? "";
+    if (!name || name === "." || name === "..") return null;
+    return name;
+  },
+};
 
 type SentenceMergeResult = {
   range: [number, number];
