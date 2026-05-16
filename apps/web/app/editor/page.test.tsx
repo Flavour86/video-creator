@@ -217,6 +217,56 @@ it("highlights search matches, scrolls to the first match, and advances with Ent
   await waitFor(() => expect(screen.getByText("s3")).toBeInTheDocument());
 });
 
+it("supports transcript search keyboard shortcuts and Cmd/Ctrl+F focus", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+
+  const search = await screen.findByRole("searchbox", { name: /search transcript/i });
+  const saveButton = screen.getByRole("button", { name: /save project config/i });
+  saveButton.focus();
+  expect(saveButton).toHaveFocus();
+
+  fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+  expect(search).toHaveFocus();
+
+  fireEvent.change(search, { target: { value: "capitalism" } });
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  expect(audio.currentTime).toBe(0);
+
+  fireEvent.keyDown(search, { key: "Enter" });
+  await waitFor(() => expect(audio.currentTime).toBe(10));
+
+  fireEvent.keyDown(search, { key: "Enter", shiftKey: true });
+  await waitFor(() => expect(audio.currentTime).toBe(0));
+
+  fireEvent.keyDown(search, { key: "ArrowDown" });
+  await waitFor(() => expect(audio.currentTime).toBe(10));
+
+  fireEvent.keyDown(search, { key: "Escape" });
+  expect(search).toHaveValue("");
+});
+
+it("merges transcript sentences, remaps clip anchors, and appends one operation-log entry", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+
+  fireEvent.contextMenu(await screen.findByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i }), { clientX: 30, clientY: 40 });
+  fireEvent.click(screen.getByRole("menuitem", { name: /merge 2 sentences/i }));
+
+  expect(await screen.findByText(/Transcript .* 4 aligned/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "PIP.png over s1" })).toBeInTheDocument();
+
+  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
+  expect(raw).not.toBeNull();
+  const parsed = JSON.parse(raw ?? "{}");
+  expect(parsed.undo).toHaveLength(1);
+  expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
+});
+
 it("opens assign media with the clicked sentence range and real thumbnails", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();

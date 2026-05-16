@@ -9,7 +9,7 @@ type TranscriptPaneProps = {
   activeRange: [number, number];
   currentMatch: number;
   onAssignRange: (range: [number, number]) => void;
-  onMergeNext: (index: number) => void;
+  onMergeRange: (range: [number, number]) => void;
   onPlayFrom: (index: number) => void;
   onQueryChange: (query: string) => void;
   onSearchKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
@@ -27,7 +27,7 @@ export function TranscriptPane({
   activeRange,
   currentMatch,
   onAssignRange,
-  onMergeNext,
+  onMergeRange,
   onPlayFrom,
   onQueryChange,
   onSearchKeyDown,
@@ -41,7 +41,7 @@ export function TranscriptPane({
   sentences,
 }: TranscriptPaneProps) {
   const t = useTranslations("pages.editor");
-  const [menu, setMenu] = useState<{ index: number; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ index: number; range: [number, number]; x: number; y: number } | null>(null);
   const visibleSentences = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return sentences;
@@ -96,12 +96,18 @@ export function TranscriptPane({
         onScroll={(event) => onScrollPositionChange?.(event.currentTarget.scrollTop)}
         ref={scrollContainerRef}
       >
+        {visibleSentences.length === 0 && query.trim() ? (
+          <div className="px-4 py-6 text-sm text-(--text-3)" role="status">
+            {t("searchNoResults", { query: query.trim() })}
+          </div>
+        ) : null}
         {visibleSentences.map((sentence, index) => {
           const active = sentence.index >= activeRange[0] && sentence.index <= activeRange[1];
           const selected = selectedRange ? sentence.index >= selectedRange[0] && sentence.index <= selectedRange[1] : false;
           const currentSearchMatch = query.trim() ? index === currentMatch : false;
           const lowConfidence = sentence.confidence_avg < 0.75;
           const orphan = sentence.end_s <= sentence.start_s;
+          const rowRange: [number, number] = selected && selectedRange ? [selectedRange[0], selectedRange[1]] : [sentence.index, sentence.index];
           return (
             <div
               className={`group grid w-full grid-cols-[minmax(0,1fr)_32px] items-stretch border-l-2 text-sm leading-snug hover:bg-(--bg-2) ${
@@ -119,7 +125,7 @@ export function TranscriptPane({
               ref={currentSearchMatch ? activeMatchRef : undefined}
             >
               <button
-                className="grid w-full grid-cols-[28px_44px_minmax(0,1fr)] items-start gap-2 px-3 py-2 text-left"
+                className="grid w-full grid-cols-[28px_96px_minmax(0,1fr)] items-start gap-2 px-3 py-2 text-left"
                 onClick={(event) => {
                   const range: [number, number] = event.shiftKey
                     ? normalizeRange(selectedRange?.[0] ?? activeRange[0], sentence.index)
@@ -129,9 +135,9 @@ export function TranscriptPane({
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  onSelectRange([sentence.index, sentence.index]);
+                  onSelectRange(rowRange);
                   onSeek(sentence.start_s);
-                  setMenu({ index: sentence.index, x: event.clientX, y: event.clientY });
+                  setMenu({ index: sentence.index, range: rowRange, x: event.clientX, y: event.clientY });
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && event.shiftKey) {
@@ -142,7 +148,9 @@ export function TranscriptPane({
                 type="button"
               >
                 <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">{sentence.index}</span>
-                <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">{formatDuration(sentence.start_s)}</span>
+                <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">
+                  {formatDuration(sentence.start_s)}-{formatDuration(sentence.end_s)}
+                </span>
                 <span className="text-(--text-2)">
                   {highlight(sanitizeSentenceText(sentence.text), query)}
                   {lowConfidence ? <span className="ml-2 font-mono text-[10px] uppercase text-(--red)">{t("lowConfidence")}</span> : null}
@@ -154,9 +162,9 @@ export function TranscriptPane({
                 className="flex items-center justify-center text-(--text-3) opacity-0 hover:text-(--amber) focus-visible:opacity-100 group-hover:opacity-100"
                 onClick={(event) => {
                   const rect = event.currentTarget.getBoundingClientRect();
-                  onSelectRange([sentence.index, sentence.index]);
+                  onSelectRange(rowRange);
                   onSeek(sentence.start_s);
-                  setMenu({ index: sentence.index, x: rect.left, y: rect.bottom + 4 });
+                  setMenu({ index: sentence.index, range: rowRange, x: rect.left, y: rect.bottom + 4 });
                 }}
                 title={`Assign media to sentence ${sentence.index}`}
                 type="button"
@@ -170,13 +178,15 @@ export function TranscriptPane({
       {menu ? (
         <SentenceContextMenu
           index={menu.index}
+          range={menu.range}
+          totalSentences={sentences.length}
           onAssign={() => {
             onAssignRange([menu.index, menu.index]);
             setMenu(null);
           }}
           onClose={() => setMenu(null)}
-          onMergeNext={() => {
-            onMergeNext(menu.index);
+          onMergeRange={() => {
+            onMergeRange(menu.range);
             setMenu(null);
           }}
           onPlay={() => {
@@ -193,22 +203,30 @@ export function TranscriptPane({
 
 function SentenceContextMenu({
   index,
+  range,
+  totalSentences,
   onAssign,
   onClose,
-  onMergeNext,
+  onMergeRange,
   onPlay,
   x,
   y,
 }: {
   index: number;
+  range: [number, number];
+  totalSentences: number;
   onAssign: () => void;
   onClose: () => void;
-  onMergeNext: () => void;
+  onMergeRange: () => void;
   onPlay: () => void;
   x: number;
   y: number;
 }) {
   const t = useTranslations("pages.editor");
+  const normalizedRange = normalizeRange(range[0], range[1]);
+  const selectedCount = normalizedRange[1] - normalizedRange[0] + 1;
+  const mergeCount = selectedCount > 1 ? selectedCount : Math.min(2, Math.max(1, totalSentences - normalizedRange[0] + 1));
+  const canMerge = mergeCount >= 2;
   return (
     <div
       className="fixed z-50 min-w-[200px] rounded-md border border-(--line) bg-(--bg-2) p-1 text-sm text-(--text) shadow-2xl"
@@ -229,8 +247,14 @@ function SentenceContextMenu({
         {t("menu.playFromHere")}
       </button>
       <div className="my-1 h-px bg-(--line-soft)" />
-      <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-(--text-3) hover:bg-(--bg-3)" onClick={onMergeNext} role="menuitem" type="button">
-        {t("menu.mergeNext", { index })}
+      <button
+        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-(--text-3) disabled:cursor-not-allowed disabled:opacity-60 hover:bg-(--bg-3)"
+        disabled={!canMerge}
+        onClick={onMergeRange}
+        role="menuitem"
+        type="button"
+      >
+        {t("menu.mergeSentences", { count: mergeCount })}
       </button>
     </div>
   );

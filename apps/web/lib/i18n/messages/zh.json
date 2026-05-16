@@ -288,9 +288,11 @@
       "menu": {
         "assignRange": "Assign media to range...",
         "playFromHere": "Play from here",
-        "mergeNext": "Merge s{index} with next"
+        "mergeNext": "Merge s{index} with next",
+        "mergeSentences": "Merge {count} sentences"
       },
       "searchPlaceholder": "Search transcript… (⌘F)",
+      "searchNoResults": "No transcript matches for \"{query}\".",
       "transcriptHead": "Transcript · {count} aligned",
       "resolution": "Resolution",
       "fitMode": "Fit mode",

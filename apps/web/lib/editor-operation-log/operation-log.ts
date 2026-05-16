@@ -16,6 +16,7 @@ export type EditorOperation =
   | { type: "move"; layerId: string; itemId: string; before: { start: number; end: number }; after: { start: number; end: number } }
   | { type: "stretch"; layerId: string; itemId: string; before: { start: number; end: number }; after: { start: number; end: number } }
   | { type: "reorder"; layerId: string; from: number; to: number }
+  | { type: "replace_layers"; before: Layer[]; after: Layer[] }
   | { type: "global_config_update"; before: Project["output"]; after: Project["output"] }
   | { type: "subtitle_settings_update"; before: Project["subtitles"]; after: Project["subtitles"] }
   | { type: "watermark_update"; before: Project["watermark"]; after: Project["watermark"] };
@@ -191,19 +192,21 @@ export function invertOperation(op: EditorOperation): EditorOperation {
   if (op.type === "patch") return { ...op, before: op.after, after: op.before };
   if (op.type === "move" || op.type === "stretch") return { ...op, before: op.after, after: op.before };
   if (op.type === "reorder") return { ...op, from: op.to, to: op.from };
+  if (op.type === "replace_layers") return { ...op, before: op.after, after: op.before };
   if (op.type === "global_config_update") return { ...op, before: op.after, after: op.before };
   if (op.type === "subtitle_settings_update") return { ...op, before: op.after, after: op.before };
   return { ...op, before: op.after, after: op.before };
 }
 
 export function applyOperation(state: EditorWorkingState, op: EditorOperation): EditorWorkingState {
+  if (op.type === "replace_layers") return { ...state, layers: op.after };
   if (op.type === "global_config_update") return { ...state, output: op.after };
   if (op.type === "subtitle_settings_update") return { ...state, subtitles: op.after };
   if (op.type === "watermark_update") return { ...state, watermark: op.after };
   return { ...state, layers: applyLayerOperation(state.layers, op) };
 }
 
-function applyLayerOperation(layers: Layer[], op: Exclude<EditorOperation, { type: "global_config_update" | "subtitle_settings_update" | "watermark_update" }>): Layer[] {
+function applyLayerOperation(layers: Layer[], op: Exclude<EditorOperation, { type: "replace_layers" | "global_config_update" | "subtitle_settings_update" | "watermark_update" }>): Layer[] {
   return layers.map((layer) => {
     if (layer.id !== op.layerId || layer.kind === "sub") return layer;
     const items = [...layer.items] as Array<Record<string, unknown>>;

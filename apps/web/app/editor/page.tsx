@@ -403,14 +403,23 @@ function EditorContent() {
     setPlaying(true);
   }, [seekTo, sentences]);
 
-  const mergeSentenceWithNext = useCallback((index: number) => {
-    const nextSentences = mergeSentences(sentences, index);
-    setSentences(nextSentences);
-    setLayers((current) => remapLayersAfterSentenceMerge(current, index, nextSentences));
-    setSelectedSentenceRange([index, index]);
+  const mergeSentenceWithNext = useCallback((range: [number, number]) => {
+    const mergeResult = mergeSentences(sentences, range);
+    if (!mergeResult) return;
+    const nextLayers = remapLayersAfterSentenceMerge(layers, mergeResult.range, mergeResult.sentences);
+    setSentences(mergeResult.sentences);
+    setLayers(nextLayers);
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "replace_layers",
+        before: layers,
+        after: nextLayers,
+      });
+    }
+    setSelectedSentenceRange([mergeResult.range[0], mergeResult.range[0]]);
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
-  }, [sentences]);
+  }, [layers, projectId, sentences]);
 
   const onResolutionChange = useCallback((value: string) => {
     const nextResolution = normalizeResolutionPreset(value, resolution);
@@ -469,7 +478,7 @@ function EditorContent() {
           activeRange={activeRange}
           currentMatch={currentMatch}
           onAssignRange={assignSentenceRange}
-          onMergeNext={mergeSentenceWithNext}
+          onMergeRange={mergeSentenceWithNext}
           onPlayFrom={playFromSentence}
           onQueryChange={(value) => {
             setQuery(value);
@@ -563,58 +572,99 @@ function hasVisualItemId(value: unknown): value is { id: string } {
   return typeof value === "object" && value !== null && "id" in value && typeof value.id === "string";
 }
 
-function mergeSentences(sentences: AlignedSentence[], index: number): AlignedSentence[] {
-  const position = sentences.findIndex((sentence) => sentence.index === index);
-  if (position === -1 || position >= sentences.length - 1) return sentences;
-  const current = sentences[position];
-  const next = sentences[position + 1];
-  if (!current || !next) return sentences;
+type SentenceMergeResult = {
+  range: [number, number];
+  sentences: AlignedSentence[];
+};
+
+function mergeSentences(sentences: AlignedSentence[], mergeRequest: [number, number]): SentenceMergeResult | null {
+  const range = resolveMergeRange(sentences, mergeRequest);
+  if (!range) return null;
+  const startPosition = sentences.findIndex((sentence) => sentence.index === range[0]);
+  const endPosition = sentences.findIndex((sentence) => sentence.index === range[1]);
+  if (startPosition < 0 || endPosition < startPosition) return null;
+  const selected = sentences.slice(startPosition, endPosition + 1);
+  const head = selected[0];
+  const tail = selected[selected.length - 1];
+  if (!head || !tail) return null;
   const merged: AlignedSentence = {
-    index: current.index,
-    text: `${current.text.trim()} ${next.text.trim()}`.trim(),
-    start_s: current.start_s,
-    end_s: next.end_s,
-    confidence_avg: Math.min(current.confidence_avg, next.confidence_avg),
+    index: range[0],
+    text: selected.map((sentence) => sentence.text.trim()).filter(Boolean).join(" "),
+    start_s: head.start_s,
+    end_s: tail.end_s,
+    confidence_avg: selected.reduce((value, sentence) => Math.min(value, sentence.confidence_avg), head.confidence_avg),
   };
-  return [
-    ...sentences.slice(0, position),
-    merged,
-    ...sentences.slice(position + 2).map((sentence) => ({ ...sentence, index: sentence.index - 1 })),
-  ];
+  const removedCount = range[1] - range[0];
+  return {
+    range,
+    sentences: [
+      ...sentences.slice(0, startPosition),
+      merged,
+      ...sentences.slice(endPosition + 1).map((sentence) => ({ ...sentence, index: sentence.index - removedCount })),
+    ],
+  };
 }
 
-function remapLayersAfterSentenceMerge(layers: Layer[], index: number, sentences: AlignedSentence[]): Layer[] {
+function resolveMergeRange(sentences: AlignedSentence[], mergeRequest: [number, number]): [number, number] | null {
+  if (sentences.length < 2) return null;
+  const [inputStart, inputEnd] = normalizeSentenceRange(mergeRequest);
+  const firstIndex = sentences[0]?.index ?? 1;
+  const lastIndex = sentences.at(-1)?.index ?? firstIndex;
+  const start = clampSentenceIndex(inputStart, firstIndex, lastIndex);
+  const end = clampSentenceIndex(inputEnd, start, lastIndex);
+  if (start === end) {
+    if (end >= lastIndex) return null;
+    return [start, end + 1];
+  }
+  return [start, end];
+}
+
+function clampSentenceIndex(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeSentenceRange(range: [number, number]): [number, number] {
+  return [Math.min(range[0], range[1]), Math.max(range[0], range[1])];
+}
+
+function remapLayersAfterSentenceMerge(layers: Layer[], mergeRange: [number, number], sentences: AlignedSentence[]): Layer[] {
   return layers.map((layer) => {
     if (layer.kind === "sub") return layer;
-    if (layer.kind === "bg") return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, index, sentences)) };
-    if (layer.kind === "fg") return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, index, sentences)) };
-    return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, index, sentences)) };
+    if (layer.kind === "bg") return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, mergeRange, sentences)) };
+    if (layer.kind === "fg") return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, mergeRange, sentences)) };
+    return { ...layer, items: layer.items.map((item) => remapVisualItemAfterSentenceMerge(item, mergeRange, sentences)) };
   });
 }
 
-function remapVisualItemAfterSentenceMerge<T extends { end: number; sentences: [number, number]; start: number }>(
+function remapVisualItemAfterSentenceMerge<T extends { end: number; sentences: [number, number]; start: number; orphan_reason?: string | null; orphaned?: boolean }>(
   item: T,
-  index: number,
+  mergeRange: [number, number],
   sentences: AlignedSentence[],
 ): T {
-  const nextRange = normalizeMergedRange(item.sentences, index);
+  const nextRange = normalizeMergedRange(item.sentences, mergeRange);
   const start = sentences.find((sentence) => sentence.index === nextRange[0])?.start_s;
   const end = sentences.find((sentence) => sentence.index === nextRange[1])?.end_s;
+  const orphaned = start === undefined || end === undefined || item.orphaned === true;
   return {
     ...item,
     sentences: nextRange,
     start: start ?? item.start,
     end: end ?? item.end,
+    orphaned,
+    orphan_reason: orphaned ? (item.orphan_reason ?? "missing_sentence_anchor") : null,
   };
 }
 
-function normalizeMergedRange(range: [number, number], index: number): [number, number] {
+function normalizeMergedRange(range: [number, number], mergeRange: [number, number]): [number, number] {
+  const [from, to] = mergeRange;
+  const removed = to - from;
+  const normalized = normalizeSentenceRange(range);
   const remap = (value: number) => {
-    if (value === index + 1) return index;
-    if (value > index + 1) return value - 1;
-    return value;
+    if (value < from) return value;
+    if (value <= to) return from;
+    return value - removed;
   };
-  return [remap(range[0]), Math.max(remap(range[0]), remap(range[1]))];
+  return normalizeSentenceRange([remap(normalized[0]), remap(normalized[1])]);
 }
 
 type DraftProgressEvent = {
