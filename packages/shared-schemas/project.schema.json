@@ -123,6 +123,7 @@
         "size": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
         "hash": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
         "import_mode": { "$ref": "#/$defs/MediaImportMode" },
+        "created_at": { "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
         "imported_at": { "type": "string", "format": "date-time" }
       }
     },
@@ -397,7 +398,12 @@
       "required": ["preset"],
       "properties": {
         "preset": { "enum": ["draft", "final"] },
-        "resolution": { "type": "string", "pattern": "^\\d+x\\d+$" },
+        "resolution": {
+          "oneOf": [
+            { "enum": ["1080p", "720p", "9:16"] },
+            { "type": "string", "pattern": "^\\d+x\\d+$" }
+          ]
+        },
         "width": { "type": "integer", "minimum": 1 },
         "height": { "type": "integer", "minimum": 1 },
         "fps": { "type": "number", "exclusiveMinimum": 0 },
@@ -453,7 +459,7 @@
       "title": "VisualItemBase",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "mediaId", "sentences", "start", "end", "motion", "transitions"],
+      "required": ["id", "sentences", "start", "end", "motion", "transitions"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "mediaId": { "type": "string", "minLength": 1 },
@@ -487,9 +493,9 @@
       "properties": {
         "posX": { "type": "number", "minimum": 0, "maximum": 100 },
         "posY": { "type": "number", "minimum": 0, "maximum": 100 },
-        "size": { "type": "number", "minimum": 10, "maximum": 70 },
-        "radius": { "type": "number", "minimum": 0 },
-        "opacity": { "type": "number", "minimum": 0, "maximum": 100 }
+        "size": { "type": "number", "minimum": 15, "maximum": 60 },
+        "radius": { "type": "number", "minimum": 0, "maximum": 32 },
+        "opacity": { "type": "number", "minimum": 10, "maximum": 100 }
       }
     },
     "PipItem": {
@@ -587,10 +593,10 @@
       "required": ["font", "size", "position", "max_chars_per_line", "bg_style"],
       "properties": {
         "font": { "type": "string" },
-        "size": { "type": "number", "minimum": 1 },
-        "position": { "enum": ["bottom-center", "top-center"] },
-        "max_chars_per_line": { "type": "integer", "minimum": 1 },
-        "bg_style": { "enum": ["none", "shadow", "box"] }
+        "size": { "type": "number", "minimum": 28, "maximum": 72 },
+        "position": { "enum": ["bottom", "bottom_low", "top", "bottom-center", "top-center"] },
+        "max_chars_per_line": { "type": "integer", "minimum": 20, "maximum": 80 },
+        "bg_style": { "enum": ["none", "pill", "block", "shadow", "box"] }
       }
     },
     "SubtitlesSettings": {

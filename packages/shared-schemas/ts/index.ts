@@ -154,7 +154,7 @@ export interface Transcript {
  */
 export interface Output {
   preset: "draft" | "final";
-  resolution?: string;
+  resolution?: ("1080p" | "720p" | "9:16") | string;
   width?: number;
   height?: number;
   fps?: number;
@@ -182,6 +182,7 @@ export interface MediaAsset {
   size?: number | null;
   hash?: string | null;
   import_mode: MediaImportMode;
+  created_at?: string | null;
   imported_at: string;
 }
 /**
@@ -228,7 +229,7 @@ export interface ForegroundLayer {
  */
 export interface VisualItemBase {
   id: string;
-  mediaId: string;
+  mediaId?: string;
   /**
    * @minItems 1
    */
@@ -307,9 +308,9 @@ export interface SubtitlesSettings {
 export interface SubtitleStyle {
   font: string;
   size: number;
-  position: "bottom-center" | "top-center";
+  position: "bottom" | "bottom_low" | "top" | "bottom-center" | "top-center";
   max_chars_per_line: number;
-  bg_style: "none" | "shadow" | "box";
+  bg_style: "none" | "pill" | "block" | "shadow" | "box";
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema

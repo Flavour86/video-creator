@@ -145,6 +145,7 @@ class MediaAsset(BaseModel):
     size: conint(ge=0) | None = None
     hash: str | None = None
     import_mode: MediaImportMode
+    created_at: AwareDatetime | None = None
     imported_at: AwareDatetime
 
 
@@ -381,13 +382,19 @@ class Preset(Enum):
     final = 'final'
 
 
+class Resolution(Enum):
+    field_1080p = '1080p'
+    field_720p = '720p'
+    field_9_16 = '9:16'
+
+
 class Output(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
         populate_by_name=True,
     )
     preset: Preset
-    resolution: constr(pattern=r'^\d+x\d+$') | None = None
+    resolution: Resolution | constr(pattern=r'^\d+x\d+$') | None = None
     width: conint(ge=1) | None = None
     height: conint(ge=1) | None = None
     fps: PositiveFloat | None = None
@@ -470,7 +477,7 @@ class VisualItemBase(BaseModel):
         populate_by_name=True,
     )
     id: constr(min_length=1)
-    media_id: constr(min_length=1) = Field(..., alias='mediaId')
+    media_id: constr(min_length=1) | None = Field(None, alias='mediaId')
     media_ids: list[str] | None = Field(None, alias='mediaIds', min_length=1)
     anchor: Anchor | None = None
     from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
@@ -500,9 +507,9 @@ class PipPlacement(BaseModel):
     )
     pos_x: confloat(ge=0.0, le=100.0) = Field(..., alias='posX')
     pos_y: confloat(ge=0.0, le=100.0) = Field(..., alias='posY')
-    size: confloat(ge=10.0, le=70.0)
-    radius: confloat(ge=0.0)
-    opacity: confloat(ge=0.0, le=100.0)
+    size: confloat(ge=15.0, le=60.0)
+    radius: confloat(ge=0.0, le=32.0)
+    opacity: confloat(ge=10.0, le=100.0)
 
 
 class PipItem(VisualItemBase):
@@ -575,12 +582,17 @@ class BackgroundLayer(BaseModel):
 
 
 class Position(Enum):
+    bottom = 'bottom'
+    bottom_low = 'bottom_low'
+    top = 'top'
     bottom_center = 'bottom-center'
     top_center = 'top-center'
 
 
 class BgStyle(Enum):
     none = 'none'
+    pill = 'pill'
+    block = 'block'
     shadow = 'shadow'
     box = 'box'
 
@@ -591,9 +603,9 @@ class SubtitleStyle(BaseModel):
         populate_by_name=True,
     )
     font: str
-    size: confloat(ge=1.0)
+    size: confloat(ge=28.0, le=72.0)
     position: Position
-    max_chars_per_line: conint(ge=1)
+    max_chars_per_line: conint(ge=20, le=80)
     bg_style: BgStyle
 
 

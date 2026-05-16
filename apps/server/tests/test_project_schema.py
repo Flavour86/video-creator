@@ -159,6 +159,133 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
     assert project.layers[0].root.items[0].cache_status.value == "warm"
 
 
+def test_editor_schema_accepts_task1_media_visual_subtitle_and_resolution_fields() -> None:
+    project = Project.model_validate(
+        {
+            "version": 1,
+            "name": "task1",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {**_phase1_output(), "resolution": "9:16"},
+            "media": [
+                {
+                    "id": "media-v-1",
+                    "name": "clip.mp4",
+                    "kind": "video",
+                    "path": "media/clip.mp4",
+                    "thumb_path": ".vc/thumbs/clip.jpg",
+                    "dimensions": {"width": 1080, "height": 1920},
+                    "duration": 12.5,
+                    "size": 54321,
+                    "hash": "sha256:clip",
+                    "import_mode": "copy",
+                    "created_at": "2026-05-09T00:00:00Z",
+                    "imported_at": "2026-05-09T00:00:01Z",
+                }
+            ],
+            "layers": [
+                {
+                    "id": "L-bg",
+                    "kind": "bg",
+                    "name": "Background",
+                    "items": [
+                        {
+                            "id": "bg-playlist",
+                            "mediaIds": ["media-v-1"],
+                            "sentences": [1, 2],
+                            "start": 0,
+                            "end": 12.5,
+                            "motion": {"kind": "none", "easing": "linear"},
+                            "transitions": {"in": "cut", "out": "fade"},
+                            "crossfade": 0.2,
+                            "cache_status": "partial",
+                            "orphaned": False,
+                            "orphan_reason": None,
+                        }
+                    ],
+                },
+                {
+                    "id": "L-pip",
+                    "kind": "pip",
+                    "name": "PiP",
+                    "items": [
+                        {
+                            "id": "pip-1",
+                            "mediaId": "media-v-1",
+                            "sentences": [2, 2],
+                            "start": 2,
+                            "end": 8,
+                            "motion": {"kind": "none", "easing": "linear"},
+                            "transitions": {"in": "fade", "out": "cut"},
+                            "pip": {"posX": 50, "posY": 50, "size": 15, "radius": 32, "opacity": 10},
+                        }
+                    ],
+                },
+            ],
+            "subtitles": {
+                "burn_in": True,
+                "style": {
+                    "font": "Arial",
+                    "size": 72,
+                    "position": "bottom_low",
+                    "max_chars_per_line": 80,
+                    "bg_style": "pill",
+                },
+            },
+        }
+    )
+
+    assert getattr(project.output.resolution, "value", project.output.resolution) == "9:16"
+    assert project.media[0].created_at is not None
+    assert project.layers[0].root.items[0].media_ids == ["media-v-1"]
+    assert project.layers[1].root.items[0].pip.size == 15
+    assert project.subtitles is not None
+    assert project.subtitles.style.position.value == "bottom_low"
+    assert project.subtitles.style.bg_style.value == "pill"
+
+
+def test_editor_schema_rejects_out_of_range_pip_and_subtitle_values() -> None:
+    payload = {
+        "version": 1,
+        "name": "invalid",
+        "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": _phase1_output(),
+        "layers": [
+            {
+                "id": "L-pip",
+                "kind": "pip",
+                "name": "PiP",
+                "items": [
+                    {
+                        "id": "pip-1",
+                        "mediaId": "media.jpg",
+                        "sentences": [1, 1],
+                        "start": 0,
+                        "end": 2,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "pip": {"posX": 50, "posY": 50, "size": 10, "radius": 33, "opacity": 9},
+                    }
+                ],
+            }
+        ],
+        "subtitles": {
+            "burn_in": True,
+            "style": {
+                "font": "Arial",
+                "size": 27,
+                "position": "bottom_low",
+                "max_chars_per_line": 19,
+                "bg_style": "pill",
+            },
+        },
+    }
+
+    with pytest.raises(ValidationError):
+        Project.model_validate(payload)
+
+
 def test_invalid_version_rejected() -> None:
     with pytest.raises(ValidationError):
         Project.model_validate({"version": 2, "name": "x"})
