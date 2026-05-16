@@ -20,7 +20,7 @@ def _dump_project(project_dir: Path, project: Project) -> None:
 def _phase1_output() -> dict[str, object]:
     return {
         "preset": "draft",
-        "resolution": "1920x1080",
+        "resolution": "1080p",
         "width": 1920,
         "height": 1080,
         "fps": 30,
@@ -33,6 +33,10 @@ def _phase1_output() -> dict[str, object]:
         "pixel_format": "yuv420p",
         "color_space": "bt709",
     }
+
+
+def _item_root(item: object) -> object:
+    return getattr(item, "root", item)
 
 
 def test_minimal_valid(tmp_path: Path) -> None:
@@ -98,7 +102,7 @@ def test_fg_layer_round_trip(tmp_path: Path) -> None:
     assert len(loaded.layers) == 2
     assert loaded.layers[0].root.kind == "sub"
     assert loaded.layers[1].root.kind == "fg"
-    assert loaded.layers[1].root.items[0].media_id == "img.jpg"
+    assert _item_root(loaded.layers[1].root.items[0]).media_id == "img.jpg"
 
 
 def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
@@ -135,7 +139,6 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
                     "items": [
                         {
                             "id": "bg-playlist",
-                            "mediaId": "media-bg-1",
                             "mediaIds": ["media-bg-1"],
                             "sentences": [1, 2],
                             "start": 0,
@@ -155,8 +158,9 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
 
     assert project.project_id == "p-demo"
     assert project.media[0].id == "media-bg-1"
-    assert project.layers[0].root.items[0].media_ids == ["media-bg-1"]
-    assert project.layers[0].root.items[0].cache_status.value == "warm"
+    bg_item = _item_root(project.layers[0].root.items[0])
+    assert bg_item.media_ids == ["media-bg-1"]
+    assert bg_item.cache_status.value == "warm"
 
 
 def test_editor_schema_accepts_task1_media_visual_subtitle_and_resolution_fields() -> None:
@@ -237,8 +241,8 @@ def test_editor_schema_accepts_task1_media_visual_subtitle_and_resolution_fields
 
     assert getattr(project.output.resolution, "value", project.output.resolution) == "9:16"
     assert project.media[0].created_at is not None
-    assert project.layers[0].root.items[0].media_ids == ["media-v-1"]
-    assert project.layers[1].root.items[0].pip.size == 15
+    assert _item_root(project.layers[0].root.items[0]).media_ids == ["media-v-1"]
+    assert _item_root(project.layers[1].root.items[0]).pip.size == 15
     assert project.subtitles is not None
     assert project.subtitles.style.position.value == "bottom_low"
     assert project.subtitles.style.bg_style.value == "pill"
@@ -284,6 +288,106 @@ def test_editor_schema_rejects_out_of_range_pip_and_subtitle_values() -> None:
 
     with pytest.raises(ValidationError):
         Project.model_validate(payload)
+
+
+def test_editor_schema_rejects_missing_visual_media_reference_mode() -> None:
+    base_item = {
+        "id": "fg-1",
+        "sentences": [1, 1],
+        "start": 0,
+        "end": 1,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+    }
+    base_project = {
+        "version": 1,
+        "name": "bad-media-ref",
+        "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": _phase1_output(),
+        "layers": [{"id": "L-fg", "kind": "fg", "name": "Foreground", "items": []}],
+    }
+
+    missing_ref = {
+        **base_project,
+        "layers": [
+            {
+                "id": "L-fg",
+                "kind": "fg",
+                "name": "Foreground",
+                "items": [{**base_item}],
+            }
+        ],
+    }
+    with pytest.raises(ValidationError):
+        Project.model_validate(missing_ref)
+
+
+def test_visual_item_schema_declares_exclusive_media_reference_modes() -> None:
+    schema = json.loads(
+        (Path(__file__).resolve().parents[3] / "packages" / "shared-schemas" / "project.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    one_of = schema["$defs"]["VisualItemBase"]["oneOf"]
+    assert {"required": ["mediaId"], "properties": {"mediaIds": {"type": "null"}}} in one_of
+    assert {"required": ["mediaIds"], "properties": {"mediaId": {"type": "null"}}} in one_of
+
+
+def test_editor_schema_rejects_legacy_subtitle_and_resolution_values() -> None:
+    base = {
+        "version": 1,
+        "name": "legacy",
+        "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": _phase1_output(),
+        "layers": [],
+        "subtitles": {
+            "burn_in": True,
+            "style": {
+                "font": "Arial",
+                "size": 42,
+                "position": "bottom",
+                "max_chars_per_line": 42,
+                "bg_style": "shadow",
+            },
+        },
+    }
+
+    invalid_resolution = {**base, "output": {**_phase1_output(), "resolution": "1920x1080"}}
+    invalid_position = {
+        **base,
+        "subtitles": {
+            "burn_in": True,
+            "style": {
+                "font": "Arial",
+                "size": 42,
+                "position": "bottom-center",
+                "max_chars_per_line": 42,
+                "bg_style": "shadow",
+            },
+        },
+    }
+    invalid_bg_style = {
+        **base,
+        "subtitles": {
+            "burn_in": True,
+            "style": {
+                "font": "Arial",
+                "size": 42,
+                "position": "bottom",
+                "max_chars_per_line": 42,
+                "bg_style": "box",
+            },
+        },
+    }
+
+    with pytest.raises(ValidationError):
+        Project.model_validate(invalid_resolution)
+    with pytest.raises(ValidationError):
+        Project.model_validate(invalid_position)
+    with pytest.raises(ValidationError):
+        Project.model_validate(invalid_bg_style)
 
 
 def test_invalid_version_rejected() -> None:

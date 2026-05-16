@@ -170,6 +170,7 @@ def render_clip(
 
 
 def _field(item: ClipRenderItem, snake_name: str, alias: str | None = None) -> object:
+    item = _unwrap_root_model(item)
     if isinstance(item, Mapping):
         if snake_name in item:
             return item[snake_name]
@@ -198,6 +199,10 @@ def _duration_s(item: ClipRenderItem) -> float:
     if duration_s <= 0:
         raise ValueError("Clip item duration must be positive.")
     return duration_s
+
+
+def _unwrap_root_model(value: object) -> object:
+    return getattr(value, "root", value)
 
 
 def _effective_duration_s(item: ClipRenderItem, media_path: Path) -> float:

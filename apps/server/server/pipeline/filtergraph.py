@@ -318,6 +318,7 @@ def _watermark_float(watermark: object, name: str) -> float:
 
 
 def _item_float(item: ClipRenderItem, name: str) -> float:
+    item = _unwrap_root_model(item)
     if isinstance(item, Mapping):
         value = item[name]
     else:
@@ -336,6 +337,7 @@ def _is_pip_item(item: ClipRenderItem) -> bool:
 
 
 def _pip_placement(item: ClipRenderItem) -> object:
+    item = _unwrap_root_model(item)
     if isinstance(item, Mapping):
         return item["pip"]
     return object.__getattribute__(item, "pip")
@@ -354,6 +356,7 @@ def _placement_float(placement: object, name: str) -> float:
 
 
 def _transition_value(item: ClipRenderItem, name: str) -> str | None:
+    item = _unwrap_root_model(item)
     if isinstance(item, Mapping):
         transitions = item["transitions"]
     else:
@@ -371,6 +374,10 @@ def _transition_value(item: ClipRenderItem, name: str) -> str | None:
     if not isinstance(value, str):
         raise TypeError(f"Transition {name} must be a string.")
     return value
+
+
+def _unwrap_root_model(value: object) -> object:
+    return getattr(value, "root", value)
 
 
 def _fullscreen_overlay_args(item: ClipRenderItem) -> str:

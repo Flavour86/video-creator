@@ -398,12 +398,7 @@
       "required": ["preset"],
       "properties": {
         "preset": { "enum": ["draft", "final"] },
-        "resolution": {
-          "oneOf": [
-            { "enum": ["1080p", "720p", "9:16"] },
-            { "type": "string", "pattern": "^\\d+x\\d+$" }
-          ]
-        },
+        "resolution": { "enum": ["1080p", "720p", "9:16"] },
         "width": { "type": "integer", "minimum": 1 },
         "height": { "type": "integer", "minimum": 1 },
         "fps": { "type": "number", "exclusiveMinimum": 0 },
@@ -451,6 +446,10 @@
     "SentenceRange": {
       "title": "SentenceRange",
       "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "integer", "minimum": 1 }
+      ],
       "minItems": 2,
       "maxItems": 2,
       "items": { "type": "integer", "minimum": 1 }
@@ -460,6 +459,16 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "sentences", "start", "end", "motion", "transitions"],
+      "oneOf": [
+        {
+          "required": ["mediaId"],
+          "properties": { "mediaIds": { "type": "null" } }
+        },
+        {
+          "required": ["mediaIds"],
+          "properties": { "mediaId": { "type": "null" } }
+        }
+      ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "mediaId": { "type": "string", "minLength": 1 },
@@ -594,9 +603,9 @@
       "properties": {
         "font": { "type": "string" },
         "size": { "type": "number", "minimum": 28, "maximum": 72 },
-        "position": { "enum": ["bottom", "bottom_low", "top", "bottom-center", "top-center"] },
+        "position": { "enum": ["bottom", "bottom_low", "top"] },
         "max_chars_per_line": { "type": "integer", "minimum": 20, "maximum": 80 },
-        "bg_style": { "enum": ["none", "pill", "block", "shadow", "box"] }
+        "bg_style": { "enum": ["none", "pill", "block", "shadow"] }
       }
     },
     "SubtitlesSettings": {

@@ -311,7 +311,7 @@ def _output_for_setup_preset(output_preset: object) -> dict[str, object]:
     if preset_value == "vertical":
         return {
             "preset": "final",
-            "resolution": "1080x1920",
+            "resolution": "9:16",
             "width": 1080,
             "height": 1920,
         }
@@ -869,7 +869,7 @@ def _default_subtitles(burn_in: bool) -> dict[str, Any]:
         "style": {
             "font": "Arial",
             "size": 28,
-            "position": "bottom-center",
+            "position": "bottom",
             "max_chars_per_line": 42,
             "bg_style": "shadow",
         },

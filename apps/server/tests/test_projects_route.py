@@ -143,7 +143,7 @@ async def test_create_project_from_setup_draft_materializes_final_layout(tmp_pat
     assert (target / ".vc" / "thumbs" / "project-placeholder.svg").is_file()
     assert config.status_code == 200
     payload = config.json()["config"]
-    assert payload["output"]["resolution"] == "1080x1920"
+    assert payload["output"]["resolution"] == "9:16"
     assert payload["watermark"]["mediaId"] == "watermark-1"
     assert payload["media"][0]["name"] == "watermark.png"
     assert not (settings.app_db_path.parent / "setup-cache" / setup_id).exists()

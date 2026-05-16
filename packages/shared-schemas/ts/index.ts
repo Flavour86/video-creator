@@ -21,18 +21,18 @@ export type MediaImportMode = "copy" | "link" | "generated";
  */
 export type ForegroundItem = VisualItemBase;
 /**
- * @minItems 2
- * @maxItems 2
- *
  * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "SentenceRange".
+ * via the `definition` "VisualItemBase".
  */
-export type SentenceRange = [number, number];
-/**
- * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "VisualCacheStatus".
- */
-export type VisualCacheStatus = "warm" | "partial" | "cold" | "invalid" | "orphaned";
+export type VisualItemBase =
+  | {
+      mediaIds?: null;
+      [k: string]: unknown;
+    }
+  | {
+      mediaId?: null;
+      [k: string]: unknown;
+    };
 /**
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "PipItem".
@@ -112,6 +112,11 @@ export type RenderArtifactKind =
   | "companion";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "VisualCacheStatus".
+ */
+export type VisualCacheStatus = "warm" | "partial" | "cold" | "invalid" | "orphaned";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "SetupSubtitleGenerationState".
  */
 export type SetupSubtitleGenerationState = "ready" | "running" | "succeeded" | "failed";
@@ -120,6 +125,14 @@ export type SetupSubtitleGenerationState = "ready" | "running" | "succeeded" | "
  * via the `definition` "SetupSubtitleCacheState".
  */
 export type SetupSubtitleCacheState = "unknown" | "hit" | "miss";
+/**
+ * @minItems 2
+ * @maxItems 2
+ *
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "SentenceRange".
+ */
+export type SentenceRange = [number, number];
 
 export interface Project {
   version: 1;
@@ -154,7 +167,7 @@ export interface Transcript {
  */
 export interface Output {
   preset: "draft" | "final";
-  resolution?: ("1080p" | "720p" | "9:16") | string;
+  resolution?: "1080p" | "720p" | "9:16";
   width?: number;
   height?: number;
   fps?: number;
@@ -225,45 +238,6 @@ export interface ForegroundLayer {
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "VisualItemBase".
- */
-export interface VisualItemBase {
-  id: string;
-  mediaId?: string;
-  /**
-   * @minItems 1
-   */
-  mediaIds?: [string, ...string[]];
-  anchor?: "sentences" | "time";
-  from?: string;
-  to?: string;
-  sentences: SentenceRange;
-  start: number;
-  end: number;
-  motion: Motion;
-  transitions: Transitions;
-  cache_status?: VisualCacheStatus;
-  orphaned?: boolean;
-  orphan_reason?: string | null;
-}
-/**
- * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "Motion".
- */
-export interface Motion {
-  kind: "none" | "static" | "ken_burns" | "ken_burns_strong" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
-  easing: "linear" | "ease_in" | "ease_out" | "ease_in_out";
-}
-/**
- * This interface was referenced by `Project`'s JSON-Schema
- * via the `definition` "Transitions".
- */
-export interface Transitions {
-  in: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
-  out: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
-}
-/**
- * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "PipLayer".
  */
 export interface PipLayer {
@@ -308,9 +282,9 @@ export interface SubtitlesSettings {
 export interface SubtitleStyle {
   font: string;
   size: number;
-  position: "bottom" | "bottom_low" | "top" | "bottom-center" | "top-center";
+  position: "bottom" | "bottom_low" | "top";
   max_chars_per_line: number;
-  bg_style: "none" | "pill" | "block" | "shadow" | "box";
+  bg_style: "none" | "pill" | "block" | "shadow";
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -507,6 +481,22 @@ export interface AlignmentStateResponse {
   cache_hit: boolean;
   hash?: string | null;
   error?: string | null;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Motion".
+ */
+export interface Motion {
+  kind: "none" | "static" | "ken_burns" | "ken_burns_strong" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
+  easing: "linear" | "ease_in" | "ease_out" | "ease_in_out";
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "Transitions".
+ */
+export interface Transitions {
+  in: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
+  out: "cut" | "fade" | "slide_left" | "slide_right" | "dip_black";
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema

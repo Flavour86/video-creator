@@ -1301,7 +1301,7 @@ def _project_output_for_setup_preset(output_preset: SetupOutputPreset) -> dict[s
     if output_preset == SetupOutputPreset.vertical:
         return {
             "preset": "final",
-            "resolution": "1080x1920",
+            "resolution": "9:16",
             "width": 1080,
             "height": 1920,
         }

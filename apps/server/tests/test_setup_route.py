@@ -135,7 +135,7 @@ async def test_setup_scaffold_preserves_vertical_output_intent(tmp_path: Path) -
     assert response.status_code == 200
     project_json = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
     assert project_json["output"]["preset"] == "final"
-    assert project_json["output"]["resolution"] == "1080x1920"
+    assert project_json["output"]["resolution"] == "9:16"
     assert project_json["output"]["width"] == 1080
     assert project_json["output"]["height"] == 1920
 

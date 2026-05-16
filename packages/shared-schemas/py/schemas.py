@@ -394,7 +394,7 @@ class Output(BaseModel):
         populate_by_name=True,
     )
     preset: Preset
-    resolution: Resolution | constr(pattern=r'^\d+x\d+$') | None = None
+    resolution: Resolution | None = None
     width: conint(ge=1) | None = None
     height: conint(ge=1) | None = None
     fps: PositiveFloat | None = None
@@ -471,13 +471,13 @@ class Anchor(Enum):
     time = 'time'
 
 
-class VisualItemBase(BaseModel):
+class VisualItemBase1(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
         populate_by_name=True,
     )
     id: constr(min_length=1)
-    media_id: constr(min_length=1) | None = Field(None, alias='mediaId')
+    media_id: constr(min_length=1) = Field(..., alias='mediaId')
     media_ids: list[str] | None = Field(None, alias='mediaIds', min_length=1)
     anchor: Anchor | None = None
     from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
@@ -494,10 +494,97 @@ class VisualItemBase(BaseModel):
     orphan_reason: str | None = None
 
 
-class ForegroundItem(VisualItemBase):
+class VisualItemBase2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    media_id: None = Field(None, alias='mediaId')
+    media_ids: list[str] = Field(..., alias='mediaIds', min_length=1)
+    anchor: Anchor | None = None
+    from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
+        None, alias='from'
+    )
+    to: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = None
+    sentences: SentenceRange
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    motion: Motion
+    transitions: Transitions
+    cache_status: VisualCacheStatus | None = None
+    orphaned: bool | None = None
+    orphan_reason: str | None = None
+
+
+VisualItemBase = RootModel[VisualItemBase1 | VisualItemBase2]
+
+
+class ForegroundItem1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    media_id: constr(min_length=1) = Field(..., alias='mediaId')
+    media_ids: list[str] | None = Field(None, alias='mediaIds', min_length=1)
+    anchor: Anchor | None = None
+    from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
+        None, alias='from'
+    )
+    to: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = None
+    sentences: SentenceRange
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    motion: Motion
+    transitions: Transitions
+    cache_status: VisualCacheStatus | None = None
+    orphaned: bool | None = None
+    orphan_reason: str | None = None
+
+
+class ForegroundItem2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    media_id: None = Field(None, alias='mediaId')
+    media_ids: list[str] = Field(..., alias='mediaIds', min_length=1)
+    anchor: Anchor | None = None
+    from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
+        None, alias='from'
+    )
+    to: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = None
+    sentences: SentenceRange
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    motion: Motion
+    transitions: Transitions
+    cache_status: VisualCacheStatus | None = None
+    orphaned: bool | None = None
+    orphan_reason: str | None = None
+
+
+class ForegroundItem3(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
+
+
+class ForegroundItem4(ForegroundItem1, ForegroundItem3):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+class ForegroundItem5(ForegroundItem2, ForegroundItem3):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+ForegroundItem = RootModel[ForegroundItem4 | ForegroundItem5]
 
 
 class PipPlacement(BaseModel):
@@ -512,18 +599,140 @@ class PipPlacement(BaseModel):
     opacity: confloat(ge=10.0, le=100.0)
 
 
-class PipItem(VisualItemBase):
+class PipItem1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    media_id: constr(min_length=1) = Field(..., alias='mediaId')
+    media_ids: list[str] | None = Field(None, alias='mediaIds', min_length=1)
+    anchor: Anchor | None = None
+    from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
+        None, alias='from'
+    )
+    to: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = None
+    sentences: SentenceRange
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    motion: Motion
+    transitions: Transitions
+    cache_status: VisualCacheStatus | None = None
+    orphaned: bool | None = None
+    orphan_reason: str | None = None
+
+
+class PipItem2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    media_id: None = Field(None, alias='mediaId')
+    media_ids: list[str] = Field(..., alias='mediaIds', min_length=1)
+    anchor: Anchor | None = None
+    from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
+        None, alias='from'
+    )
+    to: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = None
+    sentences: SentenceRange
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    motion: Motion
+    transitions: Transitions
+    cache_status: VisualCacheStatus | None = None
+    orphaned: bool | None = None
+    orphan_reason: str | None = None
+
+
+class PipItem3(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
     pip: PipPlacement
 
 
-class BackgroundItem(VisualItemBase):
+class PipItem4(PipItem1, PipItem3):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+class PipItem5(PipItem2, PipItem3):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+PipItem = RootModel[PipItem4 | PipItem5]
+
+
+class BackgroundItem1(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    media_id: constr(min_length=1) = Field(..., alias='mediaId')
+    media_ids: list[str] | None = Field(None, alias='mediaIds', min_length=1)
+    anchor: Anchor | None = None
+    from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
+        None, alias='from'
+    )
+    to: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = None
+    sentences: SentenceRange
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    motion: Motion
+    transitions: Transitions
+    cache_status: VisualCacheStatus | None = None
+    orphaned: bool | None = None
+    orphan_reason: str | None = None
+
+
+class BackgroundItem2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    media_id: None = Field(None, alias='mediaId')
+    media_ids: list[str] = Field(..., alias='mediaIds', min_length=1)
+    anchor: Anchor | None = None
+    from_: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = Field(
+        None, alias='from'
+    )
+    to: constr(pattern=r'^\d{1,2}:\d{2}:\d{2}\.\d{3}$') | None = None
+    sentences: SentenceRange
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    motion: Motion
+    transitions: Transitions
+    cache_status: VisualCacheStatus | None = None
+    orphaned: bool | None = None
+    orphan_reason: str | None = None
+
+
+class BackgroundItem3(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
     crossfade: confloat(ge=0.0)
+
+
+class BackgroundItem4(BackgroundItem1, BackgroundItem3):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+class BackgroundItem5(BackgroundItem2, BackgroundItem3):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+
+BackgroundItem = RootModel[BackgroundItem4 | BackgroundItem5]
 
 
 class SubtitlesItem(BaseModel):
@@ -585,8 +794,6 @@ class Position(Enum):
     bottom = 'bottom'
     bottom_low = 'bottom_low'
     top = 'top'
-    bottom_center = 'bottom-center'
-    top_center = 'top-center'
 
 
 class BgStyle(Enum):
@@ -594,7 +801,6 @@ class BgStyle(Enum):
     pill = 'pill'
     block = 'block'
     shadow = 'shadow'
-    box = 'box'
 
 
 class SubtitleStyle(BaseModel):

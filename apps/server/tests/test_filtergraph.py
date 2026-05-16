@@ -226,7 +226,7 @@ def test_subtitle_burn_in_appends_subtitles_filter(tmp_path: Path) -> None:
             "style": {
                 "font": "Arial",
                 "size": 28,
-                "position": "bottom-center",
+                "position": "bottom",
                 "max_chars_per_line": 42,
                 "bg_style": "shadow",
             },
@@ -255,7 +255,7 @@ def test_subtitle_burn_in_false_skips_subtitles_filter(tmp_path: Path) -> None:
             "style": {
                 "font": "Arial",
                 "size": 28,
-                "position": "bottom-center",
+                "position": "bottom",
                 "max_chars_per_line": 42,
                 "bg_style": "shadow",
             },
@@ -328,7 +328,7 @@ def test_pip_items_are_overlaid_after_foreground_before_subtitles(tmp_path: Path
             "style": {
                 "font": "Arial",
                 "size": 28,
-                "position": "bottom-center",
+                "position": "bottom",
                 "max_chars_per_line": 42,
                 "bg_style": "shadow",
             },
