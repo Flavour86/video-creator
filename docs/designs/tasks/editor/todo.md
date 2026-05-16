@@ -16,7 +16,7 @@
 
 ## Phase 2: Transcript And Media Creation
 
-- [ ] Task 4: Complete transcript selection, search, context menu, and merge behavior
+- [x] Task 4: Complete transcript selection, search, context menu, and merge behavior
   - Acceptance: rows, search, multi-select, context menu, play-from-here, merge, anchor remap, orphan state, and operation logging work.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/TranscriptPane.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_alignment_subtitles.py tests/test_srt.py`
 - [ ] Task 5: Implement explicit media import and asset metadata for Editor

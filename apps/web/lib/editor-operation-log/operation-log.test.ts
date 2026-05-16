@@ -21,6 +21,7 @@ const BG_LAYER: Layer = {
 
 const BASE_STATE: EditorWorkingState = {
   layers: [BG_LAYER],
+  transcript: { kind: "plain_text", path: "transcript.txt" },
   output: { preset: "draft" },
   subtitles: null,
   watermark: null,
@@ -85,13 +86,35 @@ describe("editor operation log", () => {
 
   it("records global, subtitle, and watermark config updates", () => {
     appendOperation("p_demo", { before: { preset: "draft" }, after: { preset: "final" }, type: "global_config_update" });
-    appendOperation("p_demo", { before: null, after: { burn_in: true, style: { font: "Arial", size: 28, position: "bottom-center", max_chars_per_line: 42, bg_style: "shadow" } }, type: "subtitle_settings_update" });
+    appendOperation("p_demo", { before: null, after: { burn_in: true, style: { font: "Arial", size: 28, position: "bottom", max_chars_per_line: 42, bg_style: "shadow" } }, type: "subtitle_settings_update" });
     appendOperation("p_demo", { before: null, after: { mediaId: "logo.png", posX: 10, posY: 20, scale: 0.1, opacity: 80 }, type: "watermark_update" });
 
     const recovered = recoverWorkingState("p_demo", BASE_STATE);
     expect(recovered.output.preset).toBe("final");
     expect(recovered.subtitles?.burn_in).toBe(true);
     expect(recovered.watermark?.mediaId).toBe("logo.png");
+  });
+
+  it("replays transcript merge as a single operation that updates transcript and layers", () => {
+    appendOperation("p_demo", {
+      type: "transcript_merge",
+      before: {
+        transcript: { kind: "plain_text", path: "transcript.txt" },
+        layers: [BG_LAYER],
+      },
+      after: {
+        transcript: {
+          kind: "plain_text",
+          path: "transcript.txt",
+          sentences: [{ index: 1, text: "Merged sentence", start_s: 0, end_s: 5, confidence_avg: 0.9 }],
+        },
+        layers: [{ ...BG_LAYER, items: [{ id: "bg-1", mediaId: "bg.jpg", sentences: [1, 1], start: 0, end: 5, motion: { kind: "none", easing: "linear" }, transitions: { in: "cut", out: "cut" } }] }],
+      },
+    });
+
+    const recovered = recoverWorkingState("p_demo", BASE_STATE);
+    expect(recovered.transcript.sentences).toHaveLength(1);
+    expect(recovered.layers[0].items).toHaveLength(1);
   });
 
   it("discards malformed operation logs from browser storage", () => {

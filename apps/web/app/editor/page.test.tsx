@@ -264,7 +264,17 @@ it("merges transcript sentences, remaps clip anchors, and appends one operation-
   expect(raw).not.toBeNull();
   const parsed = JSON.parse(raw ?? "{}");
   expect(parsed.undo).toHaveLength(1);
-  expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
+  expect(parsed.undo[0]?.op?.type).toBe("transcript_merge");
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    expect(Array.isArray(payload.config?.transcript?.sentences)).toBe(true);
+    expect(payload.config?.transcript?.sentences).toHaveLength(4);
+  });
 });
 
 it("opens assign media with the clicked sentence range and real thumbnails", async () => {
