@@ -101,6 +101,7 @@ const TEST_PROJECT = {
         end: 10,
         motion: { kind: "none", easing: "ease_in_out" },
         transitions: { in: "fade", out: "cut" },
+        cache_status: "warm",
         pip: { posX: 68, posY: 14, size: 30, radius: 12, opacity: 100 },
       }],
     },
@@ -116,6 +117,7 @@ const TEST_PROJECT = {
         end: 5,
         motion: { kind: "none", easing: "ease_in_out" },
         transitions: { in: "fade", out: "cut" },
+        cache_status: "warm",
       }],
     },
     {
@@ -131,6 +133,7 @@ const TEST_PROJECT = {
         motion: { kind: "ken_burns", easing: "ease_in_out" },
         transitions: { in: "cut", out: "cut" },
         crossfade: 0.6,
+        cache_status: "warm",
       }],
     },
   ],
@@ -190,6 +193,13 @@ function ok(body: unknown): Response {
   return { ok: true, json: async () => body } as Response;
 }
 
+function readUndo(projectId = TEST_PROJECT_ID): Array<{ op?: Record<string, unknown> }> {
+  const raw = window.localStorage.getItem(editorOperationStorageKey(projectId));
+  if (!raw) return [];
+  const parsed = JSON.parse(raw) as { undo?: Array<{ op?: Record<string, unknown> }> };
+  return parsed.undo ?? [];
+}
+
 it("renders the test01 editor from project, alignment, and media data", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
@@ -205,9 +215,33 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
   expect(screen.getByText("Background · 1 strip")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
-  expect(screen.getByText(/posX 68.*posY 14.*size 30.*radius 12.*opacity 100/)).toBeInTheDocument();
+  expect(screen.getByLabelText("PiP size")).toHaveValue(30);
+  expect(screen.getByLabelText("PiP radius")).toHaveValue(12);
+  expect(screen.getByLabelText("PiP opacity")).toHaveValue(100);
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
-  expect(screen.getByText("Crossfade 0.6s")).toBeInTheDocument();
+  expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("defaults selection to background on editor entry when background exists", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+  expect(screen.queryByLabelText("PiP placement")).not.toBeInTheDocument();
+});
+
+it("defaults selection to first non-subtitle item when background is absent", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ project: TEST_PROJECT_NO_BG });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByLabelText("PiP placement")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Add Background" })).toBeInTheDocument();
 });
 
 it("shows Add Background in global right-rail controls when background is absent", async () => {
@@ -297,6 +331,80 @@ it("saves background motion with schema-valid values after Change Background", a
     const bgItem = bgLayer?.items?.[0];
     expect(bgItem?.motion?.kind).toBe("ken_burns");
   });
+});
+
+it("edits background inspector controls and invalidates only background cache entries", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
+
+  fireEvent.change(screen.getByLabelText("Background crossfade"), { target: { value: "1.2" } });
+  fireEvent.change(screen.getByLabelText("Background motion"), { target: { value: "ken_burns_strong" } });
+  fireEvent.change(screen.getByLabelText("Background easing"), { target: { value: "ease_out" } });
+
+  expect(readUndo()).toHaveLength(3);
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    const bgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "bg");
+    const fgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "fg");
+    const pipLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "pip");
+    expect(bgLayer?.items?.[0]?.crossfade).toBe(1.2);
+    expect(bgLayer?.items?.[0]?.motion?.kind).toBe("ken_burns_strong");
+    expect(bgLayer?.items?.[0]?.motion?.easing).toBe("ease_out");
+    expect(bgLayer?.items?.[0]?.cache_status).toBe("invalid");
+    expect(fgLayer?.items?.[0]?.cache_status).toBe("warm");
+    expect(pipLayer?.items?.[0]?.cache_status).toBe("warm");
+  });
+});
+
+it("edits foreground inspector fields and deletes foreground item with one op per action", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
+
+  fireEvent.change(screen.getByLabelText("Range from"), { target: { value: "2" } });
+  fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "ken_burns_strong" } });
+  fireEvent.change(screen.getByLabelText("Transition out"), { target: { value: "slide_left" } });
+
+  expect(readUndo()).toHaveLength(3);
+  expect(screen.getByRole("button", { name: "foreground.png over s2" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Delete item" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: /foreground\.png over/i })).not.toBeInTheDocument());
+  expect(readUndo()).toHaveLength(4);
+});
+
+it("edits PiP inspector placement, edge margins, and style fields, then deletes PiP item", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
+
+  fireEvent.change(screen.getByLabelText("PiP placement"), { target: { value: "TL" } });
+  fireEvent.change(screen.getByLabelText("Edge margin X"), { target: { value: "20" } });
+  fireEvent.change(screen.getByLabelText("Edge margin Y"), { target: { value: "18" } });
+  fireEvent.change(screen.getByLabelText("PiP size"), { target: { value: "42" } });
+  fireEvent.change(screen.getByLabelText("PiP radius"), { target: { value: "22" } });
+  fireEvent.change(screen.getByLabelText("PiP opacity"), { target: { value: "80" } });
+
+  expect(readUndo()).toHaveLength(6);
+
+  fireEvent.click(screen.getByRole("button", { name: "Delete PiP item" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: /PIP\.png over/i })).not.toBeInTheDocument());
+  expect(readUndo()).toHaveLength(7);
 });
 
 it("Remove background deletes only background and appends one operation", async () => {

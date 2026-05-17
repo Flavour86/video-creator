@@ -34,6 +34,7 @@ import {
   type EditorRecoverySelection,
 } from "@/lib/editor-operation-log/operation-log";
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
+import { deleteVisualItem, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 
@@ -432,13 +433,17 @@ function EditorContent() {
     setModal("upload");
   }, []);
 
-  const applyAssignedLayers = useCallback((updatedLayers: Layer[], newLayerId: string, newItemId: string) => {
+  const applyLayerMutation = useCallback((updatedLayers: Layer[], options?: { closeModal?: boolean; nextSelection?: EditorSelection }) => {
     if (!project) return;
     const previousLayers = layers;
     setLayers(updatedLayers);
     setProject({ ...project, layers: updatedLayers as Project["layers"] });
-    setSelected({ layerId: newLayerId, itemId: newItemId });
-    setModal(null);
+    if (options?.nextSelection !== undefined) {
+      setSelected(options.nextSelection);
+    }
+    if (options?.closeModal) {
+      setModal(null);
+    }
     if (projectId) {
       appendOperation(projectId, {
         type: "replace_layers",
@@ -449,55 +454,72 @@ function EditorContent() {
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
   }, [layers, project, projectId]);
+
+  const applyAssignedLayers = useCallback((updatedLayers: Layer[], newLayerId: string, newItemId: string) => {
+    applyLayerMutation(updatedLayers, {
+      closeModal: true,
+      nextSelection: { layerId: newLayerId, itemId: newItemId },
+    });
+  }, [applyLayerMutation]);
 
   const applyBackgroundLayer = useCallback((backgroundLayer: BgLayer) => {
-    if (!project) return;
-    const previousLayers = layers;
-    const backgroundIndex = previousLayers.findIndex((layer) => layer.kind === "bg");
+    const backgroundIndex = layers.findIndex((layer) => layer.kind === "bg");
     const updatedLayers = backgroundIndex >= 0
-      ? previousLayers.map((layer, index) => (index === backgroundIndex ? backgroundLayer : layer))
-      : [...previousLayers, backgroundLayer];
-    setLayers(updatedLayers);
-    setProject({ ...project, layers: updatedLayers as Project["layers"] });
+      ? layers.map((layer, index) => (index === backgroundIndex ? backgroundLayer : layer))
+      : [...layers, backgroundLayer];
     const selectedItem = backgroundLayer.items[0];
-    if (selectedItem) {
-      setSelected({ layerId: backgroundLayer.id, itemId: selectedItem.id });
-    }
-    setModal(null);
-    if (projectId) {
-      appendOperation(projectId, {
-        type: "replace_layers",
-        before: previousLayers,
-        after: updatedLayers,
-      });
-    }
-    setHasUnrenderedChanges(true);
-    setSaveStatus("pending");
-  }, [layers, project, projectId]);
+    applyLayerMutation(updatedLayers, {
+      closeModal: true,
+      nextSelection: selectedItem ? { layerId: backgroundLayer.id, itemId: selectedItem.id } : defaultSelectionFromLayers(updatedLayers),
+    });
+  }, [applyLayerMutation, layers]);
 
   const removeBackgroundLayer = useCallback((layerId: string) => {
-    if (!project) return;
-    const previousLayers = layers;
-    const hasTarget = previousLayers.some((layer) => layer.kind === "bg" && layer.id === layerId);
+    const hasTarget = layers.some((layer) => layer.kind === "bg" && layer.id === layerId);
     if (!hasTarget) return;
-    const updatedLayers = previousLayers.filter((layer) => !(layer.kind === "bg" && layer.id === layerId));
-    setLayers(updatedLayers);
-    setProject({ ...project, layers: updatedLayers as Project["layers"] });
-    const nextSelection = updatedLayers
-      .filter((layer) => layer.kind !== "sub")
-      .flatMap((layer) => layer.items.filter(hasVisualItemId).map((item) => ({ layerId: layer.id, itemId: item.id })))
-      .at(0) ?? null;
-    setSelected(nextSelection);
-    if (projectId) {
-      appendOperation(projectId, {
-        type: "replace_layers",
-        before: previousLayers,
-        after: updatedLayers,
-      });
-    }
-    setHasUnrenderedChanges(true);
-    setSaveStatus("pending");
-  }, [layers, project, projectId]);
+    const updatedLayers = layers.filter((layer) => !(layer.kind === "bg" && layer.id === layerId));
+    applyLayerMutation(updatedLayers, { nextSelection: defaultSelectionFromLayers(updatedLayers) });
+  }, [applyLayerMutation, layers]);
+
+  const patchInspectorBackground = useCallback((layerId: string, patch: { crossfade?: number; motion?: Partial<{ easing: string; kind: string }> }) => {
+    const updatedLayers = patchBackgroundItems(layers, layerId, patch);
+    applyLayerMutation(updatedLayers);
+  }, [applyLayerMutation, layers]);
+
+  const patchInspectorItem = useCallback((
+    layerId: string,
+    itemId: string,
+    patch: {
+      mediaId?: string;
+      motion?: Partial<{ easing: string; kind: string }>;
+      pip?: Partial<{ opacity: number; posX: number; posY: number; radius: number; size: number }>;
+      transitions?: Partial<{ in: string; out: string }>;
+    },
+  ) => {
+    const updatedLayers = patchVisualItem(layers, layerId, itemId, patch);
+    applyLayerMutation(updatedLayers);
+  }, [applyLayerMutation, layers]);
+
+  const patchInspectorRange = useCallback((layerId: string, itemId: string, range: [number, number]) => {
+    const target = findVisualItemById(layers, layerId, itemId);
+    if (!target) return;
+    const maxSentence = Math.max(1, ...sentences.map((sentence) => sentence.index));
+    const from = clamp(Math.min(range[0], range[1]), 1, maxSentence);
+    const to = clamp(Math.max(range[0], range[1]), from, maxSentence);
+    const startSentence = sentences.find((sentence) => sentence.index === from);
+    const endSentence = sentences.find((sentence) => sentence.index === to);
+    const updatedLayers = patchVisualItem(layers, layerId, itemId, {
+      sentences: [from, to],
+      start: startSentence?.start_s ?? target.start,
+      end: endSentence?.end_s ?? target.end,
+    });
+    applyLayerMutation(updatedLayers);
+  }, [applyLayerMutation, layers, sentences]);
+
+  const deleteInspectorItem = useCallback((layerId: string, itemId: string) => {
+    const updatedLayers = deleteVisualItem(layers, layerId, itemId);
+    applyLayerMutation(updatedLayers, { nextSelection: defaultSelectionFromLayers(updatedLayers) });
+  }, [applyLayerMutation, layers]);
 
   const applySubtitlesSettings = useCallback((nextSubtitles: Project["subtitles"]) => {
     if (!project) return;
@@ -718,14 +740,18 @@ function EditorContent() {
         <Inspector
           layers={layers}
           media={media}
+          onDeleteItem={deleteInspectorItem}
           onOpenAssignEdit={openAssignEdit}
           onOpenBackground={() => setModal("background")}
           onOpenSubtitles={() => setModal("subtitles")}
-          onRemoveBackground={removeBackgroundLayer}
           onOpenUpload={() => {
             setAssignEdit(null);
             setModal("upload");
           }}
+          onPatchBackground={patchInspectorBackground}
+          onPatchItem={patchInspectorItem}
+          onRemoveBackground={removeBackgroundLayer}
+          onUpdateRange={patchInspectorRange}
           onWatermarkChange={applyWatermarkSettings}
           projectPath={projectPath}
           selected={selected}
@@ -819,15 +845,59 @@ function normalizeResolutionPreset(candidate: unknown, fallback: unknown = "1080
 }
 
 function selectRecoverySelection(selection: EditorRecoverySelection, layers: Layer[]): EditorSelection {
-  if (!selection) return null;
+  if (!selection) return defaultSelectionFromLayers(layers);
   const layer = layers.find((entry) => entry.id === selection.layerId && entry.kind !== "sub");
-  if (!layer) return null;
+  if (!layer) return defaultSelectionFromLayers(layers);
   const hasItem = layer.items.some((item) => hasVisualItemId(item) && item.id === selection.itemId);
-  return hasItem ? selection : null;
+  return hasItem ? selection : defaultSelectionFromLayers(layers);
+}
+
+function defaultSelectionFromLayers(layers: Layer[]): EditorSelection {
+  const backgroundLayer = layers.find((entry) => entry.kind === "bg");
+  const backgroundItem = backgroundLayer?.items.find(hasVisualItemId);
+  if (backgroundLayer && backgroundItem) {
+    return { layerId: backgroundLayer.id, itemId: backgroundItem.id };
+  }
+  for (const layer of layers) {
+    if (layer.kind === "sub") continue;
+    const item = layer.items.find(hasVisualItemId);
+    if (item) return { layerId: layer.id, itemId: item.id };
+  }
+  return null;
 }
 
 function hasVisualItemId(value: unknown): value is { id: string } {
   return typeof value === "object" && value !== null && "id" in value && typeof value.id === "string";
+}
+
+function findVisualItemById(layers: Layer[], layerId: string, itemId: string): {
+  end: number;
+  id: string;
+  start: number;
+} | null {
+  const layer = layers.find((entry) => entry.id === layerId && entry.kind !== "sub");
+  if (!layer) return null;
+  for (const candidate of layer.items) {
+    if (!hasVisualItemId(candidate) || candidate.id !== itemId) continue;
+    if (!hasTimeBounds(candidate)) return null;
+    return { id: candidate.id, start: candidate.start, end: candidate.end };
+  }
+  return null;
+}
+
+function hasTimeBounds(value: unknown): value is { end: number; start: number } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "start" in value &&
+    typeof value.start === "number" &&
+    "end" in value &&
+    typeof value.end === "number"
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function sanitizeTranscriptSentences(transcript: Project["transcript"] | null | undefined): AlignedSentence[] {

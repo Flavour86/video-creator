@@ -82,11 +82,15 @@ const LAYERS: Layer[] = [
 ];
 
 function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {}) {
+  const onDeleteItem = vi.fn();
   const onOpenAssignEdit = vi.fn();
   const onOpenBackground = vi.fn();
   const onOpenSubtitles = vi.fn();
-  const onRemoveBackground = vi.fn();
   const onOpenUpload = vi.fn();
+  const onPatchBackground = vi.fn();
+  const onPatchItem = vi.fn();
+  const onRemoveBackground = vi.fn();
+  const onUpdateRange = vi.fn();
   const onWatermarkChange = vi.fn();
 
   render(
@@ -94,11 +98,15 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
       <Inspector
         layers={LAYERS}
         media={MEDIA}
+        onDeleteItem={onDeleteItem}
         onOpenAssignEdit={onOpenAssignEdit}
         onOpenBackground={onOpenBackground}
         onOpenSubtitles={onOpenSubtitles}
-        onRemoveBackground={onRemoveBackground}
         onOpenUpload={onOpenUpload}
+        onPatchBackground={onPatchBackground}
+        onPatchItem={onPatchItem}
+        onRemoveBackground={onRemoveBackground}
+        onUpdateRange={onUpdateRange}
         onWatermarkChange={onWatermarkChange}
         projectPath="E:/projects/test01"
         selected={{ layerId: "fg-z1", itemId: "fg-1" }}
@@ -109,7 +117,7 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
     </NextIntlClientProvider>,
   );
 
-  return { onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onOpenUpload, onRemoveBackground, onWatermarkChange };
+  return { onDeleteItem, onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onOpenUpload, onPatchBackground, onPatchItem, onRemoveBackground, onUpdateRange, onWatermarkChange };
 }
 
 describe("Inspector", () => {

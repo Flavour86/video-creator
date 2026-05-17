@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFgItem, hasSentenceOverlap, nextZIndex } from "./layers";
+import { buildFgItem, deleteVisualItem, hasSentenceOverlap, nextZIndex, patchBackgroundItems, patchVisualItem } from "./layers";
 import type { Layer } from "./preview/resolveDisplay";
 
 // ── hasSentenceOverlap ────────────────────────────────────────────────────────
@@ -146,5 +146,139 @@ describe("buildFgItem", () => {
       start: 60,
       end: 75,
     });
+  });
+});
+
+describe("patchVisualItem", () => {
+  const layers: Layer[] = [
+    {
+      id: "fg-z1",
+      kind: "fg",
+      name: "Foreground z1",
+      items: [{
+        id: "fg-1",
+        mediaId: "fg.png",
+        sentences: [1, 1],
+        start: 0,
+        end: 5,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        cache_status: "warm",
+      }],
+    },
+    {
+      id: "pip-z1",
+      kind: "pip",
+      name: "PiP z1",
+      items: [{
+        id: "pip-1",
+        mediaId: "pip.png",
+        sentences: [2, 2],
+        start: 5,
+        end: 10,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        cache_status: "warm",
+        pip: { posX: 88, posY: 88, size: 30, radius: 8, opacity: 90 },
+      }],
+    },
+  ];
+
+  it("patches one selected item and marks only that item cache invalid", () => {
+    const next = patchVisualItem(layers, "fg-z1", "fg-1", {
+      motion: { kind: "ken_burns_strong" },
+      transitions: { out: "fade" },
+    });
+    const fgItem = next[0]?.items[0] as { motion: { kind: string }; transitions: { out: string }; cache_status?: string };
+    const pipItem = next[1]?.items[0] as { cache_status?: string };
+    expect(fgItem.motion.kind).toBe("ken_burns_strong");
+    expect(fgItem.transitions.out).toBe("fade");
+    expect(fgItem.cache_status).toBe("invalid");
+    expect(pipItem.cache_status).toBe("warm");
+  });
+});
+
+describe("patchBackgroundItems", () => {
+  it("patches all background strips and invalidates their cache", () => {
+    const layers: Layer[] = [{
+      id: "bg-main",
+      kind: "bg",
+      name: "Background",
+      items: [
+        {
+          id: "bg-1",
+          mediaId: "bg-a.png",
+          sentences: [1, 3],
+          start: 0,
+          end: 5,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "cut", out: "fade" },
+          crossfade: 0.2,
+          cache_status: "warm",
+        },
+        {
+          id: "bg-2",
+          mediaId: "bg-b.png",
+          sentences: [1, 3],
+          start: 5,
+          end: 10,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "fade", out: "cut" },
+          crossfade: 0.2,
+          cache_status: "warm",
+        },
+      ],
+    }];
+    const next = patchBackgroundItems(layers, "bg-main", {
+      crossfade: 1.2,
+      motion: { kind: "ken_burns_strong", easing: "ease_out" },
+    });
+    const first = next[0]?.items[0] as { crossfade: number; motion: { kind: string; easing: string }; cache_status?: string };
+    const second = next[0]?.items[1] as { crossfade: number; motion: { kind: string; easing: string }; cache_status?: string };
+    expect(first.crossfade).toBe(1.2);
+    expect(second.crossfade).toBe(1.2);
+    expect(first.motion.kind).toBe("ken_burns_strong");
+    expect(second.motion.easing).toBe("ease_out");
+    expect(first.cache_status).toBe("invalid");
+    expect(second.cache_status).toBe("invalid");
+  });
+});
+
+describe("deleteVisualItem", () => {
+  it("removes a clip and prunes empty foreground layers", () => {
+    const layers: Layer[] = [
+      {
+        id: "fg-z1",
+        kind: "fg",
+        name: "Foreground z1",
+        items: [{
+          id: "fg-1",
+          mediaId: "fg.png",
+          sentences: [1, 1],
+          start: 0,
+          end: 5,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+        }],
+      },
+      {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-1",
+          mediaId: "bg.png",
+          sentences: [1, 1],
+          start: 0,
+          end: 5,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      },
+    ];
+    const next = deleteVisualItem(layers, "fg-z1", "fg-1");
+    expect(next.some((layer) => layer.id === "fg-z1")).toBe(false);
+    expect(next.some((layer) => layer.id === "bg-main")).toBe(true);
   });
 });

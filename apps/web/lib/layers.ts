@@ -51,3 +51,97 @@ export function buildFgItem(p: FgItemParams) {
     to: p.toTime,
   };
 }
+
+export type VisualItemPatch = {
+  cache_status?: "warm" | "partial" | "cold" | "invalid" | "orphaned";
+  crossfade?: number;
+  end?: number;
+  mediaId?: string;
+  motion?: Partial<{ easing: string; kind: string }>;
+  pip?: Partial<{ opacity: number; posX: number; posY: number; radius: number; size: number }>;
+  sentences?: [number, number];
+  start?: number;
+  transitions?: Partial<{ in: string; out: string }>;
+};
+
+type VisualLayer = Extract<Layer, { kind: "bg" | "fg" | "pip" }>;
+type VisualItem = {
+  id: string;
+  cache_status?: "warm" | "partial" | "cold" | "invalid" | "orphaned";
+  crossfade?: number;
+  end: number;
+  mediaId: string;
+  motion: { easing: string; kind: string };
+  pip?: { opacity: number; posX: number; posY: number; radius: number; size: number };
+  sentences: [number, number];
+  start: number;
+  transitions: { in: string; out: string };
+};
+
+export function patchVisualItem(
+  layers: Layer[],
+  layerId: string,
+  itemId: string,
+  patch: VisualItemPatch,
+): Layer[] {
+  return layers.map((layer) => {
+    if (layer.id !== layerId || layer.kind === "sub") return layer;
+    return {
+      ...layer,
+      items: layer.items.map((candidate) => {
+        if (!isVisualItem(candidate) || candidate.id !== itemId) return candidate;
+        return mergeVisualPatch(candidate, patch);
+      }),
+    } as VisualLayer;
+  });
+}
+
+export function patchBackgroundItems(
+  layers: Layer[],
+  layerId: string,
+  patch: Pick<VisualItemPatch, "crossfade" | "motion">,
+): Layer[] {
+  return layers.map((layer) => {
+    if (layer.id !== layerId || layer.kind !== "bg") return layer;
+    return {
+      ...layer,
+      items: layer.items.map((item) => mergeVisualPatch(item as VisualItem, patch)),
+    };
+  });
+}
+
+export function deleteVisualItem(layers: Layer[], layerId: string, itemId: string): Layer[] {
+  return layers.flatMap((layer) => {
+    if (layer.id !== layerId || layer.kind === "sub") return [layer];
+    const items = layer.items.filter((candidate) => !isVisualItem(candidate) || candidate.id !== itemId);
+    if ((layer.kind === "fg" || layer.kind === "pip") && items.length === 0) return [];
+    return [{ ...layer, items } as VisualLayer];
+  });
+}
+
+function mergeVisualPatch(item: VisualItem, patch: VisualItemPatch): VisualItem {
+  const next: VisualItem = { ...item, ...patch };
+  if (patch.motion) next.motion = { ...item.motion, ...patch.motion };
+  if (patch.transitions) next.transitions = { ...item.transitions, ...patch.transitions };
+  if (item.pip || patch.pip) {
+    const base = item.pip ?? { opacity: 100, posX: 50, posY: 50, radius: 0, size: 30 };
+    next.pip = { ...base, ...(patch.pip ?? {}) };
+  }
+  next.cache_status = "invalid";
+  return next;
+}
+
+function isVisualItem(value: unknown): value is VisualItem {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    "mediaId" in value &&
+    typeof value.mediaId === "string" &&
+    "start" in value &&
+    typeof value.start === "number" &&
+    "end" in value &&
+    typeof value.end === "number"
+  );
+}

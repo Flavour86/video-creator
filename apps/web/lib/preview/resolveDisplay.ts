@@ -8,6 +8,7 @@ type Transitions = { in: string; out: string };
 type BaseItem = {
   id: string;
   mediaId: string;
+  mediaIds?: string[];
   anchor?: "sentences" | "time";
   from?: string;
   to?: string;
@@ -16,6 +17,9 @@ type BaseItem = {
   end: number;
   motion: Motion;
   transitions: Transitions;
+  cache_status?: "warm" | "partial" | "cold" | "invalid" | "orphaned";
+  orphaned?: boolean;
+  orphan_reason?: string | null;
 };
 
 type BgItem = BaseItem & { crossfade: number };
