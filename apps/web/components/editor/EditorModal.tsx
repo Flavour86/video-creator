@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useRef } from "react";
-import { Button, Checkbox, Field, NumberInput, Select } from "@/components/ui";
+import { useEffect, useRef, useState } from "react";
+import { Button, Field, NumberInput, Select } from "@/components/ui";
+import type { SubtitlesSettings } from "@/lib/hooks/useProject";
 import type { EditorMediaItem, EditorModal as EditorModalKind } from "./types";
 import Image from "next/image";
 
@@ -10,16 +11,45 @@ type EditorModalProps = {
   assignRange: [number, number];
   media: EditorMediaItem[];
   modal: EditorModalKind;
+  onApplySubtitles: (subtitles: SubtitlesSettings) => void;
   onClose: () => void;
   onImport: (files: FileList | null) => Promise<void> | void;
+  previewResolution: "1080p" | "720p" | "9:16";
   projectPath: string;
+  subtitles: SubtitlesSettings | null;
 };
 
-export function EditorModal({ assignRange, media, modal, onClose, onImport, projectPath }: EditorModalProps) {
+const SUBTITLE_PREVIEW_TEXT = "Drop an image onto a sentence and the editor knows when it should appear.";
+
+export function EditorModal({
+  assignRange,
+  media,
+  modal,
+  onApplySubtitles,
+  onClose,
+  onImport,
+  previewResolution,
+  projectPath,
+  subtitles,
+}: EditorModalProps) {
   const t = useTranslations("pages.editor.modals");
   const open = modal !== null;
   const title = modal === "subtitles" ? t("subtitlesTitle") : modal === "background" ? t("backgroundTitle") : t("uploadTitle");
   const subtitle = modal === "subtitles" ? t("subtitlesSubtitle") : modal === "background" ? t("backgroundSubtitle") : t("uploadSubtitle");
+  const [subtitlesDraft, setSubtitlesDraft] = useState<SubtitlesSettings>(normalizeSubtitlesSettings(subtitles));
+
+  useEffect(() => {
+    if (modal !== "subtitles") return;
+    setSubtitlesDraft(normalizeSubtitlesSettings(subtitles));
+  }, [modal, subtitles]);
+
+  function onPrimaryAction() {
+    if (modal === "subtitles") {
+      onApplySubtitles(subtitlesDraft);
+      return;
+    }
+    onClose();
+  }
 
   return (
     <Dialog.Root onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }} open={open}>
@@ -35,7 +65,11 @@ export function EditorModal({ assignRange, media, modal, onClose, onImport, proj
           </header>
           <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
             {modal === "subtitles" ? (
-              <SubtitlesFields />
+              <SubtitlesFields
+                previewResolution={previewResolution}
+                value={subtitlesDraft}
+                onChange={setSubtitlesDraft}
+              />
             ) : (
               <MediaFields
                 assignRange={assignRange}
@@ -48,7 +82,7 @@ export function EditorModal({ assignRange, media, modal, onClose, onImport, proj
           </div>
           <footer className="flex items-center justify-end gap-2 border-t border-(--line) px-6 py-4">
             <Button onClick={onClose} variant="ghost">{t("cancel")}</Button>
-            <Button onClick={onClose} variant="primary">{modal === "upload" ? t("addToProject") : t("apply")}</Button>
+            <Button onClick={onPrimaryAction} variant="primary">{modal === "upload" ? t("addToProject") : t("apply")}</Button>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>
@@ -56,19 +90,128 @@ export function EditorModal({ assignRange, media, modal, onClose, onImport, proj
   );
 }
 
-function SubtitlesFields() {
+function SubtitlesFields({
+  onChange,
+  previewResolution,
+  value,
+}: {
+  onChange: (value: SubtitlesSettings) => void;
+  previewResolution: "1080p" | "720p" | "9:16";
+  value: SubtitlesSettings;
+}) {
   const t = useTranslations("pages.editor.modals");
+  const aspectClass = previewResolution === "9:16" ? "aspect-[9/16]" : "aspect-video";
+  const cueLines = wrapCueLine(SUBTITLE_PREVIEW_TEXT, value.style.max_chars_per_line);
+  const cuePositionClass = value.style.position === "top" ? "top-4" : value.style.position === "bottom_low" ? "bottom-3" : "bottom-7";
+  const cueBackgroundClass =
+    value.style.bg_style === "pill"
+      ? "rounded-full bg-black/60 px-4 py-2"
+      : value.style.bg_style === "block"
+        ? "rounded-md bg-black/80 px-4 py-2"
+        : value.style.bg_style === "shadow"
+          ? "drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
+          : "";
+
   return (
     <>
       <div className="grid grid-cols-2 gap-5">
-        <Field label={t("background")}><Select defaultValue="shadow"><option>None</option><option>Pill · 60% black</option><option>Block · 80% black</option><option value="shadow">Drop shadow only</option></Select></Field>
-        <Field label={t("position")}><Select defaultValue="bottom"><option value="bottom">Bottom · safe zone</option><option>Bottom · low</option><option>Top</option></Select></Field>
-        <Field label={t("font")}><Select defaultValue="Inter"><option>Inter</option><option>Sohne</option><option>Helvetica Neue</option><option>SF Pro</option></Select></Field>
-        <Field label={t("maxChars")}><NumberInput defaultValue={42} max={120} min={20} /></Field>
+        <Field htmlFor="editor-sub-bg-style" label={t("background")}>
+          <Select
+            id="editor-sub-bg-style"
+            onChange={(event) => onChange({ ...value, style: { ...value.style, bg_style: event.target.value as SubtitlesSettings["style"]["bg_style"] } })}
+            value={value.style.bg_style}
+          >
+            <option value="none">None</option>
+            <option value="pill">Pill · 60% black</option>
+            <option value="block">Block · 80% black</option>
+            <option value="shadow">Drop shadow only</option>
+          </Select>
+        </Field>
+        <Field htmlFor="editor-sub-position" label={t("position")}>
+          <Select
+            id="editor-sub-position"
+            onChange={(event) => onChange({ ...value, style: { ...value.style, position: event.target.value as SubtitlesSettings["style"]["position"] } })}
+            value={value.style.position}
+          >
+            <option value="bottom">Bottom · safe zone</option>
+            <option value="bottom_low">Bottom · low</option>
+            <option value="top">Top</option>
+          </Select>
+        </Field>
+        <Field htmlFor="editor-sub-font" label={t("font")}>
+          <Select
+            id="editor-sub-font"
+            onChange={(event) => onChange({ ...value, style: { ...value.style, font: event.target.value } })}
+            value={value.style.font}
+          >
+            <option value="Arial">Arial</option>
+            <option value="Sohne">Sohne</option>
+            <option value="Helvetica Neue">Helvetica Neue</option>
+            <option value="SF Pro">SF Pro</option>
+          </Select>
+        </Field>
+        <Field htmlFor="editor-sub-max-chars" label={t("maxChars")}>
+          <NumberInput
+            id="editor-sub-max-chars"
+            max={80}
+            min={20}
+            onChange={(event) => {
+              const next = clampNumber(Number(event.target.value), 20, 80);
+              onChange({ ...value, style: { ...value.style, max_chars_per_line: next } });
+            }}
+            value={value.style.max_chars_per_line}
+          />
+        </Field>
       </div>
-      <label className="flex items-center gap-3 text-sm text-(--text-2)"><Checkbox defaultChecked />{t("burnIn")}</label>
-      <div className="aspect-video rounded-md border border-(--line) bg-(--bg-2) p-8 text-center text-lg font-semibold text-white shadow-(--shadow-1)">
-        {t("previewText")}
+      <Field htmlFor="editor-sub-size" label="Size">
+        <div className="flex items-center gap-3">
+          <input
+            className="w-full"
+            id="editor-sub-size"
+            max={72}
+            min={28}
+            onChange={(event) => {
+              const next = clampNumber(Number(event.target.value), 28, 72);
+              onChange({ ...value, style: { ...value.style, size: next } });
+            }}
+            step={1}
+            type="range"
+            value={value.style.size}
+          />
+          <span className="font-mono text-[11px] text-(--text-3)">{value.style.size}px</span>
+        </div>
+      </Field>
+      <label className="flex items-center gap-3 text-sm text-(--text-2)">
+        <button
+          aria-checked={value.burn_in}
+          aria-label={t("burnIn")}
+          className={`inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
+            value.burn_in ? "border-(--blue) bg-(--blue)" : "border-(--line) bg-(--bg-3)"
+          }`}
+          onClick={() => onChange({ ...value, burn_in: !value.burn_in })}
+          role="switch"
+          type="button"
+        >
+          <span className={`h-4 w-4 rounded-full bg-white transition-transform ${value.burn_in ? "translate-x-5" : "translate-x-1"}`} />
+        </button>
+        {t("burnIn")}
+      </label>
+      <div className={`relative rounded-md border border-(--line) bg-(--bg-2) ${aspectClass}`} data-testid="subtitles-live-preview">
+        <div
+          className={`absolute inset-x-6 text-center font-semibold text-white ${cuePositionClass} ${cueBackgroundClass}`}
+          style={{
+            fontFamily: value.style.font,
+            fontSize: `${Math.max(14, (value.style.size / 28) * 14)}px`,
+            opacity: value.burn_in ? 1 : 0.5,
+          }}
+        >
+          {cueLines.map((line, index) => (
+            <div key={`${line}-${index}`}>{line}</div>
+          ))}
+        </div>
+        <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white">
+          Preview · {previewResolution === "9:16" ? "9:16" : "16:9"}
+        </span>
       </div>
     </>
   );
@@ -184,4 +327,55 @@ function fileExt(filename: string): string {
   const dot = name.lastIndexOf(".");
   if (dot < 0 || dot === name.length - 1) return "";
   return name.slice(dot + 1);
+}
+
+function normalizeSubtitlesSettings(value: SubtitlesSettings | null | undefined): SubtitlesSettings {
+  const fallback: SubtitlesSettings = {
+    burn_in: false,
+    style: {
+      bg_style: "shadow",
+      font: "Arial",
+      max_chars_per_line: 42,
+      position: "bottom",
+      size: 28,
+    },
+  };
+  if (!value) return fallback;
+  return {
+    burn_in: value.burn_in,
+    style: {
+      bg_style: value.style?.bg_style ?? fallback.style.bg_style,
+      font: value.style?.font ?? fallback.style.font,
+      max_chars_per_line: clampNumber(value.style?.max_chars_per_line ?? fallback.style.max_chars_per_line, 20, 80),
+      position: value.style?.position ?? fallback.style.position,
+      size: clampNumber(value.style?.size ?? fallback.style.size, 28, 72),
+    },
+  };
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function wrapCueLine(text: string, maxChars: number): string[] {
+  const safeMax = clampNumber(maxChars, 20, 80);
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= safeMax || !current) {
+      current = next;
+      continue;
+    }
+    lines.push(current);
+    current = word;
+    if (lines.length === 1 && current.length > safeMax) {
+      lines.push(current.slice(0, safeMax));
+      return lines;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, 2);
 }

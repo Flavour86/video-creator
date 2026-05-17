@@ -499,6 +499,37 @@ function EditorContent() {
     setSaveStatus("pending");
   }, [layers, project, projectId]);
 
+  const applySubtitlesSettings = useCallback((nextSubtitles: Project["subtitles"]) => {
+    if (!project) return;
+    const previousSubtitles = project.subtitles;
+    setProject({ ...project, subtitles: nextSubtitles });
+    setModal(null);
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "subtitle_settings_update",
+        before: previousSubtitles,
+        after: nextSubtitles,
+      });
+    }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [project, projectId]);
+
+  const applyWatermarkSettings = useCallback((nextWatermark: Project["watermark"]) => {
+    if (!project) return;
+    const previousWatermark = project.watermark;
+    setProject({ ...project, watermark: nextWatermark });
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "watermark_update",
+        before: previousWatermark,
+        after: nextWatermark,
+      });
+    }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [project, projectId]);
+
   const playFromSentence = useCallback((index: number) => {
     const sentence = sentences.find((item) => item.index === index);
     if (!sentence) return;
@@ -663,6 +694,8 @@ function EditorContent() {
             projectPath={projectPath}
             resolution={resolution}
             sentences={sentences}
+            subtitles={project?.subtitles ?? null}
+            watermark={project?.watermark ?? null}
           />
           <div className="relative">
             <PreviewControls
@@ -687,13 +720,17 @@ function EditorContent() {
           media={media}
           onOpenAssignEdit={openAssignEdit}
           onOpenBackground={() => setModal("background")}
+          onOpenSubtitles={() => setModal("subtitles")}
           onRemoveBackground={removeBackgroundLayer}
           onOpenUpload={() => {
             setAssignEdit(null);
             setModal("upload");
           }}
+          onWatermarkChange={applyWatermarkSettings}
           projectPath={projectPath}
           selected={selected}
+          subtitles={project?.subtitles ?? null}
+          watermark={project?.watermark ?? null}
         />
       </div>
       {audioFile && projectPath ? (
@@ -746,9 +783,12 @@ function EditorContent() {
           assignRange={assignRange}
           media={media}
           modal={modal}
+          onApplySubtitles={applySubtitlesSettings}
           onClose={() => setModal(null)}
           onImport={importMedia}
+          previewResolution={resolution}
           projectPath={projectPath}
+          subtitles={project?.subtitles ?? null}
         />
       )}
     </PageChrome>

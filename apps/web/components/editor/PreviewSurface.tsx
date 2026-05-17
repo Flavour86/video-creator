@@ -1,5 +1,6 @@
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { useTranslations } from "next-intl";
+import type { Project } from "@vc/shared-schemas";
 import { IconButton } from "@/components/ui";
 import { formatTimecode } from "@/lib/format";
 import Image from "next/image";
@@ -12,9 +13,32 @@ type PreviewSurfaceProps = Pick<EditorStateProps, "currentTime" | "duration" | "
   onTogglePlay: () => void;
   playing: boolean;
   resolution: string;
+  subtitles: Project["subtitles"];
+  watermark: Project["watermark"];
 };
 
-export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevious, onTogglePlay, playing, projectPath, resolution, sentences }: PreviewSurfaceProps) {
+const FALLBACK_SUBTITLE_STYLE: NonNullable<Project["subtitles"]>["style"] = {
+  bg_style: "shadow",
+  font: "Arial",
+  max_chars_per_line: 42,
+  position: "bottom",
+  size: 28,
+};
+
+export function PreviewSurface({
+  currentTime,
+  duration,
+  layers,
+  onNext,
+  onPrevious,
+  onTogglePlay,
+  playing,
+  projectPath,
+  resolution,
+  sentences,
+  subtitles,
+  watermark,
+}: PreviewSurfaceProps) {
   const t = useTranslations("pages.editor.transport");
   const display = resolveDisplay(layers, sentences, currentTime);
   const baseImage = display.bg?.mediaId ?? display.fg[0]?.mediaId;
@@ -22,6 +46,19 @@ export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevio
   const baseTranslateX = display.bg ? 0 : display.fg[0]?.translateX ?? 0;
   const overlayForegrounds = display.bg ? display.fg : display.fg.slice(1);
   const aspectClass = resolution === "9:16" ? "aspect-[9/16]" : "aspect-video";
+  const subtitleStyle = subtitles?.style ?? FALLBACK_SUBTITLE_STYLE;
+  const subtitlePositionClass =
+    subtitleStyle.position === "top" ? "top-[7%]" : subtitleStyle.position === "bottom_low" ? "bottom-[3%]" : "bottom-[7%]";
+  const subtitleBackgroundClass =
+    subtitleStyle.bg_style === "pill"
+      ? "rounded-full bg-black/60 px-5 py-2"
+      : subtitleStyle.bg_style === "block"
+        ? "rounded-md bg-black/80 px-4 py-2"
+        : subtitleStyle.bg_style === "shadow"
+          ? "drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
+          : "";
+  const subtitleFontSize = Math.max(14, Math.round(subtitleStyle.size));
+  const watermarkScale = clamp(watermark?.scale ?? 0.08, 0.02, 0.5) * 100;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -69,11 +106,31 @@ export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevio
             />
           ))}
           {display.subtitle ? (
-            <div className="absolute inset-x-0 bottom-[7%] px-[8%] text-center text-[clamp(14px,2vw,28px)] font-semibold text-white drop-shadow-md">
+            <div
+              className={`absolute inset-x-[8%] text-center font-semibold text-white ${subtitlePositionClass} ${subtitleBackgroundClass}`}
+              style={{
+                fontFamily: subtitleStyle.font,
+                fontSize: `${subtitleFontSize}px`,
+              }}
+            >
               {display.subtitle.text}
             </div>
           ) : null}
-          <div className="absolute bottom-3 right-3 rounded bg-(--bg-2)/40 px-2 py-1 text-xs font-semibold text-white">VC</div>
+          {watermark ? (
+            <Image
+              alt=""
+              className="absolute object-contain"
+              data-testid="preview-watermark"
+              src={mediaUrl(projectPath, watermark.mediaId)}
+              style={{
+                left: `${clamp(watermark.posX, 0, 100)}%`,
+                opacity: clamp(watermark.opacity, 0, 100) / 100,
+                top: `${clamp(watermark.posY, 0, 100)}%`,
+                transform: "translate(-50%, -50%)",
+                width: `${watermarkScale}%`,
+              }}
+            />
+          ) : null}
         </div>
       </div>
       <div className="flex items-center justify-between border-t border-(--line) px-4 py-2">
@@ -94,4 +151,8 @@ export function PreviewSurface({ currentTime, duration, layers, onNext, onPrevio
 
 function mediaUrl(projectPath: string, filename: string): string {
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(filename)}`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }

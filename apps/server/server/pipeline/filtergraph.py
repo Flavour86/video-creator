@@ -95,6 +95,7 @@ def build_compose_command(
         duration_s=duration_s,
         config=config,
         items=items,
+        project=project,
         subtitles_path=project_dir / "subtitles.srt" if _burns_subtitles(project) else None,
         watermark=project.watermark,
         watermark_input_index=watermark_input_index,
@@ -202,6 +203,7 @@ def _build_filtergraph(
     duration_s: float,
     config: PresetConfig,
     items: list[ClipRenderItem],
+    project: Project,
     subtitles_path: Path | None = None,
     watermark: object | None = None,
     watermark_input_index: int | None = None,
@@ -252,7 +254,7 @@ def _build_filtergraph(
     if subtitles_path is not None:
         segments.append(
             f"[{current}]subtitles='{_escape_subtitles_path(subtitles_path)}':"
-            f"force_style='{_subtitle_force_style()}'[vsub]"
+            f"force_style='{_subtitle_force_style(project)}'[vsub]"
         )
         current = "vsub"
     if watermark is not None and watermark_input_index is not None:
@@ -288,20 +290,71 @@ def _escape_subtitles_path(path: Path) -> str:
     return path.resolve().as_posix().replace(":", r"\:").replace("'", r"\'")
 
 
-def _subtitle_force_style() -> str:
+def _subtitle_force_style(project: Project) -> str:
+    subtitles = getattr(project, "subtitles", None)
+    style = getattr(subtitles, "style", None)
+    font = _subtitle_style_str(style, "font", "Arial")
+    size = _subtitle_style_float(style, "size", 28.0)
+    position = _subtitle_style_str(style, "position", "bottom")
+    bg_style = _subtitle_style_str(style, "bg_style", "shadow")
+    alignment, margin_v = _subtitle_position_style(position)
+    border_style, outline, shadow = _subtitle_background_style(bg_style)
+
     return ",".join(
         [
-            "Fontname=Arial",
-            "Fontsize=28",
+            f"Fontname={font}",
+            f"Fontsize={_fmt(size)}",
             "PrimaryColour=&H00FFFFFF",
             "OutlineColour=&H00000000",
-            "BorderStyle=1",
-            "Outline=2",
-            "Shadow=1",
-            "Alignment=2",
-            "MarginV=60",
+            f"BorderStyle={border_style}",
+            f"Outline={outline}",
+            f"Shadow={shadow}",
+            f"Alignment={alignment}",
+            f"MarginV={margin_v}",
         ]
     )
+
+
+def _subtitle_style_value(style: object | None, key: str) -> object | None:
+    if style is None:
+        return None
+    if isinstance(style, Mapping):
+        value = style.get(key)
+    else:
+        value = getattr(style, key, None)
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _subtitle_style_str(style: object | None, key: str, fallback: str) -> str:
+    value = _subtitle_style_value(style, key)
+    return value if isinstance(value, str) and value else fallback
+
+
+def _subtitle_style_float(style: object | None, key: str, fallback: float) -> float:
+    value = _subtitle_style_value(style, key)
+    if not isinstance(value, int | float):
+        return fallback
+    return max(1.0, float(value))
+
+
+def _subtitle_position_style(position: str) -> tuple[int, int]:
+    if position == "top":
+        return (8, 40)
+    if position == "bottom_low":
+        return (2, 24)
+    return (2, 60)
+
+
+def _subtitle_background_style(bg_style: str) -> tuple[int, int, int]:
+    if bg_style == "block":
+        return (4, 0, 0)
+    if bg_style == "pill":
+        return (3, 0, 0)
+    if bg_style == "none":
+        return (1, 0, 0)
+    return (1, 2, 1)
 
 
 def _watermark_path(project_dir: Path, project: Project) -> Path | None:

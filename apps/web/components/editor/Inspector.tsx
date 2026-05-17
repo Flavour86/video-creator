@@ -1,7 +1,9 @@
 import { Trash, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import type { Project } from "@vc/shared-schemas";
 import { Button, NumberInput, Select } from "@/components/ui";
+import { WatermarkPanel } from "@/components/watermark-panel/WatermarkPanel";
 import { formatImageMeta, formatRangeLabel } from "@/lib/format";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import Image from "next/image";
@@ -12,10 +14,14 @@ type InspectorProps = {
   media: EditorMediaItem[];
   onOpenAssignEdit: (layerId: string, itemId: string, range: [number, number]) => void;
   onOpenBackground: () => void;
+  onOpenSubtitles: () => void;
   onRemoveBackground: (layerId: string) => void;
   onOpenUpload: () => void;
+  onWatermarkChange: (watermark: Project["watermark"]) => void;
   projectPath: string;
   selected: EditorSelection;
+  subtitles: Project["subtitles"];
+  watermark: Project["watermark"];
 };
 
 type VisualItem = {
@@ -69,10 +75,14 @@ export function Inspector({
   media,
   onOpenAssignEdit,
   onOpenBackground,
+  onOpenSubtitles,
   onRemoveBackground,
   onOpenUpload,
+  onWatermarkChange,
   projectPath,
   selected,
+  subtitles,
+  watermark,
 }: InspectorProps) {
   const t = useTranslations("pages.editor.inspector");
   const backgroundLayer = layers.find((entry) => entry.kind === "bg");
@@ -85,15 +95,15 @@ export function Inspector({
     return (
       <aside className="flex flex-col bg-(--bg-1)">
         <Header label={t("title")} />
-        <section className="border-b border-(--line-soft) px-4 py-3">
-          <button
-            className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
-            onClick={onOpenBackground}
-            type="button"
-          >
-            {hasBackground ? "Change Background" : "Add Background"}
-          </button>
-        </section>
+        <GlobalControls
+          hasBackground={hasBackground}
+          media={media}
+          onOpenBackground={onOpenBackground}
+          onOpenSubtitles={onOpenSubtitles}
+          onWatermarkChange={onWatermarkChange}
+          subtitles={subtitles}
+          watermark={watermark}
+        />
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-(--text-3)">
           <p className="text-sm">{t("empty")}</p>
           <p className="text-[11px]">{t("emptyHint")}</p>
@@ -110,15 +120,15 @@ export function Inspector({
   return (
     <aside className="flex min-h-0 flex-col bg-(--bg-1)">
       <Header label={t("title")} />
-      <section className="border-b border-(--line-soft) px-4 py-3">
-        <button
-          className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
-          onClick={onOpenBackground}
-          type="button"
-        >
-          {hasBackground ? "Change Background" : "Add Background"}
-        </button>
-      </section>
+      <GlobalControls
+        hasBackground={hasBackground}
+        media={media}
+        onOpenBackground={onOpenBackground}
+        onOpenSubtitles={onOpenSubtitles}
+        onWatermarkChange={onWatermarkChange}
+        subtitles={subtitles}
+        watermark={watermark}
+      />
       <section className="flex flex-col gap-3 border-b border-(--line-soft) px-4 py-4">
         <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">
           {layerHeading(layer)}
@@ -285,5 +295,59 @@ function GridRow({ children, label }: { children: ReactNode; label: string }) {
       <span className="uppercase tracking-[0.06em] text-(--text-3)">{label}</span>
       <span>{children}</span>
     </>
+  );
+}
+
+function GlobalControls({
+  hasBackground,
+  media,
+  onOpenBackground,
+  onOpenSubtitles,
+  onWatermarkChange,
+  subtitles,
+  watermark,
+}: {
+  hasBackground: boolean;
+  media: EditorMediaItem[];
+  onOpenBackground: () => void;
+  onOpenSubtitles: () => void;
+  onWatermarkChange: (watermark: Project["watermark"]) => void;
+  subtitles: Project["subtitles"];
+  watermark: Project["watermark"];
+}) {
+  const watermarkMedia = media
+    .filter((item) => item.kind === "image" || item.kind === "video" || item.kind === "watermark_image" || item.kind === "watermark_video")
+    .map((item) => ({
+      mediaId: item.mediaId || item.filename,
+      filename: item.filename,
+      kind: item.kind,
+      thumb_url: item.thumb_url,
+    }));
+
+  return (
+    <section className="border-b border-(--line-soft) px-4 py-3">
+      <div className="grid gap-2">
+        <WatermarkPanel media={watermarkMedia} onChange={onWatermarkChange} value={watermark} />
+        <button
+          className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
+          onClick={onOpenSubtitles}
+          type="button"
+        >
+          Subtitles
+        </button>
+        <button
+          className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
+          onClick={onOpenBackground}
+          type="button"
+        >
+          {hasBackground ? "Change Background" : "Add Background"}
+        </button>
+      </div>
+      {subtitles ? (
+        <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-(--text-3)">
+          {subtitles.burn_in ? "Subtitles burn-in on" : "Subtitles sidecar"}
+        </p>
+      ) : null}
+    </section>
   );
 }

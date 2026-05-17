@@ -28,7 +28,7 @@
 - [x] Task 7: Implement Background modal and background playlist behavior
   - Acceptance: Add/Change Background supports image/video playlist rules, crossfade/motion/easing, video fallback/trimming, edit mode, and removal.
   - Verify: `rtk pnpm -F @vc/web test -- components/bg-modal/BgModal.test.tsx components/editor/Inspector.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_clip_cache.py`
-- [ ] Task 8: Implement subtitles and watermark global config controls
+- [x] Task 8: Implement subtitles and watermark global config controls
   - Acceptance: right rail exposes Watermark/Subtitles/Background controls; subtitles modal and watermark config mutate working config through operations and affect preview/render.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx components/watermark-panel/WatermarkPanel.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_srt.py`
 - [ ] Checkpoint: Transcript And Media Creation

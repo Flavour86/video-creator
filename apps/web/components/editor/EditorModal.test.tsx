@@ -28,8 +28,20 @@ const MEDIA = [
   },
 ];
 
+const DEFAULT_SUBTITLES = {
+  burn_in: false,
+  style: {
+    font: "Arial",
+    size: 28,
+    position: "bottom" as const,
+    max_chars_per_line: 42,
+    bg_style: "shadow" as const,
+  },
+};
+
 function renderModal(overrides: Partial<Parameters<typeof EditorModal>[0]> = {}) {
   const onImport = vi.fn().mockResolvedValue(undefined);
+  const onApplySubtitles = vi.fn();
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <EditorModal
@@ -37,13 +49,16 @@ function renderModal(overrides: Partial<Parameters<typeof EditorModal>[0]> = {})
         media={MEDIA}
         modal="upload"
         onClose={vi.fn()}
+        onApplySubtitles={onApplySubtitles}
         onImport={onImport}
+        previewResolution="1080p"
         projectPath="E:/projects/test01"
+        subtitles={DEFAULT_SUBTITLES}
         {...overrides}
       />
     </NextIntlClientProvider>,
   );
-  return { onImport };
+  return { onApplySubtitles, onImport };
 }
 
 describe("EditorModal", () => {
@@ -66,5 +81,55 @@ describe("EditorModal", () => {
     expect(onImport).toHaveBeenCalledTimes(1);
     const firstArg = onImport.mock.calls[0]?.[0] as FileList | null;
     expect(firstArg?.[0]?.name).toBe("clip.mp4");
+  });
+
+  it("applies subtitles settings from modal controls", () => {
+    const { onApplySubtitles } = renderModal({
+      modal: "subtitles",
+      subtitles: DEFAULT_SUBTITLES,
+    });
+
+    fireEvent.change(screen.getByLabelText("Background"), { target: { value: "pill" } });
+    fireEvent.change(screen.getByLabelText("Position"), { target: { value: "top" } });
+    fireEvent.change(screen.getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
+    fireEvent.change(screen.getByLabelText("Max chars / line"), { target: { value: "32" } });
+    fireEvent.change(screen.getByLabelText("Size"), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("switch", { name: "Burn-in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(onApplySubtitles).toHaveBeenCalledWith({
+      burn_in: true,
+      style: {
+        bg_style: "pill",
+        font: "Helvetica Neue",
+        max_chars_per_line: 32,
+        position: "top",
+        size: 40,
+      },
+    });
+  });
+
+  it("cancels subtitles changes without applying", () => {
+    const { onApplySubtitles } = renderModal({
+      modal: "subtitles",
+      subtitles: DEFAULT_SUBTITLES,
+    });
+
+    fireEvent.change(screen.getByLabelText("Font"), { target: { value: "SF Pro" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onApplySubtitles).not.toHaveBeenCalled();
+  });
+
+  it("uses current preview resolution for subtitles live preview", () => {
+    renderModal({
+      modal: "subtitles",
+      previewResolution: "9:16",
+      subtitles: DEFAULT_SUBTITLES,
+    });
+
+    const preview = screen.getByTestId("subtitles-live-preview");
+    expect(preview.className).toContain("aspect-[9/16]");
+    expect(preview.className).not.toContain("aspect-video");
   });
 });

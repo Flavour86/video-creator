@@ -247,6 +247,35 @@ def test_subtitle_burn_in_appends_subtitles_filter(tmp_path: Path) -> None:
     assert "Alignment=2,MarginV=60'[vsub];[vsub]format=yuv420p[vout]" in filtergraph
 
 
+def test_subtitle_style_fields_are_mapped_to_force_style(tmp_path: Path) -> None:
+    project = _project(
+        [],
+        subtitles={
+            "burn_in": True,
+            "style": {
+                "font": "Helvetica Neue",
+                "size": 36,
+                "position": "top",
+                "max_chars_per_line": 30,
+                "bg_style": "block",
+            },
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert "Fontname=Helvetica Neue,Fontsize=36" in filtergraph
+    assert "Alignment=8,MarginV=40" in filtergraph
+    assert "BorderStyle=4,Outline=0,Shadow=0" in filtergraph
+
+
 def test_subtitle_burn_in_false_skips_subtitles_filter(tmp_path: Path) -> None:
     project = _project(
         [],

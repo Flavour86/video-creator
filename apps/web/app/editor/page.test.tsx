@@ -232,6 +232,24 @@ it("shows Change Background in global right-rail controls when background is pre
   expect(screen.queryByRole("button", { name: "Add Background" })).not.toBeInTheDocument();
 });
 
+it("renders Watermark, Subtitles, and Background controls before contextual inspector sections", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
+
+  const watermark = screen.getByText("Watermark");
+  const subtitles = screen.getByRole("button", { name: "Subtitles" });
+  const background = screen.getByRole("button", { name: "Change Background" });
+  const contextualHeading = screen.getByRole("heading", { name: "PiP · z3" });
+
+  expect(watermark.compareDocumentPosition(contextualHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(subtitles.compareDocumentPosition(contextualHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(background.compareDocumentPosition(contextualHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
 it("updates only background through Change Background modal and appends one operation", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
@@ -298,6 +316,97 @@ it("Remove background deletes only background and appends one operation", async 
   const parsed = JSON.parse(raw ?? "{}");
   expect(parsed.undo).toHaveLength(1);
   expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
+});
+
+it("Apply in subtitles modal updates defaults, appends one operation, and closes", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Subtitles" }));
+
+  const modal = await screen.findByRole("dialog");
+  fireEvent.change(within(modal).getByLabelText("Background"), { target: { value: "pill" } });
+  fireEvent.change(within(modal).getByLabelText("Position"), { target: { value: "top" } });
+  fireEvent.change(within(modal).getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
+  fireEvent.change(within(modal).getByLabelText("Max chars / line"), { target: { value: "30" } });
+  fireEvent.change(within(modal).getByLabelText("Size"), { target: { value: "40" } });
+  fireEvent.click(within(modal).getByRole("switch", { name: "Burn-in" }));
+  fireEvent.click(within(modal).getByRole("button", { name: "Apply" }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
+  expect(raw).not.toBeNull();
+  const parsed = JSON.parse(raw ?? "{}");
+  expect(parsed.undo).toHaveLength(1);
+  expect(parsed.undo[0]?.op?.type).toBe("subtitle_settings_update");
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    expect(payload.config.subtitles).toEqual({
+      burn_in: true,
+      style: {
+        bg_style: "pill",
+        font: "Helvetica Neue",
+        max_chars_per_line: 30,
+        position: "top",
+        size: 40,
+      },
+    });
+  });
+});
+
+it("Cancel in subtitles modal closes without mutation", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Subtitles" }));
+
+  const modal = await screen.findByRole("dialog");
+  fireEvent.change(within(modal).getByLabelText("Font"), { target: { value: "SF Pro" } });
+  fireEvent.click(within(modal).getByRole("button", { name: "Cancel" }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    expect(parsed.undo ?? []).toHaveLength(0);
+  } else {
+    expect(raw).toBeNull();
+  }
+});
+
+it("updates watermark config, shows preview watermark, and persists watermark operations", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("switch", { name: /watermark enabled/i }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Watermark asset" }), { target: { value: "bg0.png" } });
+
+  expect(await screen.findByTestId("preview-watermark")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove watermark" }));
+  await waitFor(() => expect(screen.queryByTestId("preview-watermark")).not.toBeInTheDocument());
+
+  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
+  expect(raw).not.toBeNull();
+  const parsed = JSON.parse(raw ?? "{}");
+  const wmOps = (parsed.undo ?? []).filter((entry: { op?: { type?: string } }) => entry.op?.type === "watermark_update");
+  expect(wmOps.length).toBeGreaterThanOrEqual(2);
+  expect(wmOps.some((entry: { op?: { after?: { mediaId?: string } } }) => entry.op?.after?.mediaId === "bg0.png")).toBe(true);
+  expect(wmOps.at(-1)?.op?.after).toBeNull();
 });
 
 it("highlights search matches, scrolls to the first match, and advances with Enter", async () => {

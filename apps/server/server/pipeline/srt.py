@@ -9,7 +9,6 @@ from server.domain.timing import AlignedWord, AlignmentResult
 
 MAX_LINE_CHARS = 42
 MAX_CUE_LINES = 2
-MAX_CUE_CHARS = MAX_LINE_CHARS * MAX_CUE_LINES
 MAX_CUE_SECONDS = 7.0
 
 SENTENCE_PUNCTUATION = (".", "!", "?")
@@ -33,8 +32,9 @@ class SubtitleAlignmentUpdate:
     cue_count: int
 
 
-def generate_srt(alignment: AlignmentResult) -> str:
-    cues = _build_cues(alignment)
+def generate_srt(alignment: AlignmentResult, *, max_line_chars: int = MAX_LINE_CHARS) -> str:
+    safe_max_line_chars = _normalize_max_line_chars(max_line_chars)
+    cues = _build_cues(alignment, max_line_chars=safe_max_line_chars)
     blocks = [
         "\r\n".join(
             [
@@ -43,7 +43,7 @@ def generate_srt(alignment: AlignmentResult) -> str:
                     f"{_format_timestamp(cue.words[0].start_s)} "
                     f"--> {_format_timestamp(cue.words[-1].end_s)}"
                 ),
-                *_wrap_text(_words_text(cue.words)),
+                *_wrap_text(_words_text(cue.words), max_line_chars=safe_max_line_chars),
             ]
         )
         for index, cue in enumerate(cues, start=1)
@@ -51,21 +51,44 @@ def generate_srt(alignment: AlignmentResult) -> str:
     return "\r\n\r\n".join(blocks) + ("\r\n" if blocks else "")
 
 
-def write_srt(project_dir: Path, alignment: AlignmentResult) -> Path:
-    return write_srt_file(project_dir / "subtitles.srt", alignment)
+def write_srt(
+    project_dir: Path,
+    alignment: AlignmentResult,
+    *,
+    max_line_chars: int = MAX_LINE_CHARS,
+) -> Path:
+    return write_srt_file(
+        project_dir / "subtitles.srt",
+        alignment,
+        max_line_chars=max_line_chars,
+    )
 
 
-def write_srt_file(srt_path: Path, alignment: AlignmentResult) -> Path:
-    srt_path.write_text(generate_srt(alignment), encoding="utf-8", newline="")
+def write_srt_file(
+    srt_path: Path,
+    alignment: AlignmentResult,
+    *,
+    max_line_chars: int = MAX_LINE_CHARS,
+) -> Path:
+    srt_path.write_text(
+        generate_srt(alignment, max_line_chars=max_line_chars),
+        encoding="utf-8",
+        newline="",
+    )
     return srt_path
 
 
-def write_aligned_srt_file(srt_path: Path, alignment: AlignmentResult) -> SubtitleAlignmentUpdate:
+def write_aligned_srt_file(
+    srt_path: Path,
+    alignment: AlignmentResult,
+    *,
+    max_line_chars: int = MAX_LINE_CHARS,
+) -> SubtitleAlignmentUpdate:
     previous_content = ""
     if srt_path.is_file():
         previous_content = srt_path.read_text(encoding="utf-8")
 
-    next_content = generate_srt(alignment)
+    next_content = generate_srt(alignment, max_line_chars=max_line_chars)
     corrections = _count_cue_level_corrections(previous_content, next_content)
     srt_path.write_text(next_content, encoding="utf-8", newline="")
     return SubtitleAlignmentUpdate(
@@ -74,8 +97,13 @@ def write_aligned_srt_file(srt_path: Path, alignment: AlignmentResult) -> Subtit
     )
 
 
-def subtitle_stats(alignment: AlignmentResult) -> SubtitleStats:
-    cues = _build_cues(alignment)
+def subtitle_stats(
+    alignment: AlignmentResult,
+    *,
+    max_line_chars: int = MAX_LINE_CHARS,
+) -> SubtitleStats:
+    safe_max_line_chars = _normalize_max_line_chars(max_line_chars)
+    cues = _build_cues(alignment, max_line_chars=safe_max_line_chars)
     total_duration_s = sum(
         max(0.0, cue.words[-1].end_s - cue.words[0].start_s)
         for cue in cues
@@ -84,7 +112,7 @@ def subtitle_stats(alignment: AlignmentResult) -> SubtitleStats:
     return SubtitleStats(cue_count=len(cues), total_duration_s=round(total_duration_s, 3))
 
 
-def _build_cues(alignment: AlignmentResult) -> list[_Cue]:
+def _build_cues(alignment: AlignmentResult, *, max_line_chars: int) -> list[_Cue]:
     cues: list[_Cue] = []
     for sentence in alignment.sentences:
         words = [
@@ -94,18 +122,18 @@ def _build_cues(alignment: AlignmentResult) -> list[_Cue]:
         ]
         start = 0
         while start < len(words):
-            end = _best_chunk_end(words, start)
+            end = _best_chunk_end(words, start, max_line_chars=max_line_chars)
             cues.append(_Cue(words=words[start:end]))
             start = end
     return cues
 
 
-def _best_chunk_end(words: list[AlignedWord], start: int) -> int:
+def _best_chunk_end(words: list[AlignedWord], start: int, *, max_line_chars: int) -> int:
     limit = start + 1
     for index in range(start + 1, len(words) + 1):
         chunk = words[start:index]
         duration_s = chunk[-1].end_s - chunk[0].start_s
-        if duration_s > MAX_CUE_SECONDS or not _fits_cue(chunk):
+        if duration_s > MAX_CUE_SECONDS or not _fits_cue(chunk, max_line_chars=max_line_chars):
             break
         limit = index
 
@@ -120,15 +148,16 @@ def _best_chunk_end(words: list[AlignedWord], start: int) -> int:
     return limit
 
 
-def _fits_cue(words: list[AlignedWord]) -> bool:
+def _fits_cue(words: list[AlignedWord], *, max_line_chars: int) -> bool:
     text = _words_text(words)
-    if len(text) > MAX_CUE_CHARS:
+    max_cue_chars = max_line_chars * MAX_CUE_LINES
+    if len(text) > max_cue_chars:
         return False
-    lines = _wrap_text(text)
-    return len(lines) <= MAX_CUE_LINES and all(len(line) <= MAX_LINE_CHARS for line in lines)
+    lines = _wrap_text(text, max_line_chars=max_line_chars)
+    return len(lines) <= MAX_CUE_LINES and all(len(line) <= max_line_chars for line in lines)
 
 
-def _wrap_text(text: str) -> list[str]:
+def _wrap_text(text: str, *, max_line_chars: int) -> list[str]:
     words = text.split()
     if not words:
         return [""]
@@ -137,7 +166,7 @@ def _wrap_text(text: str) -> list[str]:
     current = ""
     for word in words:
         candidate = word if not current else f"{current} {word}"
-        if len(candidate) <= MAX_LINE_CHARS or not current:
+        if len(candidate) <= max_line_chars or not current:
             current = candidate
             continue
         lines.append(current)
@@ -147,6 +176,12 @@ def _wrap_text(text: str) -> list[str]:
         lines.append(current)
 
     return lines
+
+
+def _normalize_max_line_chars(value: int) -> int:
+    if not isinstance(value, int):
+        return MAX_LINE_CHARS
+    return max(20, min(80, value))
 
 
 def _words_text(words: list[AlignedWord]) -> str:

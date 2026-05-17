@@ -4,7 +4,12 @@ import { BadgeIcon, X } from "lucide-react";
 
 import type { WatermarkSettings } from "@/lib/hooks/useProject";
 
-type MediaItem = { filename: string; kind: "image" | "video"; thumb_url: string };
+type MediaItem = {
+  mediaId: string;
+  filename: string;
+  kind: "image" | "video" | "watermark_image" | "watermark_video";
+  thumb_url?: string | null;
+};
 
 type Props = {
   media: MediaItem[];
@@ -25,8 +30,10 @@ const POSITIONS = [
 ];
 
 export function WatermarkPanel({ media, value, onChange }: Props) {
-  const imageMedia = media.filter((item) => item.kind === "image");
+  const selectable = media.filter((item) => item.kind === "image" || item.kind === "video" || item.kind === "watermark_image" || item.kind === "watermark_video");
+  const enabled = value !== null;
   const selected = value?.mediaId ?? "";
+  const selectedMedia = selectable.find((item) => item.mediaId === selected || item.filename === selected) ?? null;
 
   function patch(delta: Partial<WatermarkSettings>) {
     if (!value) return;
@@ -34,6 +41,10 @@ export function WatermarkPanel({ media, value, onChange }: Props) {
   }
 
   function select(mediaId: string) {
+    if (!mediaId) {
+      onChange(null);
+      return;
+    }
     onChange({
       mediaId,
       posX: value?.posX ?? 100,
@@ -43,17 +54,27 @@ export function WatermarkPanel({ media, value, onChange }: Props) {
     });
   }
 
+  function toggleEnabled(nextEnabled: boolean) {
+    if (!nextEnabled) {
+      onChange(null);
+      return;
+    }
+    const fallback = selectable[0];
+    if (!fallback) return;
+    select(fallback.mediaId || fallback.filename);
+  }
+
   return (
-    <section className="rounded border border-neutral-200 p-3">
+    <section className="rounded border border-(--line) bg-(--bg-2) p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <BadgeIcon className="shrink-0 opacity-50" size={16} />
           <p className="truncate text-xs font-semibold">Watermark</p>
         </div>
-        {value && (
+        {enabled && (
           <button
             aria-label="Remove watermark"
-            className="rounded p-1 opacity-40 hover:bg-neutral-100 hover:opacity-80"
+            className="rounded p-1 opacity-50 hover:bg-(--bg-3) hover:opacity-100"
             onClick={() => onChange(null)}
             type="button"
           >
@@ -62,21 +83,57 @@ export function WatermarkPanel({ media, value, onChange }: Props) {
         )}
       </div>
 
+      <button
+        aria-checked={enabled}
+        aria-label="Watermark enabled"
+        className={`mb-2 inline-flex h-7 w-12 items-center rounded-full border transition-colors ${
+          enabled ? "border-(--blue) bg-(--blue)" : "border-(--line) bg-(--bg-3)"
+        }`}
+        onClick={() => toggleEnabled(!enabled)}
+        role="switch"
+        type="button"
+      >
+        <span
+          className={`h-5 w-5 rounded-full bg-white transition-transform ${
+            enabled ? "translate-x-6" : "translate-x-1"
+          }`}
+        />
+      </button>
+
       <select
-        className="mb-2 w-full rounded border border-neutral-200 px-2 py-1.5 text-xs"
+        aria-label="Watermark asset"
+        className="mb-2 w-full rounded border border-(--line) bg-(--bg-1) px-2 py-1.5 text-xs"
+        disabled={!enabled}
         onChange={(event) => select(event.target.value)}
         value={selected}
       >
         <option value="">No watermark</option>
-        {imageMedia.map((item) => (
-          <option key={item.filename} value={item.filename}>
+        {selectable.map((item) => (
+          <option key={item.mediaId || item.filename} value={item.mediaId || item.filename}>
             {item.filename}
           </option>
         ))}
       </select>
 
-      {value && (
+      {enabled && value && (
         <div className="grid gap-3">
+          <div className="relative h-20 overflow-hidden rounded border border-(--line) bg-(--bg-1)" data-testid="watermark-preview">
+            {selectedMedia?.thumb_url ? (
+              <img
+                alt={`Preview ${selectedMedia.filename}`}
+                className="h-full w-full object-cover opacity-70"
+                src={selectedMedia.thumb_url}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[11px] text-(--text-3)">
+                No watermark preview
+              </div>
+            )}
+            <span
+              className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white ring-1 ring-black/30"
+              style={{ left: `${value.posX}%`, top: `${value.posY}%` }}
+            />
+          </div>
           <div className="grid grid-cols-3 gap-1">
             {POSITIONS.map((position) => {
               const active = value.posX === position.posX && value.posY === position.posY;
@@ -84,8 +141,8 @@ export function WatermarkPanel({ media, value, onChange }: Props) {
                 <button
                   className={`rounded border px-1 py-1 text-[10px] font-semibold ${
                     active
-                      ? "border-neutral-950 bg-neutral-950 text-white"
-                      : "border-neutral-200 hover:bg-neutral-50"
+                      ? "border-(--blue) bg-(--blue) text-white"
+                      : "border-(--line) hover:bg-(--bg-3)"
                   }`}
                   key={position.label}
                   onClick={() => patch({ posX: position.posX, posY: position.posY })}

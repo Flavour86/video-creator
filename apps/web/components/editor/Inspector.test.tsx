@@ -84,8 +84,10 @@ const LAYERS: Layer[] = [
 function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {}) {
   const onOpenAssignEdit = vi.fn();
   const onOpenBackground = vi.fn();
+  const onOpenSubtitles = vi.fn();
   const onRemoveBackground = vi.fn();
   const onOpenUpload = vi.fn();
+  const onWatermarkChange = vi.fn();
 
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -94,16 +96,20 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
         media={MEDIA}
         onOpenAssignEdit={onOpenAssignEdit}
         onOpenBackground={onOpenBackground}
+        onOpenSubtitles={onOpenSubtitles}
         onRemoveBackground={onRemoveBackground}
         onOpenUpload={onOpenUpload}
+        onWatermarkChange={onWatermarkChange}
         projectPath="E:/projects/test01"
         selected={{ layerId: "fg-z1", itemId: "fg-1" }}
+        subtitles={null}
+        watermark={null}
         {...overrides}
       />
     </NextIntlClientProvider>,
   );
 
-  return { onOpenAssignEdit, onOpenBackground, onOpenUpload, onRemoveBackground };
+  return { onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onOpenUpload, onRemoveBackground, onWatermarkChange };
 }
 
 describe("Inspector", () => {

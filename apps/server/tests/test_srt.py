@@ -119,6 +119,15 @@ def test_aligned_srt_correction_count_handles_cue_resegmentation(tmp_path) -> No
     assert update.corrections_applied < update.cue_count + 2
 
 
+def test_generate_srt_respects_custom_max_chars_per_line() -> None:
+    srt = generate_srt(_alignment(), max_line_chars=30)
+
+    blocks = _blocks(srt)
+    for block in blocks:
+        assert all(len(line) <= 30 for line in block[2:])
+        assert len(block[2:]) <= 2
+
+
 def _seconds(timestamp: str) -> float:
     hours, minutes, rest = timestamp.split(":")
     seconds, millis = rest.split(",")
