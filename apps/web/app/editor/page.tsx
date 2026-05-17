@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AssignModal } from "@/components/assign-modal/AssignModal";
+import { BgModal } from "@/components/bg-modal/BgModal";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditorModal } from "@/components/editor/EditorModal";
 import { Inspector } from "@/components/editor/Inspector";
@@ -35,6 +36,8 @@ import {
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
+
+type BgLayer = Extract<Layer, { kind: "bg" }>;
 
 function projectIdFromPathname(pathname: string): string {
   const prefix = "/editor/";
@@ -447,6 +450,55 @@ function EditorContent() {
     setSaveStatus("pending");
   }, [layers, project, projectId]);
 
+  const applyBackgroundLayer = useCallback((backgroundLayer: BgLayer) => {
+    if (!project) return;
+    const previousLayers = layers;
+    const backgroundIndex = previousLayers.findIndex((layer) => layer.kind === "bg");
+    const updatedLayers = backgroundIndex >= 0
+      ? previousLayers.map((layer, index) => (index === backgroundIndex ? backgroundLayer : layer))
+      : [...previousLayers, backgroundLayer];
+    setLayers(updatedLayers);
+    setProject({ ...project, layers: updatedLayers as Project["layers"] });
+    const selectedItem = backgroundLayer.items[0];
+    if (selectedItem) {
+      setSelected({ layerId: backgroundLayer.id, itemId: selectedItem.id });
+    }
+    setModal(null);
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "replace_layers",
+        before: previousLayers,
+        after: updatedLayers,
+      });
+    }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [layers, project, projectId]);
+
+  const removeBackgroundLayer = useCallback((layerId: string) => {
+    if (!project) return;
+    const previousLayers = layers;
+    const hasTarget = previousLayers.some((layer) => layer.kind === "bg" && layer.id === layerId);
+    if (!hasTarget) return;
+    const updatedLayers = previousLayers.filter((layer) => !(layer.kind === "bg" && layer.id === layerId));
+    setLayers(updatedLayers);
+    setProject({ ...project, layers: updatedLayers as Project["layers"] });
+    const nextSelection = updatedLayers
+      .filter((layer) => layer.kind !== "sub")
+      .flatMap((layer) => layer.items.filter(hasVisualItemId).map((item) => ({ layerId: layer.id, itemId: item.id })))
+      .at(0) ?? null;
+    setSelected(nextSelection);
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "replace_layers",
+        before: previousLayers,
+        after: updatedLayers,
+      });
+    }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [layers, project, projectId]);
+
   const playFromSentence = useCallback((index: number) => {
     const sentence = sentences.find((item) => item.index === index);
     if (!sentence) return;
@@ -635,6 +687,7 @@ function EditorContent() {
           media={media}
           onOpenAssignEdit={openAssignEdit}
           onOpenBackground={() => setModal("background")}
+          onRemoveBackground={removeBackgroundLayer}
           onOpenUpload={() => {
             setAssignEdit(null);
             setModal("upload");
@@ -668,6 +721,25 @@ function EditorContent() {
           open
           sentences={sentences}
           toSentence={assignRange[1]}
+        />
+      ) : modal === "background" ? (
+        <BgModal
+          duration={duration}
+          existing={(layers.find((layer) => layer.kind === "bg") as BgLayer | undefined)}
+          media={media.filter((entry) => entry.kind === "image" || entry.kind === "video").map((entry) => ({
+            duration: entry.duration,
+            filename: entry.filename,
+            import_error: entry.import_error,
+            importing: entry.importing,
+            kind: entry.kind,
+            mediaId: entry.mediaId,
+            thumb_url: entry.thumb_url,
+          }))}
+          onClose={() => setModal(null)}
+          onImport={importMedia}
+          onSave={applyBackgroundLayer}
+          open
+          totalSentences={sentences.length}
         />
       ) : (
         <EditorModal

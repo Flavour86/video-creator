@@ -12,6 +12,7 @@ type InspectorProps = {
   media: EditorMediaItem[];
   onOpenAssignEdit: (layerId: string, itemId: string, range: [number, number]) => void;
   onOpenBackground: () => void;
+  onRemoveBackground: (layerId: string) => void;
   onOpenUpload: () => void;
   projectPath: string;
   selected: EditorSelection;
@@ -63,8 +64,19 @@ const transitionOptions = [
   { label: "dip to black", value: "dip_black" },
 ];
 
-export function Inspector({ layers, media, onOpenAssignEdit, onOpenBackground, onOpenUpload, projectPath, selected }: InspectorProps) {
+export function Inspector({
+  layers,
+  media,
+  onOpenAssignEdit,
+  onOpenBackground,
+  onRemoveBackground,
+  onOpenUpload,
+  projectPath,
+  selected,
+}: InspectorProps) {
   const t = useTranslations("pages.editor.inspector");
+  const backgroundLayer = layers.find((entry) => entry.kind === "bg");
+  const hasBackground = !!backgroundLayer;
   const layer = selected ? layers.find((entry) => entry.id === selected.layerId) : layers.find((entry) => entry.kind === "bg");
   const selectedItem = selected && layer ? layer.items.find((entry) => hasId(entry) && entry.id === selected.itemId) : undefined;
   const item = selectedItem ?? (layer?.kind === "bg" ? layer.items[0] : undefined);
@@ -73,6 +85,15 @@ export function Inspector({ layers, media, onOpenAssignEdit, onOpenBackground, o
     return (
       <aside className="flex flex-col bg-(--bg-1)">
         <Header label={t("title")} />
+        <section className="border-b border-(--line-soft) px-4 py-3">
+          <button
+            className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
+            onClick={onOpenBackground}
+            type="button"
+          >
+            {hasBackground ? "Change Background" : "Add Background"}
+          </button>
+        </section>
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-(--text-3)">
           <p className="text-sm">{t("empty")}</p>
           <p className="text-[11px]">{t("emptyHint")}</p>
@@ -89,6 +110,15 @@ export function Inspector({ layers, media, onOpenAssignEdit, onOpenBackground, o
   return (
     <aside className="flex min-h-0 flex-col bg-(--bg-1)">
       <Header label={t("title")} />
+      <section className="border-b border-(--line-soft) px-4 py-3">
+        <button
+          className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
+          onClick={onOpenBackground}
+          type="button"
+        >
+          {hasBackground ? "Change Background" : "Add Background"}
+        </button>
+      </section>
       <section className="flex flex-col gap-3 border-b border-(--line-soft) px-4 py-4">
         <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">
           {layerHeading(layer)}
@@ -160,7 +190,16 @@ export function Inspector({ layers, media, onOpenAssignEdit, onOpenBackground, o
           <GridRow label={t("out")}><Select defaultValue={item.transitions.out} id="editor-transition-out" name="editor-transition-out">{transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></GridRow>
         </Section>
       ) : null}
-      <Button className="mx-4 my-3 justify-start" variant="ghost">
+      <Button
+        className="mx-4 my-3 justify-start"
+        onClick={() => {
+          if (isBackground) {
+            onRemoveBackground(layer.id);
+            return;
+          }
+        }}
+        variant="ghost"
+      >
         <Trash aria-hidden="true" className="h-4 w-4 text-(--red)" />
         {isBackground ? t("removeBg") : t("deleteItem")}
       </Button>

@@ -24,6 +24,7 @@ beforeEach(() => {
   _projectIdParam = null;
   _pathname = "/editor";
   _routerPush.mockReset();
+  window.localStorage.clear();
   global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
   Element.prototype.scrollIntoView = vi.fn();
 });
@@ -137,6 +138,11 @@ const TEST_PROJECT = {
   watermark: null,
 };
 
+const TEST_PROJECT_NO_BG = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.filter((layer) => layer.kind !== "bg"),
+};
+
 const TEST_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"].map((filename) => ({
   filename,
   kind: "image",
@@ -202,6 +208,70 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByText(/posX 68.*posY 14.*size 30.*radius 12.*opacity 100/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByText("Crossfade 0.6s")).toBeInTheDocument();
+});
+
+it("shows Add Background in global right-rail controls when background is absent", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ project: TEST_PROJECT_NO_BG });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("button", { name: "Add Background" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Change Background" })).not.toBeInTheDocument();
+});
+
+it("shows Change Background in global right-rail controls when background is present", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("button", { name: "Change Background" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Add Background" })).not.toBeInTheDocument();
+});
+
+it("updates only background through Change Background modal and appends one operation", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  expect(await screen.findByRole("heading", { name: "Change background" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /bg1\.png/i }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+  expect(await screen.findByRole("button", { name: "bg1.png over s1-s5" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "foreground.png over s1" })).toBeInTheDocument();
+
+  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
+  expect(raw).not.toBeNull();
+  const parsed = JSON.parse(raw ?? "{}");
+  expect(parsed.undo).toHaveLength(1);
+  expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
+});
+
+it("Remove background deletes only background and appends one operation", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: /remove background/i }));
+
+  await waitFor(() => expect(screen.queryByRole("button", { name: "bg0.png over s1" })).not.toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "foreground.png over s1" })).toBeInTheDocument();
+
+  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
+  expect(raw).not.toBeNull();
+  const parsed = JSON.parse(raw ?? "{}");
+  expect(parsed.undo).toHaveLength(1);
+  expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
 });
 
 it("highlights search matches, scrolls to the first match, and advances with Enter", async () => {

@@ -84,6 +84,7 @@ const LAYERS: Layer[] = [
 function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {}) {
   const onOpenAssignEdit = vi.fn();
   const onOpenBackground = vi.fn();
+  const onRemoveBackground = vi.fn();
   const onOpenUpload = vi.fn();
 
   render(
@@ -93,6 +94,7 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
         media={MEDIA}
         onOpenAssignEdit={onOpenAssignEdit}
         onOpenBackground={onOpenBackground}
+        onRemoveBackground={onRemoveBackground}
         onOpenUpload={onOpenUpload}
         projectPath="E:/projects/test01"
         selected={{ layerId: "fg-z1", itemId: "fg-1" }}
@@ -101,10 +103,31 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
     </NextIntlClientProvider>,
   );
 
-  return { onOpenAssignEdit, onOpenBackground, onOpenUpload };
+  return { onOpenAssignEdit, onOpenBackground, onOpenUpload, onRemoveBackground };
 }
 
 describe("Inspector", () => {
+  it("shows global Change Background when background layer exists", () => {
+    renderInspector();
+    expect(screen.getByRole("button", { name: "Change Background" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Background" })).not.toBeInTheDocument();
+  });
+
+  it("shows global Add Background when background layer is absent", () => {
+    renderInspector({
+      layers: LAYERS.filter((layer) => layer.kind !== "bg"),
+      selected: { layerId: "fg-z1", itemId: "fg-1" },
+    });
+    expect(screen.getByRole("button", { name: "Add Background" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change Background" })).not.toBeInTheDocument();
+  });
+
+  it("opens background modal from global config control", () => {
+    const { onOpenBackground } = renderInspector();
+    fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+    expect(onOpenBackground).toHaveBeenCalledTimes(1);
+  });
+
   it("opens assign edit for non-background asset card", () => {
     const { onOpenAssignEdit } = renderInspector();
     fireEvent.click(screen.getByRole("button", { name: /clip\.mp4/i }));
@@ -119,5 +142,12 @@ describe("Inspector", () => {
     expect(onOpenBackground).toHaveBeenCalledTimes(1);
     expect(onOpenAssignEdit).not.toHaveBeenCalled();
   });
-});
 
+  it("removes background from inspector action", () => {
+    const { onRemoveBackground } = renderInspector({
+      selected: { layerId: "bg-main", itemId: "bg-1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /remove background/i }));
+    expect(onRemoveBackground).toHaveBeenCalledWith("bg-main");
+  });
+});
