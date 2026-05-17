@@ -255,6 +255,32 @@ it("updates only background through Change Background modal and appends one oper
   expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
 });
 
+it("saves background motion with schema-valid values after Change Background", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const modal = await screen.findByRole("dialog");
+  fireEvent.click(within(modal).getByRole("button", { name: /bg1\.png/i }));
+  fireEvent.change(within(modal).getByLabelText(/motion/i), { target: { value: "ken_burns" } });
+  fireEvent.click(within(modal).getByRole("button", { name: "Save changes" }));
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    const bgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "bg");
+    const bgItem = bgLayer?.items?.[0];
+    expect(bgItem?.motion?.kind).toBe("ken_burns");
+  });
+});
+
 it("Remove background deletes only background and appends one operation", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();

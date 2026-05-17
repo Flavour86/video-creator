@@ -25,7 +25,7 @@
 - [x] Task 6: Add/Edit foreground and PiP clips from sentence ranges
   - Acceptance: Assign/Edit modal creates and updates FG/PiP clips, validates ranges, packs layers, invalidates affected cache, selects item, and logs one operation.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx components/editor/Inspector.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/web test -- lib/layers.test.ts lib/editor-operation-log`
-- [ ] Task 7: Implement Background modal and background playlist behavior
+- [x] Task 7: Implement Background modal and background playlist behavior
   - Acceptance: Add/Change Background supports image/video playlist rules, crossfade/motion/easing, video fallback/trimming, edit mode, and removal.
   - Verify: `rtk pnpm -F @vc/web test -- components/bg-modal/BgModal.test.tsx components/editor/Inspector.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_clip_cache.py`
 - [ ] Task 8: Implement subtitles and watermark global config controls

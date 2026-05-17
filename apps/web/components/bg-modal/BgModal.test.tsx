@@ -107,7 +107,7 @@ describe("BgModal", () => {
           sentences: [1, 6],
           start: 0,
           end: 10,
-          motion: { kind: "ken_burns_subtle", easing: "ease_out" },
+          motion: { kind: "ken_burns", easing: "ease_out" },
           transitions: { in: "cut", out: "cut" },
           crossfade: 0.5,
         }],

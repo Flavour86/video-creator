@@ -43,7 +43,7 @@ type Props = {
 
 const MOTION_OPTIONS = [
   { value: "none", label: "None" },
-  { value: "ken_burns_subtle", label: "Ken Burns · subtle" },
+  { value: "ken_burns", label: "Ken Burns · subtle" },
   { value: "ken_burns_strong", label: "Ken Burns · strong" },
 ];
 
@@ -53,12 +53,18 @@ const EASING_OPTIONS = [
   { value: "ease_out", label: "ease_out" },
 ];
 
+function normalizeMotionKind(value: string | undefined): string {
+  if (!value) return "none";
+  if (value === "ken_burns_subtle") return "ken_burns";
+  return value;
+}
+
 function initialState(existing?: BgLayer) {
   const existingItem = existing?.items[0];
   return {
     crossfadeInput: String(existingItem?.crossfade ?? 0),
     easing: existingItem?.motion.easing ?? "linear",
-    motionKind: existingItem?.motion.kind ?? "none",
+    motionKind: normalizeMotionKind(existingItem?.motion.kind),
     selectedMedia: existing?.items.map((item) => item.mediaId) ?? [],
   };
 }
@@ -211,6 +217,9 @@ export function BgModal({
           <Dialog.Title className="mb-2 text-lg font-semibold">
             {isEdit ? "Change background" : "Add background"}
           </Dialog.Title>
+          <Dialog.Description className="sr-only">
+            Configure background playlist assets, motion, easing, and crossfade.
+          </Dialog.Description>
           <p className="mb-5 text-sm text-neutral-600">
             {state.selectedMedia.length} selected · {selectedLabel}
           </p>
