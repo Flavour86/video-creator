@@ -766,17 +766,28 @@ function EditorContent() {
           <div className="relative">
             <PreviewControls
               layerCount={layers.length}
+              layersOpen={layersOpen}
               onLayers={() => setLayersOpen((value) => !value)}
               onSetResolution={onResolutionChange}
               resolution={resolution}
             />
             <LayersPopover
               layers={layers}
+              onClose={() => setLayersOpen(false)}
               onAdd={() => {
                 setAssignEdit(null);
                 setModal("upload");
               }}
+              onRemoveBackground={(layerId) => {
+                removeBackgroundLayer(layerId);
+                setLayersOpen(false);
+              }}
+              onSelectLayerItem={(layerId, itemId) => {
+                setSelected({ layerId, itemId });
+                setLayersOpen(false);
+              }}
               open={layersOpen}
+              selected={selected}
             />
           </div>
           <Timeline

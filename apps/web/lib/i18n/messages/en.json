@@ -298,7 +298,7 @@
       "fitMode": "Fit mode",
       "fit": "Fit",
       "actual": "Actual",
-      "layersButton": "Layers · {count}",
+      "layersButton": "Layers - {count}",
       "timeline": {
         "head": "TIMELINE"
       },
@@ -355,7 +355,7 @@
         "emptyHint": "Right-click a sentence to add new media."
       },
       "layers": {
-        "head": "Layer order · top renders on top",
+        "head": "Layer order - top renders on top",
         "delete": "Delete layer",
         "add": "+ Add layer item"
       },

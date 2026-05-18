@@ -689,6 +689,97 @@ it("Remove background deletes only background and appends one operation", async 
   expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
 });
 
+it("opens layers popover from Layers - 4 and shows header", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("button", { name: "Layers - 4" }));
+
+  expect(screen.getByText("Layer order - top renders on top")).toBeInTheDocument();
+});
+
+it("clicking Layers - 4 when open closes popover", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  const trigger = screen.getByRole("button", { name: "Layers - 4" });
+  fireEvent.click(trigger);
+  expect(screen.getByText("Layer order - top renders on top")).toBeInTheDocument();
+
+  fireEvent.click(trigger);
+  await waitFor(() => expect(screen.queryByText("Layer order - top renders on top")).not.toBeInTheDocument());
+});
+
+it("closes layers popover on outside mousedown", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("button", { name: "Layers - 4" }));
+  expect(screen.getByText("Layer order - top renders on top")).toBeInTheDocument();
+
+  fireEvent.mouseDown(document.body);
+
+  await waitFor(() => expect(screen.queryByText("Layer order - top renders on top")).not.toBeInTheDocument());
+});
+
+it("selects a foreground row from layers popover", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByLabelText("Background crossfade")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Layers - 4" }));
+  const popover = document.getElementById("editor-layers-popover");
+  expect(popover).not.toBeNull();
+  fireEvent.click(within(popover!).getByRole("button", { name: /foreground z1/i }));
+
+  expect(screen.getByLabelText("Foreground motion")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Background crossfade")).not.toBeInTheDocument();
+});
+
+it("removes background from layers popover trash and appends one operation", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("button", { name: "Layers - 4" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete layer" }));
+
+  await waitFor(() => expect(screen.queryByRole("button", { name: "bg0.png over s1" })).not.toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "foreground.png over s1" })).toBeInTheDocument();
+  expect(readUndo()).toHaveLength(1);
+  expect(readUndo()[0]?.op?.type).toBe("replace_layers");
+});
+
+it("closes layers popover on Escape", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("button", { name: "Layers - 4" }));
+  expect(screen.getByText("Layer order - top renders on top")).toBeInTheDocument();
+
+  fireEvent.keyDown(window, { key: "Escape" });
+
+  await waitFor(() => expect(screen.queryByText("Layer order - top renders on top")).not.toBeInTheDocument());
+});
+
 it("Apply in subtitles modal updates defaults, appends one operation, and closes", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();

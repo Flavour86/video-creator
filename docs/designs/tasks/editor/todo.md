@@ -42,7 +42,7 @@
 - [x] Task 10: Implement timeline packing, drag/stretch/delete, and keyboard deletion
   - Acceptance: fixed-height timeline, full-width waveform, layer packing/order, drag/stretch constraints, transcript sync, and non-background deletion work.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/Timeline.test.tsx app/editor/page.test.tsx`
-- [ ] Task 11: Complete Layers Popover and preview resolution controls
+- [x] Task 11: Complete Layers Popover and preview resolution controls
   - Acceptance: rows render in order, row click selects first item, removable trash works, outside/Escape close works, and resolution persists and drives render requests.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/LayersPopover.test.tsx components/editor/PreviewControls.test.tsx app/editor/page.test.tsx`
 - [ ] Task 12: Make Preview Surface reflect live render order and visual states

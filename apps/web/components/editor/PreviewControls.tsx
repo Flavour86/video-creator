@@ -7,9 +7,10 @@ type PreviewControlsProps = {
   onLayers: () => void;
   onSetResolution: (value: string) => void;
   resolution: string;
+  layersOpen: boolean;
 };
 
-export function PreviewControls({ layerCount, onLayers, onSetResolution, resolution }: PreviewControlsProps) {
+export function PreviewControls({ layerCount, onLayers, onSetResolution, resolution, layersOpen }: PreviewControlsProps) {
   const t = useTranslations("pages.editor");
   return (
     <div className="flex items-center justify-between border-t border-(--line) px-4 py-2">
@@ -21,7 +22,14 @@ export function PreviewControls({ layerCount, onLayers, onSetResolution, resolut
           value={resolution}
         />
       </div>
-      <Button onClick={onLayers} size="extra-small" variant="ghost">
+      <Button
+        aria-controls="editor-layers-popover"
+        aria-expanded={layersOpen}
+        data-editor-layers-trigger="true"
+        onClick={onLayers}
+        size="extra-small"
+        variant="ghost"
+      >
         <Layers aria-hidden="true" className="h-4 w-4" />
         {t("layersButton", { count: layerCount })}
       </Button>
