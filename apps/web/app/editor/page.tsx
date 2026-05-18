@@ -34,11 +34,12 @@ import {
   type EditorRecoverySelection,
 } from "@/lib/editor-operation-log/operation-log";
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
-import { deleteVisualItem, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
+import { deleteVisualItem, hasSentenceOverlap, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 
 type BgLayer = Extract<Layer, { kind: "bg" }>;
+type ClipLayer = Extract<Layer, { kind: "fg" | "pip" }>;
 
 function projectIdFromPathname(pathname: string): string {
   const prefix = "/editor/";
@@ -508,6 +509,10 @@ function EditorContent() {
     const to = clamp(Math.max(range[0], range[1]), from, maxSentence);
     const startSentence = sentences.find((sentence) => sentence.index === from);
     const endSentence = sentences.find((sentence) => sentence.index === to);
+    const overlapLayer = layers.find((entry): entry is ClipLayer => entry.id === layerId && (entry.kind === "fg" || entry.kind === "pip"));
+    if (overlapLayer && hasSentenceOverlap(overlapLayer.items, from, to, itemId)) {
+      return;
+    }
     const updatedLayers = patchVisualItem(layers, layerId, itemId, {
       sentences: [from, to],
       start: startSentence?.start_s ?? target.start,
@@ -744,10 +749,6 @@ function EditorContent() {
           onOpenAssignEdit={openAssignEdit}
           onOpenBackground={() => setModal("background")}
           onOpenSubtitles={() => setModal("subtitles")}
-          onOpenUpload={() => {
-            setAssignEdit(null);
-            setModal("upload");
-          }}
           onPatchBackground={patchInspectorBackground}
           onPatchItem={patchInspectorItem}
           onRemoveBackground={removeBackgroundLayer}

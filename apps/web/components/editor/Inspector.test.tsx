@@ -86,7 +86,6 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
   const onOpenAssignEdit = vi.fn();
   const onOpenBackground = vi.fn();
   const onOpenSubtitles = vi.fn();
-  const onOpenUpload = vi.fn();
   const onPatchBackground = vi.fn();
   const onPatchItem = vi.fn();
   const onRemoveBackground = vi.fn();
@@ -102,7 +101,6 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
         onOpenAssignEdit={onOpenAssignEdit}
         onOpenBackground={onOpenBackground}
         onOpenSubtitles={onOpenSubtitles}
-        onOpenUpload={onOpenUpload}
         onPatchBackground={onPatchBackground}
         onPatchItem={onPatchItem}
         onRemoveBackground={onRemoveBackground}
@@ -117,7 +115,7 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
     </NextIntlClientProvider>,
   );
 
-  return { onDeleteItem, onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onOpenUpload, onPatchBackground, onPatchItem, onRemoveBackground, onUpdateRange, onWatermarkChange };
+  return { onDeleteItem, onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onPatchBackground, onPatchItem, onRemoveBackground, onUpdateRange, onWatermarkChange };
 }
 
 describe("Inspector", () => {
@@ -163,5 +161,13 @@ describe("Inspector", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /remove background/i }));
     expect(onRemoveBackground).toHaveBeenCalledWith("bg-main");
+  });
+
+  it("normalizes background subtle motion alias before patching", () => {
+    const { onPatchBackground } = renderInspector({
+      selected: { layerId: "bg-main", itemId: "bg-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Background motion"), { target: { value: "ken_burns_subtle" } });
+    expect(onPatchBackground).toHaveBeenCalledWith("bg-main", { motion: { kind: "ken_burns" } });
   });
 });

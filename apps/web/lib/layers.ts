@@ -78,6 +78,27 @@ type VisualItem = {
   transitions: { in: string; out: string };
 };
 
+type PersistedMotionKind =
+  | "none"
+  | "static"
+  | "ken_burns"
+  | "ken_burns_strong"
+  | "zoom_in"
+  | "zoom_out"
+  | "pan_left"
+  | "pan_right";
+
+const PERSISTED_MOTION_KINDS: ReadonlySet<PersistedMotionKind> = new Set([
+  "none",
+  "static",
+  "ken_burns",
+  "ken_burns_strong",
+  "zoom_in",
+  "zoom_out",
+  "pan_left",
+  "pan_right",
+]);
+
 export function patchVisualItem(
   layers: Layer[],
   layerId: string,
@@ -121,7 +142,12 @@ export function deleteVisualItem(layers: Layer[], layerId: string, itemId: strin
 
 function mergeVisualPatch(item: VisualItem, patch: VisualItemPatch): VisualItem {
   const next: VisualItem = { ...item, ...patch };
-  if (patch.motion) next.motion = { ...item.motion, ...patch.motion };
+  const currentMotionKind = normalizeMotionKind(item.motion.kind, "none");
+  const mergedMotion = patch.motion ? { ...item.motion, ...patch.motion } : item.motion;
+  next.motion = {
+    ...mergedMotion,
+    kind: normalizeMotionKind(mergedMotion.kind, currentMotionKind),
+  };
   if (patch.transitions) next.transitions = { ...item.transitions, ...patch.transitions };
   if (item.pip || patch.pip) {
     const base = item.pip ?? { opacity: 100, posX: 50, posY: 50, radius: 0, size: 30 };
@@ -129,6 +155,18 @@ function mergeVisualPatch(item: VisualItem, patch: VisualItemPatch): VisualItem 
   }
   next.cache_status = "invalid";
   return next;
+}
+
+function normalizeMotionKind(kind: string, fallback: string): PersistedMotionKind {
+  const normalized = kind === "ken_burns_subtle" ? "ken_burns" : kind;
+  if (isPersistedMotionKind(normalized)) return normalized;
+  const fallbackNormalized = fallback === "ken_burns_subtle" ? "ken_burns" : fallback;
+  if (isPersistedMotionKind(fallbackNormalized)) return fallbackNormalized;
+  return "none";
+}
+
+function isPersistedMotionKind(value: string): value is PersistedMotionKind {
+  return PERSISTED_MOTION_KINDS.has(value as PersistedMotionKind);
 }
 
 function isVisualItem(value: unknown): value is VisualItem {

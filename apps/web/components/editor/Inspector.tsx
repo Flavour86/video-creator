@@ -16,7 +16,6 @@ type InspectorProps = {
   onOpenAssignEdit: (layerId: string, itemId: string, range: [number, number]) => void;
   onOpenBackground: () => void;
   onOpenSubtitles: () => void;
-  onOpenUpload: () => void;
   onPatchBackground: (
     layerId: string,
     patch: {
@@ -72,6 +71,14 @@ type PipPlacement = "TL" | "TC" | "TR" | "ML" | "MC" | "MR" | "BL" | "BC" | "BR"
 const motionOptions = [
   { label: "none", value: "none" },
   { label: "ken_burns", value: "ken_burns" },
+  { label: "ken_burns_strong", value: "ken_burns_strong" },
+  { label: "zoom_in", value: "zoom_in" },
+  { label: "zoom_out", value: "zoom_out" },
+  { label: "pan_left", value: "pan_left" },
+  { label: "pan_right", value: "pan_right" },
+];
+const backgroundMotionOptions = [
+  { label: "none", value: "none" },
   { label: "ken_burns_subtle", value: "ken_burns_subtle" },
   { label: "ken_burns_strong", value: "ken_burns_strong" },
   { label: "zoom_in", value: "zoom_in" },
@@ -101,7 +108,6 @@ export function Inspector({
   onOpenAssignEdit,
   onOpenBackground,
   onOpenSubtitles,
-  onOpenUpload,
   onPatchBackground,
   onPatchItem,
   onRemoveBackground,
@@ -152,6 +158,7 @@ export function Inspector({
   const edgeMarginY = isPip ? edgeMarginYFromPlacement(placement, item.pip.posY) : 0;
   const rangeLabel = formatRangeLabel(item.sentences[0], item.sentences[1]);
   const timeLabel = `${formatTimecode(item.start)}-${formatTimecode(item.end)}`;
+  const availableMotionOptions = isBackground ? backgroundMotionOptions : motionOptions;
 
   return (
     <aside className="flex min-h-0 flex-col bg-(--bg-1)">
@@ -200,7 +207,7 @@ export function Inspector({
 
       {!isBackground ? (
         <Section title={t("range")}>
-          <GridRow htmlFor="editor-range-from" label="Range from">
+          <GridRow htmlFor="editor-range-from" label={t("rangeFrom")}>
             <NumberInput
               id="editor-range-from"
               min={1}
@@ -213,7 +220,7 @@ export function Inspector({
               value={item.sentences[0]}
             />
           </GridRow>
-          <GridRow htmlFor="editor-range-to" label="Range to">
+          <GridRow htmlFor="editor-range-to" label={t("rangeTo")}>
             <NumberInput
               id="editor-range-to"
               min={item.sentences[0]}
@@ -227,7 +234,7 @@ export function Inspector({
               value={item.sentences[1]}
             />
           </GridRow>
-          <GridRow label="Resolved time span">
+          <GridRow label={t("resolvedTimeSpan")}>
             <span className="font-mono text-[11px] text-(--text-3)">{`${rangeLabel} (${timeLabel})`}</span>
           </GridRow>
           <GridRow label={t("stretch")}><span className="font-mono text-[11px] text-(--text-3)">{t("stretchHint")}</span></GridRow>
@@ -235,23 +242,24 @@ export function Inspector({
       ) : null}
 
       <Section title={t("motion")}>
-        <GridRow htmlFor="editor-motion-kind" label={isBackground ? "Background motion" : layer.kind === "pip" ? "PiP motion" : "Foreground motion"}>
+        <GridRow htmlFor="editor-motion-kind" label={isBackground ? t("backgroundMotion") : layer.kind === "pip" ? t("pipMotion") : t("foregroundMotion")}>
           <Select
             id="editor-motion-kind"
             name="editor-motion-kind"
             onChange={(event) => {
+              const nextKind = persistedMotionKind(event.target.value);
               if (isBackground) {
-                onPatchBackground(layer.id, { motion: { kind: event.target.value } });
+                onPatchBackground(layer.id, { motion: { kind: nextKind } });
                 return;
               }
-              onPatchItem(layer.id, item.id, { motion: { kind: event.target.value } });
+              onPatchItem(layer.id, item.id, { motion: { kind: nextKind } });
             }}
             value={normalizeMotionKind(item.motion.kind, isBackground)}
           >
-            {motionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {availableMotionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
         </GridRow>
-        <GridRow htmlFor="editor-motion-easing" label={isBackground ? "Background easing" : "Motion easing"}>
+        <GridRow htmlFor="editor-motion-easing" label={isBackground ? t("backgroundEasing") : t("motionEasing")}>
           <Select
             id="editor-motion-easing"
             name="editor-motion-easing"
@@ -271,7 +279,7 @@ export function Inspector({
 
       {isPip ? (
         <Section title={t("pipPlacement")}>
-          <GridRow htmlFor="editor-pip-placement" label="PiP placement">
+          <GridRow htmlFor="editor-pip-placement" label={t("pipPlacementLabel")}>
             <Select
               id="editor-pip-placement"
               name="editor-pip-placement"
@@ -285,7 +293,7 @@ export function Inspector({
               {pipPlacements.map((value) => <option key={value} value={value}>{value}</option>)}
             </Select>
           </GridRow>
-          <GridRow htmlFor="editor-pip-margin-x" label="Edge margin X">
+          <GridRow htmlFor="editor-pip-margin-x" label={t("edgeMarginX")}>
             <NumberInput
               id="editor-pip-margin-x"
               max={40}
@@ -300,7 +308,7 @@ export function Inspector({
               value={edgeMarginX}
             />
           </GridRow>
-          <GridRow htmlFor="editor-pip-margin-y" label="Edge margin Y">
+          <GridRow htmlFor="editor-pip-margin-y" label={t("edgeMarginY")}>
             <NumberInput
               id="editor-pip-margin-y"
               max={40}
@@ -315,7 +323,7 @@ export function Inspector({
               value={edgeMarginY}
             />
           </GridRow>
-          <GridRow htmlFor="editor-pip-size" label="PiP size">
+          <GridRow htmlFor="editor-pip-size" label={t("pipSize")}>
             <NumberInput
               id="editor-pip-size"
               max={60}
@@ -329,7 +337,7 @@ export function Inspector({
               value={item.pip.size}
             />
           </GridRow>
-          <GridRow htmlFor="editor-pip-radius" label="PiP radius">
+          <GridRow htmlFor="editor-pip-radius" label={t("pipRadius")}>
             <NumberInput
               id="editor-pip-radius"
               max={32}
@@ -343,7 +351,7 @@ export function Inspector({
               value={item.pip.radius}
             />
           </GridRow>
-          <GridRow htmlFor="editor-pip-opacity" label="PiP opacity">
+          <GridRow htmlFor="editor-pip-opacity" label={t("pipOpacity")}>
             <NumberInput
               id="editor-pip-opacity"
               max={100}
@@ -370,7 +378,7 @@ export function Inspector({
               </div>
             ))}
           </div>
-          <GridRow htmlFor="editor-bg-crossfade" label="Background crossfade">
+          <GridRow htmlFor="editor-bg-crossfade" label={t("backgroundCrossfade")}>
             <NumberInput
               id="editor-bg-crossfade"
               max={2}
@@ -390,7 +398,7 @@ export function Inspector({
 
       {!isBackground ? (
         <Section title={t("transitions")}>
-          <GridRow htmlFor="editor-transition-in" label="Transition in">
+          <GridRow htmlFor="editor-transition-in" label={t("transitionIn")}>
             <Select
               id="editor-transition-in"
               name="editor-transition-in"
@@ -400,7 +408,7 @@ export function Inspector({
               {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
           </GridRow>
-          <GridRow htmlFor="editor-transition-out" label="Transition out">
+          <GridRow htmlFor="editor-transition-out" label={t("transitionOut")}>
             <Select
               id="editor-transition-out"
               name="editor-transition-out"
@@ -425,7 +433,7 @@ export function Inspector({
         variant="ghost"
       >
         <Trash aria-hidden="true" className="h-4 w-4 text-(--red)" />
-        {isBackground ? t("removeBg") : isPip ? "Delete PiP item" : t("deleteItem")}
+        {isBackground ? t("removeBg") : isPip ? t("deletePipItem") : t("deleteItem")}
       </Button>
     </aside>
   );
@@ -545,6 +553,7 @@ function GlobalControls({
   subtitles: Project["subtitles"];
   watermark: Project["watermark"];
 }) {
+  const t = useTranslations("pages.editor.inspector");
   const watermarkMedia = media
     .filter((item) => item.kind === "image" || item.kind === "video" || item.kind === "watermark_image" || item.kind === "watermark_video")
     .map((item) => ({
@@ -563,19 +572,19 @@ function GlobalControls({
           onClick={onOpenSubtitles}
           type="button"
         >
-          Subtitles
+          {t("subtitles")}
         </button>
         <button
           className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
           onClick={onOpenBackground}
           type="button"
         >
-          {hasBackground ? "Change Background" : "Add Background"}
+          {hasBackground ? t("changeBackground") : t("addBackground")}
         </button>
       </div>
       {subtitles ? (
         <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-(--text-3)">
-          {subtitles.burn_in ? "Subtitles burn-in on" : "Subtitles sidecar"}
+          {subtitles.burn_in ? t("subtitlesBurnInOn") : t("subtitlesSidecar")}
         </p>
       ) : null}
     </section>
@@ -587,9 +596,17 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function normalizeMotionKind(kind: string, isBackground: boolean): string {
-  if (!isBackground) return kind;
+  if (!isBackground) {
+    if (kind === "ken_burns_subtle") return "ken_burns";
+    return kind;
+  }
   if (kind === "ken_burns_subtle") return "ken_burns_subtle";
   if (kind === "ken_burns") return "ken_burns_subtle";
+  return kind;
+}
+
+function persistedMotionKind(kind: string): string {
+  if (kind === "ken_burns_subtle") return "ken_burns";
   return kind;
 }
 

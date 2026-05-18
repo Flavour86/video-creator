@@ -146,6 +146,72 @@ const TEST_PROJECT_NO_BG = {
   layers: TEST_PROJECT.layers.filter((layer) => layer.kind !== "bg"),
 };
 
+const TEST_PROJECT_FG_OVERLAP = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => {
+    if (layer.kind !== "fg") return layer;
+    return {
+      ...layer,
+      items: [
+        {
+          id: "fg-1",
+          mediaId: "foreground.png",
+          sentences: [1, 1] as [number, number],
+          start: 0,
+          end: 5,
+          motion: { kind: "none", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "cut" },
+          cache_status: "warm",
+        },
+        {
+          id: "fg-2",
+          mediaId: "foreground-2.png",
+          sentences: [3, 3] as [number, number],
+          start: 10,
+          end: 15,
+          motion: { kind: "none", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "cut" },
+          cache_status: "warm",
+        },
+      ],
+    };
+  }),
+};
+
+const TEST_PROJECT_PIP_OVERLAP = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => {
+    if (layer.kind !== "pip") return layer;
+    return {
+      ...layer,
+      items: [
+        {
+          id: "pip-1",
+          mediaId: "PIP.png",
+          sentences: [2, 2] as [number, number],
+          start: 5,
+          end: 10,
+          motion: { kind: "none", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "cut" },
+          cache_status: "warm",
+          pip: { posX: 68, posY: 14, size: 30, radius: 12, opacity: 100 },
+        },
+        {
+          id: "pip-2",
+          mediaId: "PIP-2.png",
+          sentences: [4, 4] as [number, number],
+          start: 15,
+          end: 20,
+          motion: { kind: "none", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "cut" },
+          cache_status: "warm",
+          pip: { posX: 88, posY: 88, size: 30, radius: 12, opacity: 100 },
+        },
+      ],
+    };
+  }),
+};
+
 const TEST_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"].map((filename) => ({
   filename,
   kind: "image",
@@ -411,6 +477,51 @@ it("edits background inspector controls and invalidates only background cache en
   });
 });
 
+it("persists schema-valid background motion when inspector selects subtle alias", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
+
+  fireEvent.change(screen.getByLabelText("Background motion"), { target: { value: "ken_burns_subtle" } });
+  expect(readUndo()).toHaveLength(1);
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    const bgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "bg");
+    expect(bgLayer?.items?.[0]?.motion?.kind).toBe("ken_burns");
+  });
+});
+
+it("persists schema-valid foreground motion when inspector receives subtle alias", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
+
+  fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "ken_burns_subtle" } });
+  expect(readUndo()).toHaveLength(1);
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    const fgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "fg");
+    expect(fgLayer?.items?.[0]?.motion?.kind).not.toBe("ken_burns_subtle");
+    expect(["none", "static", "ken_burns", "ken_burns_strong", "zoom_in", "zoom_out", "pan_left", "pan_right"]).toContain(fgLayer?.items?.[0]?.motion?.kind);
+  });
+});
+
 it("edits foreground inspector fields and deletes foreground item with one op per action", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
@@ -429,6 +540,21 @@ it("edits foreground inspector fields and deletes foreground item with one op pe
   fireEvent.click(screen.getByRole("button", { name: "Delete item" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: /foreground\.png over/i })).not.toBeInTheDocument());
   expect(readUndo()).toHaveLength(4);
+});
+
+it("rejects overlapping foreground range edits from inspector without appending operations", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ project: TEST_PROJECT_FG_OVERLAP });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
+
+  fireEvent.change(screen.getByLabelText("Range from"), { target: { value: "3" } });
+
+  expect(readUndo()).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "foreground.png over s1" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "foreground-2.png over s3" })).toBeInTheDocument();
 });
 
 it("edits PiP inspector placement, edge margins, and style fields, then deletes PiP item", async () => {
@@ -451,6 +577,21 @@ it("edits PiP inspector placement, edge margins, and style fields, then deletes 
   fireEvent.click(screen.getByRole("button", { name: "Delete PiP item" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: /PIP\.png over/i })).not.toBeInTheDocument());
   expect(readUndo()).toHaveLength(7);
+});
+
+it("rejects overlapping pip range edits from inspector without appending operations", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ project: TEST_PROJECT_PIP_OVERLAP });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
+
+  fireEvent.change(screen.getByLabelText("Range from"), { target: { value: "4" } });
+
+  expect(readUndo()).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "PIP-2.png over s4" })).toBeInTheDocument();
 });
 
 it("Remove background deletes only background and appends one operation", async () => {

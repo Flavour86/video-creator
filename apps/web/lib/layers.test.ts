@@ -196,6 +196,14 @@ describe("patchVisualItem", () => {
     expect(fgItem.cache_status).toBe("invalid");
     expect(pipItem.cache_status).toBe("warm");
   });
+
+  it("normalizes subtle motion alias to schema-valid ken_burns", () => {
+    const next = patchVisualItem(layers, "fg-z1", "fg-1", {
+      motion: { kind: "ken_burns_subtle" },
+    });
+    const fgItem = next[0]?.items[0] as { motion: { kind: string } };
+    expect(fgItem.motion.kind).toBe("ken_burns");
+  });
 });
 
 describe("patchBackgroundItems", () => {
@@ -241,6 +249,30 @@ describe("patchBackgroundItems", () => {
     expect(second.motion.easing).toBe("ease_out");
     expect(first.cache_status).toBe("invalid");
     expect(second.cache_status).toBe("invalid");
+  });
+
+  it("normalizes subtle motion alias on background patches", () => {
+    const layers: Layer[] = [{
+      id: "bg-main",
+      kind: "bg",
+      name: "Background",
+      items: [{
+        id: "bg-1",
+        mediaId: "bg-a.png",
+        sentences: [1, 3],
+        start: 0,
+        end: 5,
+        motion: { kind: "ken_burns", easing: "linear" },
+        transitions: { in: "cut", out: "fade" },
+        crossfade: 0.2,
+        cache_status: "warm",
+      }],
+    }];
+    const next = patchBackgroundItems(layers, "bg-main", {
+      motion: { kind: "ken_burns_subtle" },
+    });
+    const first = next[0]?.items[0] as { motion: { kind: string } };
+    expect(first.motion.kind).toBe("ken_burns");
   });
 });
 
