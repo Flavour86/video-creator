@@ -398,7 +398,7 @@ shared project schema and generated types
 
 ## Task 12: Make Preview Surface reflect live render order and visual states
 
-**Description:** Bring Preview Surface into parity with render order and documented states, including black fallback, background, foreground, PiP, subtitles, watermark, transport, Space shortcut, and 9:16 framing.
+**Description:** Bring Preview Surface into parity with render order and documented states, including black fallback, background, foreground, PiP, subtitles, watermark, transport, Space shortcut, and 9:16 framing. Using `canvas-design` skill
 
 **Acceptance criteria:**
 
