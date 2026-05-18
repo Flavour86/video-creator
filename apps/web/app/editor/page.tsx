@@ -780,6 +780,7 @@ function EditorContent() {
             onNext={() => seekSentence(1)}
             onPrevious={() => seekSentence(-1)}
             onTogglePlay={() => setPlaying((value) => !value)}
+            playbackClock={audioRef}
             playing={playing}
             projectPath={projectPath}
             resolution={resolution}

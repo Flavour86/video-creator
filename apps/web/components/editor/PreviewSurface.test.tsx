@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Project } from "@vc/shared-schemas";
 import type { ComponentProps, ImgHTMLAttributes } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
-import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
+import type { Layer } from "@/lib/preview/resolveDisplay";
 import { PreviewSurface } from "./PreviewSurface";
 
 vi.mock("next/image", () => ({
@@ -19,6 +19,22 @@ const BG_LAYER: Layer = {
   items: [{
     id: "bg-1",
     mediaId: "bg0.png",
+    sentences: [1, 1],
+    start: 0,
+    end: 20,
+    motion: { kind: "none", easing: "linear" },
+    transitions: { in: "cut", out: "cut" },
+    crossfade: 0.6,
+  }],
+};
+
+const BG_VIDEO_LAYER: Layer = {
+  id: "bg-video",
+  kind: "bg",
+  name: "Background Video",
+  items: [{
+    id: "bg-v-1",
+    mediaId: "bg0.mp4",
     sentences: [1, 1],
     start: 0,
     end: 20,
@@ -43,6 +59,36 @@ const FG_LAYER: Layer = {
   }],
 };
 
+const FG_LAYER_LATE: Layer = {
+  id: "fg-late",
+  kind: "fg",
+  name: "Foreground Late",
+  items: [{
+    id: "fg-late-1",
+    mediaId: "fg-late.png",
+    sentences: [1, 1],
+    start: 5,
+    end: 20,
+    motion: { kind: "none", easing: "linear" },
+    transitions: { in: "cut", out: "cut" },
+  }],
+};
+
+const FG_VIDEO_LAYER: Layer = {
+  id: "fg-video",
+  kind: "fg",
+  name: "Foreground Video",
+  items: [{
+    id: "fg-v-1",
+    mediaId: "fg0.mov",
+    sentences: [1, 1],
+    start: 0,
+    end: 20,
+    motion: { kind: "none", easing: "linear" },
+    transitions: { in: "fade", out: "cut" },
+  }],
+};
+
 const PIP_LAYER: Layer = {
   id: "pip-main",
   kind: "pip",
@@ -58,18 +104,19 @@ const PIP_LAYER: Layer = {
     pip: { posX: 70, posY: 10, size: 30, radius: 10, opacity: 80 },
   }],
 };
-const PIP_LAYER_2: Layer = {
-  id: "pip-main-2",
+
+const PIP_VIDEO_LAYER: Layer = {
+  id: "pip-video",
   kind: "pip",
-  name: "PiP 2",
+  name: "PiP Video",
   items: [{
-    id: "pip-2",
-    mediaId: "pip1.png",
+    id: "pip-v-1",
+    mediaId: "pip0.webm",
     sentences: [1, 1],
     start: 0,
     end: 20,
     motion: { kind: "none", easing: "linear" },
-    transitions: { in: "cut", out: "cut" },
+    transitions: { in: "fade", out: "cut" },
     pip: { posX: 15, posY: 70, size: 28, radius: 8, opacity: 100 },
   }],
 };
@@ -88,7 +135,6 @@ const SUBTITLES_ON: Project["subtitles"] = {
     size: 36,
   },
 };
-const SUBTITLE_STYLE = SUBTITLES_ON.style;
 
 const WATERMARK_ON: Project["watermark"] = {
   mediaId: "logo.png",
@@ -97,6 +143,48 @@ const WATERMARK_ON: Project["watermark"] = {
   posY: 10,
   scale: 0.08,
 };
+const WATERMARK_VIDEO_ON: Project["watermark"] = {
+  mediaId: "logo.mov",
+  opacity: 90,
+  posX: 90,
+  posY: 10,
+  scale: 0.08,
+};
+
+const drawImage = vi.fn();
+const fillRect = vi.fn();
+const fillText = vi.fn();
+const roundRect = vi.fn();
+const beginPath = vi.fn();
+const clip = vi.fn();
+const fill = vi.fn();
+
+const fakeContext = {
+  beginPath,
+  clip,
+  clearRect: vi.fn(),
+  drawImage,
+  fill,
+  fillRect,
+  fillText,
+  measureText: vi.fn((text: string) => ({ width: text.length * 10 })),
+  restore: vi.fn(),
+  roundRect,
+  save: vi.fn(),
+  strokeText: vi.fn(),
+} as unknown as CanvasRenderingContext2D;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(fakeContext);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function renderSurface(overrides: Partial<ComponentProps<typeof PreviewSurface>> = {}) {
   const props: ComponentProps<typeof PreviewSurface> = {
@@ -124,165 +212,209 @@ function renderSurface(overrides: Partial<ComponentProps<typeof PreviewSurface>>
   };
 }
 
-describe("PreviewSurface", () => {
-  it("renders pure black fallback without textual empty-state copy", () => {
-    renderSurface({ layers: [], sentences: [] });
+function filenameFromSource(source: unknown): string | null {
+  if (!(source instanceof HTMLImageElement || source instanceof HTMLVideoElement)) {
+    return null;
+  }
+  try {
+    const url = new URL(source.src, "http://localhost");
+    return url.searchParams.get("filename");
+  } catch {
+    return null;
+  }
+}
 
-    expect(screen.getByTestId("preview-black-fallback")).toBeInTheDocument();
-    expect(screen.queryByText(/no media assigned/i)).not.toBeInTheDocument();
+function drawnFilenames(): string[] {
+  return drawImage.mock.calls
+    .map((call) => filenameFromSource(call[0]))
+    .filter((value): value is string => Boolean(value));
+}
+
+describe("PreviewSurface", () => {
+  it("uses a single canvas compositing surface without DOM image layers", () => {
+    renderSurface({ layers: [BG_LAYER, FG_LAYER, PIP_LAYER] });
+
+    expect(screen.getByTestId("preview-canvas")).toBeInTheDocument();
+    expect(screen.queryByTestId("preview-background")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preview-foreground")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preview-pip")).not.toBeInTheDocument();
   });
 
-  it("renders layers in documented order when background is active", () => {
-    renderSurface({
+  it("tracks render-state matrix on canvas metadata", () => {
+    const { rerender, props } = renderSurface({
       currentTime: 5,
-      layers: [PIP_LAYER, BG_LAYER],
+      layers: [BG_LAYER],
       subtitles: SUBTITLES_ON,
       watermark: WATERMARK_ON,
     });
 
-    const black = screen.getByTestId("preview-black-fallback");
-    const background = screen.getByTestId("preview-background");
-    const pip = screen.getByTestId("preview-pip");
-    const subtitle = screen.getByTestId("preview-subtitle");
-    const watermark = screen.getByTestId("preview-watermark");
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-has-background", "true");
+    expect(canvas).toHaveAttribute("data-has-foreground", "false");
+    expect(canvas).toHaveAttribute("data-has-pip", "false");
+    expect(canvas).toHaveAttribute("data-subtitle-visible", "true");
+    expect(canvas).toHaveAttribute("data-watermark-visible", "true");
 
-    expect(black.compareDocumentPosition(background) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(background.compareDocumentPosition(pip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(pip.compareDocumentPosition(subtitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(subtitle.compareDocumentPosition(watermark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PreviewSurface
+          {...props}
+          layers={[FG_LAYER, PIP_LAYER]}
+          subtitles={null}
+          watermark={null}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    expect(canvas).toHaveAttribute("data-has-background", "false");
+    expect(canvas).toHaveAttribute("data-has-foreground", "true");
+    expect(canvas).toHaveAttribute("data-has-pip", "true");
+    expect(canvas).toHaveAttribute("data-subtitle-visible", "false");
+    expect(canvas).toHaveAttribute("data-watermark-visible", "false");
   });
 
-  it("hides background while fullscreen foreground is active and keeps PiP above foreground", () => {
+  it("draws layers in render order on canvas (fg hides bg, pip above fg, watermark above all)", () => {
+    renderSurface({
+      currentTime: 5,
+      layers: [PIP_VIDEO_LAYER, FG_VIDEO_LAYER, BG_VIDEO_LAYER],
+      subtitles: SUBTITLES_ON,
+      watermark: WATERMARK_VIDEO_ON,
+    });
+
+    const filenames = drawnFilenames();
+    const fgIndex = filenames.indexOf("fg0.mov");
+    const pipIndex = filenames.indexOf("pip0.webm");
+    const watermarkIndex = filenames.indexOf("logo.mov");
+
+    expect(filenames).not.toContain("bg0.mp4");
+    expect(fgIndex).toBeGreaterThanOrEqual(0);
+    expect(pipIndex).toBeGreaterThan(fgIndex);
+    expect(watermarkIndex).toBeGreaterThan(pipIndex);
+    expect(fillText).toHaveBeenCalled();
+  });
+
+  it("hides background while fullscreen foreground is active and keeps pip present", () => {
     renderSurface({
       currentTime: 5,
       layers: [PIP_LAYER, FG_LAYER, BG_LAYER],
       subtitles: SUBTITLES_ON,
     });
 
-    expect(screen.queryByTestId("preview-background")).not.toBeInTheDocument();
-    const fg = screen.getByTestId("preview-foreground");
-    const pip = screen.getByTestId("preview-pip");
-    expect(fg.compareDocumentPosition(pip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-has-background", "false");
+    expect(canvas).toHaveAttribute("data-has-foreground", "true");
+    expect(canvas).toHaveAttribute("data-has-pip", "true");
   });
 
-  it("renders one or more active PiP overlays", () => {
+  it("renders one or more active pip overlays in state metadata", () => {
     renderSurface({
       currentTime: 5,
-      layers: [PIP_LAYER, PIP_LAYER_2, BG_LAYER],
+      layers: [PIP_LAYER, PIP_VIDEO_LAYER, BG_LAYER],
     });
 
-    expect(screen.getAllByTestId("preview-pip")).toHaveLength(2);
+    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-pip-count", "2");
   });
 
-  it("shows subtitles only when burn-in is enabled and applies style fields", () => {
-    const { rerender } = renderSurface({ currentTime: 1, layers: [BG_LAYER], subtitles: null });
-    expect(screen.queryByTestId("preview-subtitle")).not.toBeInTheDocument();
-
-    rerender(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <PreviewSurface
-          currentTime={1}
-          duration={20}
-          layers={[BG_LAYER]}
-          onNext={vi.fn()}
-          onPrevious={vi.fn()}
-          onTogglePlay={vi.fn()}
-          playing={false}
-          projectPath="E:/projects/test01"
-          resolution="1080p"
-          sentences={SENTENCES}
-          subtitles={{ burn_in: false, style: SUBTITLE_STYLE }}
-          watermark={null}
-        />
-      </NextIntlClientProvider>,
-    );
-    expect(screen.queryByTestId("preview-subtitle")).not.toBeInTheDocument();
-
-    rerender(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <PreviewSurface
-          currentTime={1}
-          duration={20}
-          layers={[BG_LAYER]}
-          onNext={vi.fn()}
-          onPrevious={vi.fn()}
-          onTogglePlay={vi.fn()}
-          playing={false}
-          projectPath="E:/projects/test01"
-          resolution="1080p"
-          sentences={SENTENCES}
-          subtitles={SUBTITLES_ON}
-          watermark={null}
-        />
-      </NextIntlClientProvider>,
-    );
-    const subtitle = screen.getByTestId("preview-subtitle");
-    expect(subtitle).toHaveTextContent("Capitalism begins here.");
-    expect(subtitle).toHaveStyle({ fontFamily: "Helvetica Neue", fontSize: "36px" });
-    expect(subtitle).toHaveAttribute("data-subtitle-position", "top");
-    expect(subtitle).toHaveAttribute("data-subtitle-bg-style", "pill");
-    expect(subtitle).toHaveAttribute("data-subtitle-max-chars", "30");
-  });
-
-  it("wraps subtitle text using max_chars_per_line and keeps each line under limit", () => {
+  it("creates hidden video decoders for video layers and skips non-video layers", () => {
     renderSurface({
-      currentTime: 1,
-      layers: [BG_LAYER],
-      sentences: [{ index: 1, text: "one two three four five six", start_s: 0, end_s: 10, confidence_avg: 0.9 }],
-      subtitles: {
-        burn_in: true,
-        style: {
-          bg_style: "block",
-          font: "Arial",
-          max_chars_per_line: 8,
-          position: "bottom_low",
-          size: 32,
-        },
-      },
+      currentTime: 5,
+      layers: [FG_VIDEO_LAYER, BG_VIDEO_LAYER, PIP_VIDEO_LAYER, BG_LAYER],
     });
 
-    const subtitle = screen.getByTestId("preview-subtitle");
-    const lines = subtitle.textContent?.split("\n") ?? [];
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines.every((line) => line.length <= 8)).toBe(true);
-    expect(subtitle).toHaveAttribute("data-subtitle-position", "bottom_low");
-    expect(subtitle).toHaveAttribute("data-subtitle-bg-style", "block");
-    expect(subtitle.className).toContain("bottom-[3%]");
-    expect(subtitle.className).toContain("rounded-md bg-black/80 px-4 py-2");
+    const decoders = screen.getAllByTestId("preview-video-decoder");
+    expect(decoders).toHaveLength(3);
+    expect(decoders.every((node) => node.tagName === "VIDEO")).toBe(true);
+    expect(decoders.every((node) => node.getAttribute("aria-hidden") === "true")).toBe(true);
+    expect(decoders.every((node) => node.getAttribute("preload") === "metadata")).toBe(true);
+  });
+
+  it("redraws continuously on requestAnimationFrame while playing and redraws on pause/seek edits", async () => {
+    const { rerender, props } = renderSurface({ currentTime: 1, layers: [BG_LAYER], playing: true });
+    expect(requestAnimationFrame).toHaveBeenCalled();
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PreviewSurface {...props} playing={false} currentTime={2} layers={[BG_LAYER, FG_LAYER]} />
+      </NextIntlClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fillRect).toHaveBeenCalled();
+    });
+  });
+
+  it("resolves active visual state from playback clock each rAF frame while currentTime prop is stale", () => {
+    let frameCallback: FrameRequestCallback | null = null;
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
+      frameCallback = callback;
+      return 1;
+    }));
+
+    const playbackClock = { current: { currentTime: 0 } as HTMLAudioElement };
+    renderSurface({
+      currentTime: 0,
+      layers: [BG_LAYER, FG_LAYER_LATE],
+      playbackClock,
+      playing: true,
+      subtitles: SUBTITLES_ON,
+    });
+
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-draw-order", "black>bg>subtitle");
+    expect(canvas).toHaveAttribute("data-has-foreground", "false");
+
+    playbackClock.current.currentTime = 6;
+    frameCallback?.(16);
+
+    expect(canvas).toHaveAttribute("data-draw-order", "black>fg>subtitle");
+    expect(canvas).toHaveAttribute("data-has-foreground", "true");
+    expect(canvas).toHaveAttribute("data-has-background", "false");
+  });
+
+  it("renders subtitles only when burn-in is enabled", () => {
+    const { rerender, props } = renderSurface({ layers: [BG_LAYER], subtitles: null, currentTime: 1 });
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-subtitle-visible", "false");
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PreviewSurface
+          {...props}
+          subtitles={{ burn_in: false, style: SUBTITLES_ON.style }}
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(canvas).toHaveAttribute("data-subtitle-visible", "false");
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PreviewSurface {...props} subtitles={SUBTITLES_ON} />
+      </NextIntlClientProvider>,
+    );
+    expect(canvas).toHaveAttribute("data-subtitle-visible", "true");
+    expect(canvas).toHaveAttribute("data-subtitle-position", "top");
+    expect(screen.getByTestId("preview-subtitle-live")).toHaveTextContent("Capitalism begins here.");
   });
 
   it("toggles watermark visibility from config", () => {
-    const { rerender } = renderSurface({ layers: [BG_LAYER], watermark: null });
-    expect(screen.queryByTestId("preview-watermark")).not.toBeInTheDocument();
+    const { rerender, props } = renderSurface({ layers: [BG_LAYER], watermark: null });
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-watermark-visible", "false");
 
     rerender(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <PreviewSurface
-          currentTime={0}
-          duration={20}
-          layers={[BG_LAYER]}
-          onNext={vi.fn()}
-          onPrevious={vi.fn()}
-          onTogglePlay={vi.fn()}
-          playing={false}
-          projectPath="E:/projects/test01"
-          resolution="1080p"
-          sentences={SENTENCES}
-          subtitles={null}
-          watermark={WATERMARK_ON}
-        />
+        <PreviewSurface {...props} watermark={WATERMARK_ON} />
       </NextIntlClientProvider>,
     );
-    expect(screen.getByTestId("preview-watermark")).toBeInTheDocument();
+    expect(canvas).toHaveAttribute("data-watermark-visible", "true");
   });
 
-  it("renders transport controls and live timecode", () => {
-    const { props, rerender } = renderSurface({ currentTime: 12.5, duration: 30 });
+  it("renders transport controls and playing/paused states", () => {
+    const { props, rerender } = renderSurface({ currentTime: 12.5, duration: 30, playing: false });
 
     fireEvent.click(screen.getByRole("button", { name: "Previous sentence" }));
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     fireEvent.click(screen.getByRole("button", { name: "Next sentence" }));
-
     expect(props.onPrevious).toHaveBeenCalledTimes(1);
     expect(props.onTogglePlay).toHaveBeenCalledTimes(1);
     expect(props.onNext).toHaveBeenCalledTimes(1);
@@ -298,27 +430,24 @@ describe("PreviewSurface", () => {
   });
 
   it("switches framing class for 9:16 and keeps 1080p/720p in 16:9", () => {
-    const { rerender } = renderSurface({ resolution: "9:16" });
+    const { rerender, props } = renderSurface({ resolution: "9:16" });
     expect(screen.getByTestId("preview-stage").className).toContain("aspect-[9/16]");
 
     rerender(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <PreviewSurface
-          currentTime={0}
-          duration={20}
-          layers={[]}
-          onNext={vi.fn()}
-          onPrevious={vi.fn()}
-          onTogglePlay={vi.fn()}
-          playing={false}
-          projectPath="E:/projects/test01"
-          resolution="720p"
-          sentences={[]}
-          subtitles={null}
-          watermark={null}
-        />
+        <PreviewSurface {...props} resolution="720p" />
       </NextIntlClientProvider>,
     );
     expect(screen.getByTestId("preview-stage").className).toContain("aspect-video");
+  });
+
+  it("draws video frames through canvas drawImage when active video decoders are present", () => {
+    renderSurface({
+      currentTime: 5,
+      layers: [FG_VIDEO_LAYER, PIP_VIDEO_LAYER, BG_VIDEO_LAYER],
+    });
+
+    expect(drawImage).toHaveBeenCalled();
+    expect(drawnFilenames()).toContain("fg0.mov");
   });
 });

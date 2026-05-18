@@ -9,6 +9,21 @@ vi.mock("next/image", () => ({
   default: (props: ImgHTMLAttributes<HTMLImageElement>) => <img {...props} alt={props.alt ?? ""} />,
 }));
 
+const testCanvasContext = {
+  beginPath: vi.fn(),
+  clearRect: vi.fn(),
+  clip: vi.fn(),
+  drawImage: vi.fn(),
+  fill: vi.fn(),
+  fillRect: vi.fn(),
+  fillText: vi.fn(),
+  measureText: vi.fn((text: string) => ({ width: text.length * 10 })),
+  restore: vi.fn(),
+  roundRect: vi.fn(),
+  save: vi.fn(),
+  strokeText: vi.fn(),
+} as unknown as CanvasRenderingContext2D;
+
 // Mutable so individual tests can override the "projectId" param value
 let _projectIdParam: string | null = null;
 let _pathname = "/editor";
@@ -27,6 +42,8 @@ beforeEach(() => {
   window.localStorage.clear();
   global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
   Element.prototype.scrollIntoView = vi.fn();
+  vi.clearAllMocks();
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(testCanvasContext);
 });
 
 afterEach(() => {
@@ -879,10 +896,14 @@ it("updates watermark config, shows preview watermark, and persists watermark op
   fireEvent.click(screen.getByRole("switch", { name: /watermark enabled/i }));
   fireEvent.change(screen.getByRole("combobox", { name: "Watermark asset" }), { target: { value: "bg0.png" } });
 
-  expect(await screen.findByTestId("preview-watermark")).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "true");
+  });
 
   fireEvent.click(screen.getByRole("button", { name: "Remove watermark" }));
-  await waitFor(() => expect(screen.queryByTestId("preview-watermark")).not.toBeInTheDocument());
+  await waitFor(() => {
+    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "false");
+  });
 
   const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
   expect(raw).not.toBeNull();
