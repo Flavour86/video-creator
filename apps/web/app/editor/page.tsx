@@ -54,6 +54,20 @@ function projectIdFromPathname(pathname: string): string {
   }
 }
 
+function isSpaceShortcutInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (isTextEditingTarget(target)) {
+    return true;
+  }
+  return Boolean(
+    target.closest(
+      "button, a[href], summary, [role='button'], [role='link'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [contenteditable]:not([contenteditable='false'])",
+    ),
+  );
+}
+
 function EditorContent() {
   const t = useTranslations("pages.editor");
   const router = useRouter();
@@ -312,6 +326,13 @@ function EditorContent() {
 
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
+      if ((event.key === " " || event.code === "Space") && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (event.defaultPrevented) return;
+        if (isSpaceShortcutInteractiveTarget(event.target)) return;
+        event.preventDefault();
+        setPlaying((value) => !value);
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" && !isTextEditingTarget(event.target)) {
         event.preventDefault();
         searchInputRef.current?.focus();
@@ -710,7 +731,7 @@ function EditorContent() {
   }
 
   return (
-    <PageChrome className="grid h-[calc(100vh-44px-40px)] grid-rows-[48px_auto_1fr] overflow-hidden">
+    <PageChrome className="grid min-h-[calc(100vh-44px-40px)] grid-rows-[48px_auto_minmax(0,1fr)] overflow-y-auto lg:h-[calc(100vh-44px-40px)] lg:overflow-hidden">
       <EditorBar
         cacheLabel={cacheLabel}
         onHome={() => router.push("/")}
@@ -725,7 +746,10 @@ function EditorContent() {
         saving={saving}
       />
       <RenderStrip job={renderJob} onCancel={cancelDraft} />
-      <div className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] divide-x divide-(--line) bg-(--line)">
+      <div
+        className="grid min-h-0 grid-cols-1 divide-y divide-(--line) bg-(--line) lg:grid-cols-[320px_minmax(0,1fr)_320px] lg:divide-x lg:divide-y-0"
+        data-testid="editor-layout-grid"
+      >
         <TranscriptPane
           activeRange={activeRange}
           currentMatch={currentMatch}
@@ -748,7 +772,7 @@ function EditorContent() {
           selectedRange={selectedSentenceRange}
           sentences={sentences}
         />
-        <main className="flex min-w-0 flex-col bg-(--bg-0)">
+        <main className="flex min-h-0 min-w-0 flex-col bg-(--bg-0)">
           <PreviewSurface
             currentTime={currentTime}
             duration={duration}

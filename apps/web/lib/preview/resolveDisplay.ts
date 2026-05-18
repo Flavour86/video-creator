@@ -105,11 +105,18 @@ export function resolveDisplay(
 ): DisplaySpec {
   const spec: DisplaySpec = { fg: [], pip: [] };
 
-  for (const layer of layers) {
+  // Project layers are stored top-to-bottom; iterate backwards for bottom-to-top render order.
+  for (let layerIndex = layers.length - 1; layerIndex >= 0; layerIndex -= 1) {
+    const layer = layers[layerIndex];
     if (layer.kind === "bg") {
-      const item = [...layer.items].reverse().find((candidate) => {
-        return candidate.start <= currentTime && currentTime < candidate.end;
-      }) as BgItem | undefined;
+      let item: BgItem | undefined;
+      for (let itemIndex = layer.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
+        const candidate = layer.items[itemIndex] as BgItem;
+        if (candidate.start <= currentTime && currentTime < candidate.end) {
+          item = candidate;
+          break;
+        }
+      }
       if (item) {
         spec.bg = { mediaId: item.mediaId, opacity: transitionOpacity(item, currentTime) };
       }

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { Suspense, type ImgHTMLAttributes } from "react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
 import { editorOperationStorageKey } from "@/lib/editor-operation-log/operation-log";
 
@@ -27,6 +27,10 @@ beforeEach(() => {
   window.localStorage.clear();
   global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
   Element.prototype.scrollIntoView = vi.fn();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 // EditorPage wraps EditorContent in Suspense internally
@@ -286,6 +290,24 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("PiP opacity")).toHaveValue(100);
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("uses responsive layout guards so preview/transport do not clip on narrow widths", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  const layout = screen.getByTestId("editor-layout-grid");
+  expect(layout.className).toContain("grid-cols-1");
+  expect(layout.className).toContain("lg:grid-cols-[320px_minmax(0,1fr)_320px]");
+  expect(layout.className).toContain("divide-y");
+  expect(layout.className).toContain("lg:divide-y-0");
+
+  const shell = layout.closest("main");
+  expect(shell?.className ?? "").toContain("overflow-y-auto");
+  expect(shell?.className ?? "").toContain("lg:overflow-hidden");
 });
 
 it("defaults selection to background on editor entry when background exists", async () => {
@@ -916,6 +938,65 @@ it("supports transcript search keyboard shortcuts and Cmd/Ctrl+F focus", async (
 
   fireEvent.keyDown(search, { key: "Escape" });
   expect(search).toHaveValue("");
+});
+
+it("toggles play and pause with Space outside typing targets", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+  const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
+  const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+
+  fireEvent.keyDown(window, { key: " ", code: "Space" });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument());
+
+  fireEvent.keyDown(window, { key: " ", code: "Space" });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument());
+
+  expect(playSpy).toHaveBeenCalled();
+  expect(pauseSpy).toHaveBeenCalled();
+  playSpy.mockRestore();
+  pauseSpy.mockRestore();
+});
+
+it("ignores Space play/pause shortcut when typing in editable targets", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+  const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  const search = screen.getByRole("searchbox", { name: /search transcript/i });
+  search.focus();
+  fireEvent.keyDown(search, { key: " ", code: "Space" });
+
+  expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
+  expect(playSpy).not.toHaveBeenCalled();
+});
+
+it("ignores Space play/pause shortcut when focused on an interactive button", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+  const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  const saveButton = screen.getByRole("button", { name: /save project config/i });
+  saveButton.focus();
+  expect(saveButton).toHaveFocus();
+
+  fireEvent.keyDown(saveButton, { key: " ", code: "Space" });
+
+  expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
+  expect(playSpy).not.toHaveBeenCalled();
 });
 
 it("merges transcript sentences, remaps clip anchors, and appends one operation-log entry", async () => {

@@ -41,11 +41,10 @@ export function PreviewSurface({
 }: PreviewSurfaceProps) {
   const t = useTranslations("pages.editor.transport");
   const display = resolveDisplay(layers, sentences, currentTime);
-  const baseImage = display.bg?.mediaId ?? display.fg[0]?.mediaId;
-  const baseOpacity = display.bg?.opacity ?? display.fg[0]?.opacity ?? 1;
-  const baseTranslateX = display.bg ? 0 : display.fg[0]?.translateX ?? 0;
-  const overlayForegrounds = display.bg ? display.fg : display.fg.slice(1);
+  const hasActiveForeground = display.fg.length > 0;
+  const background = hasActiveForeground ? undefined : display.bg;
   const aspectClass = resolution === "9:16" ? "aspect-[9/16]" : "aspect-video";
+  const subtitlesEnabled = subtitles?.burn_in === true;
   const subtitleStyle = subtitles?.style ?? FALLBACK_SUBTITLE_STYLE;
   const subtitlePositionClass =
     subtitleStyle.position === "top" ? "top-[7%]" : subtitleStyle.position === "bottom_low" ? "bottom-[3%]" : "bottom-[7%]";
@@ -58,29 +57,33 @@ export function PreviewSurface({
           ? "drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
           : "";
   const subtitleFontSize = Math.max(14, Math.round(subtitleStyle.size));
+  const subtitleText = display.subtitle ? wrapSubtitle(display.subtitle.text, subtitleStyle.max_chars_per_line) : null;
   const watermarkScale = clamp(watermark?.scale ?? 0.08, 0.02, 0.5) * 100;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-(--bg-0)">
-        <div className={`relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-md bg-(--bg-2) ${aspectClass}`}>
-          {baseImage ? (
+        <div
+          className={`relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-md border border-(--line-soft) bg-(--bg-2) shadow-(--shadow-1) ${aspectClass}`}
+          data-testid="preview-stage"
+        >
+          <div className="absolute inset-0 bg-black" data-testid="preview-black-fallback" />
+          {background ? (
             <Image
               alt=""
               className="absolute inset-0 h-full w-full object-contain"
-              src={mediaUrl(projectPath, baseImage)}
+              data-testid="preview-background"
+              src={mediaUrl(projectPath, background.mediaId)}
               style={{
-                opacity: baseOpacity,
-                transform: `translateX(${baseTranslateX}%)`,
+                opacity: background.opacity,
               }}
             />
-          ) : (
-            <div className="flex h-full items-center justify-center px-6 text-sm text-(--text-3)">No media assigned</div>
-          )}
-          {overlayForegrounds.map((layer, index) => (
+          ) : null}
+          {display.fg.map((layer, index) => (
             <Image
               alt=""
               className="absolute inset-0 h-full w-full object-contain"
+              data-testid="preview-foreground"
               key={`${layer.mediaId}-${index}`}
               src={mediaUrl(projectPath, layer.mediaId)}
               style={{
@@ -93,27 +96,33 @@ export function PreviewSurface({
             <Image
               alt=""
               className="absolute object-cover shadow-(--shadow-2)"
+              data-testid="preview-pip"
               key={`${layer.mediaId}-${index}`}
               src={mediaUrl(projectPath, layer.mediaId)}
               style={{
                 borderRadius: `${layer.placement.radius}px`,
                 left: `${layer.placement.posX}%`,
-                opacity: layer.opacity / 100,
+                opacity: (layer.opacity * layer.placement.opacity) / 100,
                 top: `${layer.placement.posY}%`,
                 transform: `translateX(${layer.translateX}%)`,
                 width: `${layer.placement.size}%`,
               }}
             />
           ))}
-          {display.subtitle ? (
+          {subtitlesEnabled && subtitleText ? (
             <div
               className={`absolute inset-x-[8%] text-center font-semibold text-white ${subtitlePositionClass} ${subtitleBackgroundClass}`}
+              data-subtitle-bg-style={subtitleStyle.bg_style}
+              data-subtitle-max-chars={subtitleStyle.max_chars_per_line}
+              data-subtitle-position={subtitleStyle.position}
+              data-testid="preview-subtitle"
               style={{
                 fontFamily: subtitleStyle.font,
                 fontSize: `${subtitleFontSize}px`,
+                whiteSpace: "pre-line",
               }}
             >
-              {display.subtitle.text}
+              {subtitleText}
             </div>
           ) : null}
           {watermark ? (
@@ -155,4 +164,49 @@ function mediaUrl(projectPath: string, filename: string): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function wrapSubtitle(text: string, maxCharsPerLine: number): string {
+  const limit = Math.max(1, Math.floor(maxCharsPerLine));
+  const source = text.trim();
+  if (source.length <= limit) {
+    return source;
+  }
+
+  const words = source.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) {
+    return splitHard(source, limit).join("\n");
+  }
+
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    if (word.length > limit) {
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      lines.push(...splitHard(word, limit));
+      continue;
+    }
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > limit) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) {
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+function splitHard(text: string, limit: number): string[] {
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += limit) {
+    chunks.push(text.slice(i, i + limit));
+  }
+  return chunks;
 }

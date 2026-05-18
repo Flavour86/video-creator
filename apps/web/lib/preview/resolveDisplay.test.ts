@@ -147,6 +147,76 @@ describe("resolveDisplay", () => {
     expect(spec.pip[0].placement.opacity).toBe(90);
   });
 
+  it("returns active foreground items in bottom-to-top layer order", () => {
+    const fgTop: Layer = {
+      id: "L-fg-top",
+      kind: "fg",
+      name: "Foreground top",
+      items: [{
+        id: "fg-top",
+        mediaId: "top.jpg",
+        sentences: [1, 1],
+        start: 0,
+        end: 10,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+      }],
+    };
+    const fgBottom: Layer = {
+      id: "L-fg-bottom",
+      kind: "fg",
+      name: "Foreground bottom",
+      items: [{
+        id: "fg-bottom",
+        mediaId: "bottom.jpg",
+        sentences: [1, 1],
+        start: 0,
+        end: 10,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+      }],
+    };
+
+    const spec = resolveDisplay([fgTop, fgBottom], [], 5);
+    expect(spec.fg.map((item) => item.mediaId)).toEqual(["bottom.jpg", "top.jpg"]);
+  });
+
+  it("returns active pip items in bottom-to-top layer order", () => {
+    const pipTop: Layer = {
+      id: "L-pip-top",
+      kind: "pip",
+      name: "PiP top",
+      items: [{
+        id: "pip-top",
+        mediaId: "pip-top.jpg",
+        sentences: [1, 1],
+        start: 0,
+        end: 10,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        pip: { posX: 70, posY: 10, size: 30, radius: 12, opacity: 100 },
+      }],
+    };
+    const pipBottom: Layer = {
+      id: "L-pip-bottom",
+      kind: "pip",
+      name: "PiP bottom",
+      items: [{
+        id: "pip-bottom",
+        mediaId: "pip-bottom.jpg",
+        sentences: [1, 1],
+        start: 0,
+        end: 10,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        pip: { posX: 10, posY: 70, size: 30, radius: 12, opacity: 100 },
+      }],
+    };
+
+    const spec = resolveDisplay([pipTop, pipBottom], [], 5);
+    expect(spec.pip.map((item) => item.mediaId)).toEqual(["pip-bottom.jpg", "pip-top.jpg"]);
+  });
+
   it("approximates slide transitions with translateX", () => {
     const layer: Layer = {
       ...FG_LAYER,

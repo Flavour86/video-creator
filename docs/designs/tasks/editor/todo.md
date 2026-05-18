@@ -45,10 +45,10 @@
 - [x] Task 11: Complete Layers Popover and preview resolution controls
   - Acceptance: rows render in order, row click selects first item, removable trash works, outside/Escape close works, and resolution persists and drives render requests.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/LayersPopover.test.tsx components/editor/PreviewControls.test.tsx app/editor/page.test.tsx`
-- [ ] Task 12: Make Preview Surface reflect live render order and visual states
+- [x] Task 12: Make Preview Surface reflect live render order and visual states
   - Acceptance: black fallback, background, foreground, PiP, subtitles, watermark, transport, Space shortcut, and 9:16 framing match the spec.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/PreviewSurface.test.tsx lib/preview/resolveDisplay.test.ts app/editor/page.test.tsx`
-- [ ] Checkpoint: Editor Surfaces
+- [x] Checkpoint: Editor Surfaces
   - Acceptance: inspector, timeline, layers popover, and preview all read/write the same working config.
 
 ## Phase 4: Render, Cache, And Recovery Guarantees
