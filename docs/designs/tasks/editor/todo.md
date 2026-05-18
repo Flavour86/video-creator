@@ -39,7 +39,7 @@
 - [x] Task 9: Make the Inspector fully editable for background, foreground, and PiP
   - Acceptance: all documented inspector fields update config, mark dirty, append one operation, and invalidate affected cache.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/Inspector.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/web test -- lib/editor-operation-log lib/layers`
-- [ ] Task 10: Implement timeline packing, drag/stretch/delete, and keyboard deletion
+- [x] Task 10: Implement timeline packing, drag/stretch/delete, and keyboard deletion
   - Acceptance: fixed-height timeline, full-width waveform, layer packing/order, drag/stretch constraints, transcript sync, and non-background deletion work.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/Timeline.test.tsx app/editor/page.test.tsx`
 - [ ] Task 11: Complete Layers Popover and preview resolution controls

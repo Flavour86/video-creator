@@ -98,6 +98,7 @@ function EditorContent() {
   const alignmentSentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
   const [sentences, setSentences] = useState<AlignedSentence[]>([]);
   const duration = sentences.at(-1)?.end_s ?? 0;
+  const timelineDuration = duration;
   const visualClipCount = useMemo(() => {
     return layers.reduce((total, layer) => total + (layer.kind === "sub" ? 0 : layer.items.length), 0);
   }, [layers]);
@@ -521,10 +522,48 @@ function EditorContent() {
     applyLayerMutation(updatedLayers);
   }, [applyLayerMutation, layers, sentences]);
 
+  const updateTimelineClipTiming = useCallback((input: { layerId: string; itemId: string; start: number; end: number }) => {
+    const target = findVisualItemById(layers, input.layerId, input.itemId);
+    if (!target) return;
+    const layer = layers.find((entry): entry is ClipLayer => entry.id === input.layerId && (entry.kind === "fg" || entry.kind === "pip"));
+    const boundedStart = clamp(input.start, 0, Math.max(0, timelineDuration - MIN_CLIP_DURATION_SECONDS));
+    const boundedEnd = clamp(input.end, boundedStart + MIN_CLIP_DURATION_SECONDS, Math.max(timelineDuration, boundedStart + MIN_CLIP_DURATION_SECONDS));
+    const nextRange = resolveSentenceRangeForSpan(
+      sentences,
+      boundedStart,
+      boundedEnd,
+      target.sentences ?? [sentences[0]?.index ?? 1, sentences[0]?.index ?? 1],
+    );
+    if (layer && hasSentenceOverlap(layer.items, nextRange[0], nextRange[1], input.itemId)) {
+      return;
+    }
+    const updatedLayers = patchVisualItem(layers, input.layerId, input.itemId, {
+      start: boundedStart,
+      end: boundedEnd,
+      sentences: nextRange,
+    });
+    applyLayerMutation(updatedLayers);
+    setSelectedSentenceRange(nextRange);
+    seekTo(boundedStart);
+  }, [applyLayerMutation, layers, seekTo, sentences, timelineDuration]);
+
   const deleteInspectorItem = useCallback((layerId: string, itemId: string) => {
     const updatedLayers = deleteVisualItem(layers, layerId, itemId);
     applyLayerMutation(updatedLayers, { nextSelection: defaultSelectionFromLayers(updatedLayers) });
   }, [applyLayerMutation, layers]);
+
+  useEffect(() => {
+    function onDeleteKey(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      if (!selected || isTextEditingTarget(event.target)) return;
+      const selectedLayer = layers.find((layer) => layer.id === selected.layerId);
+      if (!selectedLayer || selectedLayer.kind === "bg" || selectedLayer.kind === "sub") return;
+      event.preventDefault();
+      deleteInspectorItem(selected.layerId, selected.itemId);
+    }
+    window.addEventListener("keydown", onDeleteKey);
+    return () => window.removeEventListener("keydown", onDeleteKey);
+  }, [deleteInspectorItem, layers, selected]);
 
   const applySubtitlesSettings = useCallback((nextSubtitles: Project["subtitles"]) => {
     if (!project) return;
@@ -740,7 +779,18 @@ function EditorContent() {
               open={layersOpen}
             />
           </div>
-          <Timeline cacheLabel={cacheLabel} currentTime={currentTime} duration={duration} fps={30} layers={layers} onSeek={seekTo} onSelect={setSelected} selected={selected} />
+          <Timeline
+            cacheLabel={cacheLabel}
+            currentTime={currentTime}
+            duration={timelineDuration}
+            fps={30}
+            layers={layers}
+            onDeleteItem={({ layerId, itemId }) => deleteInspectorItem(layerId, itemId)}
+            onSeek={seekTo}
+            onSelect={setSelected}
+            onUpdateClipTiming={updateTimelineClipTiming}
+            selected={selected}
+          />
         </main>
         <Inspector
           layers={layers}
@@ -874,6 +924,7 @@ function hasVisualItemId(value: unknown): value is { id: string } {
 function findVisualItemById(layers: Layer[], layerId: string, itemId: string): {
   end: number;
   id: string;
+  sentences: [number, number] | null;
   start: number;
 } | null {
   const layer = layers.find((entry) => entry.id === layerId && entry.kind !== "sub");
@@ -881,7 +932,12 @@ function findVisualItemById(layers: Layer[], layerId: string, itemId: string): {
   for (const candidate of layer.items) {
     if (!hasVisualItemId(candidate) || candidate.id !== itemId) continue;
     if (!hasTimeBounds(candidate)) return null;
-    return { id: candidate.id, start: candidate.start, end: candidate.end };
+    return {
+      id: candidate.id,
+      start: candidate.start,
+      end: candidate.end,
+      sentences: hasSentenceBounds(candidate) ? candidate.sentences : null,
+    };
   }
   return null;
 }
@@ -899,6 +955,33 @@ function hasTimeBounds(value: unknown): value is { end: number; start: number } 
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+const MIN_CLIP_DURATION_SECONDS = 0.5;
+
+function hasSentenceBounds(value: unknown): value is { sentences: [number, number] } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "sentences" in value &&
+    Array.isArray(value.sentences) &&
+    value.sentences.length === 2 &&
+    typeof value.sentences[0] === "number" &&
+    typeof value.sentences[1] === "number"
+  );
+}
+
+function resolveSentenceRangeForSpan(
+  sentences: AlignedSentence[],
+  start: number,
+  end: number,
+  fallback: [number, number],
+): [number, number] {
+  const covered = sentences.filter((sentence) => sentence.end_s > start && sentence.start_s < end);
+  if (covered.length === 0) return fallback;
+  const first = covered[0]?.index ?? fallback[0];
+  const last = covered.at(-1)?.index ?? fallback[1];
+  return [first, Math.max(first, last)];
 }
 
 function sanitizeTranscriptSentences(transcript: Project["transcript"] | null | undefined): AlignedSentence[] {

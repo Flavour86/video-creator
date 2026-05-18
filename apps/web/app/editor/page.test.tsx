@@ -600,6 +600,61 @@ it("edits PiP inspector placement, edge margins, and style fields, then deletes 
   expect(readUndo()).toHaveLength(7);
 });
 
+it("deletes a selected non-background timeline clip via keyboard Delete", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
+
+  fireEvent.keyDown(window, { key: "Delete" });
+
+  await waitFor(() => expect(screen.queryByRole("button", { name: /PIP\.png over/i })).not.toBeInTheDocument());
+  expect(readUndo()).toHaveLength(1);
+});
+
+it("does not delete background clips via keyboard Delete", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.keyDown(window, { key: "Delete" });
+
+  expect(screen.getByRole("button", { name: "bg0.png over s1" })).toBeInTheDocument();
+  expect(readUndo()).toHaveLength(0);
+});
+
+it("dragging a timeline clip body recalculates sentence range from updated span", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+  const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => ({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 100,
+    bottom: 20,
+    width: 100,
+    height: 20,
+    toJSON: () => ({}),
+  }));
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.mouseDown(screen.getByRole("button", { name: "foreground.png over s1" }), { clientX: 0 });
+  fireEvent.mouseMove(window, { clientX: 20 });
+  fireEvent.mouseUp(window);
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "foreground.png over s2" })).toBeInTheDocument());
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  await waitFor(() => expect(audio.currentTime).toBeGreaterThanOrEqual(5));
+  rectSpy.mockRestore();
+});
+
 it("rejects overlapping pip range edits from inspector without appending operations", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({ project: TEST_PROJECT_PIP_OVERLAP });

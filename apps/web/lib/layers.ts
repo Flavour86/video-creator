@@ -17,6 +17,26 @@ export function nextZIndex(layers: Layer[], kind: "fg" | "pip"): number {
   return layers.filter((l) => l.kind === kind).length + 1;
 }
 
+export function packRowsByTime<T extends { end: number; start: number }>(items: T[]): T[][] {
+  const sorted = [...items].sort((left, right) => {
+    if (left.start !== right.start) return left.start - right.start;
+    return left.end - right.end;
+  });
+  const rows: T[][] = [];
+  const rowEndTimes: number[] = [];
+  for (const item of sorted) {
+    const rowIndex = rowEndTimes.findIndex((endTime) => endTime <= item.start);
+    if (rowIndex === -1) {
+      rows.push([item]);
+      rowEndTimes.push(item.end);
+      continue;
+    }
+    rows[rowIndex]?.push(item);
+    rowEndTimes[rowIndex] = item.end;
+  }
+  return rows;
+}
+
 export type FgItemParams = {
   id: string;
   mediaId: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFgItem, deleteVisualItem, hasSentenceOverlap, nextZIndex, patchBackgroundItems, patchVisualItem } from "./layers";
+import { buildFgItem, deleteVisualItem, hasSentenceOverlap, nextZIndex, packRowsByTime, patchBackgroundItems, patchVisualItem } from "./layers";
 import type { Layer } from "./preview/resolveDisplay";
 
 // ── hasSentenceOverlap ────────────────────────────────────────────────────────
@@ -91,6 +91,29 @@ describe("nextZIndex", () => {
       { id: "L2", kind: "sub", name: "Subtitles", items: [] },
     ];
     expect(nextZIndex(layers, "fg")).toBe(1);
+  });
+});
+
+describe("packRowsByTime", () => {
+  it("packs non-overlapping clips onto the same row", () => {
+    const rows = packRowsByTime([
+      { id: "a", start: 0, end: 5 },
+      { id: "b", start: 5, end: 10 },
+      { id: "c", start: 10, end: 12 },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.map((item) => item.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("splits overlapping clips into separate rows", () => {
+    const rows = packRowsByTime([
+      { id: "a", start: 0, end: 6 },
+      { id: "b", start: 3, end: 7 },
+      { id: "c", start: 6, end: 8 },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.map((item) => item.id)).toEqual(["a", "c"]);
+    expect(rows[1]?.map((item) => item.id)).toEqual(["b"]);
   });
 });
 
