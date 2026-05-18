@@ -220,3 +220,10 @@ User: Setup must be blob-first. Frontend uploads `File` blobs (voice/transcript/
 User: don't remain anything unused!
 - [X] 2026-05-14: Backend-global Task 7 defines global `POST /uploads` and requires uploaded assets to be represented in canonical `config.media[]`, but the API surface does not say how `POST /uploads` receives the target project context. Should `POST /uploads` require `project_id` as query/form data and update that project's config, or should it only store root-level assets and leave `config.media[]` updates to a separate project config save?
 User: `POST /uploads` stores root-level assets only. Project config is updated separately through `PUT /projects/:projectId/config` to connect the returned `mediaId`.
+
+- [X] 2026-05-18: Editor Task 12 follow-up asks to use `canvas-api` to simulate a live video player frame-by-frame. Please confirm the exact implementation boundary:
+  1. Does `canvas-api` mean in-app HTML5 `<canvas>` rendering in `PreviewSurface` (React + Canvas 2D), not static art output from the `canvas-design` skill?
+  2. Should we fully replace the current DOM-based preview compositor with canvas, or keep DOM as fallback and run canvas as primary?
+  3. For video media layers, should canvas playback decode real video frames via hidden `<video>` elements synchronized to `currentTime`, or is thumbnail/frame simulation acceptable in this phase?
+  4. Should preview timing stay audio-clock-driven (`audio.currentTime`) with canvas redraw on `requestAnimationFrame`, including pause/resume/seek parity with existing transport behavior?
+User: (1) yes, use HTML5 `<canvas>` in `PreviewSurface` with React + Canvas 2D; (2) fully replace DOM preview compositor with canvas; (3) decode real video frames via hidden `<video>`; (4) keep audio-clock-driven timing with `requestAnimationFrame`, including pause/resume/seek parity.

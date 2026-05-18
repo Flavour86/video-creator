@@ -51,8 +51,6 @@ shared project schema and generated types
               -> visual parity and performance gates
 ```
 
-## Task List
-
 ### Phase 1: Contracts And Persistence
 
 ## Task 1: Align shared Editor config schema with the spec
@@ -61,19 +59,19 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Media assets include `id`, `name`, `kind`, `path`, `thumb_path`, dimensions, video duration, file size, content hash, import mode, and created/imported timestamp.
-- [ ] Visual items allow `mediaId` or playlist `mediaIds`, inclusive `sentences`, `start`, `end`, motion, transitions, cache status, and orphan metadata.
-- [ ] PiP placement uses canonical `posX` and `posY` fields, plus size `15..60`, radius `0..32`, and opacity `10..100`.
-- [ ] Subtitle settings cover background `none/pill/block/shadow`, position `bottom/bottom_low/top`, font, max chars `20..80`, size `28..72`, and burn-in.
-- [ ] Output/resolution settings cover `1080p`, `720p`, and `9:16`.
-- [ ] Generated TS/Python schema outputs are refreshed from the JSON schema.
+- [x] Media assets include `id`, `name`, `kind`, `path`, `thumb_path`, dimensions, video duration, file size, content hash, import mode, and created/imported timestamp.
+- [x] Visual items allow `mediaId` or playlist `mediaIds`, inclusive `sentences`, `start`, `end`, motion, transitions, cache status, and orphan metadata.
+- [x] PiP placement uses canonical `posX` and `posY` fields, plus size `15..60`, radius `0..32`, and opacity `10..100`.
+- [x] Subtitle settings cover background `none/pill/block/shadow`, position `bottom/bottom_low/top`, font, max chars `20..80`, size `28..72`, and burn-in.
+- [x] Output/resolution settings cover `1080p`, `720p`, and `9:16`.
+- [x] Generated TS/Python schema outputs are refreshed from the JSON schema.
 
 **Verification:**
 
-- [ ] `rtk pnpm gen:types`
-- [ ] `rtk pnpm gen:py`
-- [ ] `rtk pnpm -F @vc/server test -- tests/test_project_schema.py tests/test_shared_api_schemas.py`
-- [ ] `rtk pnpm -F @vc/web test -- lib/preview/resolveDisplay.test.ts lib/layers.test.ts`
+- [x] `rtk pnpm gen:types`
+- [x] `rtk pnpm gen:py`
+- [x] `rtk pnpm -F @vc/server test -- tests/test_project_schema.py tests/test_shared_api_schemas.py`
+- [x] `rtk pnpm -F @vc/web test -- lib/preview/resolveDisplay.test.ts lib/layers.test.ts`
 
 **Dependencies:** None
 
@@ -93,16 +91,16 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Browser autosave writes `vc.editor.operations.<projectId>` and recovery metadata without calling `PUT /projects/:projectId/config`.
-- [ ] `Save` builds the current config from canonical config plus operations, validates it through the shared schema, syncs it to SQLite, clears committed operations, and reports pending/saving/saved/failed states.
-- [ ] Undo and redo do not send a config save request and still mark the working project dirty.
-- [ ] Reloading the same project replays the operation log and restores selection, selected range, scroll position, and resolution preset.
-- [ ] Malformed recovery state is discarded without blocking canonical project load.
+- [x] Browser autosave writes `vc.editor.operations.<projectId>` and recovery metadata without calling `PUT /projects/:projectId/config`.
+- [x] `Save` builds the current config from canonical config plus operations, validates it through the shared schema, syncs it to SQLite, clears committed operations, and reports pending/saving/saved/failed states.
+- [x] Undo and redo do not send a config save request and still mark the working project dirty.
+- [x] Reloading the same project replays the operation log and restores selection, selected range, scroll position, and resolution preset.
+- [x] Malformed recovery state is discarded without blocking canonical project load.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- lib/editor-operation-log app/editor/page.test.tsx`
-- [ ] Manual check: make an edit, reload before Save, verify recovery; click Save, verify operation log is cleared.
+- [x] `rtk pnpm -F @vc/web test -- lib/editor-operation-log app/editor/page.test.tsx`
+- [x] Manual check: make an edit, reload before Save, verify recovery; click Save, verify operation log is cleared.
 
 **Dependencies:** Task 1
 
@@ -122,17 +120,17 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] New aligned projects can run Draft/Final render even with no foreground/background/PiP.
-- [ ] Already-rendered or running projects enable render only when the working config hash differs from the latest successful rendered config hash.
-- [ ] Clicking `Render Draft` explicitly saves/syncs the current config, shows the draft strip, disables the button while queued/running, and queues a draft render with the selected resolution.
-- [ ] Clicking `Render Final` explicitly saves/syncs the current config, queues a final render with the selected resolution, and navigates to `/render/:projectId/:render_id`.
-- [ ] Draft strip labels cover queued, verifying cache, pre-rendering clips, building `subtitles.srt`, ffmpeg compose, muxing audio, done, failed, and cancelled.
-- [ ] Toolbar exposes save, cache, and render states with accessible labels.
+- [x] New aligned projects can run Draft/Final render even with no foreground/background/PiP.
+- [x] Already-rendered or running projects enable render only when the working config hash differs from the latest successful rendered config hash.
+- [x] Clicking `Render Draft` explicitly saves/syncs the current config, shows the draft strip, disables the button while queued/running, and queues a draft render with the selected resolution.
+- [x] Clicking `Render Final` explicitly saves/syncs the current config, queues a final render with the selected resolution, and navigates to `/render/:projectId/:render_id`.
+- [x] Draft strip labels cover queued, verifying cache, pre-rendering clips, building `subtitles.srt`, ffmpeg compose, muxing audio, done, failed, and cancelled.
+- [x] Toolbar exposes save, cache, and render states with accessible labels.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/EditorBar.test.tsx components/editor/RenderStrip.test.tsx app/editor/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/server test -- tests/test_render_endpoint.py tests/test_render_progress.py tests/test_projects_route.py`
+- [x] `rtk pnpm -F @vc/web test -- components/editor/EditorBar.test.tsx components/editor/RenderStrip.test.tsx app/editor/page.test.tsx`
+- [x] `rtk pnpm -F @vc/server test -- tests/test_render_endpoint.py tests/test_render_progress.py tests/test_projects_route.py`
 
 **Dependencies:** Tasks 1-2
 
@@ -148,10 +146,10 @@ shared project schema and generated types
 
 ### Checkpoint: Contracts And Persistence
 
-- [ ] Tasks 1-3 pass.
-- [ ] Editor no longer syncs SQLite through passive autosave.
-- [ ] Render actions always queue from the latest explicitly saved working config.
-- [ ] Shared schema and generated models are in sync.
+- [x] Tasks 1-3 pass.
+- [x] Editor no longer syncs SQLite through passive autosave.
+- [x] Render actions always queue from the latest explicitly saved working config.
+- [x] Shared schema and generated models are in sync.
 
 ### Phase 2: Transcript And Media Creation
 
@@ -161,16 +159,16 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Rows render sentence index, start/end timecode, text, selected/current/search/orphan/low-confidence states, and a no-results search state.
-- [ ] Click selects and seeks; Shift-click selects a contiguous range; playhead changes highlight the current sentence.
-- [ ] `Cmd/Ctrl+F` focuses transcript search; Enter/Down advances; Shift+Enter reverses; Escape clears search.
-- [ ] Right-click opens the context menu at pointer position with Assign, Merge `<N>` sentences, and Play from here.
-- [ ] Merge updates the subtitle/sentence model, remaps dependent clip anchors, marks orphaned anchors red where needed, and appends one operation-log entry.
+- [x] Rows render sentence index, start/end timecode, text, selected/current/search/orphan/low-confidence states, and a no-results search state.
+- [x] Click selects and seeks; Shift-click selects a contiguous range; playhead changes highlight the current sentence.
+- [x] `Cmd/Ctrl+F` focuses transcript search; Enter/Down advances; Shift+Enter reverses; Escape clears search.
+- [x] Right-click opens the context menu at pointer position with Assign, Merge `<N>` sentences, and Play from here.
+- [x] Merge updates the subtitle/sentence model, remaps dependent clip anchors, marks orphaned anchors red where needed, and appends one operation-log entry.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/TranscriptPane.test.tsx app/editor/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/server test -- tests/test_alignment_subtitles.py tests/test_srt.py`
+- [x] `rtk pnpm -F @vc/web test -- components/editor/TranscriptPane.test.tsx app/editor/page.test.tsx`
+- [x] `rtk pnpm -F @vc/server test -- tests/test_alignment_subtitles.py tests/test_srt.py`
 
 **Dependencies:** Tasks 1-2
 
@@ -190,16 +188,16 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Global `POST /uploads` is the canonical media import route, invoked only after user action, and returns schema-valid media assets.
-- [ ] Supported badges cover image/video types including `IMG`, `MP4`, `MOV`, `RMVB`, and `FLV` when backend decoder support exists.
-- [ ] Duplicate files, same filename with different content, unsupported type, corrupt media, missing referenced file, huge video chunking, too-small image, and thumbnail failure are handled with recoverable states.
-- [ ] Asset grid cards show thumbnail, name, kind badge, metadata, selected state, and per-card import progress.
-- [ ] Imported assets are available to Assign/Edit and Background modals without reloading the page.
+- [x] Global `POST /uploads` is the canonical media import route, invoked only after user action, and returns schema-valid media assets.
+- [x] Supported badges cover image/video types including `IMG`, `MP4`, `MOV`, `RMVB`, and `FLV` when backend decoder support exists.
+- [x] Duplicate files, same filename with different content, unsupported type, corrupt media, missing referenced file, huge video chunking, too-small image, and thumbnail failure are handled with recoverable states.
+- [x] Asset grid cards show thumbnail, name, kind badge, metadata, selected state, and per-card import progress.
+- [x] Imported assets are available to Assign/Edit and Background modals without reloading the page.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/server test -- tests/test_media_upload.py`
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx app/editor/page.test.tsx`
+- [x] `rtk pnpm -F @vc/server test -- tests/test_media_upload.py`
+- [x] `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx app/editor/page.test.tsx`
 
 **Dependencies:** Task 1
 
@@ -248,16 +246,16 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Right rail global config shows `Add Background` when absent and `Change Background` when present.
-- [ ] Background modal supports create/edit mode, multi-select, import, selected count, image-only/video-only kind lock, will-replace state, and invalid crossfade state.
-- [ ] Image playlists distribute evenly across full voice duration; video playlists play in selected order, show black fallback when short, and trim when long.
-- [ ] Existing background updates media, motion, easing, and crossfade without changing unrelated layers.
-- [ ] Remove background deletes only the background layer/item, keeps other layers, marks the project dirty, and appends one operation.
+- [x] Right rail global config shows `Add Background` when absent and `Change Background` when present.
+- [x] Background modal supports create/edit mode, multi-select, import, selected count, image-only/video-only kind lock, will-replace state, and invalid crossfade state.
+- [x] Image playlists distribute evenly across full voice duration; video playlists play in selected order, show black fallback when short, and trim when long.
+- [x] Existing background updates media, motion, easing, and crossfade without changing unrelated layers.
+- [x] Remove background deletes only the background layer/item, keeps other layers, marks the project dirty, and appends one operation.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- components/bg-modal/BgModal.test.tsx components/editor/Inspector.test.tsx app/editor/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_clip_cache.py`
+- [x] `rtk pnpm -F @vc/web test -- components/bg-modal/BgModal.test.tsx components/editor/Inspector.test.tsx app/editor/page.test.tsx`
+- [x] `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_clip_cache.py`
 
 **Dependencies:** Tasks 2, 5
 
@@ -277,16 +275,16 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Right rail exposes Watermark, Subtitles, and Add/Change Background controls before contextual inspector sections.
-- [ ] Subtitles modal supports background style, position, font, max chars, size, burn-in, and live preview using the current preview resolution/aspect.
-- [ ] `Apply` updates all subtitle defaults, appends one operation, and closes; `Cancel` closes without mutation.
-- [ ] Watermark config supports off/on, asset selection, placement, scale, opacity, preview display, operation log persistence, and removal.
-- [ ] Preview and render pipeline consume the same subtitles/watermark config fields.
+- [x] Right rail exposes Watermark, Subtitles, and Add/Change Background controls before contextual inspector sections.
+- [x] Subtitles modal supports background style, position, font, max chars, size, burn-in, and live preview using the current preview resolution/aspect.
+- [x] `Apply` updates all subtitle defaults, appends one operation, and closes; `Cancel` closes without mutation.
+- [x] Watermark config supports off/on, asset selection, placement, scale, opacity, preview display, operation log persistence, and removal.
+- [x] Preview and render pipeline consume the same subtitles/watermark config fields.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx components/watermark-panel/WatermarkPanel.test.tsx app/editor/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_srt.py`
+- [x] `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx components/watermark-panel/WatermarkPanel.test.tsx app/editor/page.test.tsx`
+- [x] `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_srt.py`
 
 **Dependencies:** Tasks 1-2, 5
 
@@ -302,9 +300,9 @@ shared project schema and generated types
 
 ### Checkpoint: Transcript And Media Creation
 
-- [ ] Tasks 4-8 pass.
-- [ ] User can import media, assign foreground/PiP clips, configure background, subtitles, and watermark without losing browser recovery state.
-- [ ] All creation/edit flows append incremental operations instead of full config snapshots.
+- [x] Tasks 4-8 pass.
+- [x] User can import media, assign foreground/PiP clips, configure background, subtitles, and watermark without losing browser recovery state.
+- [x] All creation/edit flows append incremental operations instead of full config snapshots.
 
 ### Phase 3: Editor Surfaces
 
@@ -314,16 +312,16 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Editor entry always selects background by default when available; otherwise the first non-subtitle visual item is selected or the Add Background control is shown.
-- [ ] Background inspector edits asset playlist, crossfade `0..2`, motion, easing, and Remove background.
-- [ ] Foreground inspector edits asset, sentence range/time span, motion, easing, transition in/out, and Delete item.
-- [ ] PiP inspector edits asset, 3x3 placement with edge margins, size, radius, opacity, sentence range/time span, motion, easing, transition in/out, and Delete PiP item.
-- [ ] Every edit marks the project dirty, writes browser recovery state, appends exactly one operation, and invalidates only affected cache entries.
+- [x] Editor entry always selects background by default when available; otherwise the first non-subtitle visual item is selected or the Add Background control is shown.
+- [x] Background inspector edits asset playlist, crossfade `0..2`, motion, easing, and Remove background.
+- [x] Foreground inspector edits asset, sentence range/time span, motion, easing, transition in/out, and Delete item.
+- [x] PiP inspector edits asset, 3x3 placement with edge margins, size, radius, opacity, sentence range/time span, motion, easing, transition in/out, and Delete PiP item.
+- [x] Every edit marks the project dirty, writes browser recovery state, appends exactly one operation, and invalidates only affected cache entries.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/Inspector.test.tsx app/editor/page.test.tsx`
-- [ ] `rtk pnpm -F @vc/web test -- lib/editor-operation-log lib/layers`
+- [x] `rtk pnpm -F @vc/web test -- components/editor/Inspector.test.tsx app/editor/page.test.tsx`
+- [x] `rtk pnpm -F @vc/web test -- lib/editor-operation-log lib/layers`
 
 **Dependencies:** Tasks 6-8
 
@@ -343,17 +341,17 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] Timeline header shows `30 fps`, clip count, and cache count; waveform spans the full voice duration and full timeline width.
-- [ ] Track visual order is bottom-to-top background, foreground, PiP, subtitles and matches render stacking.
-- [ ] Foreground/PiP overlapping clips occupy separate visual rows; non-overlapping clips can share a row; empty foreground/PiP layers are removed.
-- [ ] Left grip resizes start, right grip resizes end, and body drag moves both endpoints for background, foreground, PiP, and subtitle clips with `start >= 0`, `end <= duration`, and minimum `0.5s`.
-- [ ] Drag/stretch recalculates covered sentence range and syncs current time/selection with the transcript pane.
-- [ ] Clip `x`, Backspace, and Delete remove selected non-background items; background cannot be deleted via timeline.
+- [x] Timeline header shows `30 fps`, clip count, and cache count; waveform spans the full voice duration and full timeline width.
+- [x] Track visual order is bottom-to-top background, foreground, PiP, subtitles and matches render stacking.
+- [x] Foreground/PiP overlapping clips occupy separate visual rows; non-overlapping clips can share a row; empty foreground/PiP layers are removed.
+- [x] Left grip resizes start, right grip resizes end, and body drag moves both endpoints for background, foreground, PiP, and subtitle clips with `start >= 0`, `end <= duration`, and minimum `0.5s`.
+- [x] Drag/stretch recalculates covered sentence range and syncs current time/selection with the transcript pane.
+- [x] Clip `x`, Backspace, and Delete remove selected non-background items; background cannot be deleted via timeline.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/Timeline.test.tsx app/editor/page.test.tsx`
-- [ ] Manual check: drag/resize 100 clips stays visually stable and does not resize the preview/inspector.
+- [x] `rtk pnpm -F @vc/web test -- components/editor/Timeline.test.tsx app/editor/page.test.tsx`
+- [x] Manual check: drag/resize 100 clips stays visually stable and does not resize the preview/inspector.
 
 **Dependencies:** Tasks 4, 6, 9
 
@@ -373,16 +371,16 @@ shared project schema and generated types
 
 **Acceptance criteria:**
 
-- [ ] `Layers - N` count reflects active visual layers/items according to the spec.
-- [ ] Popover header reads `Layer order - top renders on top`; rows appear in render order with kind dot, layer name, item count, and trash where removable.
-- [ ] Clicking a row selects the first item in the layer and closes the popover.
-- [ ] Background trash removes background while keeping all other layers; subtitle layer is non-removable while alignment/subtitles exist.
-- [ ] Outside click and Escape close the popover.
-- [ ] Resolution segmented control updates preview aspect, persists to browser recovery state, and participates in render requests.
+- [x] `Layers - N` count reflects active visual layers/items according to the spec.
+- [x] Popover header reads `Layer order - top renders on top`; rows appear in render order with kind dot, layer name, item count, and trash where removable.
+- [x] Clicking a row selects the first item in the layer and closes the popover.
+- [x] Background trash removes background while keeping all other layers; subtitle layer is non-removable while alignment/subtitles exist.
+- [x] Outside click and Escape close the popover.
+- [x] Resolution segmented control updates preview aspect, persists to browser recovery state, and participates in render requests.
 
 **Verification:**
 
-- [ ] `rtk pnpm -F @vc/web test -- components/editor/LayersPopover.test.tsx components/editor/PreviewControls.test.tsx app/editor/page.test.tsx`
+- [x] `rtk pnpm -F @vc/web test -- components/editor/LayersPopover.test.tsx components/editor/PreviewControls.test.tsx app/editor/page.test.tsx`
 
 **Dependencies:** Tasks 2, 6-10
 
@@ -398,21 +396,26 @@ shared project schema and generated types
 
 ## Task 12: Make Preview Surface reflect live render order and visual states
 
-**Description:** Bring Preview Surface into parity with render order and documented states, including black fallback, background, foreground, PiP, subtitles, watermark, transport, Space shortcut, and 9:16 framing. Using `canvas-design` skill
+**Description:** Bring Preview Surface into parity with render order and documented states, including black fallback, background, foreground, PiP, subtitles, watermark, transport, Space shortcut, and 9:16 framing, using an in-app HTML5 `<canvas>` compositor (React + Canvas 2D) instead of a DOM layer stack.
 
 **Acceptance criteria:**
 
+- [ ] `PreviewSurface` uses a single HTML5 `<canvas>` render surface for visual compositing; the DOM-based layer compositor is fully replaced.
+- [ ] Canvas redraw is live: while playing it renders on `requestAnimationFrame`, and on edit/seek/pause/resume it updates on the next frame without refresh.
+- [ ] Video layers use hidden `<video>` decoder elements and draw real decoded frames onto canvas synchronized to `audio.currentTime`.
 - [ ] Preview renders black fallback, background, active fullscreen foreground, active PiP overlays, subtitles, and watermark in the documented order.
 - [ ] Fullscreen foreground hides background while active; PiP always renders above foreground.
 - [ ] Subtitle visibility/style and watermark off/on states match current config.
-- [ ] Transport controls support Previous, Play/Pause, Next, live timecode, and Space play/pause outside typing targets.
+- [ ] Transport controls support Previous, Play/Pause, Next, live timecode, and Space play/pause outside typing targets, sharing the same playback clock used by canvas compositing.
 - [ ] `1080p`, `720p`, and `9:16` produce correct aspect/framing without overlap or clipped controls.
 - [ ] Preview states cover no background, background only, no foreground, foreground active, no PiP, one/more PiP, subtitles off/on, watermark off/on, playing, and paused.
 
 **Verification:**
 
 - [ ] `rtk pnpm -F @vc/web test -- components/editor/PreviewSurface.test.tsx lib/preview/resolveDisplay.test.ts app/editor/page.test.tsx`
+- [ ] `rtk pnpm -F @vc/web exec vitest run components/editor/PreviewSurface.test.tsx lib/preview/resolveDisplay.test.ts app/editor/page.test.tsx`
 - [ ] Browser check: open Editor at desktop and mobile widths and verify non-overlapping preview controls.
+- [ ] Browser check: verify canvas frame progression with mixed image/video layers, and verify pause/resume/seek/edit all reflect live on-canvas output.
 
 **Dependencies:** Tasks 8-11
 
@@ -431,6 +434,7 @@ shared project schema and generated types
 - [ ] Tasks 9-12 pass.
 - [ ] Inspector, timeline, layers popover, and preview all mutate and display the same working config.
 - [ ] Render stacking and visual timeline order are covered by unit/component tests.
+- [ ] Preview uses the canvas compositor as the sole visual surface, with hidden video decoders and audio-clock-synced frame rendering.
 
 ### Phase 4: Render, Cache, And Recovery Guarantees
 

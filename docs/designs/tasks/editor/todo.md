@@ -11,7 +11,7 @@
 - [x] Task 3: Wire toolbar save/render enablement and render queue contract
   - Acceptance: render enable rules hold; Draft/Final save before queueing; draft strip stages and final navigation match spec.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorBar.test.tsx components/editor/RenderStrip.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_render_endpoint.py tests/test_render_progress.py tests/test_projects_route.py`
-- [ ] Checkpoint: Contracts And Persistence
+- [x] Checkpoint: Contracts And Persistence
   - Acceptance: shared schema is generated, SQLite sync is explicit, and render queues use the latest saved working config.
 
 ## Phase 2: Transcript And Media Creation
@@ -31,7 +31,7 @@
 - [x] Task 8: Implement subtitles and watermark global config controls
   - Acceptance: right rail exposes Watermark/Subtitles/Background controls; subtitles modal and watermark config mutate working config through operations and affect preview/render.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx components/watermark-panel/WatermarkPanel.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_srt.py`
-- [ ] Checkpoint: Transcript And Media Creation
+- [x] Checkpoint: Transcript And Media Creation
   - Acceptance: media import, FG/PiP assignment, background, subtitles, and watermark are usable with browser recovery intact.
 
 ## Phase 3: Editor Surfaces
@@ -45,10 +45,10 @@
 - [x] Task 11: Complete Layers Popover and preview resolution controls
   - Acceptance: rows render in order, row click selects first item, removable trash works, outside/Escape close works, and resolution persists and drives render requests.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/LayersPopover.test.tsx components/editor/PreviewControls.test.tsx app/editor/page.test.tsx`
-- [x] Task 12: Make Preview Surface reflect live render order and visual states
-  - Acceptance: black fallback, background, foreground, PiP, subtitles, watermark, transport, Space shortcut, and 9:16 framing match the spec.
+- [ ] Task 12: Make Preview Surface reflect live render order and visual states
+  - Acceptance: black fallback, background, foreground, PiP, subtitles, watermark, transport, Space shortcut, and 9:16 framing match the spec, using HTML5 `<canvas>` as the sole preview compositor with hidden `<video>` frame decoders.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/PreviewSurface.test.tsx lib/preview/resolveDisplay.test.ts app/editor/page.test.tsx`
-- [x] Checkpoint: Editor Surfaces
+- [ ] Checkpoint: Editor Surfaces
   - Acceptance: inspector, timeline, layers popover, and preview all read/write the same working config.
 
 ## Phase 4: Render, Cache, And Recovery Guarantees
