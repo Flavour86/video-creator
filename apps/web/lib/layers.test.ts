@@ -204,6 +204,40 @@ describe("patchVisualItem", () => {
     const fgItem = next[0]?.items[0] as { motion: { kind: string } };
     expect(fgItem.motion.kind).toBe("ken_burns");
   });
+
+  it("patches mediaIds-only visual items", () => {
+    const legacyLayers = [{
+      id: "fg-z1",
+      kind: "fg",
+      name: "Foreground z1",
+      items: [{
+        id: "fg-legacy",
+        mediaIds: ["legacy-fg.png"],
+        sentences: [1, 1],
+        start: 0,
+        end: 5,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        cache_status: "warm",
+      }],
+    }] as unknown as Layer[];
+
+    const next = patchVisualItem(legacyLayers, "fg-z1", "fg-legacy", {
+      transitions: { out: "fade" },
+    });
+
+    const item = next[0]?.items[0] as {
+      cache_status?: string;
+      mediaId?: string;
+      mediaIds?: string[];
+      transitions: { out: string };
+    };
+
+    expect(item.transitions.out).toBe("fade");
+    expect(item.cache_status).toBe("invalid");
+    expect(item.mediaId).toBeUndefined();
+    expect(item.mediaIds).toEqual(["legacy-fg.png"]);
+  });
 });
 
 describe("patchBackgroundItems", () => {
@@ -274,6 +308,44 @@ describe("patchBackgroundItems", () => {
     const first = next[0]?.items[0] as { motion: { kind: string } };
     expect(first.motion.kind).toBe("ken_burns");
   });
+
+  it("patches mediaIds-only background strips", () => {
+    const legacyLayers = [{
+      id: "bg-main",
+      kind: "bg",
+      name: "Background",
+      items: [{
+        id: "bg-legacy",
+        mediaIds: ["legacy-bg.png"],
+        sentences: [1, 3],
+        start: 0,
+        end: 5,
+        motion: { kind: "ken_burns", easing: "linear" },
+        transitions: { in: "cut", out: "fade" },
+        crossfade: 0.2,
+        cache_status: "warm",
+      }],
+    }] as unknown as Layer[];
+
+    const next = patchBackgroundItems(legacyLayers, "bg-main", {
+      crossfade: 1.2,
+      motion: { kind: "ken_burns_strong" },
+    });
+
+    const first = next[0]?.items[0] as {
+      cache_status?: string;
+      crossfade: number;
+      mediaId?: string;
+      mediaIds?: string[];
+      motion: { kind: string };
+    };
+
+    expect(first.crossfade).toBe(1.2);
+    expect(first.motion.kind).toBe("ken_burns_strong");
+    expect(first.cache_status).toBe("invalid");
+    expect(first.mediaId).toBeUndefined();
+    expect(first.mediaIds).toEqual(["legacy-bg.png"]);
+  });
 });
 
 describe("deleteVisualItem", () => {
@@ -310,6 +382,45 @@ describe("deleteVisualItem", () => {
       },
     ];
     const next = deleteVisualItem(layers, "fg-z1", "fg-1");
+    expect(next.some((layer) => layer.id === "fg-z1")).toBe(false);
+    expect(next.some((layer) => layer.id === "bg-main")).toBe(true);
+  });
+
+  it("removes mediaIds-only clips and still prunes empty foreground layers", () => {
+    const layers = [
+      {
+        id: "fg-z1",
+        kind: "fg",
+        name: "Foreground z1",
+        items: [{
+          id: "fg-legacy",
+          mediaIds: ["legacy-fg.png"],
+          sentences: [1, 1],
+          start: 0,
+          end: 5,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+        }],
+      },
+      {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-1",
+          mediaId: "bg.png",
+          sentences: [1, 1],
+          start: 0,
+          end: 5,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      },
+    ] as unknown as Layer[];
+
+    const next = deleteVisualItem(layers, "fg-z1", "fg-legacy");
+
     expect(next.some((layer) => layer.id === "fg-z1")).toBe(false);
     expect(next.some((layer) => layer.id === "bg-main")).toBe(true);
   });

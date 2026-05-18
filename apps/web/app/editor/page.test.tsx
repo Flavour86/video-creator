@@ -310,6 +310,27 @@ it("defaults selection to first non-subtitle item when background is absent", as
   expect(screen.getByRole("button", { name: "Add Background" })).toBeInTheDocument();
 });
 
+it("restores valid recovered selection instead of replacing it with background default", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+  window.localStorage.setItem(
+    `vc.editor.recovery.${TEST_PROJECT_ID}`,
+    JSON.stringify({
+      version: 1,
+      resolution: "1080p",
+      selected: { layerId: "pip-z3", itemId: "pip-1" },
+      selectedRange: null,
+      transcriptScrollTop: 0,
+    }),
+  );
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByLabelText("PiP placement")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Background crossfade")).not.toBeInTheDocument();
+});
+
 it("shows Add Background in global right-rail controls when background is absent", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({ project: TEST_PROJECT_NO_BG });

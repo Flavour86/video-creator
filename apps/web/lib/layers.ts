@@ -70,7 +70,8 @@ type VisualItem = {
   cache_status?: "warm" | "partial" | "cold" | "invalid" | "orphaned";
   crossfade?: number;
   end: number;
-  mediaId: string;
+  mediaId?: string;
+  mediaIds?: string[];
   motion: { easing: string; kind: string };
   pip?: { opacity: number; posX: number; posY: number; radius: number; size: number };
   sentences: [number, number];
@@ -126,7 +127,7 @@ export function patchBackgroundItems(
     if (layer.id !== layerId || layer.kind !== "bg") return layer;
     return {
       ...layer,
-      items: layer.items.map((item) => mergeVisualPatch(item as VisualItem, patch)),
+      items: layer.items.map((item) => (isVisualItem(item) ? mergeVisualPatch(item, patch) : item)),
     };
   });
 }
@@ -170,16 +171,30 @@ function isPersistedMotionKind(value: string): value is PersistedMotionKind {
 }
 
 function isVisualItem(value: unknown): value is VisualItem {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as {
+    end?: unknown;
+    id?: unknown;
+    mediaId?: unknown;
+    mediaIds?: unknown;
+    motion?: unknown;
+    start?: unknown;
+    transitions?: unknown;
+  };
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "id" in value &&
-    typeof value.id === "string" &&
-    "mediaId" in value &&
-    typeof value.mediaId === "string" &&
-    "start" in value &&
-    typeof value.start === "number" &&
-    "end" in value &&
-    typeof value.end === "number"
+    typeof candidate.id === "string" &&
+    hasVisualMediaReference(candidate) &&
+    typeof candidate.start === "number" &&
+    typeof candidate.end === "number" &&
+    typeof candidate.motion === "object" &&
+    candidate.motion !== null &&
+    typeof candidate.transitions === "object" &&
+    candidate.transitions !== null
   );
+}
+
+function hasVisualMediaReference(value: { mediaId?: unknown; mediaIds?: unknown }): boolean {
+  const hasMediaId = typeof value.mediaId === "string" && value.mediaId.length > 0;
+  const hasMediaIds = Array.isArray(value.mediaIds) && value.mediaIds.some((entry) => typeof entry === "string" && entry.length > 0);
+  return hasMediaId || hasMediaIds;
 }
