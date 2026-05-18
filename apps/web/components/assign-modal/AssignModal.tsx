@@ -62,6 +62,21 @@ const PIP_POSITION_OPTIONS = [
 
 type PipPositionValue = (typeof PIP_POSITION_OPTIONS)[number]["value"];
 
+type AssignVisualItem = {
+  id: string;
+  mediaId: string;
+  anchor?: "sentences" | "time";
+  from?: string;
+  to?: string;
+  sentences: [number, number];
+  start: number;
+  end: number;
+  motion: { kind: string; easing: string };
+  transitions: { in: string; out: string };
+  pip?: { posX: number; posY: number; size: number; radius: number; opacity: number };
+  cache_status?: "warm" | "partial" | "cold" | "invalid" | "orphaned";
+};
+
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
   const sec = (s % 60).toFixed(1).padStart(4, "0");
@@ -91,6 +106,43 @@ function pipCoordsFromPreset(value: PipPositionValue): { posX: number; posY: num
 function pipPresetFromCoords(posX: number, posY: number): PipPositionValue {
   const match = PIP_POSITION_OPTIONS.find((entry) => entry.posX === posX && entry.posY === posY);
   return match?.value ?? "BR";
+}
+
+function areItemsEquivalent(left: AssignVisualItem, right: AssignVisualItem): boolean {
+  const leftPip = left.pip;
+  const rightPip = right.pip;
+  const samePip = !leftPip && !rightPip
+    ? true
+    : !!leftPip &&
+      !!rightPip &&
+      leftPip.posX === rightPip.posX &&
+      leftPip.posY === rightPip.posY &&
+      leftPip.size === rightPip.size &&
+      leftPip.radius === rightPip.radius &&
+      leftPip.opacity === rightPip.opacity;
+  return (
+    left.mediaId === right.mediaId &&
+    left.anchor === right.anchor &&
+    left.from === right.from &&
+    left.to === right.to &&
+    left.sentences[0] === right.sentences[0] &&
+    left.sentences[1] === right.sentences[1] &&
+    left.start === right.start &&
+    left.end === right.end &&
+    left.motion.kind === right.motion.kind &&
+    left.motion.easing === right.motion.easing &&
+    left.transitions.in === right.transitions.in &&
+    left.transitions.out === right.transitions.out &&
+    samePip
+  );
+}
+
+function withEditCacheStatus(existing: AssignVisualItem | undefined, next: AssignVisualItem): AssignVisualItem {
+  if (!existing) return { ...next, cache_status: "invalid" };
+  if (areItemsEquivalent(existing, next)) {
+    return existing.cache_status ? { ...next, cache_status: existing.cache_status } : next;
+  }
+  return { ...next, cache_status: "invalid" };
 }
 
 export function AssignModal({
@@ -242,6 +294,12 @@ export function AssignModal({
 
     const targetLayer =
       layerId !== "new" ? matchingLayers.find((l) => l.id === layerId) : undefined;
+    const existingEditLayer = editLayerId
+      ? layers.find((layer) => layer.id === editLayerId && layer.kind !== "sub")
+      : undefined;
+    const existingEditItem = existingEditLayer?.items.find(
+      (candidate) => (candidate as { id?: string }).id === editItemId,
+    ) as AssignVisualItem | undefined;
 
     if (targetLayer) {
       const overlaps = hasSentenceOverlap(
@@ -289,6 +347,9 @@ export function AssignModal({
             },
           }
         : newItemBase;
+    const finalItem = editItemId
+      ? withEditCacheStatus(existingEditItem, newItem as AssignVisualItem)
+      : newItem;
 
     let newLayerId = layerId;
     let updatedLayers: Layer[];
@@ -298,12 +359,12 @@ export function AssignModal({
       newLayerId = `L-${compositing}-${Date.now()}`;
       const newLayer: Layer =
         compositing === "fg"
-          ? { id: newLayerId, kind: "fg", name: `Foreground · z${z}`, items: [newItem] }
+          ? { id: newLayerId, kind: "fg", name: `Foreground · z${z}`, items: [finalItem] }
           : {
               id: newLayerId,
               kind: "pip",
               name: `PiP · z${z}`,
-              items: [newItem],
+              items: [finalItem],
             };
 
       // Insert before BG layer (or at end)
@@ -321,7 +382,7 @@ export function AssignModal({
           ...l,
           items: l.items.map((it) => {
             if ((it as { id: string }).id !== editItemId) return it;
-            return newItem;
+            return finalItem;
           }),
         } as Layer;
       });
@@ -329,7 +390,7 @@ export function AssignModal({
       // Add to existing layer
       updatedLayers = layers.map((l) => {
         if (l.id !== layerId) return l;
-        return { ...l, items: [...l.items, newItem] } as Layer;
+        return { ...l, items: [...l.items, finalItem] } as Layer;
       });
     }
 

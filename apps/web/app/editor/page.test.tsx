@@ -305,6 +305,52 @@ it("updates only background through Change Background modal and appends one oper
   const parsed = JSON.parse(raw ?? "{}");
   expect(parsed.undo).toHaveLength(1);
   expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    const bgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "bg");
+    const fgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "fg");
+    const pipLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "pip");
+    expect(bgLayer?.items?.[0]?.cache_status).toBe("invalid");
+    expect(fgLayer?.items?.[0]?.cache_status).toBe("warm");
+    expect(pipLayer?.items?.[0]?.cache_status).toBe("warm");
+  });
+});
+
+it("edits foreground via inspector Assign modal and invalidates only the edited foreground item", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
+  fireEvent.click(screen.getByTitle("CHANGE"));
+
+  expect(await screen.findByRole("heading", { name: "Edit clip" })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Motion"), { target: { value: "zoom_in" } });
+  fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+
+  expect(readUndo()).toHaveLength(1);
+  expect(readUndo()[0]?.op?.type).toBe("replace_layers");
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    const bgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "bg");
+    const fgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "fg");
+    const pipLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "pip");
+    expect(fgLayer?.items?.[0]?.motion?.kind).toBe("zoom_in");
+    expect(fgLayer?.items?.[0]?.cache_status).toBe("invalid");
+    expect(bgLayer?.items?.[0]?.cache_status).toBe("warm");
+    expect(pipLayer?.items?.[0]?.cache_status).toBe("warm");
+  });
 });
 
 it("saves background motion with schema-valid values after Change Background", async () => {

@@ -27,6 +27,7 @@ type BgLayer = {
     motion: { kind: string; easing: string };
     transitions: { in: string; out: string };
     crossfade: number;
+    cache_status?: "warm" | "partial" | "cold" | "invalid" | "orphaned";
   }>;
 };
 
@@ -69,6 +70,33 @@ function initialState(existing?: BgLayer) {
   };
 }
 
+function hasBackgroundItemChanged(
+  previous: BgLayer["items"][number],
+  next: BgLayer["items"][number],
+): boolean {
+  return (
+    previous.mediaId !== next.mediaId ||
+    previous.sentences[0] !== next.sentences[0] ||
+    previous.sentences[1] !== next.sentences[1] ||
+    previous.start !== next.start ||
+    previous.end !== next.end ||
+    previous.motion.kind !== next.motion.kind ||
+    previous.motion.easing !== next.motion.easing ||
+    previous.transitions.in !== next.transitions.in ||
+    previous.transitions.out !== next.transitions.out ||
+    previous.crossfade !== next.crossfade
+  );
+}
+
+function withBackgroundCacheStatus(
+  previous: BgLayer["items"][number] | undefined,
+  next: BgLayer["items"][number],
+): BgLayer["items"][number] {
+  if (!previous) return next;
+  if (hasBackgroundItemChanged(previous, next)) return { ...next, cache_status: "invalid" };
+  return previous.cache_status ? { ...next, cache_status: previous.cache_status } : next;
+}
+
 export function BgModal({
   duration,
   existing,
@@ -108,7 +136,7 @@ export function BgModal({
         duration,
         (index + 1) * slotDuration + (index < selectedMedia.length - 1 ? fadeSeconds : 0),
       );
-      return {
+      const nextItem = {
         id: existingForIndex?.id ?? `bg-${Date.now()}-${index}`,
         mediaId,
         sentences: [1, Math.max(totalSentences, 1)] as [number, number],
@@ -120,7 +148,8 @@ export function BgModal({
           out: index < selectedMedia.length - 1 && crossfadeSeconds > 0 ? "fade" : "cut",
         },
         crossfade: crossfadeSeconds,
-      };
+      } as BgLayer["items"][number];
+      return withBackgroundCacheStatus(existingForIndex, nextItem);
     });
   }
 
@@ -137,7 +166,7 @@ export function BgModal({
       const end = Math.min(duration, start + clipDuration);
       if (end <= start) break;
       const existingForIndex = existing?.items[index];
-      items.push({
+      const nextItem = {
         id: existingForIndex?.id ?? `bg-${Date.now()}-${index}`,
         mediaId,
         sentences: [1, Math.max(totalSentences, 1)] as [number, number],
@@ -149,7 +178,8 @@ export function BgModal({
           out: index < selectedMedia.length - 1 && crossfadeSeconds > 0 && end < duration ? "fade" : "cut",
         },
         crossfade: crossfadeSeconds,
-      });
+      } as BgLayer["items"][number];
+      items.push(withBackgroundCacheStatus(existingForIndex, nextItem));
       start = end;
       if (start >= duration) break;
     }

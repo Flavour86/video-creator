@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ImgHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { AssignModal } from "./AssignModal";
+
+vi.mock("next/image", () => ({
+  default: (props: ImgHTMLAttributes<HTMLImageElement>) => <img {...props} alt={props.alt ?? ""} />,
+}));
 
 const SENTENCES = [
   { index: 1, text: "First sentence.", start_s: 0, end_s: 5, confidence_avg: 0.9 },
@@ -122,5 +127,85 @@ describe("AssignModal", () => {
     await waitFor(() =>
       expect(screen.getByText(/overlap/i)).toBeInTheDocument(),
     );
+  });
+
+  it("marks edited item cache invalid when edit mode changes clip fields", async () => {
+    const onConfirm = vi.fn();
+    const existingLayer = {
+      id: "L-fg-1",
+      kind: "fg" as const,
+      name: "Foreground · z1",
+      items: [
+        {
+          id: "item-1",
+          mediaId: "img.jpg",
+          sentences: [1, 2] as [number, number],
+          start: 0,
+          end: 10,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          cache_status: "warm" as const,
+        },
+      ],
+    };
+    render(
+      <AssignModal
+        {...BASE_PROPS}
+        editItemId="item-1"
+        editLayerId="L-fg-1"
+        layers={[existingLayer]}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Motion"), { target: { value: "zoom_in" } });
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() => {
+      expect(onConfirm).toHaveBeenCalledOnce();
+      const [updatedLayers] = onConfirm.mock.calls[0] as [Array<{ id: string; items: Array<Record<string, unknown>> }>, string, string];
+      const layer = updatedLayers.find((entry) => entry.id === "L-fg-1");
+      expect(layer?.items[0]?.motion).toEqual({ kind: "zoom_in", easing: "linear" });
+      expect(layer?.items[0]?.cache_status).toBe("invalid");
+    });
+  });
+
+  it("preserves cache status when edit mode confirms without changes", async () => {
+    const onConfirm = vi.fn();
+    const existingLayer = {
+      id: "L-fg-1",
+      kind: "fg" as const,
+      name: "Foreground · z1",
+      items: [
+        {
+          id: "item-1",
+          mediaId: "img.jpg",
+          sentences: [1, 2] as [number, number],
+          start: 0,
+          end: 10,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          cache_status: "warm" as const,
+        },
+      ],
+    };
+    render(
+      <AssignModal
+        {...BASE_PROPS}
+        editItemId="item-1"
+        editLayerId="L-fg-1"
+        layers={[existingLayer]}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() => {
+      expect(onConfirm).toHaveBeenCalledOnce();
+      const [updatedLayers] = onConfirm.mock.calls[0] as [Array<{ id: string; items: Array<Record<string, unknown>> }>, string, string];
+      const layer = updatedLayers.find((entry) => entry.id === "L-fg-1");
+      expect(layer?.items[0]?.cache_status).toBe("warm");
+    });
   });
 });

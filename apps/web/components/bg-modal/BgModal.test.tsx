@@ -193,4 +193,83 @@ describe("BgModal", () => {
     expect(layer.items[0]).toMatchObject({ mediaId: "clip-long-a.mp4", start: 0, end: 6 });
     expect(layer.items[1]).toMatchObject({ mediaId: "clip-long-b.mp4", start: 6, end: 10 });
   });
+
+  it("preserves existing cache status for unchanged edited background strips", () => {
+    const { onSave } = renderModal({
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [
+          {
+            id: "bg-1",
+            mediaId: "bg.jpg",
+            sentences: [1, 6],
+            start: 0,
+            end: 5,
+            motion: { kind: "ken_burns", easing: "linear" },
+            transitions: { in: "cut", out: "cut" },
+            crossfade: 0,
+            cache_status: "warm",
+          },
+          {
+            id: "bg-2",
+            mediaId: "bg-2.jpg",
+            sentences: [1, 6],
+            start: 5,
+            end: 10,
+            motion: { kind: "ken_burns", easing: "linear" },
+            transitions: { in: "cut", out: "cut" },
+            crossfade: 0,
+            cache_status: "partial",
+          },
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    const layer = onSave.mock.calls[0][0];
+    expect(layer.items[0]).toMatchObject({ id: "bg-1", cache_status: "warm" });
+    expect(layer.items[1]).toMatchObject({ id: "bg-2", cache_status: "partial" });
+  });
+
+  it("invalidates edited background strips when playlist properties change", () => {
+    const { onSave } = renderModal({
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [
+          {
+            id: "bg-1",
+            mediaId: "bg.jpg",
+            sentences: [1, 6],
+            start: 0,
+            end: 5,
+            motion: { kind: "ken_burns", easing: "linear" },
+            transitions: { in: "cut", out: "cut" },
+            crossfade: 0,
+            cache_status: "warm",
+          },
+          {
+            id: "bg-2",
+            mediaId: "bg-2.jpg",
+            sentences: [1, 6],
+            start: 5,
+            end: 10,
+            motion: { kind: "ken_burns", easing: "linear" },
+            transitions: { in: "cut", out: "cut" },
+            crossfade: 0,
+            cache_status: "warm",
+          },
+        ],
+      },
+    });
+    fireEvent.change(screen.getByLabelText(/crossfade/i), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    const layer = onSave.mock.calls[0][0];
+    expect(layer.items[0]).toMatchObject({ id: "bg-1", cache_status: "invalid" });
+    expect(layer.items[1]).toMatchObject({ id: "bg-2", cache_status: "invalid" });
+  });
 });
