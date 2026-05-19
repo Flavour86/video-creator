@@ -119,4 +119,25 @@ describe("split-spec screenshot ownership inventory", () => {
 
     expect(problems, `Launcher visual parity ownership mismatches:\n${problems.join("\n")}`).toEqual([]);
   });
+
+  it("keeps editor parity screenshots implemented under editor ownership", () => {
+    const editorRefs = collectScreenshotRefs("docs/designs/tasks/editor/SPEC_EDITOR.md");
+    const problems: string[] = [];
+
+    for (const screenshot of editorRefs) {
+      const entries = visualManifest.filter((entry) => entry.screenshot === screenshot);
+      if (entries.length !== 1) {
+        problems.push(`${screenshot} expected exactly one manifest entry, got ${entries.length}`);
+        continue;
+      }
+      const [entry] = entries;
+      if (entry && (entry.owner !== "editor" || entry.status !== "implemented")) {
+        problems.push(
+          `${screenshot} expected owner=editor/status=implemented actual owner=${entry.owner}/status=${entry.status}`,
+        );
+      }
+    }
+
+    expect(problems, `Editor visual parity ownership mismatches:\n${problems.join("\n")}`).toEqual([]);
+  });
 });

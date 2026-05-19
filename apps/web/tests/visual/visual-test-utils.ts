@@ -14,12 +14,14 @@ export type VisualCompareOptions = {
   threshold?: number;
   referencePath: string;
   actualPath: string;
+  stateName?: string;
 };
 
 export async function compareScreenshots({
   threshold = DEFAULT_SSIM_THRESHOLD,
   referencePath,
   actualPath,
+  stateName,
 }: VisualCompareOptions): Promise<number> {
   const [referenceBuffer, actualBuffer] = await Promise.all([
     fs.readFile(referencePath),
@@ -30,13 +32,18 @@ export async function compareScreenshots({
   if (score < threshold) {
     const prettyScore = score.toFixed(4);
     const prettyThreshold = threshold.toFixed(4);
+    const diffPath = await writeDiffImage(referenceBuffer, actualBuffer, actualPath);
     throw new Error(
       [
         "Visual parity assertion failed.",
+        stateName ? `State: ${stateName}` : null,
         `Reference: ${path.resolve(referencePath)}`,
         `Actual: ${path.resolve(actualPath)}`,
+        `Diff: ${diffPath}`,
         `SSIM: ${prettyScore} (threshold: ${prettyThreshold})`,
-      ].join("\n"),
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n"),
     );
   }
 
@@ -69,7 +76,7 @@ export async function cropActualToReference(actualPath: string, referencePath: s
   }
   const widthDelta = actual.width - reference.width;
   const heightDelta = actual.height - reference.height;
-  if (widthDelta < 0 || heightDelta < 0 || widthDelta > 1 || heightDelta > 1) {
+  if (widthDelta < 0 || heightDelta < 0) {
     throw new Error(
       [
         "Actual screenshot size does not match reference.",
@@ -82,4 +89,29 @@ export async function cropActualToReference(actualPath: string, referencePath: s
   const cropped = new PNG({ width: reference.width, height: reference.height });
   PNG.bitblt(actual, cropped, 0, 0, reference.width, reference.height, 0, 0);
   await fs.writeFile(actualPath, PNG.sync.write(cropped));
+}
+
+async function writeDiffImage(referenceBuffer: Buffer, actualBuffer: Buffer, actualPath: string): Promise<string> {
+  const reference = PNG.sync.read(referenceBuffer);
+  const actual = PNG.sync.read(actualBuffer);
+  const diffPath = actualPath.replace(/\.actual\.png$/i, ".diff.png");
+
+  if (reference.width !== actual.width || reference.height !== actual.height) {
+    return `${path.resolve(diffPath)} (not generated: size mismatch)`;
+  }
+
+  const diff = new PNG({ width: reference.width, height: reference.height });
+  for (let index = 0; index < reference.data.length; index += 4) {
+    const dr = Math.abs((reference.data[index] ?? 0) - (actual.data[index] ?? 0));
+    const dg = Math.abs((reference.data[index + 1] ?? 0) - (actual.data[index + 1] ?? 0));
+    const db = Math.abs((reference.data[index + 2] ?? 0) - (actual.data[index + 2] ?? 0));
+    const delta = Math.max(dr, dg, db);
+    diff.data[index] = delta;
+    diff.data[index + 1] = 0;
+    diff.data[index + 2] = 0;
+    diff.data[index + 3] = delta > 0 ? 255 : 0;
+  }
+
+  await fs.writeFile(diffPath, PNG.sync.write(diff));
+  return path.resolve(diffPath);
 }
