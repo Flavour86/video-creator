@@ -170,14 +170,14 @@ def render_clip(
 
 
 def _field(item: ClipRenderItem, snake_name: str, alias: str | None = None) -> object:
-    item = _unwrap_root_model(item)
-    if isinstance(item, Mapping):
-        if snake_name in item:
-            return item[snake_name]
-        if alias is not None and alias in item:
-            return item[alias]
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        if snake_name in raw:
+            return raw[snake_name]
+        if alias is not None and alias in raw:
+            return raw[alias]
         raise KeyError(snake_name)
-    return getattr(item, snake_name)
+    return getattr(raw, snake_name)
 
 
 def _media_id(item: ClipRenderItem) -> str:

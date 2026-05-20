@@ -67,7 +67,7 @@ function BgBlock({
             style={{ left: `${left}%`, width: `${Math.max(width, 0.8)}%` }}
           >
             {thumbUrl && (
-              <Image alt="" className="h-full w-full object-cover opacity-60" src={thumbUrl} />
+              <Image alt="" className="h-full w-full object-cover opacity-60" fill sizes="120px" src={thumbUrl} />
             )}
             <span className="absolute inset-0 flex truncate px-2 text-[10px] font-medium opacity-70">
               {item.mediaId}

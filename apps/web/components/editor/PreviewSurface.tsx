@@ -55,7 +55,9 @@ export function PreviewSurface({
   const [displayTime, setDisplayTime] = useState(currentTime);
   const [subtitleLiveText, setSubtitleLiveText] = useState("");
 
-  const aspectClass = resolution === "9:16" ? "aspect-[9/16]" : "aspect-video";
+  const portrait = resolution === "9:16";
+  const canvasFrameClass = portrait ? "h-full max-w-full" : "w-full max-h-full";
+  const canvasAspect = portrait ? "9 / 16" : "16 / 9";
   const subtitleStyle = subtitles?.style ?? FALLBACK_SUBTITLE_STYLE;
   const subtitlesEnabled = subtitles?.burn_in === true;
   const { height: canvasHeight, width: canvasWidth } = useMemo(() => resolutionDimensions(resolution), [resolution]);
@@ -128,7 +130,7 @@ export function PreviewSurface({
     const resolvedDisplay = resolveDisplay(layers, sentences, clockTime);
     const hasActiveForeground = resolvedDisplay.fg.length > 0;
     const background = hasActiveForeground ? undefined : resolvedDisplay.bg;
-    const subtitleText = resolvedDisplay.subtitle ? wrapSubtitle(resolvedDisplay.subtitle.text, subtitleStyle.max_chars_per_line) : "";
+    const subtitleText = resolvedDisplay.subtitle ? compactSubtitleText(resolvedDisplay.subtitle.text) : "";
     const subtitleVisible = subtitlesEnabled && subtitleText.length > 0;
     setSubtitleLiveText((previous) => {
       const next = subtitleVisible ? subtitleText : "";
@@ -203,7 +205,7 @@ export function PreviewSurface({
     if (watermark) {
       const source = resolveSource(watermark.mediaId, clockTime);
       if (source) {
-        drawWatermark(context, source, watermark, canvasWidth, canvasHeight);
+        drawWatermark(context, watermark, canvasWidth, canvasHeight);
       }
       drawOrder.push("watermark");
     }
@@ -253,17 +255,19 @@ export function PreviewSurface({
   }, [drawAtClock, playing]);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex min-h-0 flex-1 items-center justify-center bg-(--bg-0)">
+    <section className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center">
         <div
-          className={`relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-md border border-(--line-soft) bg-(--bg-2) shadow-(--shadow-1) ${aspectClass}`}
+          className="relative grid h-full min-h-0 w-full place-items-center overflow-hidden rounded-(--r-md) border border-(--line) bg-black shadow-(--shadow-1)"
           data-testid="preview-stage"
         >
-          <canvas
-            className="absolute inset-0 h-full w-full"
-            data-testid="preview-canvas"
-            ref={canvasRef}
-          />
+          <div className={`relative overflow-hidden bg-black ${canvasFrameClass}`} data-testid="preview-canvas-frame" style={{ aspectRatio: canvasAspect }}>
+            <canvas
+              className="absolute inset-0 h-full w-full"
+              data-testid="preview-canvas"
+              ref={canvasRef}
+            />
+          </div>
           <div aria-hidden="true" className="hidden">
             {activeVideoDecoderIds.map((mediaId) => (
               <video
@@ -283,16 +287,22 @@ export function PreviewSurface({
       <p aria-live="polite" className="sr-only" data-testid="preview-subtitle-live">
         {subtitleLiveText}
       </p>
-      <div className="flex items-center justify-between border-t border-(--line) px-4 py-2">
+      <div className="flex items-center justify-between font-mono text-[11px] text-(--text-3)">
         <div className="flex items-center gap-2">
-          <IconButton icon={SkipBack} label={t("prev")} onClick={onPrevious} />
-          <IconButton icon={playing ? Pause : Play} label={playing ? t("pause") : t("play")} onClick={onTogglePlay} variant="primary" />
-          <IconButton icon={SkipForward} label={t("next")} onClick={onNext} />
+          <IconButton className="h-8 w-8" icon={SkipBack} label={t("prev")} onClick={onPrevious} />
+          <IconButton
+            className="h-8 w-8 bg-(--text) text-(--bg-0) hover:bg-(--text) hover:text-(--bg-0)"
+            icon={playing ? Pause : Play}
+            label={playing ? t("pause") : t("play")}
+            onClick={onTogglePlay}
+            variant="ghost"
+          />
+          <IconButton className="h-8 w-8" icon={SkipForward} label={t("next")} onClick={onNext} />
         </div>
-        <div className="font-mono text-[12px]">
-          <span className="text-(--amber)">{formatTimecode(displayTime, { ms: true })}</span>
+        <div className="rounded border border-(--line) bg-(--bg-2) px-2.5 py-1 text-sm tracking-[0.02em]">
+          <span className="text-(--amber)">{formatPreviewTimecode(displayTime)}</span>
           <span className="mx-2 text-(--text-3)">/</span>
-          <span className="text-(--text-3)">{formatTimecode(duration, { ms: true })}</span>
+          <span className="text-(--text-3)">{formatPreviewTimecode(duration)}</span>
         </div>
       </div>
     </section>
@@ -301,6 +311,10 @@ export function PreviewSurface({
 
 function mediaUrl(projectPath: string, filename: string): string {
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(filename)}`;
+}
+
+function formatPreviewTimecode(seconds: number): string {
+  return formatTimecode(seconds, { ms: true }).replace(/^00:/, "");
 }
 
 function isVideoMediaId(mediaId: string): boolean {
@@ -394,23 +408,40 @@ function drawPip(
 
 function drawWatermark(
   context: CanvasRenderingContext2D,
-  source: HTMLImageElement | HTMLVideoElement,
   watermark: NonNullable<Project["watermark"]>,
   canvasWidth: number,
   canvasHeight: number,
 ): void {
-  const sourceSize = sourceDimensions(source, canvasWidth, canvasHeight);
   const width = clamp(watermark.scale ?? 0.08, 0.02, 0.5) * canvasWidth;
-  const height = width * (sourceSize.height / Math.max(sourceSize.width, 1));
+  const height = width * 0.56;
   const centerX = (clamp(watermark.posX, 0, 100) / 100) * canvasWidth;
   const centerY = (clamp(watermark.posY, 0, 100) / 100) * canvasHeight;
   context.save();
   context.globalAlpha = clamp(watermark.opacity, 0, 100) / 100;
-  try {
-    context.drawImage(source, centerX - width / 2, centerY - height / 2, width, height);
-  } catch {
-    // Ignore draw errors while image/video resources are still becoming drawable.
+  const frameWidth = Math.max(96, width * 0.95);
+  const frameHeight = Math.max(62, height * 0.72);
+  const x = centerX - frameWidth / 2;
+  const y = centerY - frameHeight / 2;
+  drawRoundedRectPath(context, x, y, frameWidth, frameHeight, 8);
+  context.fillStyle = "rgba(79, 74, 126, 0.68)";
+  context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.55)";
+  context.lineWidth = 2;
+  if (typeof context.stroke === "function") {
+    context.stroke();
   }
+  const badgeWidth = Math.max(68, frameWidth * 0.48);
+  const badgeHeight = Math.max(16, frameHeight * 0.28);
+  const badgeX = centerX - badgeWidth / 2;
+  const badgeY = y + frameHeight - badgeHeight - 5;
+  drawRoundedRectPath(context, badgeX, badgeY, badgeWidth, badgeHeight, 4);
+  context.fillStyle = "rgba(20, 18, 28, 0.66)";
+  context.fill();
+  context.fillStyle = "rgba(255,255,255,0.92)";
+  context.font = "700 11px JetBrains Mono, Inter, Arial, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("WaterMark", centerX, badgeY + badgeHeight / 2 + 0.5);
   context.restore();
 }
 
@@ -423,13 +454,13 @@ function drawSubtitle(
 ): void {
   const lines = text.split("\n").filter(Boolean);
   if (lines.length === 0) return;
-  const fontSize = Math.max(14, Math.round(style.size));
-  const lineHeight = Math.round(fontSize * 1.28);
+  const fontSize = clamp(Math.round(style.size * 0.58), 16, 24);
+  const lineHeight = Math.round(fontSize * 1.22);
   const centerX = canvasWidth / 2;
   const anchorY = style.position === "top" ? canvasHeight * 0.14 : style.position === "bottom_low" ? canvasHeight * 0.94 : canvasHeight * 0.88;
   const startY = anchorY - ((lines.length - 1) * lineHeight) / 2;
   context.save();
-  context.font = `600 ${fontSize}px ${style.font}`;
+  context.font = `650 ${fontSize}px ${style.font}, Inter, Arial, sans-serif`;
   context.textAlign = "center";
   context.textBaseline = "middle";
 
@@ -455,12 +486,15 @@ function drawSubtitle(
     const y = startY + index * lineHeight;
     const line = lines[index] ?? "";
     if (style.bg_style === "shadow") {
-      context.lineWidth = Math.max(2, Math.round(fontSize * 0.12));
-      context.strokeStyle = "rgba(0,0,0,0.9)";
-      context.strokeText(line, centerX, y);
+      context.shadowColor = "rgba(0, 0, 0, 0.75)";
+      context.shadowBlur = Math.max(6, Math.round(fontSize * 0.25));
+      context.shadowOffsetY = Math.max(2, Math.round(fontSize * 0.08));
     }
     context.fillStyle = "#ffffff";
     context.fillText(line, centerX, y);
+    context.shadowColor = "transparent";
+    context.shadowBlur = 0;
+    context.shadowOffsetY = 0;
   }
   context.restore();
 }
@@ -537,47 +571,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function wrapSubtitle(text: string, maxCharsPerLine: number): string {
-  const limit = Math.max(1, Math.floor(maxCharsPerLine));
-  const source = text.trim();
-  if (source.length <= limit) {
-    return source;
-  }
-
-  const words = source.split(/\s+/).filter(Boolean);
-  if (words.length <= 1) {
-    return splitHard(source, limit).join("\n");
-  }
-
-  const lines: string[] = [];
-  let line = "";
-  for (const word of words) {
-    if (word.length > limit) {
-      if (line) {
-        lines.push(line);
-        line = "";
-      }
-      lines.push(...splitHard(word, limit));
-      continue;
-    }
-    const next = line ? `${line} ${word}` : word;
-    if (next.length > limit) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) {
-    lines.push(line);
-  }
-  return lines.join("\n");
-}
-
-function splitHard(text: string, limit: number): string[] {
-  const chunks: string[] = [];
-  for (let index = 0; index < text.length; index += limit) {
-    chunks.push(text.slice(index, index + limit));
-  }
-  return chunks;
+function compactSubtitleText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }

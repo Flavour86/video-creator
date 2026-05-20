@@ -1,12 +1,11 @@
-import { Trash, Upload } from "lucide-react";
+import { ImageIcon, PlusCircle, Trash, Type, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Project } from "@vc/shared-schemas";
 import { Button, NumberInput, Select } from "@/components/ui";
 import { WatermarkPanel } from "@/components/watermark-panel/WatermarkPanel";
-import { formatImageMeta, formatRangeLabel, formatTimecode } from "@/lib/format";
+import { formatImageMeta, formatTimecode } from "@/lib/format";
 import type { Layer } from "@/lib/preview/resolveDisplay";
-import Image from "next/image";
 import type { EditorMediaItem, EditorSelection } from "./types";
 
 type InspectorProps = {
@@ -100,6 +99,7 @@ const transitionOptions = [
   { label: "dip_black", value: "dip_black" },
 ];
 const pipPlacements: PipPlacement[] = ["TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR"];
+const inspectorControlClass = "rounded-none border-0 bg-(--bg-2) hover:bg-(--bg-2) focus:border-transparent focus-visible:outline-offset-0";
 
 export function Inspector({
   layers,
@@ -156,8 +156,6 @@ export function Inspector({
   const placement = isPip ? placementFromCoords(item.pip.posX, item.pip.posY) : "MC";
   const edgeMarginX = isPip ? edgeMarginXFromPlacement(placement, item.pip.posX) : 0;
   const edgeMarginY = isPip ? edgeMarginYFromPlacement(placement, item.pip.posY) : 0;
-  const rangeLabel = formatRangeLabel(item.sentences[0], item.sentences[1]);
-  const timeLabel = `${formatTimecode(item.start)}-${formatTimecode(item.end)}`;
   const availableMotionOptions = isBackground ? backgroundMotionOptions : motionOptions;
 
   return (
@@ -172,12 +170,12 @@ export function Inspector({
         subtitles={subtitles}
         watermark={watermark}
       />
-      <section className="flex flex-col gap-3 border-b border-(--line-soft) px-4 py-4">
-        <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">
+      <section className="flex flex-col gap-3 border-b border-(--line-soft) px-[14px] py-[14px]">
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-2)">
           {layerHeading(layer)}
         </h4>
         <button
-          className="group flex w-full items-center gap-3 rounded-md border border-(--line) bg-(--bg-2) p-3 text-left hover:border-(--bg-5)"
+          className="group flex w-full items-center gap-[10px] rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)"
           onClick={() => {
             if (isBackground) {
               onOpenBackground();
@@ -188,12 +186,18 @@ export function Inspector({
           title={t("change")}
           type="button"
         >
-          <div className="h-10 w-10 overflow-hidden rounded-sm bg-(--bg-3)">
-            {asset ? <Image alt="" className="h-full w-full object-cover" src={mediaSrc(projectPath, asset)} /> : null}
+          <div className="h-8 w-14 overflow-hidden rounded-sm bg-(--bg-3)">
+            {asset ? (
+              <img
+                alt=""
+                className="h-full w-full object-cover"
+                src={mediaSrc(projectPath, asset)}
+              />
+            ) : null}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate font-mono text-sm text-(--text)">{item.mediaId}</div>
-            <div className="truncate font-mono text-[11px] text-(--text-3)">
+            <div className="truncate text-[12px] font-semibold text-(--text)">{item.mediaId}</div>
+            <div className="truncate font-mono text-[10.5px] text-(--text-3)">
               {isBackground && asset ? formatImageMeta(asset.width ?? 0, asset.height ?? 0, asset.size) : itemSummary(item)}
             </div>
           </div>
@@ -205,10 +209,96 @@ export function Inspector({
         {isBackground ? <p className="text-[11px] leading-snug text-(--text-3)">{t("bgHint")}</p> : null}
       </section>
 
+      {isPip ? (
+        <Section title="Placement">
+          <div className="col-span-2 grid h-[90px] w-[160px] grid-cols-3 gap-1 rounded border border-(--line) bg-(--bg-2) p-1">
+            {pipPlacements.map((value) => (
+              <button
+                aria-label={`PiP placement ${value}`}
+                className={`h-full rounded-[3px] border font-mono text-[9px] ${placement === value ? "border-(--amber) bg-(--amber) text-(--bg-0) font-semibold" : "border-(--line-soft) bg-(--bg-3) text-(--text-3) hover:bg-(--bg-4) hover:text-(--text-2)"}`}
+                key={value}
+                onClick={() => {
+                  const nextPos = positionFromPlacement(value, edgeMarginX, edgeMarginY);
+                  onPatchItem(layer.id, item.id, { pip: { posX: nextPos.posX, posY: nextPos.posY } });
+                }}
+                type="button"
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+          <div className="col-span-2 grid grid-cols-[60px_minmax(0,1fr)_48px] items-center gap-2 text-[11px]">
+            <span className="text-(--text-3)">Size</span>
+            <div className="flex items-center">
+              <input
+                aria-label={t("pipSize")}
+                className="h-2 w-full accent-(--amber)"
+                id="editor-pip-size"
+                max={60}
+                min={15}
+                onChange={(event) => {
+                  const next = Number.parseFloat(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  onPatchItem(layer.id, item.id, { pip: { size: clamp(next, 15, 60) } });
+                }}
+                step={1}
+                type="range"
+                value={item.pip.size}
+              />
+            </div>
+            <span className="text-right font-mono text-[11px] text-(--text-2)">{Math.round(item.pip.size)}%</span>
+          </div>
+          <div className="col-span-2 grid grid-cols-[60px_minmax(0,1fr)_48px] items-center gap-2 text-[11px]">
+            <span className="text-(--text-3)">Radius</span>
+            <div className="flex items-center">
+              <input
+                aria-label={t("pipRadius")}
+                className="h-2 w-full accent-(--amber)"
+                id="editor-pip-radius"
+                max={32}
+                min={0}
+                onChange={(event) => {
+                  const next = Number.parseFloat(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  onPatchItem(layer.id, item.id, { pip: { radius: clamp(next, 0, 32) } });
+                }}
+                step={1}
+                type="range"
+                value={item.pip.radius}
+              />
+            </div>
+            <span className="text-right font-mono text-[11px] text-(--text-2)">{Math.round(item.pip.radius)}px</span>
+          </div>
+          <div className="col-span-2 grid grid-cols-[60px_minmax(0,1fr)_48px] items-center gap-2 text-[11px]">
+            <span className="text-(--text-3)">Opacity</span>
+            <div className="flex items-center">
+              <input
+                aria-label={t("pipOpacity")}
+                className="h-2 w-full accent-(--amber)"
+                id="editor-pip-opacity"
+                max={100}
+                min={10}
+                onChange={(event) => {
+                  const next = Number.parseFloat(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  onPatchItem(layer.id, item.id, { pip: { opacity: clamp(next, 10, 100) } });
+                }}
+                step={1}
+                type="range"
+                value={item.pip.opacity}
+              />
+            </div>
+            <span className="text-right font-mono text-[11px] text-(--text-2)">{Math.round(item.pip.opacity)}%</span>
+          </div>
+        </Section>
+      ) : null}
+
       {!isBackground ? (
         <Section title={t("range")}>
-          <GridRow htmlFor="editor-range-from" label={t("rangeFrom")}>
+          <GridRow htmlFor="editor-range-from" label="From">
             <NumberInput
+              aria-label={t("rangeFrom")}
+              className={inspectorControlClass}
               id="editor-range-from"
               min={1}
               name="editor-range-from"
@@ -220,8 +310,10 @@ export function Inspector({
               value={item.sentences[0]}
             />
           </GridRow>
-          <GridRow htmlFor="editor-range-to" label={t("rangeTo")}>
+          <GridRow htmlFor="editor-range-to" label="To">
             <NumberInput
+              aria-label={t("rangeTo")}
+              className={inspectorControlClass}
               id="editor-range-to"
               min={item.sentences[0]}
               name="editor-range-to"
@@ -234,16 +326,17 @@ export function Inspector({
               value={item.sentences[1]}
             />
           </GridRow>
-          <GridRow label={t("resolvedTimeSpan")}>
-            <span className="font-mono text-[11px] text-(--text-3)">{`${rangeLabel} (${timeLabel})`}</span>
-          </GridRow>
-          <GridRow label={t("stretch")}><span className="font-mono text-[11px] text-(--text-3)">{t("stretchHint")}</span></GridRow>
+          {layer.kind === "fg" ? (
+            <GridRow label={t("stretch")}><span className="font-mono text-[11px] text-(--text-3)">{t("stretchHint")}</span></GridRow>
+          ) : null}
         </Section>
       ) : null}
 
-      <Section title={t("motion")}>
-        <GridRow htmlFor="editor-motion-kind" label={isBackground ? t("backgroundMotion") : layer.kind === "pip" ? t("pipMotion") : t("foregroundMotion")}>
+      <Section title={isBackground ? t("motion") : "Motion & transitions"}>
+        <GridRow htmlFor={isBackground ? "editor-motion-kind" : undefined} label={isBackground ? t("backgroundMotion") : "Motion"}>
           <Select
+            aria-label={isBackground ? t("backgroundMotion") : layer.kind === "pip" ? t("pipMotion") : t("foregroundMotion")}
+            className={inspectorControlClass}
             id="editor-motion-kind"
             name="editor-motion-kind"
             onChange={(event) => {
@@ -259,121 +352,62 @@ export function Inspector({
             {availableMotionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
         </GridRow>
-        <GridRow htmlFor="editor-motion-easing" label={isBackground ? t("backgroundEasing") : t("motionEasing")}>
-          <Select
-            id="editor-motion-easing"
-            name="editor-motion-easing"
-            onChange={(event) => {
-              if (isBackground) {
-                onPatchBackground(layer.id, { motion: { easing: event.target.value } });
-                return;
-              }
-              onPatchItem(layer.id, item.id, { motion: { easing: event.target.value } });
-            }}
-            value={item.motion.easing}
-          >
-            {easingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </Select>
-        </GridRow>
-      </Section>
-
-      {isPip ? (
-        <Section title={t("pipPlacement")}>
-          <GridRow htmlFor="editor-pip-placement" label={t("pipPlacementLabel")}>
+        {isBackground ? (
+          <GridRow htmlFor="editor-motion-easing" label={t("backgroundEasing")}>
             <Select
-              id="editor-pip-placement"
-              name="editor-pip-placement"
+              aria-label={t("backgroundEasing")}
+              className={inspectorControlClass}
+              id="editor-motion-easing"
+              name="editor-motion-easing"
               onChange={(event) => {
-                const nextPlacement = event.target.value as PipPlacement;
-                const nextPos = positionFromPlacement(nextPlacement, edgeMarginX, edgeMarginY);
-                onPatchItem(layer.id, item.id, { pip: { posX: nextPos.posX, posY: nextPos.posY } });
+                onPatchBackground(layer.id, { motion: { easing: event.target.value } });
               }}
-              value={placement}
+              value={item.motion.easing}
             >
-              {pipPlacements.map((value) => <option key={value} value={value}>{value}</option>)}
+              {easingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
           </GridRow>
-          <GridRow htmlFor="editor-pip-margin-x" label={t("edgeMarginX")}>
-            <NumberInput
-              id="editor-pip-margin-x"
-              max={40}
-              min={0}
-              name="editor-pip-margin-x"
-              onChange={(event) => {
-                const nextMarginX = Number.parseInt(event.target.value, 10);
-                if (!Number.isFinite(nextMarginX)) return;
-                const nextPos = positionFromPlacement(placement, clamp(nextMarginX, 0, 40), edgeMarginY);
-                onPatchItem(layer.id, item.id, { pip: { posX: nextPos.posX } });
-              }}
-              value={edgeMarginX}
-            />
-          </GridRow>
-          <GridRow htmlFor="editor-pip-margin-y" label={t("edgeMarginY")}>
-            <NumberInput
-              id="editor-pip-margin-y"
-              max={40}
-              min={0}
-              name="editor-pip-margin-y"
-              onChange={(event) => {
-                const nextMarginY = Number.parseInt(event.target.value, 10);
-                if (!Number.isFinite(nextMarginY)) return;
-                const nextPos = positionFromPlacement(placement, edgeMarginX, clamp(nextMarginY, 0, 40));
-                onPatchItem(layer.id, item.id, { pip: { posY: nextPos.posY } });
-              }}
-              value={edgeMarginY}
-            />
-          </GridRow>
-          <GridRow htmlFor="editor-pip-size" label={t("pipSize")}>
-            <NumberInput
-              id="editor-pip-size"
-              max={60}
-              min={15}
-              name="editor-pip-size"
-              onChange={(event) => {
-                const next = Number.parseFloat(event.target.value);
-                if (!Number.isFinite(next)) return;
-                onPatchItem(layer.id, item.id, { pip: { size: clamp(next, 15, 60) } });
-              }}
-              value={item.pip.size}
-            />
-          </GridRow>
-          <GridRow htmlFor="editor-pip-radius" label={t("pipRadius")}>
-            <NumberInput
-              id="editor-pip-radius"
-              max={32}
-              min={0}
-              name="editor-pip-radius"
-              onChange={(event) => {
-                const next = Number.parseFloat(event.target.value);
-                if (!Number.isFinite(next)) return;
-                onPatchItem(layer.id, item.id, { pip: { radius: clamp(next, 0, 32) } });
-              }}
-              value={item.pip.radius}
-            />
-          </GridRow>
-          <GridRow htmlFor="editor-pip-opacity" label={t("pipOpacity")}>
-            <NumberInput
-              id="editor-pip-opacity"
-              max={100}
-              min={10}
-              name="editor-pip-opacity"
-              onChange={(event) => {
-                const next = Number.parseFloat(event.target.value);
-                if (!Number.isFinite(next)) return;
-                onPatchItem(layer.id, item.id, { pip: { opacity: clamp(next, 10, 100) } });
-              }}
-              value={item.pip.opacity}
-            />
-          </GridRow>
-        </Section>
-      ) : null}
+        ) : null}
+        {!isBackground ? (
+          <>
+            <GridRow htmlFor="editor-transition-in" label="In">
+              <Select
+                aria-label={t("transitionIn")}
+                className={inspectorControlClass}
+                id="editor-transition-in"
+                name="editor-transition-in"
+                onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { in: event.target.value } })}
+                value={item.transitions.in}
+              >
+                {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </Select>
+            </GridRow>
+            <GridRow htmlFor="editor-transition-out" label="Out">
+              <Select
+                aria-label={t("transitionOut")}
+                className={inspectorControlClass}
+                id="editor-transition-out"
+                name="editor-transition-out"
+                onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { out: event.target.value } })}
+                value={item.transitions.out}
+              >
+                {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </Select>
+            </GridRow>
+          </>
+        ) : null}
+      </Section>
 
       {isBackground ? (
         <Section title={t("backgroundCycle")}>
           <div className="col-span-2 grid grid-cols-3 gap-2">
             {bgAssets.map((entry) => (
               <div className="min-w-0 overflow-hidden rounded border border-(--line) bg-(--bg-2)" key={entry.filename}>
-                <Image alt={entry.filename} className="aspect-video w-full object-cover" src={mediaSrc(projectPath, entry)} />
+                <img
+                  alt={entry.filename}
+                  className="aspect-video w-full object-cover"
+                  src={mediaSrc(projectPath, entry)}
+                />
                 <div className="truncate px-1.5 py-1 font-mono text-[10px] text-(--text-3)">{entry.filename}</div>
               </div>
             ))}
@@ -381,6 +415,7 @@ export function Inspector({
           <GridRow htmlFor="editor-bg-crossfade" label={t("backgroundCrossfade")}>
             <NumberInput
               id="editor-bg-crossfade"
+              className={inspectorControlClass}
               max={2}
               min={0}
               name="editor-bg-crossfade"
@@ -392,31 +427,6 @@ export function Inspector({
               step={0.1}
               value={isBackgroundItem(item) ? item.crossfade : 0}
             />
-          </GridRow>
-        </Section>
-      ) : null}
-
-      {!isBackground ? (
-        <Section title={t("transitions")}>
-          <GridRow htmlFor="editor-transition-in" label={t("transitionIn")}>
-            <Select
-              id="editor-transition-in"
-              name="editor-transition-in"
-              onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { in: event.target.value } })}
-              value={item.transitions.in}
-            >
-              {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </Select>
-          </GridRow>
-          <GridRow htmlFor="editor-transition-out" label={t("transitionOut")}>
-            <Select
-              id="editor-transition-out"
-              name="editor-transition-out"
-              onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { out: event.target.value } })}
-              value={item.transitions.out}
-            >
-              {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </Select>
           </GridRow>
         </Section>
       ) : null}
@@ -488,13 +498,22 @@ function isBackgroundItem(item: VisualItem): item is BackgroundVisualItem {
 
 function layerHeading(layer: Layer): string {
   if (layer.kind === "bg") return "Background";
-  const zone = layer.name.match(/z\d+/i)?.[0];
-  if (layer.kind === "pip") return zone ? `PiP · ${zone}` : "PiP";
-  return zone ? `Foreground · ${zone}` : "Foreground";
+  if (layer.kind === "pip") {
+    if (/^PiP\s+z\d+/i.test(layer.name)) {
+      return `PiP · ${layer.name.replace(/^PiP\s+/i, "")}`;
+    }
+    return `PiP · ${layer.name}`;
+  }
+  if (/^Foreground\s+z\d+/i.test(layer.name)) {
+    return `Foreground · ${layer.name.replace(/^Foreground\s+/i, "")}`;
+  }
+  return `Foreground · ${layer.name}`;
 }
 
 function itemSummary(item: VisualItem): string {
-  return `range ${item.sentences[0]}-${item.sentences[1]} - motion ${item.motion.kind} - transition in ${item.transitions.in} - out ${item.transitions.out}`;
+  const range = `s${item.sentences[0]}-s${item.sentences[1]}`;
+  const span = `${formatTimecode(item.start)}-${formatTimecode(item.end)}`;
+  return `${range} · ${span}`;
 }
 
 function backgroundAssets(media: EditorMediaItem[]): EditorMediaItem[] {
@@ -511,14 +530,18 @@ function mediaSrc(projectPath: string, item: EditorMediaItem): string {
 }
 
 function Header({ label }: { label: string }) {
-  return <div className="sticky top-0 border-b border-(--line) px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">{label}</div>;
+  return (
+    <div className="sticky top-0 flex h-[34px] items-center justify-center border-b border-(--amber) px-4 text-[12px] font-semibold uppercase text-(--text)">
+      {label}
+    </div>
+  );
 }
 
 function Section({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <section className="flex flex-col gap-3 border-b border-(--line-soft) px-4 py-4 last:border-b-0">
-      <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">{title}</h4>
-      <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-xs">{children}</div>
+    <section className="flex flex-col gap-3 border-b border-(--line-soft) px-[14px] py-[14px] last:border-b-0">
+      <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-2)">{title}</h4>
+      <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-x-[10px] gap-y-2 text-xs">{children}</div>
     </section>
   );
 }
@@ -527,9 +550,9 @@ function GridRow({ children, htmlFor, label }: { children: ReactNode; htmlFor?: 
   return (
     <>
       {htmlFor ? (
-        <label className="uppercase tracking-[0.06em] text-(--text-3)" htmlFor={htmlFor}>{label}</label>
+        <label className="text-[10.5px] uppercase tracking-[0.06em] text-(--text-3)" htmlFor={htmlFor}>{label}</label>
       ) : (
-        <span className="uppercase tracking-[0.06em] text-(--text-3)">{label}</span>
+        <span className="text-[10.5px] uppercase tracking-[0.06em] text-(--text-3)">{label}</span>
       )}
       <span>{children}</span>
     </>
@@ -555,38 +578,74 @@ function GlobalControls({
 }) {
   const t = useTranslations("pages.editor.inspector");
   const watermarkMedia = media
-    .filter((item) => item.kind === "image" || item.kind === "video" || item.kind === "watermark_image" || item.kind === "watermark_video")
+    .filter(
+      (
+        item,
+      ): item is EditorMediaItem & { kind: "image" | "video" | "watermark_image" | "watermark_video" } =>
+        item.kind === "image" ||
+        item.kind === "video" ||
+        item.kind === "watermark_image" ||
+        item.kind === "watermark_video",
+    )
     .map((item) => ({
       mediaId: item.mediaId || item.filename,
       filename: item.filename,
       kind: item.kind,
       thumb_url: item.thumb_url,
     }));
-
+  const watermarkLabel = watermark?.mediaId ?? "Choose";
+  const firstWatermarkAsset = watermarkMedia[0];
   return (
     <section className="border-b border-(--line-soft) px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">Global video config</span>
+        <span className="rounded-full border border-(--blue) px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-(--blue)">SQLite</span>
+      </div>
       <div className="grid gap-2">
-        <WatermarkPanel media={watermarkMedia} onChange={onWatermarkChange} value={watermark} />
         <button
-          className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
+          aria-label="Watermark"
+          className="flex w-full items-center justify-between gap-[10px] rounded border border-(--amber)/35 bg-(--amber)/10 px-[10px] py-2 text-[12px]"
+          onClick={() => {
+            if (watermark) {
+              onWatermarkChange(null);
+              return;
+            }
+            if (!firstWatermarkAsset) return;
+            onWatermarkChange({
+              mediaId: firstWatermarkAsset.mediaId,
+              opacity: 85,
+              posX: 9,
+              posY: 11,
+              scale: 0.08,
+            });
+          }}
+          type="button"
+        >
+          <span className="inline-flex items-center gap-[7px] text-(--text-2)"><ImageIcon aria-hidden="true" className="h-3.5 w-3.5" />Watermark</span>
+          <span className="font-mono text-[10.5px] text-(--text-4)">{watermarkLabel}</span>
+        </button>
+        <button
+          aria-label={t("subtitles")}
+          className="flex w-full items-center justify-between gap-[10px] rounded border border-(--line) bg-(--bg-2) px-[10px] py-2 text-[12px]"
           onClick={onOpenSubtitles}
           type="button"
         >
-          {t("subtitles")}
+          <span className="inline-flex items-center gap-[7px] text-(--text-2)"><Type aria-hidden="true" className="h-3.5 w-3.5" />{t("subtitles")}</span>
+          <span className="font-mono text-[10.5px] text-(--text-4)">{subtitles?.burn_in ? "Burn-in" : "Sidecar"}</span>
         </button>
         <button
-          className="w-full rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-left text-sm font-semibold hover:border-(--bg-5)"
+          aria-label={hasBackground ? t("changeBackground") : t("addBackground")}
+          className="flex w-full items-center justify-between gap-[10px] rounded border border-(--line) bg-(--bg-2) px-[10px] py-2 text-[12px]"
           onClick={onOpenBackground}
           type="button"
         >
-          {hasBackground ? t("changeBackground") : t("addBackground")}
+          <span className="inline-flex items-center gap-[7px] text-(--text-2)"><PlusCircle aria-hidden="true" className="h-3.5 w-3.5" />{hasBackground ? t("changeBackground") : t("addBackground")}</span>
+          <span className="font-mono text-[10.5px] text-(--text-4)">Choose</span>
         </button>
       </div>
-      {subtitles ? (
-        <p className="mt-2 text-[10px] uppercase tracking-[0.08em] text-(--text-3)">
-          {subtitles.burn_in ? t("subtitlesBurnInOn") : t("subtitlesSidecar")}
-        </p>
-      ) : null}
+      <div className="sr-only">
+        <WatermarkPanel media={watermarkMedia} onChange={onWatermarkChange} value={watermark ?? null} />
+      </div>
     </section>
   );
 }
@@ -611,8 +670,8 @@ function persistedMotionKind(kind: string): string {
 }
 
 function placementFromCoords(posX: number, posY: number): PipPlacement {
-  const row = posY < 33 ? "T" : posY > 67 ? "B" : "M";
-  const col = posX < 33 ? "L" : posX > 67 ? "R" : "C";
+  const row = posY < 34 ? "T" : posY >= 66 ? "B" : "M";
+  const col = posX < 34 ? "L" : posX >= 66 ? "R" : "C";
   return `${row}${col}` as PipPlacement;
 }
 

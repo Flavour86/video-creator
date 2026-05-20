@@ -171,7 +171,7 @@ export function InspectorPanel({
 
       {/* Thumbnail */}
       <button
-        className="overflow-hidden rounded border border-neutral-200 hover:border-sky-400"
+        className="relative overflow-hidden rounded border border-neutral-200 hover:border-sky-400"
         onClick={() => onOpenAssignEdit(selectedLayerId, selectedItemId, fromIdx, toIdx)}
         title="Click to change media"
         type="button"
@@ -180,7 +180,9 @@ export function InspectorPanel({
           <Image
             alt={item.mediaId}
             className="h-20 w-full object-cover"
+            height={80}
             src={thumbUrl}
+            width={320}
           />
         ) : (
           <div className="flex h-20 items-center justify-center bg-neutral-100 text-xs opacity-40">

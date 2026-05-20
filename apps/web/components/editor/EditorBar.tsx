@@ -1,6 +1,6 @@
-import { Clapperboard, Film, Home, Save } from "lucide-react";
+import { Film, FolderOpen, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Button, IconButton, StatusTag } from "@/components/ui";
+import { Button, IconButton } from "@/components/ui";
 import type { EditorRenderJob } from "./types";
 
 type EditorBarProps = {
@@ -38,20 +38,21 @@ export function EditorBar({
   return (
     <div className="grid h-12 grid-cols-[minmax(280px,_1fr)_auto] items-center gap-[14px] border-b border-(--line) bg-(--bg-1) px-[14px]">
       <div className="flex min-w-0 items-center gap-2.5">
-        <IconButton icon={Home} label={t("goLauncher")} onClick={onHome} />
+        <IconButton icon={FolderOpen} label={t("goLauncher")} onClick={onHome} />
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold tracking-normal text-(--text)">{projectName}</h2>
-          <p className="truncate font-mono text-[11px] text-(--text-3)">projectId: {projectId.slice(0, 11)}</p>
+          <h2 className="truncate text-[14px] font-semibold tracking-[-0.01em] text-(--text)" aria-label={projectName}>
+            {displayProjectName(projectName)}
+          </h2>
+          <p className="sr-only">projectId: {projectId.slice(0, 11)}</p>
+          <p className="sr-only">{cacheLabel}</p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-2">
-        <StatusTag aria-label={`Render cache status: ${cacheLabel}`} title={cacheLabel} variant="ready">{cacheLabel}</StatusTag>
-        <Button aria-label={`Save project config (${saveStatus})`} disabled={saving} onClick={onSave} size="extra-small" variant="ghost">
+        <Button aria-label={`Save project config (${saveStatus})`} disabled={saving} onClick={onSave} size="extra-small" variant="default">
           <Save aria-hidden="true" className="h-4 w-4" />
           {saveLabel}
         </Button>
-        <Button aria-label={`Render draft (${renderStateLabel})`} disabled={renderJob.running || renderDisabled} onClick={onRenderDraft} size="extra-small" variant="ghost">
-          <Clapperboard aria-hidden="true" className="h-4 w-4" />
+        <Button aria-label={`Render draft (${renderStateLabel})`} disabled={renderJob.running || renderDisabled} onClick={onRenderDraft} size="extra-small" variant="default">
           {draftLabel}
         </Button>
         <Button aria-label={`Render final (${renderStateLabel})`} disabled={renderJob.running || renderDisabled} onClick={onRenderFinal} size="extra-small" variant="render">
@@ -61,4 +62,8 @@ export function EditorBar({
       </div>
     </div>
   );
+}
+
+function displayProjectName(name: string): string {
+  return name.replace(/([a-z])([A-Z])/g, "$1 $2");
 }

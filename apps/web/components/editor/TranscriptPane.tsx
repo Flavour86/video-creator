@@ -1,7 +1,7 @@
 import { ImagePlus, Play, Search, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { KeyboardEvent, RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Kbd, StatusTag } from "@/components/ui";
+import { Kbd } from "@/components/ui";
 import { formatDuration, formatRangeLabel } from "@/lib/format";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 
@@ -64,14 +64,25 @@ export function TranscriptPane({
   }, [menu]);
 
   const chipRange = selectedRange ?? activeRange;
+  const sentenceRefs = useRef(new Map<number, HTMLDivElement>());
+  const selectionScrollReadyRef = useRef(false);
+
+  useEffect(() => {
+    if (!selectionScrollReadyRef.current) {
+      selectionScrollReadyRef.current = true;
+      return;
+    }
+    if (!selectedRange) return;
+    sentenceRefs.current.get(selectedRange[1])?.scrollIntoView({ block: "center", behavior: "auto" });
+  }, [selectedRange]);
 
   return (
     <aside className="relative flex min-h-0 flex-col bg-(--bg-1)">
-      <div className="flex items-center gap-2 border-b border-(--line) px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-(--line) px-3 py-2.5">
         <Search aria-hidden="true" className="h-4 w-4 text-(--text-3)" />
         <input
           aria-label={t("searchPlaceholder")}
-          className="flex-1 rounded border border-(--line) bg-(--bg-2) px-2 py-1 text-xs text-(--text) outline-none placeholder:text-(--text-4) focus-visible:border-(--amber)"
+          className="flex-1 rounded border border-(--line) bg-(--bg-2) px-2.5 py-1.5 text-[12px] text-(--text) outline-none placeholder:text-(--text-4) focus-visible:border-(--amber)"
           id="editor-transcript-search"
           name="editor-transcript-search"
           onChange={(event) => onQueryChange(event.target.value)}
@@ -85,14 +96,17 @@ export function TranscriptPane({
           <Kbd>⌘F</Kbd>
         </button>
       </div>
-      <div className="flex items-center justify-between border-b border-(--line-soft) px-3 py-2">
+      <div className="flex items-center justify-between border-b border-(--line) px-3 py-2">
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">
           {t("transcriptHead", { count: sentences.length })}
         </span>
-        <StatusTag variant={selectedRange ? "ready" : "info"}>{formatRangeLabel(chipRange[0], chipRange[1])}</StatusTag>
+        <span className="rounded border border-(--amber-line) bg-(--amber-bg) px-[7px] py-[2px] font-mono text-[11px] text-(--amber)">
+          {formatRangeLabel(chipRange[0], chipRange[1])}
+        </span>
       </div>
       <div
-        className="min-h-0 flex-1 overflow-y-auto"
+        data-testid="transcript-list"
+        className="min-h-0 flex-1 overflow-y-auto py-[6px]"
         onScroll={(event) => onScrollPositionChange?.(event.currentTarget.scrollTop)}
         ref={scrollContainerRef}
       >
@@ -107,25 +121,31 @@ export function TranscriptPane({
           const currentSearchMatch = query.trim() ? index === currentMatch : false;
           const lowConfidence = sentence.confidence_avg < 0.75;
           const orphan = sentence.end_s <= sentence.start_s;
+          const activeNow = sentence.index === activeRange[0];
           const rowRange: [number, number] = selected && selectedRange ? [selectedRange[0], selectedRange[1]] : [sentence.index, sentence.index];
           return (
             <div
-              className={`group grid w-full grid-cols-[minmax(0,1fr)_32px] items-stretch border-l-2 text-sm leading-snug hover:bg-(--bg-2) ${
+              className={`group relative grid w-full grid-cols-1 items-stretch border-l-2 text-[13px] leading-[1.5] text-(--text-2) hover:bg-(--bg-2) ${
                 selected
                   ? "border-l-(--amber) bg-(--amber-bg) text-(--text)"
-                  : active
-                    ? "border-l-(--amber) bg-(--bg-2) text-(--text)"
-                    : currentSearchMatch
-                      ? "border-transparent bg-(--amber-bg)"
-                      : lowConfidence || orphan
-                        ? "border-l-(--red) bg-(--bg-1)"
-                        : "border-transparent"
-              }`}
+                  : lowConfidence || orphan
+                    ? "border-l-(--red) text-(--red)"
+                    : "border-transparent"
+              } ${activeNow ? "bg-(--bg-3)" : ""} ${currentSearchMatch ? "ring-1 ring-(--amber-line) ring-inset" : ""}`}
               key={sentence.index}
-              ref={currentSearchMatch ? activeMatchRef : undefined}
+              ref={(node) => {
+                if (node) {
+                  sentenceRefs.current.set(sentence.index, node);
+                } else {
+                  sentenceRefs.current.delete(sentence.index);
+                }
+                if (currentSearchMatch) {
+                  activeMatchRef.current = node;
+                }
+              }}
             >
               <button
-                className="grid w-full grid-cols-[28px_96px_minmax(0,1fr)] items-start gap-2 px-3 py-2 text-left"
+                className="grid w-full grid-cols-[32px_90px_minmax(0,1fr)] items-baseline gap-2 pl-0 pr-3 py-[7px] text-left"
                 onClick={(event) => {
                   const range: [number, number] = event.shiftKey
                     ? normalizeRange(selectedRange?.[0] ?? activeRange[0], sentence.index)
@@ -147,19 +167,24 @@ export function TranscriptPane({
                 }}
                 type="button"
               >
-                <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">{sentence.index}</span>
-                <span className="pt-0.5 font-mono text-[11px] text-(--text-3)">
+                <span
+                  className={`text-right font-mono text-[10.5px] ${selected ? "text-(--amber)" : lowConfidence || orphan ? "text-(--red)" : "text-(--text-4)"}`}
+                >
+                  {sentence.index}
+                </span>
+                <span className={`font-mono text-[10.5px] ${selected ? "text-(--amber)" : lowConfidence || orphan ? "text-(--red)" : "text-(--text-3)"}`}>
                   {formatDuration(sentence.start_s)}-{formatDuration(sentence.end_s)}
                 </span>
-                <span className="text-(--text-2)">
+                <span className="[text-wrap:pretty]">
                   {highlight(sanitizeSentenceText(sentence.text), query)}
                   {lowConfidence ? <span className="ml-2 font-mono text-[10px] uppercase text-(--red)">{t("lowConfidence")}</span> : null}
                   {orphan ? <span className="ml-2 font-mono text-[10px] uppercase text-(--red)">{t("orphanSentence")}</span> : null}
                 </span>
               </button>
+              {activeNow ? <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-(--text) shadow-[0_0_10px_var(--text)]" /> : null}
               <button
                 aria-label={`Assign media to sentence ${sentence.index}`}
-                className="flex items-center justify-center text-(--text-3) opacity-0 hover:text-(--amber) focus-visible:opacity-100 group-hover:opacity-100"
+                className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center rounded p-1 text-(--text-3) opacity-0 hover:text-(--amber) focus-visible:opacity-100 group-hover:opacity-100"
                 onClick={(event) => {
                   const rect = event.currentTarget.getBoundingClientRect();
                   onSelectRange(rowRange);

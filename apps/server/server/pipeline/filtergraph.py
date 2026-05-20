@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from server.domain.project import Project
 from server.domain.timing import AlignmentResult
@@ -319,11 +319,11 @@ def _subtitle_style_value(style: object | None, key: str) -> object | None:
     if style is None:
         return None
     if isinstance(style, Mapping):
-        value = style.get(key)
+        value: object | None = cast(Mapping[str, object], style).get(key)
     else:
-        value = getattr(style, key, None)
+        value = cast(object | None, getattr(style, key, None))
     if isinstance(value, Enum):
-        return value.value
+        return cast(object, value.value)
     return value
 
 
@@ -379,11 +379,11 @@ def _watermark_float(watermark: object, name: str) -> float:
 
 
 def _item_float(item: ClipRenderItem, name: str) -> float:
-    item = _unwrap_root_model(item)
-    if isinstance(item, Mapping):
-        value = item[name]
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        value = raw[name]
     else:
-        value = getattr(item, name)
+        value = getattr(raw, name)
     if not isinstance(value, int | float):
         raise TypeError(f"Visual item {name} must be numeric.")
     return float(value)
@@ -398,10 +398,10 @@ def _is_pip_item(item: ClipRenderItem) -> bool:
 
 
 def _pip_placement(item: ClipRenderItem) -> object:
-    item = _unwrap_root_model(item)
-    if isinstance(item, Mapping):
-        return item["pip"]
-    return object.__getattribute__(item, "pip")
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        return raw["pip"]
+    return object.__getattribute__(raw, "pip")
 
 
 def _placement_float(placement: object, name: str) -> float:
@@ -417,11 +417,11 @@ def _placement_float(placement: object, name: str) -> float:
 
 
 def _transition_value(item: ClipRenderItem, name: str) -> str | None:
-    item = _unwrap_root_model(item)
-    if isinstance(item, Mapping):
-        transitions = item["transitions"]
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        transitions = raw["transitions"]
     else:
-        transitions = item.transitions
+        transitions = getattr(raw, "transitions")  # noqa: B009
     if isinstance(transitions, Mapping):
         value = transitions.get(name)
         if value is None and name == "in":

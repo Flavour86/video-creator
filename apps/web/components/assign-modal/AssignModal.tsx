@@ -359,12 +359,17 @@ export function AssignModal({
       newLayerId = `L-${compositing}-${Date.now()}`;
       const newLayer: Layer =
         compositing === "fg"
-          ? { id: newLayerId, kind: "fg", name: `Foreground · z${z}`, items: [finalItem] }
+          ? {
+              id: newLayerId,
+              kind: "fg",
+              name: `Foreground · z${z}`,
+              items: [finalItem as Extract<Layer, { kind: "fg" }>["items"][number]],
+            }
           : {
               id: newLayerId,
               kind: "pip",
               name: `PiP · z${z}`,
-              items: [finalItem],
+              items: [finalItem as Extract<Layer, { kind: "pip" }>["items"][number]],
             };
 
       // Insert before BG layer (or at end)

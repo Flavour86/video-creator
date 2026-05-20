@@ -87,8 +87,8 @@ def _project_path_or_error(project_id: str) -> Path | JSONResponse:
 async def render_project(
     payload: RenderRequest | None = None,
     project: str = Query(...),
-    preset: RenderPreset | None = Query(default=None),
-    resolution: RenderResolution | None = Query(default=None),
+    preset: RenderPreset | None = Query(default=None),  # noqa: B008
+    resolution: RenderResolution | None = Query(default=None),  # noqa: B008
 ) -> RenderResponse | JSONResponse:
     project_dir = Path(project)
     if not (project_dir / "project.json").exists():
@@ -115,8 +115,8 @@ async def render_project(
 async def render_project_by_id(
     project_id: str,
     payload: RenderRequest | None = None,
-    preset: RenderPreset | None = Query(default=None),
-    resolution: RenderResolution | None = Query(default=None),
+    preset: RenderPreset | None = Query(default=None),  # noqa: B008
+    resolution: RenderResolution | None = Query(default=None),  # noqa: B008
 ) -> RenderResponse | JSONResponse:
     project_dir = _project_path_or_error(project_id)
     if isinstance(project_dir, JSONResponse):

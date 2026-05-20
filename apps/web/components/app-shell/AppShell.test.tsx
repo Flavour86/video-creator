@@ -88,7 +88,7 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
-    fireEvent.click(screen.getByRole("radio", { name: "中文" }));
+    fireEvent.click(screen.getByRole("radio", { name: "ZH" }));
 
     expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe("zh");
     expect(document.documentElement.lang).toBe("zh");
@@ -136,7 +136,7 @@ describe("AppShell", () => {
     expect(statusBar.className).toContain("fixed");
     expect(statusBar.className).toContain("bottom-0");
     expect(statusBar.className).toContain("h-(--space-10)");
-    expect(screen.getByText("⌘K")).toBeInTheDocument();
+    expect(screen.getByText("Ctrl K")).toBeInTheDocument();
     expect(screen.getByText("command")).toBeInTheDocument();
     expect(screen.getByText("command").parentElement).toHaveAttribute("tabindex", "0");
     expect(screen.getByText("command").parentElement?.className).toContain("focus-visible:outline");

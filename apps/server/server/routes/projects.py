@@ -550,7 +550,9 @@ def _media_count(project_dir: Path) -> int:
         return 0
     media_dir = project_dir / "media"
     if media_dir.exists():
-        return len([entry for entry in media_dir.iterdir() if entry.is_file()])
+        media_files = [entry for entry in media_dir.iterdir() if entry.is_file()]
+        if media_files:
+            return len(media_files)
     return len(
         [
             entry

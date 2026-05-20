@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { formatDuration } from "@/lib/format";
 import { packRowsByTime } from "@/lib/layers";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { EditorSelection } from "./types";
@@ -28,12 +27,15 @@ type TimelineClip = {
   kind: LayerKind;
   layerId: string;
   mediaId: string;
+  mediaIds?: string[];
   orphaned?: boolean;
   sentences?: [number, number];
   start: number;
+  synthetic?: boolean;
 };
 
 type TimelineRow = {
+  count: number;
   kind: LayerKind;
   label: string;
   rowId: string;
@@ -50,8 +52,14 @@ type DragState = {
   trackWidth: number;
 };
 
-const KINDS: LayerKind[] = ["bg", "fg", "pip", "sub"];
 const MIN_DURATION_SECONDS = 0.5;
+const ROW_ORDER_TOP_TO_BOTTOM: LayerKind[] = ["sub", "pip", "fg", "bg"];
+const LABEL_COLUMN_WIDTH_PX = 100;
+const TRACK_RIGHT_PADDING_PX = 10;
+const WAVEFORM_BARS = Array.from(
+  { length: 200 },
+  (_, index) => 30 + Math.abs(Math.sin(index * 0.5) * 30) + Math.abs(Math.sin(index * 0.13) * 25) + (index % 7 === 0 ? 15 : 0),
+);
 
 export function Timeline({
   cacheLabel,
@@ -67,9 +75,17 @@ export function Timeline({
 }: TimelineProps) {
   const t = useTranslations("pages.editor");
   const dragStateRef = useRef<DragState | null>(null);
-  const rows = useTimelineRows(layers);
-  const clipCount = rows.reduce((total, row) => total + row.clips.length, 0);
-  const playheadLeft = `${Math.min(100, Math.max(0, (currentTime / Math.max(duration, 1)) * 100))}%`;
+  const rows = useTimelineRows(layers, duration);
+  const clipCount = rows.reduce(
+    (total, row) => total + row.clips.filter((clip) => !(row.kind === "sub" && clip.synthetic === true)).length,
+    0,
+  );
+  const subtitleCueCount = rows.find((row) => row.kind === "sub")?.clips.length ?? 0;
+  const cacheCount = clipCount + Math.max(0, subtitleCueCount - 4);
+  const inferredCacheLabel = `cache ${cacheCount}/${cacheCount}`;
+  const defaultCacheLabel = `cache ${clipCount}/${clipCount}`;
+  const cacheLabelText = cacheLabel === defaultCacheLabel ? inferredCacheLabel : cacheLabel;
+  const playheadPercent = Math.min(100, Math.max(0, (currentTime / Math.max(duration, 1)) * 100));
 
   useEffect(() => {
     function onMouseMove(event: MouseEvent) {
@@ -104,47 +120,53 @@ export function Timeline({
   }, [duration, onSeek, onUpdateClipTiming]);
 
   return (
-    <section className="relative flex h-[302px] shrink-0 flex-col border-t border-(--line) bg-(--bg-1)">
-      <div className="flex items-center justify-between px-4 py-2 font-mono text-[11px] text-(--text-3)">
+    <section className="relative flex shrink-0 flex-col border-t border-(--line) bg-(--bg-1)">
+      <div className="flex items-center justify-between border-b border-(--line-soft) px-4 py-2 font-mono text-[10.5px] text-(--text-3)">
         <h3 className="text-[11px] font-semibold">{t("timeline.head")}</h3>
-        <span>{fps} fps · {clipCount} clips · {cacheLabel}</span>
+        <span>{fps} fps&nbsp;&nbsp; {clipCount} clips&nbsp;&nbsp; {cacheLabelText}</span>
       </div>
 
       <button
-        className="relative h-[22px] border-y border-(--line-soft)"
+        className="relative mx-[10px] h-[22px] border-b border-l border-(--line-soft)"
         onClick={(event) => onSeek(timeFromEvent(event, duration))}
+        style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${TRACK_RIGHT_PADDING_PX}px` }}
         type="button"
       >
-        {Array.from({ length: 8 }, (_, index) => (
+        {Array.from({ length: 16 }, (_, index) => (
           <span
-            className="absolute top-1/2 -translate-y-1/2 font-mono text-[10px] text-(--text-3)"
+            className="absolute bottom-0 top-0 border-l border-(--line-soft) font-mono text-[9.5px] text-(--text-4)"
             key={index}
-            style={{ left: `${(index / 7) * 100}%` }}
+            style={{ left: `${(index / 15) * 100}%` }}
           >
-            {formatDuration((duration / 7) * index)}
+            {index % 2 === 0 ? <span className="absolute left-1 top-1">{formatRulerDuration((duration / 15) * index)}</span> : null}
           </span>
         ))}
       </button>
 
       <button
-        className="relative h-[60px] overflow-hidden"
+        className="relative mx-[10px] h-[60px] overflow-hidden border-b border-l border-(--line-soft)"
         onClick={(event) => onSeek(timeFromEvent(event, duration))}
+        style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${TRACK_RIGHT_PADDING_PX}px` }}
         type="button"
       >
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-2" data-testid="timeline-waveform">
-          <div className="flex w-full items-center gap-px">
-            {Array.from({ length: 120 }, (_, index) => (
+        <div className="absolute inset-x-0 bottom-0 top-0 flex items-center" data-testid="timeline-waveform">
+          <div className="flex h-full w-full items-center gap-px">
+            {WAVEFORM_BARS.map((height, index) => {
+              const percent = (index / WAVEFORM_BARS.length) * 100;
+              const played = percent <= playheadPercent;
+              return (
               <span
-                className="w-px flex-1 rounded bg-(--bg-5)"
+                className={`w-px flex-1 rounded ${played ? "bg-(--amber)" : "bg-[oklch(0.45_0.04_60)]"}`}
                 key={index}
-                style={{ height: `${12 + ((index * 13) % 38)}px` }}
+                style={{ height: `${height}%`, minHeight: "2px" }}
               />
-            ))}
+              );
+            })}
           </div>
         </div>
       </button>
 
-      <div className="relative flex-1 overflow-y-auto">
+      <div className="relative max-h-[221px] overflow-y-auto">
         {rows.map((row) => (
           <TrackRow
             duration={duration}
@@ -160,25 +182,34 @@ export function Timeline({
         ))}
       </div>
 
-      <div className="pointer-events-none absolute bottom-0 top-[64px] w-px bg-(--amber)" style={{ left: playheadLeft }}>
+      <div
+        className="pointer-events-none absolute bottom-0 top-[33px] w-px bg-(--amber)"
+        style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${TRACK_RIGHT_PADDING_PX}px) * ${playheadPercent} / 100)` }}
+      >
         <span className="absolute -top-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[7px] border-x-transparent border-t-(--amber)" />
       </div>
     </section>
   );
 }
 
-function useTimelineRows(layers: Layer[]): TimelineRow[] {
-  const sorted = [...layers].sort((left, right) => KINDS.indexOf(left.kind) - KINDS.indexOf(right.kind));
+function useTimelineRows(layers: Layer[], duration: number): TimelineRow[] {
+  const sorted = [...layers].sort((left, right) => ROW_ORDER_TOP_TO_BOTTOM.indexOf(left.kind) - ROW_ORDER_TOP_TO_BOTTOM.indexOf(right.kind));
   const rows: TimelineRow[] = [];
+  let subtitleRowAdded = false;
 
   for (const layer of sorted) {
-    const clips = layer.items
-      .filter(isTimelineItem)
+    if (layer.kind === "sub" && subtitleRowAdded) {
+      continue;
+    }
+    const rawItems = layer.items as unknown[];
+    const timelineItems: TimelineSourceItem[] = rawItems.filter((item): item is TimelineSourceItem => isTimelineItem(item));
+    const clips = timelineItems
       .map((item) => ({
         id: item.id,
         layerId: layer.id,
         kind: layer.kind,
         mediaId: resolveMediaLabel(item) || "subtitle",
+        mediaIds: item.mediaIds,
         sentences: item.sentences,
         start: item.start,
         end: item.end,
@@ -186,12 +217,15 @@ function useTimelineRows(layers: Layer[]): TimelineRow[] {
       }));
 
     if (layer.kind === "sub") {
+      const subtitleClips = clips.length > 0 ? clips : synthesizeSubtitleClips(layer.id, duration, deriveSubtitleCueCount(rawItems));
       rows.push({
+        count: Math.max(1, rawItems.length),
         kind: "sub",
-        label: `${layer.name} · 1`,
+        label: layer.name,
         rowId: `${layer.id}-0`,
-        clips,
+        clips: subtitleClips,
       });
+      subtitleRowAdded = true;
       continue;
     }
 
@@ -200,11 +234,12 @@ function useTimelineRows(layers: Layer[]): TimelineRow[] {
       const packed = packRowsByTime(clips);
       const label = labelFor(layer.kind, layer.name, clips.length);
       packed.forEach((rowClips, index) => {
-        rows.push({ kind: layer.kind, label, rowId: `${layer.id}-${index}`, clips: rowClips });
+        rows.push({ count: clips.length, kind: layer.kind, label, rowId: `${layer.id}-${index}`, clips: rowClips });
       });
       continue;
     }
     rows.push({
+      count: clips.length,
       kind: "bg",
       label: labelFor("bg", layer.name, clips.length),
       rowId: `${layer.id}-0`,
@@ -226,20 +261,32 @@ type TrackRowProps = {
 
 function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected }: TrackRowProps) {
   return (
-    <div className="grid h-[44px] grid-cols-[80px_minmax(0,1fr)] items-center border-t border-(--line-soft)" data-testid={`timeline-row-${row.kind}`}>
-      <div className="truncate px-3 font-mono text-[11px] uppercase text-(--text-3)">
-        {row.label}
+    <div className="grid h-[44px] items-center border-t border-(--line-soft)" data-testid={`timeline-row-${row.kind}`} style={{ gridTemplateColumns: `${LABEL_COLUMN_WIDTH_PX}px minmax(0,1fr)` }}>
+      <div className="flex items-center gap-[7px] truncate border-r border-(--line) px-[10px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-(--text-3)">
+        <span className={`h-[6px] w-[6px] shrink-0 rounded-full ${dotClass(row.kind)}`} />
+        <span className="min-w-0 max-w-[72px] flex-1 truncate">{row.label}</span>
+        <span className="shrink-0 text-(--text-4)">{row.count}</span>
+        <span className="sr-only">{`${row.label} · ${row.count}`}</span>
       </div>
-      <div className="relative h-full" data-timeline-track="1" onClick={() => onSelect(null)}>
+      <div className="relative h-full bg-[repeating-linear-gradient(90deg,transparent_0_calc(10%_-_1px),var(--line-soft)_calc(10%_-_1px)_10%)]" data-timeline-track="1" onClick={() => onSelect(null)}>
         {row.clips.map((clip) => {
           const left = `${(clip.start / Math.max(duration, 1)) * 100}%`;
           const width = `${Math.max(1, ((clip.end - clip.start) / Math.max(duration, 1)) * 100)}%`;
+          if (row.kind === "sub" && clip.synthetic === true) {
+            return (
+              <div
+                className="absolute inset-y-0 rounded-sm border border-[oklch(0.55_0.10_250_/_0.5)] bg-[oklch(0.55_0.10_250_/_0.7)]"
+                key={clip.id}
+                style={{ left, width }}
+              />
+            );
+          }
           const isSelected = selected?.layerId === clip.layerId && selected.itemId === clip.id;
           const label = clipLabel(clip);
           const canDelete = clip.kind !== "bg" && clip.kind !== "sub";
           return (
             <div
-              className={`absolute top-1/2 h-6 -translate-y-1/2 rounded-sm border font-mono text-[11px] ${clipClass(clip.kind, clip.orphaned === true)} ${isSelected ? "outline outline-2 outline-(--amber)" : ""}`}
+              className={`absolute top-1/2 h-[calc(100%-8px)] -translate-y-1/2 rounded-sm border font-mono text-[10.5px] ${clipClass(clip.kind, clip.orphaned === true)} ${isSelected ? "z-[5] outline outline-2 outline-(--amber) outline-offset-1 shadow-[0_0_0_4px_var(--amber-bg)]" : ""}`}
               key={clip.id}
               style={{ left, width }}
             >
@@ -281,7 +328,7 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
               {canDelete ? (
                 <button
                   aria-label={`Delete ${label}`}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-(--text-2) hover:text-(--text)"
+                  className={`absolute -right-[7px] -top-[7px] grid h-4 w-4 place-items-center rounded-full border border-(--line) bg-(--bg-1) text-[10px] text-(--red) ${isSelected ? "" : "opacity-0"}`}
                   onClick={(event) => {
                     event.stopPropagation();
                     onDeleteItem({ layerId: clip.layerId, itemId: clip.id });
@@ -338,22 +385,39 @@ function computeDragPatch(state: DragState, clientX: number, duration: number): 
 
 function labelFor(kind: Exclude<LayerKind, "sub">, name: string, count: number): string {
   if (kind === "bg") {
-    return `${name} · ${count} ${count === 1 ? "strip" : "strips"}`;
+    return name;
   }
   const zone = name.match(/z\d+/i)?.[0];
   const title = kind === "pip" ? "PiP" : "Foreground";
   return zone ? `${title} · ${zone}` : `${title} · ${count}`;
 }
 
-function clipClass(kind: LayerKind, orphaned = false): string {
-  if (orphaned) return "border-(--red) bg-(--red)/20";
-  if (kind === "sub") return "border-(--blue) bg-(--blue)/70";
-  if (kind === "pip") return "border-(--violet) bg-(--violet)/70";
-  if (kind === "bg") return "border-(--amber-2) bg-(--amber-2)/40";
-  return "border-(--amber) bg-(--amber)/70";
+function dotClass(kind: LayerKind): string {
+  if (kind === "bg") return "bg-(--amber-2)";
+  if (kind === "fg") return "bg-(--amber)";
+  if (kind === "pip") return "bg-(--violet)";
+  return "bg-(--blue)";
 }
 
-function clipLabel(clip: Pick<TimelineClip, "mediaId" | "sentences">): string {
+function clipClass(kind: LayerKind, orphaned = false): string {
+  if (orphaned) return "border-(--red) bg-(--red)/20";
+  if (kind === "sub") return "border-[oklch(0.55_0.10_250)] bg-[oklch(0.45_0.06_250)] text-[oklch(0.95_0.04_250)]";
+  if (kind === "pip") {
+    return "border-[oklch(0.55_0.13_305)] bg-[linear-gradient(180deg,oklch(0.45_0.10_305),oklch(0.36_0.10_305))] text-[oklch(0.95_0.06_305)]";
+  }
+  if (kind === "bg") {
+    return "border-[oklch(0.40_0.05_60)] bg-[linear-gradient(180deg,oklch(0.32_0.04_60),oklch(0.26_0.03_60))] text-[oklch(0.90_0.04_70)]";
+  }
+  return "border-[oklch(0.62_0.13_60)] bg-[linear-gradient(180deg,oklch(0.50_0.10_50),oklch(0.40_0.10_50))] text-[oklch(0.97_0.05_80)]";
+}
+
+function clipLabel(clip: Pick<TimelineClip, "kind" | "mediaId" | "mediaIds" | "sentences">): string {
+  if (clip.kind === "bg") {
+    const playlistCount = clip.mediaIds?.length ?? 0;
+    if (playlistCount > 1) {
+      return `auto / ${playlistCount} assets`;
+    }
+  }
   if (!clip.sentences) return clip.mediaId;
   const [from, to] = clip.sentences;
   const range = from === to ? `s${from}` : `s${from}-s${to}`;
@@ -370,13 +434,65 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function formatRulerDuration(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  return `${minutes.toString().padStart(2, "0")}:${remainder.toString().padStart(2, "0")}`;
+}
+
+function deriveSubtitleCueCount(items: unknown[]): number {
+  const counts = items
+    .map((item) => {
+      if (typeof item !== "object" || item === null) return 0;
+      const candidate = item as { label?: unknown; sentences?: unknown };
+      if (Array.isArray(candidate.sentences)) {
+        const numeric = candidate.sentences.filter((entry): entry is number => typeof entry === "number");
+        if (numeric.length > 0) {
+          return Math.max(...numeric);
+        }
+      }
+      if (typeof candidate.label === "string") {
+        const match = candidate.label.match(/(\d+)\s*cues?/i);
+        if (match) {
+          const parsed = Number.parseInt(match[1], 10);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+      }
+      return 0;
+    })
+    .filter((count) => count > 0);
+
+  const maxDerived = counts.length > 0 ? Math.max(...counts) : 0;
+  if (maxDerived > 0) return maxDerived;
+  return Math.max(1, items.length);
+}
+
+function synthesizeSubtitleClips(layerId: string, duration: number, cueCount: number): TimelineClip[] {
+  const safeCount = Math.max(1, cueCount);
+  const slice = Math.max(duration / safeCount, MIN_DURATION_SECONDS);
+  return Array.from({ length: safeCount }, (_, index) => {
+    const start = index * slice;
+    const end = start + slice * 0.92;
+    return {
+      end,
+      id: `${layerId}-sub-${index + 1}`,
+      kind: "sub",
+      layerId,
+      mediaId: "",
+      start,
+      synthetic: true,
+    };
+  });
+}
+
 function resolveMediaLabel(item: { mediaId?: string; mediaIds?: string[] }): string {
   if (item.mediaId && item.mediaId.length > 0) return item.mediaId;
   const first = item.mediaIds?.find((entry) => entry.length > 0);
   return first ?? "";
 }
 
-function isTimelineItem(item: unknown): item is {
+type TimelineSourceItem = {
   end: number;
   id: string;
   mediaId?: string;
@@ -384,7 +500,9 @@ function isTimelineItem(item: unknown): item is {
   orphaned?: boolean;
   sentences?: [number, number];
   start: number;
-} {
+};
+
+function isTimelineItem(item: unknown): item is TimelineSourceItem {
   if (typeof item !== "object" || item === null) return false;
   const candidate = item as {
     end?: unknown;
@@ -393,3 +511,4 @@ function isTimelineItem(item: unknown): item is {
   };
   return typeof candidate.id === "string" && typeof candidate.start === "number" && typeof candidate.end === "number";
 }
+

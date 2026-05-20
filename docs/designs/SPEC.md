@@ -227,3 +227,17 @@ User: `POST /uploads` stores root-level assets only. Project config is updated s
   3. For video media layers, should canvas playback decode real video frames via hidden `<video>` elements synchronized to `currentTime`, or is thumbnail/frame simulation acceptable in this phase?
   4. Should preview timing stay audio-clock-driven (`audio.currentTime`) with canvas redraw on `requestAnimationFrame`, including pause/resume/seek parity with existing transport behavior?
 User: (1) yes, use HTML5 `<canvas>` in `PreviewSurface` with React + Canvas 2D; (2) fully replace DOM preview compositor with canvas; (3) decode real video frames via hidden `<video>`; (4) keep audio-clock-driven timing with `requestAnimationFrame`, including pause/resume/seek parity.
+
+- [X] 2026-05-19: Editor Task 16 visual parity gate ambiguity. When we run real SSIM comparison (without copying reference over actual), the first editor parity case fails hard (`editor-dark.png` SSIM `0.2120` vs threshold `0.9800`), which indicates current implementation visuals and canonical reference screenshots are not close enough for strict parity. Which canonical rule should we follow for Task 16?
+  1. Keep strict parity against existing reference screenshots and treat this as a product/UI implementation gap (do not weaken test assertions).
+  2. Keep current implementation visuals and lower/relax SSIM thresholds for editor visual tests.
+  3. Re-baseline canonical editor screenshots in `docs/designs/visuals/` to current implementation output, then keep strict SSIM checks on the new baseline.
+User: Option 1
+
+- [ ] 2026-05-20: Editor inspector visual references disagree on PiP motion controls. `editor-dark.png` default PiP inspector matches the merged `Motion & transitions` runtime section, while targeted `editor-inspector-dark.png` for PiP z4 shows separate `Motion`, `Easing`, and `Transitions` sections. Should runtime PiP inspector keep the merged section, restore separate sections for all PiP/foreground clips, or should the stale reference be re-authored before continuing strict SSIM work?
+User: The `Editor inspector` visual references should be following the one  `editor-inspector-dark.png`,  for all PiP/foreground/background clips, they stay with their own inspector
+
+- [X] 2026-05-19: Follow-up implementation boundary for Option 1 strict parity. After replacing editor visual fixtures with prototype-aligned data and media mocks, first-case SSIM improved from `0.2120` to `0.4157`, but remaining mismatch is now mostly structural layout/UI (left/center/right pane geometry and inspector control composition order/style). Which canonical implementation path should we take?
+  1. Continue full runtime UI refactor so normal `/editor/:projectId` layout/components match the reference screenshots directly (broader product UI changes).
+  2. Keep runtime UI behavior as-is and finish parity through a dedicated visual renderer mode (for example `?visual=1`) used only by visual tests, while preserving strict SSIM against the canonical references.
+User: Option 1

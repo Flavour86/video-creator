@@ -461,7 +461,10 @@ async def upload_assets(
 ) -> list[UploadResult] | JSONResponse:
     root = uploads_root().resolve()
     root.mkdir(parents=True, exist_ok=True)
-    is_chunked = any(value is not None for value in (upload_id, chunk_index, chunk_count, original_name, original_size))
+    is_chunked = any(
+        value is not None
+        for value in (upload_id, chunk_index, chunk_count, original_name, original_size)
+    )
 
     if is_chunked:
         if upload_id is None or chunk_index is None or chunk_count is None or original_name is None:
@@ -515,7 +518,11 @@ async def upload_assets(
         if assembled_path.parent != chunk_dir:
             _cleanup_chunks(upload_id)
             return _error(400, "INVALID_UPLOAD_ID", "Invalid upload_id.", {"upload_id": upload_id})
-        assembled = _assemble_chunks(upload_id, chunk_count=chunk_count, assembled_path=assembled_path)
+        assembled = _assemble_chunks(
+            upload_id,
+            chunk_count=chunk_count,
+            assembled_path=assembled_path,
+        )
         if isinstance(assembled, JSONResponse):
             return assembled
         content_hash, total_size = assembled
@@ -539,12 +546,22 @@ async def upload_assets(
             output_path = _safe_upload_path(final_name)
         except ValueError:
             _cleanup_chunks(upload_id)
-            return _error(400, "INVALID_FILENAME", "Invalid upload filename.", {"filename": original_name})
+            return _error(
+                400,
+                "INVALID_FILENAME",
+                "Invalid upload filename.",
+                {"filename": original_name},
+            )
         try:
             assembled_path.replace(output_path)
         except OSError:
             _cleanup_chunks(upload_id)
-            return _error(500, "WRITE_FAILED", "Could not store uploaded media.", {"filename": final_name})
+            return _error(
+                500,
+                "WRITE_FAILED",
+                "Could not store uploaded media.",
+                {"filename": final_name},
+            )
         _cleanup_chunks(upload_id)
         media = _media_asset_for_path(output_path, content_hash=content_hash)
         if isinstance(media, JSONResponse):
@@ -614,7 +631,11 @@ async def uploaded_media_file(filename: str) -> JSONResponse | FileResponse:
     path = uploads_root() / safe
     if not path.exists() or not path.is_file():
         return _error(404, "MEDIA_NOT_FOUND", "Media file not found.", {"filename": filename})
-    media_type = _MEDIA_CONTENT_TYPES.get(path.suffix.lower()) or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    media_type = (
+        _MEDIA_CONTENT_TYPES.get(path.suffix.lower())
+        or mimetypes.guess_type(path.name)[0]
+        or "application/octet-stream"
+    )
     return FileResponse(str(path), media_type=media_type)
 
 

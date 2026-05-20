@@ -121,7 +121,7 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
 describe("Inspector", () => {
   it("shows global Change Background when background layer exists", () => {
     renderInspector();
-    expect(screen.getByRole("button", { name: "Change Background" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Change Background/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add Background" })).not.toBeInTheDocument();
   });
 
@@ -130,13 +130,13 @@ describe("Inspector", () => {
       layers: LAYERS.filter((layer) => layer.kind !== "bg"),
       selected: { layerId: "fg-z1", itemId: "fg-1" },
     });
-    expect(screen.getByRole("button", { name: "Add Background" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add Background/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Change Background" })).not.toBeInTheDocument();
   });
 
   it("opens background modal from global config control", () => {
     const { onOpenBackground } = renderInspector();
-    fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+    fireEvent.click(screen.getByRole("button", { name: /Change Background/i }));
     expect(onOpenBackground).toHaveBeenCalledTimes(1);
   });
 

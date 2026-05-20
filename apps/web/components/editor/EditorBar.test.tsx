@@ -29,17 +29,14 @@ function renderBar(overrides: Partial<ComponentProps<typeof EditorBar>> = {}) {
 }
 
 describe("EditorBar", () => {
-  it("shows home, project title, project id, cache, save, and render actions", () => {
+  it("shows launcher, project title, save, and render actions", () => {
     renderBar();
 
     expect(screen.getByRole("button", { name: "Open Launcher" })).toBeInTheDocument();
     expect(screen.getByText("Demo")).toBeInTheDocument();
-    expect(screen.getByText("projectId: p_demo")).toBeInTheDocument();
-    expect(screen.getByText("cache 2/3")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /save project config/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
-    expect(screen.getByText("cache 2/3")).toHaveAttribute("aria-label", "Render cache status: cache 2/3");
   });
 
   it("omits subtitles and background toolbar actions", () => {

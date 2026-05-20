@@ -31,6 +31,8 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
         <Image
           alt=""
           className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
+          fill
+          sizes="100vw"
           src={fileUrl(spec.bg.mediaId)}
           style={{ opacity: spec.bg.opacity }}
         />
@@ -41,7 +43,9 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
         <Image
           alt=""
           className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
+          fill
           key={item.mediaId}
+          sizes="100vw"
           src={fileUrl(item.mediaId)}
           style={{ opacity: item.opacity, transform: `translateX(${item.translateX}%)` }}
         />
@@ -52,6 +56,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
         <Image
           alt=""
           className="absolute overflow-hidden object-cover transition-opacity duration-300"
+          height={1080}
           key={item.mediaId}
           src={fileUrl(item.mediaId)}
           style={{
@@ -62,6 +67,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
             opacity: item.opacity * (item.placement.opacity / 100),
             transform: `translate(${-item.placement.posX}%, ${-item.placement.posY}%) translateX(${item.translateX}%)`,
           }}
+          width={1920}
         />
       ))}
 
@@ -78,6 +84,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
         <Image
           alt=""
           className="absolute object-contain"
+          height={1080}
           src={fileUrl(watermark.mediaId)}
           style={{
             left: `${watermark.posX}%`,
@@ -86,6 +93,7 @@ export function PreviewPlayer({ projectPath, layers, sentences, currentTime, wat
             opacity: watermark.opacity / 100,
             transform: `translate(${-watermark.posX}%, ${-watermark.posY}%)`,
           }}
+          width={1920}
         />
       )}
 

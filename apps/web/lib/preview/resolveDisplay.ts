@@ -108,6 +108,9 @@ export function resolveDisplay(
   // Project layers are stored top-to-bottom; iterate backwards for bottom-to-top render order.
   for (let layerIndex = layers.length - 1; layerIndex >= 0; layerIndex -= 1) {
     const layer = layers[layerIndex];
+    if (!layer) {
+      continue;
+    }
     if (layer.kind === "bg") {
       let item: BgItem | undefined;
       for (let itemIndex = layer.items.length - 1; itemIndex >= 0; itemIndex -= 1) {

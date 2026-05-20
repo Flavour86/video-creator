@@ -102,12 +102,24 @@ const TEST_ALIGNMENT = {
   cache_hit: true,
 };
 
+const TEST_PROJECT_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"].map((filename) => ({
+  id: filename,
+  name: filename,
+  kind: "image" as const,
+  path: `media/${filename}`,
+  thumb_path: `uploads/thumb/${filename.replace(/\.[^.]+$/, ".jpg")}`,
+  import_mode: "copy" as const,
+  imported_at: "2026-05-11T00:00:00Z",
+  created_at: "2026-05-11T00:00:00Z",
+}));
+
 const TEST_PROJECT = {
   version: 1,
   name: "test01",
   audio: "voice.mp3",
   transcript: { kind: "plain_text", path: "transcript.txt" },
   output: { preset: "final" },
+  media: TEST_PROJECT_MEDIA,
   layers: [
     { id: "subtitles", kind: "sub", name: "Subtitles", items: [{ id: "sub-auto", auto: true, label: "Auto subtitles", style: "default" }] },
     {
@@ -254,6 +266,9 @@ function mockTest01Fetch(options: {
   const uploadsResult = options.uploadsResult ?? [];
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/inspect`) && init?.method === "POST") {
+      return ok({ path: "E:/projects/test01" });
+    }
     if (url.endsWith("/projects")) return ok([{ project_id: TEST_PROJECT_ID, path: "E:/projects/test01" }]);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(TEST_ALIGNMENT);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") {
@@ -300,11 +315,11 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByText("Subtitles · 1")).toBeInTheDocument();
   expect(screen.getAllByText("PiP · z3").length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
-  expect(screen.getByText("Background · 1 strip")).toBeInTheDocument();
+  expect(screen.getByText("Background · 1")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
-  expect(screen.getByLabelText("PiP size")).toHaveValue(30);
-  expect(screen.getByLabelText("PiP radius")).toHaveValue(12);
-  expect(screen.getByLabelText("PiP opacity")).toHaveValue(100);
+  expect(screen.getByLabelText("PiP size")).toHaveValue("30");
+  expect(screen.getByLabelText("PiP radius")).toHaveValue("12");
+  expect(screen.getByLabelText("PiP opacity")).toHaveValue("100");
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
 });
@@ -318,7 +333,7 @@ it("uses responsive layout guards so preview/transport do not clip on narrow wid
 
   const layout = screen.getByTestId("editor-layout-grid");
   expect(layout.className).toContain("grid-cols-1");
-  expect(layout.className).toContain("lg:grid-cols-[320px_minmax(0,1fr)_320px]");
+  expect(layout.className).toContain("lg:grid-cols-[380px_minmax(0,1fr)_320px]");
   expect(layout.className).toContain("divide-y");
   expect(layout.className).toContain("lg:divide-y-0");
 
@@ -335,7 +350,7 @@ it("defaults selection to background on editor entry when background exists", as
   await screen.findByText("test01");
 
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
-  expect(screen.queryByLabelText("PiP placement")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "PiP placement BR" })).not.toBeInTheDocument();
 });
 
 it("defaults selection to first non-subtitle item when background is absent", async () => {
@@ -345,7 +360,7 @@ it("defaults selection to first non-subtitle item when background is absent", as
   renderEditor();
   await screen.findByText("test01");
 
-  expect(screen.getByLabelText("PiP placement")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "PiP placement BR" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Add Background" })).toBeInTheDocument();
 });
 
@@ -366,7 +381,7 @@ it("restores valid recovered selection instead of replacing it with background d
   renderEditor();
   await screen.findByText("test01");
 
-  expect(screen.getByLabelText("PiP placement")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "PiP placement BR" })).toBeInTheDocument();
   expect(screen.queryByLabelText("Background crossfade")).not.toBeInTheDocument();
 });
 
@@ -400,7 +415,7 @@ it("renders Watermark, Subtitles, and Background controls before contextual insp
   await screen.findByText("test01");
   fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
 
-  const watermark = screen.getByText("Watermark");
+  const watermark = screen.getByRole("button", { name: "Watermark" });
   const subtitles = screen.getByRole("button", { name: "Subtitles" });
   const background = screen.getByRole("button", { name: "Change Background" });
   const contextualHeading = screen.getByRole("heading", { name: "PiP · z3" });
@@ -617,7 +632,7 @@ it("rejects overlapping foreground range edits from inspector without appending 
   expect(screen.getByRole("button", { name: "foreground-2.png over s3" })).toBeInTheDocument();
 });
 
-it("edits PiP inspector placement, edge margins, and style fields, then deletes PiP item", async () => {
+it("edits PiP inspector placement and style fields, then deletes PiP item", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
 
@@ -625,18 +640,16 @@ it("edits PiP inspector placement, edge margins, and style fields, then deletes 
   await screen.findByText("test01");
   fireEvent.click(screen.getByRole("button", { name: "PIP.png over s2" }));
 
-  fireEvent.change(screen.getByLabelText("PiP placement"), { target: { value: "TL" } });
-  fireEvent.change(screen.getByLabelText("Edge margin X"), { target: { value: "20" } });
-  fireEvent.change(screen.getByLabelText("Edge margin Y"), { target: { value: "18" } });
+  fireEvent.click(screen.getByRole("button", { name: "PiP placement TL" }));
   fireEvent.change(screen.getByLabelText("PiP size"), { target: { value: "42" } });
   fireEvent.change(screen.getByLabelText("PiP radius"), { target: { value: "22" } });
   fireEvent.change(screen.getByLabelText("PiP opacity"), { target: { value: "80" } });
 
-  expect(readUndo()).toHaveLength(6);
+  expect(readUndo()).toHaveLength(4);
 
   fireEvent.click(screen.getByRole("button", { name: "Delete PiP item" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: /PIP\.png over/i })).not.toBeInTheDocument());
-  expect(readUndo()).toHaveLength(7);
+  expect(readUndo()).toHaveLength(5);
 });
 
 it("deletes a selected non-background timeline clip via keyboard Delete", async () => {

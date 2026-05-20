@@ -148,8 +148,8 @@ export function patchBackgroundItems(
     return {
       ...layer,
       items: layer.items.map((item) => (isVisualItem(item) ? mergeVisualPatch(item, patch) : item)),
-    };
-  });
+    } as VisualLayer;
+  }) as Layer[];
 }
 
 export function deleteVisualItem(layers: Layer[], layerId: string, itemId: string): Layer[] {
@@ -162,7 +162,13 @@ export function deleteVisualItem(layers: Layer[], layerId: string, itemId: strin
 }
 
 function mergeVisualPatch(item: VisualItem, patch: VisualItemPatch): VisualItem {
-  const next: VisualItem = { ...item, ...patch };
+  const next: VisualItem = { ...item };
+  if (patch.cache_status !== undefined) next.cache_status = patch.cache_status;
+  if (patch.crossfade !== undefined) next.crossfade = patch.crossfade;
+  if (patch.end !== undefined) next.end = patch.end;
+  if (patch.mediaId !== undefined) next.mediaId = patch.mediaId;
+  if (patch.sentences !== undefined) next.sentences = patch.sentences;
+  if (patch.start !== undefined) next.start = patch.start;
   const currentMotionKind = normalizeMotionKind(item.motion.kind, "none");
   const mergedMotion = patch.motion ? { ...item.motion, ...patch.motion } : item.motion;
   next.motion = {

@@ -3,7 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
+import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse, TranscriptSentenceCue } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { BgModal } from "@/components/bg-modal/BgModal";
@@ -91,7 +91,7 @@ function EditorContent() {
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [resolution, setResolution] = useState("1080p");
+  const [resolution, setResolution] = useState<"1080p" | "720p" | "9:16">("1080p");
   const [modal, setModal] = useState<EditorModalKind>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -128,13 +128,19 @@ function EditorContent() {
     return latestConfigHash !== lastRenderedConfigHash;
   }, [hasUnrenderedChanges, lastRenderedConfigHash, latestConfigHash]);
   const renderDisabled = saving || renderJob.running || !project || !renderHashDiffers;
+  const visualMedia = useMemo(
+    () =>
+      media.filter(
+        (
+          entry,
+        ): entry is EditorMediaItem & { kind: "image" | "video" } => entry.kind === "image" || entry.kind === "video",
+      ),
+    [media],
+  );
 
   const loadProject = useCallback(async (id: string) => {
     try {
-      const [response, mediaItems] = await Promise.all([
-        request<ProjectConfigLoadResponse>(`/projects/${encodeURIComponent(id)}/config` as `/${string}`),
-        request<EditorMediaItem[]>(`/projects/${encodeURIComponent(id)}/media` as `/${string}`).catch(() => []),
-      ]);
+      const response = await request<ProjectConfigLoadResponse>(`/projects/${encodeURIComponent(id)}/config` as `/${string}`);
       const config = response.config;
       const resolvedProjectPath = await resolveProjectPath(id);
       const recoveryState = loadRecoveryState(id);
@@ -171,7 +177,7 @@ function EditorContent() {
       setSaveStatus(dirty ? "pending" : "saved");
       setLayers(working.layers);
       const configMedia = toEditorMediaItemsFromConfig(workingConfig.media ?? []);
-      setMedia(configMedia.length > 0 ? configMedia : normalizeEditorMediaItems(mediaItems));
+      setMedia(normalizeEditorMediaItems(configMedia));
       setSelected(selected);
       setResolution(normalizeResolutionPreset(recoveryState?.resolution, config.output?.resolution));
     } catch {
@@ -629,9 +635,12 @@ function EditorContent() {
     const mergeResult = mergeSentences(sentences, range);
     if (!mergeResult) return;
     const nextLayers = remapLayersAfterSentenceMerge(layers, mergeResult.range, mergeResult.sentences);
+    const nextTranscriptSentences = mergeResult.sentences.length > 0
+      ? (mergeResult.sentences as [TranscriptSentenceCue, ...TranscriptSentenceCue[]])
+      : undefined;
     const nextTranscript: Project["transcript"] = {
       ...project.transcript,
-      sentences: mergeResult.sentences,
+      sentences: nextTranscriptSentences,
     };
     setSentences(mergeResult.sentences);
     setLayers(nextLayers);
@@ -731,7 +740,7 @@ function EditorContent() {
   }
 
   return (
-    <PageChrome className="grid min-h-[calc(100vh-44px-40px)] grid-rows-[48px_auto_minmax(0,1fr)] overflow-y-auto lg:h-[calc(100vh-44px-40px)] lg:overflow-hidden">
+    <PageChrome className="grid min-h-0 grid-rows-[48px_auto_minmax(0,1fr)] overflow-y-auto lg:overflow-hidden" variant="workbench">
       <EditorBar
         cacheLabel={cacheLabel}
         onHome={() => router.push("/")}
@@ -747,7 +756,7 @@ function EditorContent() {
       />
       <RenderStrip job={renderJob} onCancel={cancelDraft} />
       <div
-        className="grid min-h-0 grid-cols-1 divide-y divide-(--line) bg-(--line) lg:grid-cols-[320px_minmax(0,1fr)_320px] lg:divide-x lg:divide-y-0"
+        className="grid min-h-0 grid-cols-1 divide-y divide-(--line) bg-(--line) lg:grid-cols-[380px_minmax(0,1fr)_320px] lg:divide-x lg:divide-y-0"
         data-testid="editor-layout-grid"
       >
         <TranscriptPane
@@ -772,48 +781,50 @@ function EditorContent() {
           selectedRange={selectedSentenceRange}
           sentences={sentences}
         />
-        <main className="flex min-h-0 min-w-0 flex-col bg-(--bg-0)">
-          <PreviewSurface
-            currentTime={currentTime}
-            duration={duration}
-            layers={layers}
-            onNext={() => seekSentence(1)}
-            onPrevious={() => seekSentence(-1)}
-            onTogglePlay={() => setPlaying((value) => !value)}
-            playbackClock={audioRef}
-            playing={playing}
-            projectPath={projectPath}
-            resolution={resolution}
-            sentences={sentences}
-            subtitles={project?.subtitles ?? null}
-            watermark={project?.watermark ?? null}
-          />
-          <div className="relative">
-            <PreviewControls
-              layerCount={layers.length}
-              layersOpen={layersOpen}
-              onLayers={() => setLayersOpen((value) => !value)}
-              onSetResolution={onResolutionChange}
-              resolution={resolution}
-            />
-            <LayersPopover
+        <main className="flex min-h-0 min-w-0 flex-col bg-(--bg-0)" data-testid="editor-center-pane">
+          <div className="flex min-h-0 flex-1 flex-col" data-testid="preview-stack">
+            <PreviewSurface
+              currentTime={currentTime}
+              duration={duration}
               layers={layers}
-              onClose={() => setLayersOpen(false)}
-              onAdd={() => {
-                setAssignEdit(null);
-                setModal("upload");
-              }}
-              onRemoveBackground={(layerId) => {
-                removeBackgroundLayer(layerId);
-                setLayersOpen(false);
-              }}
-              onSelectLayerItem={(layerId, itemId) => {
-                setSelected({ layerId, itemId });
-                setLayersOpen(false);
-              }}
-              open={layersOpen}
-              selected={selected}
+              onNext={() => seekSentence(1)}
+              onPrevious={() => seekSentence(-1)}
+              onTogglePlay={() => setPlaying((value) => !value)}
+              playbackClock={audioRef}
+              playing={playing}
+              projectPath={projectPath}
+              resolution={resolution}
+              sentences={sentences}
+              subtitles={project?.subtitles ?? null}
+              watermark={project?.watermark ?? null}
             />
+            <div className="relative">
+              <PreviewControls
+                layerCount={layers.length}
+                layersOpen={layersOpen}
+                onLayers={() => setLayersOpen((value) => !value)}
+                onSetResolution={onResolutionChange}
+                resolution={resolution}
+              />
+              <LayersPopover
+                layers={layers}
+                onClose={() => setLayersOpen(false)}
+                onAdd={() => {
+                  setAssignEdit(null);
+                  setModal("upload");
+                }}
+                onRemoveBackground={(layerId) => {
+                  removeBackgroundLayer(layerId);
+                  setLayersOpen(false);
+                }}
+                onSelectLayerItem={(layerId, itemId) => {
+                  setSelected({ layerId, itemId });
+                  setLayersOpen(false);
+                }}
+                open={layersOpen}
+                selected={selected}
+              />
+            </div>
           </div>
           <Timeline
             cacheLabel={cacheLabel}
@@ -862,9 +873,7 @@ function EditorContent() {
           editLayerId={assignEdit?.layerId}
           fromSentence={assignRange[0]}
           layers={layers}
-          media={media
-            .filter((entry) => entry.kind === "image" || entry.kind === "video")
-            .map((entry) => ({ filename: entry.filename, kind: entry.kind, thumb_url: entry.thumb_url }))}
+          media={visualMedia.map((entry) => ({ filename: entry.filename, kind: entry.kind, thumb_url: entry.thumb_url }))}
           onClose={() => setModal(null)}
           onImport={importMedia}
           onConfirm={applyAssignedLayers}
@@ -876,7 +885,7 @@ function EditorContent() {
         <BgModal
           duration={duration}
           existing={(layers.find((layer) => layer.kind === "bg") as BgLayer | undefined)}
-          media={media.filter((entry) => entry.kind === "image" || entry.kind === "video").map((entry) => ({
+          media={visualMedia.map((entry) => ({
             duration: entry.duration,
             filename: entry.filename,
             import_error: entry.import_error,
@@ -910,8 +919,11 @@ function EditorContent() {
 
 async function resolveProjectPath(projectId: string): Promise<string> {
   try {
-    const projects = await request<Array<{ project_id: string; path: string }>>("/projects");
-    return projects.find((project) => project.project_id === projectId)?.path ?? "";
+    const payload = await request<{ path?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/inspect` as `/${string}`,
+      { method: "POST" },
+    );
+    return typeof payload.path === "string" ? payload.path : "";
   } catch {
     return "";
   }
@@ -1040,9 +1052,11 @@ function sanitizeTranscriptSentences(transcript: Project["transcript"] | null | 
       );
     })
     .sort((left, right) => left.index - right.index)
-    .map((sentence, index) => ({
-      ...sentence,
+    .map((sentence, index): AlignedSentence => ({
+      confidence_avg: sentence.confidence_avg ?? 1,
+      end_s: sentence.end_s,
       index: index + 1,
+      start_s: sentence.start_s,
       text: sentence.text.trim(),
     }));
   return normalized;

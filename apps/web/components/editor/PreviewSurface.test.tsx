@@ -284,12 +284,12 @@ describe("PreviewSurface", () => {
     const filenames = drawnFilenames();
     const fgIndex = filenames.indexOf("fg0.mov");
     const pipIndex = filenames.indexOf("pip0.webm");
-    const watermarkIndex = filenames.indexOf("logo.mov");
+    const canvas = screen.getByTestId("preview-canvas");
 
     expect(filenames).not.toContain("bg0.mp4");
     expect(fgIndex).toBeGreaterThanOrEqual(0);
     expect(pipIndex).toBeGreaterThan(fgIndex);
-    expect(watermarkIndex).toBeGreaterThan(pipIndex);
+    expect(canvas).toHaveAttribute("data-watermark-visible", "true");
     expect(fillText).toHaveBeenCalled();
   });
 
@@ -418,8 +418,8 @@ describe("PreviewSurface", () => {
     expect(props.onPrevious).toHaveBeenCalledTimes(1);
     expect(props.onTogglePlay).toHaveBeenCalledTimes(1);
     expect(props.onNext).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("00:00:12.500")).toBeInTheDocument();
-    expect(screen.getByText("00:00:30.000")).toBeInTheDocument();
+    expect(screen.getByText("00:12.500")).toBeInTheDocument();
+    expect(screen.getByText("00:30.000")).toBeInTheDocument();
 
     rerender(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -431,14 +431,17 @@ describe("PreviewSurface", () => {
 
   it("switches framing class for 9:16 and keeps 1080p/720p in 16:9", () => {
     const { rerender, props } = renderSurface({ resolution: "9:16" });
-    expect(screen.getByTestId("preview-stage").className).toContain("aspect-[9/16]");
+    const frame = screen.getByTestId("preview-canvas-frame");
+    expect(frame.className).toContain("h-full");
+    expect(frame).toHaveStyle({ aspectRatio: "9 / 16" });
 
     rerender(
       <NextIntlClientProvider locale="en" messages={messages}>
         <PreviewSurface {...props} resolution="720p" />
       </NextIntlClientProvider>,
     );
-    expect(screen.getByTestId("preview-stage").className).toContain("aspect-video");
+    expect(frame.className).toContain("w-full");
+    expect(frame).toHaveStyle({ aspectRatio: "16 / 9" });
   });
 
   it("draws video frames through canvas drawImage when active video decoders are present", () => {

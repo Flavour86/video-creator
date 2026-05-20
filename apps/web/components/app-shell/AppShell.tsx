@@ -76,7 +76,7 @@ function AppShellChrome({ children }: AppShellChromeProps) {
             className="flex min-w-0 items-center gap-(--space-2) rounded-(--r-sm) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--blue)"
             tabIndex={0}
           >
-            <Kbd>⌘K</Kbd>
+            <Kbd>Ctrl K</Kbd>
             <span className="vc-type-caption text-(--text-3)">{t("statusBar.command")}</span>
           </div>
           <span className="vc-type-mono-meta shrink-0 text-(--text-3)" data-i18n-neutral="true">
