@@ -192,7 +192,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             crf=preset_config.crf,
             render_id=job.render_id,
         )
-        await _emit(job.render_id, "cache_warm", 4.0, message="building subtitles.srt")
+        await _emit(job.render_id, "cache_warm", 10.0, message="building subtitles.srt")
         await _emit(job.render_id, "compose", 12.0, message="ffmpeg compose")
         command = build_compose_command(
             project_dir=job.project_dir,
@@ -318,7 +318,7 @@ async def _warm_clip_cache(
 ) -> None:
     items = visual_items_bottom_to_top(project)
     if not items:
-        await _emit(render_id, "cache_warm", 10.0, message="pre-rendering clips")
+        await _emit(render_id, "cache_warm", 9.0, message="pre-rendering clips")
         return
     total = max(1, len(items))
     for index, item in enumerate(items, start=1):
@@ -333,7 +333,7 @@ async def _warm_clip_cache(
         await _emit(
             render_id,
             "cache_warm",
-            min(10.0, (index / total) * 10.0),
+            min(9.0, (index / total) * 9.0),
             message="pre-rendering clips",
         )
 

@@ -116,7 +116,7 @@ async def test_progress_persists_queued_and_stage_messages(
         RenderProgressEvent(
             render_id=render_id,
             stage="cache_warm",
-            percent=3.0,
+            percent=9.0,
             message="pre-rendering clips",
         )
     )
@@ -124,7 +124,7 @@ async def test_progress_persists_queued_and_stage_messages(
         RenderProgressEvent(
             render_id=render_id,
             stage="cache_warm",
-            percent=4.0,
+            percent=10.0,
             message="building subtitles.srt",
         )
     )
@@ -162,10 +162,10 @@ async def test_progress_persists_queued_and_stage_messages(
 async def test_runtime_emits_progress_messages_in_spec_order(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    events: list[tuple[str, str | None]] = []
+    events: list[tuple[str, float, str | None]] = []
 
     async def fake_publish_progress(event: RenderProgressEvent) -> None:
-        events.append((event.stage, event.message))
+        events.append((event.stage, event.percent, event.message))
 
     async def fake_ensure_alignment(project_dir: Path, project: Project) -> AlignmentResult:
         return AlignmentResult(
@@ -226,7 +226,7 @@ async def test_runtime_emits_progress_messages_in_spec_order(
 
     await render_pipeline._run_job(job, raise_errors=True)
 
-    assert [message for _, message in events] == [
+    assert [message for _, _, message in events] == [
         "queued",
         "verifying cache",
         "pre-rendering clips",
@@ -235,6 +235,9 @@ async def test_runtime_emits_progress_messages_in_spec_order(
         "muxing audio",
         "Draft ready",
     ]
+    assert [percent for _, percent, _ in events] == [0.0, 1.0, 9.0, 10.0, 12.0, 98.0, 100.0]
+    percents = [percent for _, percent, _ in events]
+    assert percents == sorted(percents)
 
 
 @pytest.mark.asyncio
