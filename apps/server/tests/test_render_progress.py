@@ -11,7 +11,10 @@ from starlette.websockets import WebSocketDisconnect
 
 from server.db.projects import project_id_for_path
 from server.db.renders import insert_render, list_render_events
+from server.domain.project import Project
+from server.domain.timing import AlignedSentence, AlignmentResult
 from server.main import app
+from server.pipeline import render as render_pipeline
 from server.pipeline.render_progress import (
     _latest,
     RenderProgressEvent,
@@ -113,6 +116,14 @@ async def test_progress_persists_queued_and_stage_messages(
         RenderProgressEvent(
             render_id=render_id,
             stage="cache_warm",
+            percent=3.0,
+            message="pre-rendering clips",
+        )
+    )
+    await publish_progress(
+        RenderProgressEvent(
+            render_id=render_id,
+            stage="cache_warm",
             percent=4.0,
             message="building subtitles.srt",
         )
@@ -136,13 +147,93 @@ async def test_progress_persists_queued_and_stage_messages(
 
     phases = [str(row["phase"]) for row in list_render_events(render_id)]
     messages = [str(row["message"]) for row in list_render_events(render_id)]
-    assert phases == ["cache_warm", "cache_warm", "cache_warm", "compose", "muxing"]
+    assert phases == ["cache_warm", "cache_warm", "cache_warm", "cache_warm", "compose", "muxing"]
     assert messages == [
         "queued",
         "verifying cache",
+        "pre-rendering clips",
         "building subtitles.srt",
         "ffmpeg compose",
         "muxing audio",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_runtime_emits_progress_messages_in_spec_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    events: list[tuple[str, str | None]] = []
+
+    async def fake_publish_progress(event: RenderProgressEvent) -> None:
+        events.append((event.stage, event.message))
+
+    async def fake_ensure_alignment(project_dir: Path, project: Project) -> AlignmentResult:
+        return AlignmentResult(
+            sentences=[
+                AlignedSentence(
+                    index=1,
+                    text="One sentence.",
+                    start_s=0.0,
+                    end_s=1.0,
+                    confidence_avg=1.0,
+                )
+            ],
+            words=[],
+            cache_hit=True,
+        )
+
+    async def fake_run_ffmpeg(
+        command: list[str],
+        output_path: Path,
+        *,
+        render_id: str,
+        total_s: float,
+    ) -> render_pipeline._RenderMediaStats:
+        return render_pipeline._RenderMediaStats()
+
+    monkeypatch.setattr(render_pipeline, "publish_progress", fake_publish_progress)
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", fake_ensure_alignment)
+    monkeypatch.setattr(
+        render_pipeline,
+        "build_compose_command",
+        lambda **kwargs: ["ffmpeg", "-y", "mock.mp4"],
+    )
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+    monkeypatch.setattr(render_pipeline, "mark_render_finished", lambda **kwargs: None)
+
+    project_dir = tmp_path / "project"
+    project = Project.model_validate(
+        {
+            "version": 1,
+            "name": "test",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [],
+            "subtitles": None,
+            "watermark": None,
+        }
+    )
+    job = render_pipeline.RenderJob(
+        render_id="r-runtime-order",
+        project_dir=project_dir,
+        project=project,
+        preset="draft",
+        resolution="1280x720",
+        output_path=project_dir / ".vc" / "drafts" / "r-runtime-order.mp4",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+    )
+
+    await render_pipeline._run_job(job, raise_errors=True)
+
+    assert [message for _, message in events] == [
+        "queued",
+        "verifying cache",
+        "pre-rendering clips",
+        "building subtitles.srt",
+        "ffmpeg compose",
+        "muxing audio",
+        "Draft ready",
     ]
 
 

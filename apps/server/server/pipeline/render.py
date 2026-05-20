@@ -182,7 +182,6 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
     try:
         await _emit(job.render_id, "cache_warm", 0.0, message="queued")
         await _emit(job.render_id, "cache_warm", 1.0, message="verifying cache")
-        await _emit(job.render_id, "cache_warm", 4.0, message="building subtitles.srt")
         alignment = await _ensure_alignment(job.project_dir, job.project)
         preset_config = PRESETS[job.preset]
         await _warm_clip_cache(
@@ -193,6 +192,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             crf=preset_config.crf,
             render_id=job.render_id,
         )
+        await _emit(job.render_id, "cache_warm", 4.0, message="building subtitles.srt")
         await _emit(job.render_id, "compose", 12.0, message="ffmpeg compose")
         command = build_compose_command(
             project_dir=job.project_dir,
