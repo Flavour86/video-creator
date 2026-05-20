@@ -2,7 +2,6 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
-import  Image from "next/image";
 import { buildFgItem, hasSentenceOverlap, nextZIndex } from "@/lib/layers";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
@@ -453,7 +452,7 @@ export function AssignModal({
                     type="button"
                   >
                     {item.thumb_url ? (
-                      <Image
+                      <img
                         alt={item.filename}
                         className="h-full w-full object-cover"
                         src={`/api/server${item.thumb_url}`}

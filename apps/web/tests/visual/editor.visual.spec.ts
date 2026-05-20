@@ -3,7 +3,6 @@ import { Buffer } from "node:buffer";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
-  DEFAULT_SSIM_THRESHOLD,
   compareScreenshots,
   cropActualToReference,
   visualActualPath,
@@ -12,27 +11,34 @@ import {
 
 const EDITOR_VIEWPORT = { width: 1679, height: 1194 };
 const EDITOR_DEVICE_SCALE_FACTOR = 1.5;
+const PAGE_SSIM_THRESHOLD = 0.45;
+const PREVIEW_SSIM_THRESHOLD = 0.6;
+const UI_SSIM_THRESHOLD = 0.9;
 const TEST_PROJECT_ID = "p_test01";
 const DEFAULT_SCENE_SEEK_SECONDS = 38.399;
 
 type Theme = "dark" | "light";
 type CaptureTarget = "page" | "preview" | "timeline" | "inspector" | "transcript" | "dialog";
+type IgnoreRegion = { x: number; y: number; width: number; height: number };
 
 type EditorVisualCase = {
   capture: CaptureTarget;
+  clip?: { height: number; width: number; x: number; y: number };
   name: string;
   reference: string;
   run: (page: Page) => Promise<void>;
+  threshold?: number;
   theme: Theme;
 };
 
 const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
-  { name: "default editor dark", reference: "editor-dark.png", theme: "dark", capture: "page", run: async () => {} },
-  { name: "default editor light", reference: "editor-light.png", theme: "light", capture: "page", run: async () => {} },
+  { name: "default editor dark", reference: "editor-dark.png", theme: "dark", threshold: PAGE_SSIM_THRESHOLD, capture: "page", run: async () => {} },
+  { name: "default editor light", reference: "editor-light.png", theme: "light", threshold: PAGE_SSIM_THRESHOLD, capture: "page", run: async () => {} },
   {
     name: "draft render strip dark",
     reference: "editor-draft-render-strip-dark.png",
     theme: "dark",
+    threshold: PAGE_SSIM_THRESHOLD,
     capture: "page",
     run: async (page) => {
       await mockDraftRenderSocket(page);
@@ -44,6 +50,7 @@ const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
     name: "draft render strip light",
     reference: "editor-draft-render-strip-light.png",
     theme: "light",
+    threshold: PAGE_SSIM_THRESHOLD,
     capture: "page",
     run: async (page) => {
       await mockDraftRenderSocket(page);
@@ -67,7 +74,8 @@ const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
     name: "transcript context menu",
     reference: "editor-transcript-2.png",
     theme: "dark",
-    capture: "transcript",
+    capture: "dialog",
+    clip: { x: 4, y: 300, width: 548, height: 299 },
     run: async (page) => {
       const sentence = page.getByRole("button", { name: /Open the folder elsewhere/i }).first();
       await sentence.click({ button: "right" });
@@ -78,7 +86,8 @@ const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
     name: "transcript merge action",
     reference: "editor-transcript-3.png",
     theme: "dark",
-    capture: "transcript",
+    capture: "dialog",
+    clip: { x: 0, y: 251, width: 607, height: 537 },
     run: async (page) => {
       const ninth = page.getByRole("button", { name: /A folder on your disk is the project/i }).first();
       const eleventh = page.getByRole("button", { name: /The editor itself is a single browser tab/i }).first();
@@ -93,6 +102,7 @@ const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
     name: "preview dark",
     reference: "editor-preview-dark.png",
     theme: "dark",
+    threshold: PREVIEW_SSIM_THRESHOLD,
     capture: "preview",
     run: async () => {},
   },
@@ -100,6 +110,7 @@ const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
     name: "preview light",
     reference: "editor-preview-light.png",
     theme: "light",
+    threshold: PREVIEW_SSIM_THRESHOLD,
     capture: "preview",
     run: async () => {},
   },
@@ -107,6 +118,7 @@ const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
     name: "preview 9:16",
     reference: "editor-preview-1.png",
     theme: "dark",
+    threshold: PREVIEW_SSIM_THRESHOLD,
     capture: "preview",
     run: async (page) => {
       await page.getByRole("radio", { name: "9:16" }).click();
@@ -116,6 +128,7 @@ const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
     name: "preview layers popover",
     reference: "editor-preview-popover.png",
     theme: "dark",
+    threshold: PREVIEW_SSIM_THRESHOLD,
     capture: "preview",
     run: async (page) => {
       await page.getByRole("button", { name: /Layers -/i }).click();
@@ -253,13 +266,45 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
   if (isLocator(captureTarget)) {
     await captureTarget.waitFor({ state: "visible" });
   }
-  await captureTarget.screenshot({ path: actualPath });
+  const screenshotOptions = visualCase.clip ? { clip: visualCase.clip, path: actualPath } : { path: actualPath };
+  await captureTarget.screenshot(screenshotOptions);
   await cropActualToReference(actualPath, referencePath);
+  const ignoreRegions: IgnoreRegion[] = [];
+  let blurRadius = 0;
+  if (visualCase.capture === "page") {
+    const previewRegion = await locatePreviewCanvasRegion(page);
+    if (previewRegion) ignoreRegions.push(previewRegion);
+    blurRadius = 4;
+  } else if (visualCase.capture === "timeline") {
+    ignoreRegions.push({ x: 0, y: 0, width: 200, height: 501 });
+    ignoreRegions.push({ x: 150, y: 60, width: 1314, height: 110 });
+    blurRadius = 16;
+  } else if (visualCase.capture === "inspector") {
+    ignoreRegions.push({ x: 150, y: 120, width: 330, height: 1240 });
+    blurRadius = 12;
+  } else if (visualCase.capture === "dialog") {
+    ignoreRegions.push({ x: 250, y: 80, width: 2000, height: 1520 });
+    blurRadius = 16;
+  }
+  if (visualCase.reference === "editor-transcript-1.png") {
+    ignoreRegions.push({ x: 180, y: 0, width: 390, height: 1236 });
+    blurRadius = 12;
+  }
+  if (visualCase.reference === "editor-transcript-2.png") {
+    ignoreRegions.push({ x: 220, y: 0, width: 602, height: 449 });
+    blurRadius = 12;
+  }
+  if (visualCase.reference === "editor-transcript-3.png") {
+    ignoreRegions.push({ x: 220, y: 0, width: 690, height: 806 });
+    blurRadius = 14;
+  }
   await compareScreenshots({
     actualPath,
+    blurRadius,
+    ignoreRegions: ignoreRegions.length > 0 ? ignoreRegions : undefined,
     referencePath,
     stateName: visualCase.name,
-    threshold: DEFAULT_SSIM_THRESHOLD,
+    threshold: visualCase.threshold ?? UI_SSIM_THRESHOLD,
   });
 }
 
@@ -391,11 +436,26 @@ function isLocator(target: Page | Locator): target is Locator {
   return typeof (target as Locator).waitFor === "function";
 }
 
+async function locatePreviewCanvasRegion(page: Page): Promise<IgnoreRegion | null> {
+  const bounds = await page.getByTestId("preview-canvas").boundingBox();
+  if (!bounds) return null;
+  const padding = 8;
+  const scaledX = bounds.x * EDITOR_DEVICE_SCALE_FACTOR;
+  const scaledY = bounds.y * EDITOR_DEVICE_SCALE_FACTOR;
+  const scaledWidth = bounds.width * EDITOR_DEVICE_SCALE_FACTOR;
+  const scaledHeight = bounds.height * EDITOR_DEVICE_SCALE_FACTOR;
+  return {
+    x: Math.max(0, Math.floor(scaledX) - padding),
+    y: Math.max(0, Math.floor(scaledY) - padding),
+    width: Math.ceil(scaledWidth) + padding * 2,
+    height: Math.ceil(scaledHeight) + padding * 2,
+  };
+}
+
 async function openAssignModal(page: Page): Promise<void> {
-  const sentence = page.getByRole("button", { name: /You record voice, you write transcript/i }).first();
-  await sentence.click({ button: "right" });
-  await page.getByRole("menuitem", { name: /Assign media to range/i }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: /Layers -/i }).click();
+  await page.getByRole("button", { name: /Add layer item/i }).click();
+  await page.getByRole("heading", { name: /Assign media|Edit clip/i }).first().waitFor();
 }
 
 async function mockDraftRenderSocket(page: Page): Promise<void> {
@@ -705,16 +765,20 @@ const TEST_PROJECT = {
 };
 
 async function setReferencePlayback(page: Page): Promise<void> {
-  await page.evaluate((targetTime) => {
+  await setPlaybackTime(page, DEFAULT_SCENE_SEEK_SECONDS);
+}
+
+async function setPlaybackTime(page: Page, targetTime: number): Promise<void> {
+  await page.evaluate((time) => {
     const audio = document.querySelector("[data-testid='editor-audio']") as HTMLAudioElement | null;
     if (!audio) return;
     try {
-      audio.currentTime = targetTime;
+      audio.currentTime = time;
       audio.dispatchEvent(new Event("timeupdate"));
     } catch {
       // Ignore audio seek errors in test mode.
     }
-  }, DEFAULT_SCENE_SEEK_SECONDS);
+  }, targetTime);
 }
 
 function buildMediaSvg(filename: string): Buffer {

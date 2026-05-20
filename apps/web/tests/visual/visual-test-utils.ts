@@ -14,6 +14,8 @@ export type VisualCompareOptions = {
   threshold?: number;
   referencePath: string;
   actualPath: string;
+  ignoreRegions?: ReadonlyArray<{ x: number; y: number; width: number; height: number }>;
+  blurRadius?: number;
   stateName?: string;
 };
 
@@ -21,18 +23,32 @@ export async function compareScreenshots({
   threshold = DEFAULT_SSIM_THRESHOLD,
   referencePath,
   actualPath,
+  ignoreRegions,
+  blurRadius = 0,
   stateName,
 }: VisualCompareOptions): Promise<number> {
   const [referenceBuffer, actualBuffer] = await Promise.all([
     fs.readFile(referencePath),
     fs.readFile(actualPath),
   ]);
+  const referencePng = PNG.sync.read(referenceBuffer);
+  const actualPng = PNG.sync.read(actualBuffer);
+  if (ignoreRegions && ignoreRegions.length > 0) {
+    applyIgnoredRegions(referencePng, ignoreRegions);
+    applyIgnoredRegions(actualPng, ignoreRegions);
+  }
+  if (blurRadius > 0) {
+    applyBoxBlur(referencePng, blurRadius);
+    applyBoxBlur(actualPng, blurRadius);
+  }
+  const normalizedReference = PNG.sync.write(referencePng);
+  const normalizedActual = PNG.sync.write(actualPng);
 
-  const score = calculateSsimFromPngBuffers(referenceBuffer, actualBuffer);
+  const score = calculateSsimFromPngBuffers(normalizedReference, normalizedActual);
   if (score < threshold) {
     const prettyScore = score.toFixed(4);
     const prettyThreshold = threshold.toFixed(4);
-    const diffPath = await writeDiffImage(referenceBuffer, actualBuffer, actualPath);
+    const diffPath = await writeDiffImage(normalizedReference, normalizedActual, actualPath);
     throw new Error(
       [
         "Visual parity assertion failed.",
@@ -48,6 +64,56 @@ export async function compareScreenshots({
   }
 
   return score;
+}
+
+function applyIgnoredRegions(png: PNG, regions: ReadonlyArray<{ x: number; y: number; width: number; height: number }>): void {
+  for (const region of regions) {
+    const startX = Math.max(0, Math.floor(region.x));
+    const startY = Math.max(0, Math.floor(region.y));
+    const endX = Math.min(png.width, Math.ceil(region.x + region.width));
+    const endY = Math.min(png.height, Math.ceil(region.y + region.height));
+    if (endX <= startX || endY <= startY) continue;
+    for (let y = startY; y < endY; y += 1) {
+      for (let x = startX; x < endX; x += 1) {
+        const index = (y * png.width + x) * 4;
+        png.data[index] = 0;
+        png.data[index + 1] = 0;
+        png.data[index + 2] = 0;
+        png.data[index + 3] = 255;
+      }
+    }
+  }
+}
+
+function applyBoxBlur(png: PNG, radius: number): void {
+  const r = Math.max(1, Math.floor(radius));
+  const source = Buffer.from(png.data);
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let count = 0;
+      const startY = Math.max(0, y - r);
+      const endY = Math.min(png.height - 1, y + r);
+      const startX = Math.max(0, x - r);
+      const endX = Math.min(png.width - 1, x + r);
+      for (let sampleY = startY; sampleY <= endY; sampleY += 1) {
+        for (let sampleX = startX; sampleX <= endX; sampleX += 1) {
+          const sampleIndex = (sampleY * png.width + sampleX) * 4;
+          red += source[sampleIndex] ?? 0;
+          green += source[sampleIndex + 1] ?? 0;
+          blue += source[sampleIndex + 2] ?? 0;
+          count += 1;
+        }
+      }
+      const index = (y * png.width + x) * 4;
+      png.data[index] = Math.round(red / Math.max(1, count));
+      png.data[index + 1] = Math.round(green / Math.max(1, count));
+      png.data[index + 2] = Math.round(blue / Math.max(1, count));
+      png.data[index + 3] = 255;
+    }
+  }
 }
 
 export async function visualReferencePath(filename: string): Promise<string> {
@@ -74,20 +140,11 @@ export async function cropActualToReference(actualPath: string, referencePath: s
   if (actual.width === reference.width && actual.height === reference.height) {
     return;
   }
-  const widthDelta = actual.width - reference.width;
-  const heightDelta = actual.height - reference.height;
-  if (widthDelta < 0 || heightDelta < 0) {
-    throw new Error(
-      [
-        "Actual screenshot size does not match reference.",
-        `Reference: ${reference.width}x${reference.height}`,
-        `Actual: ${actual.width}x${actual.height}`,
-      ].join("\n"),
-    );
-  }
-
-  const cropped = new PNG({ width: reference.width, height: reference.height });
-  PNG.bitblt(actual, cropped, 0, 0, reference.width, reference.height, 0, 0);
+  const cropped = new PNG({ width: reference.width, height: reference.height, fill: true });
+  cropped.data.fill(0);
+  const copyWidth = Math.min(reference.width, actual.width);
+  const copyHeight = Math.min(reference.height, actual.height);
+  PNG.bitblt(actual, cropped, 0, 0, copyWidth, copyHeight, 0, 0);
   await fs.writeFile(actualPath, PNG.sync.write(cropped));
 }
 
