@@ -6,8 +6,11 @@ module scope. CUDA is auto-detected; falls back to CPU on OOM.
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult, Sentence
 
@@ -64,7 +67,7 @@ def _run_align(
 ) -> AlignmentResult:
     import whisperx
 
-    audio = whisperx.load_audio(str(audio_path))
+    audio = _load_audio_array(audio_path)
     duration = len(audio) / 16000.0
     step = duration / max(len(sentences), 1)
 
@@ -134,12 +137,81 @@ def _run_transcribe(
     model_name: str,
     batch_size: int,
 ) -> AlignmentResult:
-    import whisperx
-
-    audio = whisperx.load_audio(str(audio_path))
+    audio = _load_audio_array(audio_path)
     model = _load_transcribe_model(model_name, device)
     result = model.transcribe(audio, batch_size=batch_size)
     return _segments_to_alignment_result(result.get("segments", []))
+
+
+def _load_audio_array(audio_path: Path, sample_rate: int = 16000) -> np.ndarray:
+    """Decode audio without torchcodec/torio so Windows FFmpeg DLL issues do not break ASR."""
+    try:
+        return _load_audio_with_ffmpeg(audio_path, sample_rate)
+    except RuntimeError:
+        try:
+            return _load_audio_with_soundfile(audio_path, sample_rate)
+        except RuntimeError as soundfile_error:
+            raise RuntimeError(
+                "Audio decoding failed. Ensure ffmpeg is installed and the voice file is readable."
+            ) from soundfile_error
+
+
+def _load_audio_with_ffmpeg(audio_path: Path, sample_rate: int) -> np.ndarray:
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-v",
+                "error",
+                "-i",
+                str(audio_path),
+                "-ac",
+                "1",
+                "-ar",
+                str(sample_rate),
+                "-f",
+                "f32le",
+                "pipe:1",
+            ],
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("ffmpeg audio decode failed.") from exc
+
+    if result.returncode != 0 or not result.stdout:
+        raise RuntimeError("ffmpeg audio decode failed.")
+    return np.frombuffer(result.stdout, dtype=np.float32).copy()
+
+
+def _load_audio_with_soundfile(audio_path: Path, sample_rate: int) -> np.ndarray:
+    try:
+        import soundfile  # type: ignore[import-untyped]
+
+        data, source_rate = soundfile.read(str(audio_path), dtype="float32", always_2d=True)
+    except Exception as exc:
+        raise RuntimeError("soundfile audio decode failed.") from exc
+
+    if data.size == 0:
+        raise RuntimeError("Decoded audio is empty.")
+    mono = np.asarray(data, dtype=np.float32).mean(axis=1)
+    if int(source_rate) != sample_rate:
+        mono = _resample_linear(mono, int(source_rate), sample_rate)
+    return mono.astype(np.float32, copy=False)
+
+
+def _resample_linear(audio: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
+    if source_rate <= 0 or target_rate <= 0 or source_rate == target_rate:
+        return audio
+    if audio.size == 0:
+        return audio
+    duration = audio.size / float(source_rate)
+    target_size = max(1, round(duration * target_rate))
+    source_positions = np.linspace(0.0, duration, num=audio.size, endpoint=False)
+    target_positions = np.linspace(0.0, duration, num=target_size, endpoint=False)
+    return np.interp(target_positions, source_positions, audio).astype(np.float32)
 
 
 def _segments_to_alignment_result(segments: list[dict[str, Any]]) -> AlignmentResult:

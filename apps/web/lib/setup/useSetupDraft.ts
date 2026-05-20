@@ -400,7 +400,7 @@ function emptyDraft(path: string, projectId: string): SetupDraft {
   return {
     project_id: projectId || undefined,
     path,
-    name: nameFromPath(path),
+    name: "",
     output_preset: "final",
     voice: null,
     transcript: null,
@@ -414,13 +414,6 @@ function emptyDraft(path: string, projectId: string): SetupDraft {
       cache_hit: false,
     },
   };
-}
-
-function nameFromPath(path: string): string {
-  if (!path) {
-    return "";
-  }
-  return path.split(/[\\/]/).filter(Boolean).pop() ?? "Untitled Project";
 }
 
 function extractServerErrorMessage(error: unknown): string | null {

@@ -247,25 +247,30 @@ test.describe("Launcher Task 11 flows", () => {
     await expect(page.getByRole("button", { name: "Create project" })).toBeDisabled();
 
     await page.getByLabel("Project name").fill("Flow Three");
-    await page.getByRole("radio", { name: "1080p" }).click();
+    await page.getByRole("combobox", { name: "Output preset" }).selectOption("final");
     await expectStepDone(page, "Project Name");
 
     await page.locator('input[accept=".mp3,.wav,.m4a"]').setInputFiles(
       makeUpload("voice.wav", "audio/wav", "valid wav audio"),
     );
     await expectStepDone(page, "Voice");
-    await expect(page.getByText("copied").first()).toBeVisible();
+    await expect(page.getByText("selected").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Subtitle Alignment" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Run alignment API" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Generate subtitle" }).click();
     await expect(page.getByText("running").first()).toBeVisible();
-    await expect(page.getByText("13 cues", { exact: false })).toBeVisible();
+    await expect(page.getByText("13 subtitles", { exact: false })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Subtitle Alignment" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Run alignment API" })).toBeDisabled();
     await expectStepDone(page, "Subtitle");
 
     await page.locator('input[accept=".txt,.md,.srt"]').setInputFiles(
       makeUpload("transcript.txt", "text/plain", "hello world"),
     );
+    await expect(page.getByRole("button", { name: "Run alignment API" })).toBeEnabled();
     await page.getByRole("button", { name: "Run alignment API" }).click();
-    await expect(page.getByText("Corrections applied: 4")).toBeVisible();
+    await expect(page.getByText("Alignment finished. 4 subtitle updates applied.")).toBeVisible();
     await expectStepDone(page, "Alignment");
 
     const createButton = page.getByRole("button", { name: "Create project" });
@@ -371,7 +376,7 @@ test.describe("Launcher Task 11 flows", () => {
     await page.locator('input[accept=".mp3,.wav,.m4a"]').setInputFiles(
       makeUpload("broken.txt", "text/plain", "bad"),
     );
-    await expect(page.getByText("invalid").first()).toBeVisible();
+    await expect(page.getByText("failed").first()).toBeVisible();
     await expect(stepDoneLocator(page, "Voice")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Generate subtitle" })).toBeDisabled();
 
@@ -383,10 +388,13 @@ test.describe("Launcher Task 11 flows", () => {
     await page.getByRole("button", { name: "Generate subtitle" }).click();
     await expect(page.getByText("Subtitle generation failed.")).toBeVisible();
     await expect(stepDoneLocator(page, "Subtitle")).toHaveCount(0);
+    await expect(page.getByText("subtitle.srt", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Subtitle Alignment" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Run alignment API" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Generate subtitle" })).toBeEnabled();
 
     await page.getByRole("button", { name: "Generate subtitle" }).click();
-    await expect(page.getByText("7 cues", { exact: false })).toBeVisible();
+    await expect(page.getByText("7 subtitles", { exact: false })).toBeVisible();
     await expectStepDone(page, "Subtitle");
 
     await page.locator('input[accept=".txt,.md,.srt"]').setInputFiles(
@@ -397,7 +405,7 @@ test.describe("Launcher Task 11 flows", () => {
     await expect(stepDoneLocator(page, "Alignment")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Run alignment API" }).click();
-    await expect(page.getByText("Corrections applied: 4")).toBeVisible();
+    await expect(page.getByText("Alignment finished. 4 subtitle updates applied.")).toBeVisible();
     await expectStepDone(page, "Alignment");
     await expect(page.getByRole("button", { name: "Create project" })).toBeEnabled();
     expect(state.subtitleCalls).toBe(2);
@@ -514,8 +522,9 @@ test.describe("Launcher Task 11 flows", () => {
     await expectStepDone(page, "Project Name");
 
     await page.locator('input[accept=".mp3,.wav,.m4a"]').setInputFiles(makeUpload("voice-a.wav", "audio/wav", "a"));
-    await page.locator('input[accept=".txt,.md,.srt"]').setInputFiles(makeUpload("transcript-a.txt", "text/plain", "a"));
+    await expect(page.getByRole("heading", { name: "Subtitle Alignment" })).toHaveCount(0);
     await page.getByRole("button", { name: "Generate subtitle" }).click();
+    await page.locator('input[accept=".txt,.md,.srt"]').setInputFiles(makeUpload("transcript-a.txt", "text/plain", "a"));
     await page.getByRole("button", { name: "Run alignment API" }).click();
     await expectStepDone(page, "Voice");
     await expectStepDone(page, "Subtitle");

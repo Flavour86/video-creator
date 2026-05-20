@@ -455,7 +455,7 @@ function deriveSubtitleCueCount(items: unknown[]): number {
       if (typeof candidate.label === "string") {
         const match = candidate.label.match(/(\d+)\s*cues?/i);
         if (match) {
-          const parsed = Number.parseInt(match[1], 10);
+          const parsed = Number.parseInt(match[1] ?? "0", 10);
           if (Number.isFinite(parsed)) return parsed;
         }
       }

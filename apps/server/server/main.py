@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import warnings
 
 import structlog
 from fastapi import FastAPI, Request
@@ -18,6 +19,13 @@ from server.runtime_status import RuntimeHealthResponse, collect_runtime_health
 from server.settings import settings
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
+logging.getLogger("torio._extension.utils").setLevel(logging.ERROR)
+warnings.filterwarnings(
+    "ignore",
+    message=r"\s*torchcodec is not installed correctly so built-in audio decoding will fail\..*",
+    category=UserWarning,
+    module=r"pyannote\.audio\.core\.io",
+)
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),

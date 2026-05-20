@@ -2,16 +2,15 @@ import { test, type Page } from "@playwright/test";
 import type { SetupAlignment, SetupDraft, SetupSubtitleGenerationResult } from "@vc/shared-schemas";
 
 import {
-  DEFAULT_SSIM_THRESHOLD,
   compareScreenshots,
   cropActualToReference,
-  materializeReferenceAsActual,
   visualActualPath,
   visualReferencePath,
 } from "./visual-test-utils";
 
 const SETUP_VIEWPORT = { width: 1330, height: 899 };
 const SETUP_DEVICE_SCALE_FACTOR = 1.5;
+const SETUP_SSIM_THRESHOLD = 0.9;
 
 type Theme = "dark" | "light";
 type SetupVisualState =
@@ -61,8 +60,12 @@ async function compareSetup(
   const actualPath = await visualActualPath(visualCase.reference.replace(".png", ".actual.png"));
   await page.screenshot({ path: actualPath });
   await cropActualToReference(actualPath, referencePath);
-  await materializeReferenceAsActual(referencePath, actualPath);
-  await compareScreenshots({ actualPath, referencePath, threshold: DEFAULT_SSIM_THRESHOLD });
+  await compareScreenshots({
+    actualPath,
+    referencePath,
+    stateName: visualCase.reference,
+    threshold: SETUP_SSIM_THRESHOLD,
+  });
 }
 
 async function prepareVisualPage(page: Page, theme: Theme) {
@@ -92,11 +95,14 @@ async function settleChrome(page: Page) {
 }
 
 function draftForState(state: SetupVisualState): SetupDraft {
-  const withTranscript = !state.startsWith("srt");
+  const withTranscript = state === "complete"
+    || state === "alignment-selected"
+    || state === "alignment-running"
+    || state === "alignment-success";
   const subtitle = subtitleForState(state);
   const alignment = alignmentForState(state);
   return {
-    project_id: null,
+    project_id: undefined,
     path: "E:/video-projects/tokyo-essay",
     name: "Tokyo Essay",
     output_preset: "final",

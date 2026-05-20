@@ -6,10 +6,12 @@ never spawns real OS threads (which triggers torch DLL double-init on Windows).
 from __future__ import annotations
 
 import asyncio
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 
+import numpy as np
 import pytest
 
 from server.domain.timing import AlignmentResult, Sentence
@@ -94,6 +96,7 @@ async def _align(
     with (
         patch.dict(sys.modules, {"whisperx": mock_wx}),
         patch.object(transcribe, "_device", return_value="cpu"),
+        patch.object(transcribe, "_load_audio_array", return_value=[0.0] * 32000),
         patch.object(asyncio, "to_thread", side_effect=_inline),
     ):
         return await transcribe.align(wav, sentences, language=language)
@@ -148,6 +151,63 @@ async def test_align_cache_hit_false_on_fresh_run(tmp_path: Path) -> None:
     assert result.cache_hit is False
 
 
+def test_load_audio_array_uses_ffmpeg_float32_pipe(tmp_path: Path) -> None:
+    samples = np.array([0.25, -0.25], dtype=np.float32)
+
+    with patch.object(
+        transcribe.subprocess,
+        "run",
+        return_value=subprocess.CompletedProcess(
+            args=["ffmpeg"],
+            returncode=0,
+            stdout=samples.tobytes(),
+        ),
+    ) as run:
+        audio = transcribe._load_audio_array(tmp_path / "voice.mp3")
+
+    assert audio.dtype == np.float32
+    assert audio.tolist() == pytest.approx([0.25, -0.25])
+    run.assert_called_once()
+
+
+def test_load_audio_array_falls_back_to_soundfile(tmp_path: Path) -> None:
+    fallback = np.array([0.5], dtype=np.float32)
+
+    with (
+        patch.object(
+            transcribe,
+            "_load_audio_with_ffmpeg",
+            side_effect=RuntimeError("ffmpeg failed"),
+        ),
+        patch.object(
+            transcribe,
+            "_load_audio_with_soundfile",
+            return_value=fallback,
+        ) as soundfile_loader,
+    ):
+        audio = transcribe._load_audio_array(tmp_path / "voice.wav")
+
+    assert audio.tolist() == pytest.approx([0.5])
+    soundfile_loader.assert_called_once()
+
+
+def test_load_audio_array_reports_decode_failure(tmp_path: Path) -> None:
+    with (
+        patch.object(
+            transcribe,
+            "_load_audio_with_ffmpeg",
+            side_effect=RuntimeError("ffmpeg failed"),
+        ),
+        patch.object(
+            transcribe,
+            "_load_audio_with_soundfile",
+            side_effect=RuntimeError("soundfile failed"),
+        ),
+        pytest.raises(RuntimeError, match="Audio decoding failed"),
+    ):
+        transcribe._load_audio_array(tmp_path / "voice.mp3")
+
+
 @pytest.mark.asyncio
 async def test_align_word_sentence_index(tmp_path: Path) -> None:
     result = await _align(tmp_path / "v.wav", _SENTENCES)
@@ -165,6 +225,7 @@ async def test_align_passes_language_to_load_model(tmp_path: Path) -> None:
     with (
         patch.dict(sys.modules, {"whisperx": mock_wx}),
         patch.object(transcribe, "_device", return_value="cpu"),
+        patch.object(transcribe, "_load_audio_array", return_value=[0.0] * 32000),
         patch.object(asyncio, "to_thread", side_effect=_inline),
     ):
         await transcribe.align(tmp_path / "v.wav", _SENTENCES, language="fr")
@@ -182,6 +243,7 @@ async def test_transcribe_audio_returns_alignment_result(tmp_path: Path) -> None
     with (
         patch.dict(sys.modules, {"whisperx": mock_wx}),
         patch.object(transcribe, "_device", return_value="cpu"),
+        patch.object(transcribe, "_load_audio_array", return_value=[0.0] * 16000),
         patch.object(asyncio, "to_thread", side_effect=_inline),
     ):
         result = await transcribe.transcribe_audio(tmp_path / "voice.wav")
@@ -191,6 +253,7 @@ async def test_transcribe_audio_returns_alignment_result(tmp_path: Path) -> None
     assert len(result.words) == 2
     model.transcribe.assert_called_once_with(ANY, batch_size=16)
     mock_wx.load_model.assert_called_once_with("large-v3", device="cpu")
+    mock_wx.load_audio.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -203,6 +266,7 @@ async def test_transcribe_audio_reuses_loaded_model(tmp_path: Path) -> None:
     with (
         patch.dict(sys.modules, {"whisperx": mock_wx}),
         patch.object(transcribe, "_device", return_value="cpu"),
+        patch.object(transcribe, "_load_audio_array", return_value=[0.0] * 16000),
         patch.object(asyncio, "to_thread", side_effect=_inline),
     ):
         await transcribe.transcribe_audio(tmp_path / "a.wav")
@@ -224,6 +288,7 @@ async def test_transcribe_audio_synthesizes_word_timings_when_missing(tmp_path: 
     with (
         patch.dict(sys.modules, {"whisperx": mock_wx}),
         patch.object(transcribe, "_device", return_value="cpu"),
+        patch.object(transcribe, "_load_audio_array", return_value=[0.0] * 16000),
         patch.object(asyncio, "to_thread", side_effect=_inline),
     ):
         result = await transcribe.transcribe_audio(tmp_path / "voice.wav")

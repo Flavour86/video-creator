@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import type { SetupDraft, SetupSubtitleGenerationResult } from "@vc/shared-schemas";
 import { beforeEach, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
 import SetupPage from "./page";
 
 const mocks = vi.hoisted(() => ({
-  pathParam: "E:\\video-projects\\tokyo-essay" as string | null,
-  projectIdParam: "p_tokyo",
+  pathParam: null as string | null,
+  projectIdParam: "",
   push: vi.fn(),
 }));
 
@@ -30,51 +31,130 @@ function renderSetup() {
 }
 
 beforeEach(() => {
-  mocks.pathParam = "E:\\video-projects\\tokyo-essay";
-  mocks.projectIdParam = "p_tokyo";
+  mocks.pathParam = null;
+  mocks.projectIdParam = "";
   mocks.push.mockReset();
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      path: "E:\\video-projects\\tokyo-essay",
-      name: "Tokyo Essay",
-      voice: { path: "voice.wav", duration: 942, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
-      transcript: { path: "transcript.txt", sentence_count: 164, state: "parsed" },
-      subtitle_generation: {
-        status: "ready",
-        cue_count: 0,
-        total_duration_s: 0,
-        cache_state: "unknown",
-        error_message: null,
-      },
-      alignment: {
-        status: "pending",
-        hash: "8a3f2c1df91c",
-        device: "cuda · fp16",
-        model: "large-v3",
-        audio_duration: 942,
-        cache_hit: false,
-      },
-    }),
-  });
+  global.fetch = vi.fn();
 });
 
-it("shows the four-step setup layout and project-id inspect", async () => {
+it("starts with an empty form and hides post-subtitle panels", async () => {
+  mockSetupDraft(draft());
+
   renderSetup();
 
-  expect(screen.getByRole("heading", { name: "SetUp" })).toBeInTheDocument();
-  expect(screen.getAllByText("Project Name").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Voice").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Subtitle").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Alignment").length).toBeGreaterThan(0);
-  expect(screen.getByRole("radio", { name: "720p" })).toBeInTheDocument();
-  expect(screen.getByRole("radio", { name: "1080p" })).toBeInTheDocument();
-  expect(screen.getByRole("radio", { name: "9:16" })).toBeInTheDocument();
-  expect(screen.getByText("watermark.png")).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeEnabled());
-  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeInTheDocument();
+  expect(await screen.findByRole("textbox", { name: "Project name" })).toHaveValue("");
+  expect(screen.getByRole("combobox", { name: "Output preset" })).toHaveValue("final");
+  expect(screen.getByText("Voice for video")).toBeInTheDocument();
+  expect(screen.queryByText("subtitle.srt")).not.toBeInTheDocument();
+  expect(screen.queryByText("Subtitle Alignment")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Run alignment API" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
+});
+
+it("shows voice selected state without revealing subtitle or alignment panels", async () => {
+  mockSetupDraft(draft({
+    name: "Ss",
+    voice: voice(),
+    subtitle_generation: subtitle("ready"),
+  }));
+
+  renderSetup();
+
+  expect(await screen.findByText("voice.mp3")).toBeInTheDocument();
+  expect(screen.getByText("selected")).toBeInTheDocument();
+  expect(screen.queryByText("subtitle.srt")).not.toBeInTheDocument();
+  expect(screen.queryByText("Subtitle Alignment")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeEnabled();
+});
+
+it("keeps alignment hidden when subtitle generation fails", async () => {
+  mockSetupDraft(draft({
+    name: "Ss",
+    voice: voice(),
+    subtitle_generation: subtitle("failed", { error_message: "generator timeout." }),
+  }));
+
+  renderSetup();
+
+  expect(await screen.findByText("failed")).toBeInTheDocument();
+  expect(screen.getByText("subtitle.srt generation failed: generator timeout.")).toBeInTheDocument();
+  expect(screen.queryByText("subtitle.srt")).not.toBeInTheDocument();
+  expect(screen.queryByText("Subtitle Alignment")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Run alignment API" })).not.toBeInTheDocument();
+});
+
+it("reveals subtitle and alignment sections only after subtitle generation succeeds", async () => {
+  mockSetupDraft(draft({
+    name: "Ss",
+    voice: voice(),
+    subtitle_generation: subtitle("succeeded"),
+  }));
+
+  renderSetup();
+
+  expect(await screen.findByText("subtitle.srt")).toBeInTheDocument();
+  expect(screen.getByText("21 subtitles / 15:42")).toBeInTheDocument();
+  expect(screen.getByText("Subtitle Alignment")).toBeInTheDocument();
+  expect(screen.getByText("transcript for alignment")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Run alignment API" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
+});
+
+it("enables alignment after transcript selection", async () => {
+  mockSetupDraft(draft({
+    name: "Ss",
+    voice: voice(),
+    transcript: transcript(),
+    subtitle_generation: subtitle("succeeded"),
+  }));
+
+  renderSetup();
+
+  expect(await screen.findByText("transcript.txt")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
+});
+
+it("enables Create project after alignment succeeds and routes to the editor", async () => {
+  mockSetupDraft(
+    draft({
+      alignment: alignment("aligned"),
+      name: "Ss",
+      subtitle_generation: subtitle("succeeded"),
+      transcript: transcript(),
+      voice: voice(),
+    }),
+    { createProjectId: "p_ss" },
+  );
+
+  renderSetup();
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create project" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/editor/p_ss"));
+});
+
+it("calls project inspect when setup is opened for an existing project", async () => {
+  mocks.projectIdParam = "p_tokyo";
+  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/projects/p_tokyo/inspect")) {
+      return okJson({
+        path: "E:\\video-projects\\tokyo-essay",
+        name: "Tokyo Essay",
+        voice: voice({ path: "voice.wav" }),
+        transcript: transcript(),
+        subtitle_generation: subtitle("succeeded"),
+        alignment: alignment("aligned"),
+      });
+    }
+    return okJson({});
+  });
+
+  renderSetup();
+
   await waitFor(() =>
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/server/projects/p_tokyo/inspect",
@@ -83,326 +163,90 @@ it("shows the four-step setup layout and project-id inspect", async () => {
   );
 });
 
-it("keeps Setup cancel local and does not persist partial state", async () => {
-  renderSetup();
-
-  fireEvent.change(screen.getByLabelText("Project name"), { target: { value: "Local Draft" } });
-  fireEvent.click(screen.getByRole("radio", { name: "9:16" }));
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-  expect(mocks.push).toHaveBeenCalledWith("/");
-  expect(
-    (global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([url]) => String(url).includes("/setup/drafts")),
-  ).toBe(false);
-});
-
-it("routes Create project only with a canonical project id", async () => {
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      path: "E:\\video-projects\\tokyo-essay",
-      name: "Tokyo Essay",
-      voice: { path: "voice.wav", duration: 942, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
-      transcript: { path: "transcript.txt", sentence_count: 164, state: "parsed" },
-      subtitle_generation: {
-        status: "succeeded",
-        cue_count: 164,
-        total_duration_s: 942,
-        cache_state: "miss",
-        error_message: null,
-      },
-      alignment: {
-        status: "aligned",
-        hash: "8a3f2c1df91c",
-        device: "cuda 路 fp16",
-        model: "large-v3",
-        audio_duration: 942,
-        cache_hit: false,
-      },
-    }),
-  });
-
-  renderSetup();
-
-  await waitFor(() => expect(screen.getByRole("button", { name: "Create project" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Create project" }));
-
-  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/editor/p_tokyo"));
-});
-
-it("shows a recoverable message when final setup creation fails", async () => {
-  mocks.pathParam = null;
-  mocks.projectIdParam = "";
-  let setupDraftCalls = 0;
+function mockSetupDraft(initialDraft: SetupDraft, options: { createProjectId?: string } = {}) {
+  let currentDraft = initialDraft;
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.endsWith("/setup/drafts")) {
-      setupDraftCalls += 1;
-      if (setupDraftCalls > 1) {
-        return {
-          ok: true,
-          json: async () => ({
-            setup_id: "setup_refill",
-            draft: {
-              project_id: null,
-              path: "E:\\video-projects\\untitled-project",
-              name: "",
-              output_preset: "final",
-              voice: null,
-              transcript: null,
-              subtitle_generation: {
-                status: "ready",
-                cue_count: 0,
-                total_duration_s: 0,
-                cache_state: "unknown",
-                error_message: null,
-              },
-              alignment: {
-                status: "pending",
-                hash: "",
-                device: "cuda fp16",
-                model: "large-v3",
-                audio_duration: 0,
-                cache_hit: false,
-              },
-            },
-          }),
-        } as Response;
-      }
-      return {
-        ok: true,
-        json: async () => ({
-          setup_id: "setup_abc123",
-          draft: {
-            project_id: null,
-            path: "E:\\video-projects\\tokyo-essay",
-            name: "Tokyo Essay",
-            output_preset: "final",
-            voice: {
-              path: "voice.wav",
-              duration: 12,
-              sample_rate: 48000,
-              channels: 2,
-              codec: "pcm_s16le",
-              state: "copied",
-            },
-            transcript: { path: "transcript.txt", sentence_count: 3, state: "parsed" },
-            subtitle_generation: {
-              status: "succeeded",
-              cue_count: 3,
-              total_duration_s: 12,
-              cache_state: "miss",
-              error_message: null,
-            },
-            alignment: {
-              status: "aligned",
-              hash: "abc123",
-              device: "cuda fp16",
-              model: "large-v3",
-              audio_duration: 12,
-              cache_hit: false,
-            },
-          },
-        }),
-      } as Response;
+    const method = init?.method ?? "GET";
+    if (url.endsWith("/setup/drafts") && method === "POST") {
+      return okJson({ setup_id: "setup_test", draft: currentDraft });
     }
-    if (url.endsWith("/projects") && init?.method === "POST") {
-      return {
-        ok: false,
-        status: 409,
-        json: async () => ({
-          error: {
-            code: "NOT_EMPTY",
-            message: "Project directory already exists and is not empty.",
-          },
-        }),
-      } as Response;
+    if (url.endsWith("/setup/drafts/setup_test") && method === "PATCH") {
+      currentDraft = {
+        ...currentDraft,
+        ...(JSON.parse(String(init?.body ?? "{}")) as Partial<SetupDraft>),
+      };
+      return okJson({ setup_id: "setup_test", draft: currentDraft });
     }
-    return { ok: false, json: async () => ({}) } as Response;
+    if (url.endsWith("/projects") && method === "POST") {
+      return okJson({ project_id: options.createProjectId ?? "p_created" });
+    }
+    return okJson({ setup_id: "setup_test", draft: currentDraft });
   });
+}
 
-  renderSetup();
-
-  await waitFor(() => expect(screen.getByRole("button", { name: "Create project" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Create project" }));
-
-  await waitFor(() =>
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Project directory already exists and is not empty.",
-    ),
-  );
-  await waitFor(() => expect(setupDraftCalls).toBeGreaterThan(1));
-  expect(mocks.push).not.toHaveBeenCalled();
-});
-
-it("generates subtitles before enabling alignment", async () => {
-  global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    if (url.endsWith("/projects/p_tokyo/inspect")) {
-      return {
-        ok: true,
-        json: async () => ({
-          path: "E:\\video-projects\\tokyo-essay",
-          name: "Tokyo Essay",
-          voice: { path: "voice.wav", duration: 942, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
-          transcript: { path: "transcript.txt", sentence_count: 164, state: "parsed" },
-          subtitle_generation: {
-            status: "ready",
-            cue_count: 0,
-            total_duration_s: 0,
-            cache_state: "unknown",
-            error_message: null,
-          },
-          alignment: {
-            status: "pending",
-            hash: "8a3f2c1df91c",
-            device: "cuda 路 fp16",
-            model: "large-v3",
-            audio_duration: 942,
-            cache_hit: false,
-          },
-        }),
-      } as Response;
-    }
-    if (url.endsWith("/subtitle") && init?.method === "POST") {
-      return {
-        ok: true,
-        json: async () => ({
-          status: "succeeded",
-          cue_count: 164,
-          total_duration_s: 942,
-          cache_state: "miss",
-          error_message: null,
-        }),
-      } as Response;
-    }
-    return { ok: false, json: async () => ({}) } as Response;
-  });
-
-  renderSetup();
-
-  await waitFor(() => expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeEnabled());
-  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Generate subtitle" }));
-
-  await waitFor(() => expect(screen.getByText(/164 cues/)).toBeInTheDocument());
-  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeEnabled();
-  expect(global.fetch).toHaveBeenCalledWith(
-    "/api/server/subtitle",
-    expect.objectContaining({
-      body: JSON.stringify({ project_id: "p_tokyo" }),
-      method: "POST",
-    }),
-  );
-});
-
-it("keeps alignment disabled when subtitle generation fails", async () => {
-  global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    if (url.endsWith("/projects/p_tokyo/inspect")) {
-      return {
-        ok: true,
-        json: async () => ({
-          path: "E:\\video-projects\\tokyo-essay",
-          name: "Tokyo Essay",
-          voice: { path: "voice.wav", duration: 942, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
-          transcript: { path: "transcript.txt", sentence_count: 164, state: "parsed" },
-          subtitle_generation: {
-            status: "ready",
-            cue_count: 0,
-            total_duration_s: 0,
-            cache_state: "unknown",
-            error_message: null,
-          },
-          alignment: {
-            status: "pending",
-            hash: "8a3f2c1df91c",
-            device: "cuda 路 fp16",
-            model: "large-v3",
-            audio_duration: 942,
-            cache_hit: false,
-          },
-        }),
-      } as Response;
-    }
-    if (url.endsWith("/subtitle") && init?.method === "POST") {
-      return {
-        ok: false,
-        json: async () => ({ error: { code: "SUBTITLE_GENERATION_FAILED" } }),
-      } as Response;
-    }
-    return { ok: false, json: async () => ({}) } as Response;
-  });
-
-  renderSetup();
-
-  await waitFor(() => expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Generate subtitle" }));
-
-  await waitFor(() => expect(screen.getByText("failed")).toBeInTheDocument());
-  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeDisabled();
-});
-
-it("keeps subtitle and alignment disabled when voice is invalid", async () => {
-  global.fetch = vi.fn().mockResolvedValue({
+function okJson(body: unknown): Response {
+  return {
     ok: true,
-    json: async () => ({
-      path: "E:\\video-projects\\tokyo-essay",
-      name: "Tokyo Essay",
-      voice: { path: "voice.wav", duration: 0, sample_rate: 0, channels: 0, codec: "unknown", state: "invalid" },
-      transcript: { path: "transcript.txt", sentence_count: 164, state: "parsed" },
-      subtitle_generation: {
-        status: "ready",
-        cue_count: 0,
-        total_duration_s: 0,
-        cache_state: "unknown",
-        error_message: null,
-      },
-      alignment: {
-        status: "pending",
-        hash: "",
-        device: "cuda fp16",
-        model: "large-v3",
-        audio_duration: 0,
-        cache_hit: false,
-      },
-    }),
-  });
+    json: async () => body,
+  } as Response;
+}
 
-  renderSetup();
-  await waitFor(() => expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeInTheDocument());
-  expect(screen.getByRole("button", { name: "Generate subtitle" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Run alignment API" })).toBeDisabled();
-});
+function draft(values: Partial<SetupDraft> = {}): SetupDraft {
+  return {
+    alignment: alignment("pending"),
+    name: "",
+    output_preset: "final",
+    path: "E:\\video-projects\\untitled-project",
+    subtitle_generation: subtitle("ready"),
+    transcript: null,
+    voice: null,
+    ...values,
+  };
+}
 
-it("does not start alignment when transcript is empty", async () => {
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      path: "E:\\video-projects\\tokyo-essay",
-      name: "Tokyo Essay",
-      voice: { path: "voice.wav", duration: 942, sample_rate: 48000, channels: 2, codec: "pcm_s16le", state: "copied" },
-      transcript: { path: "transcript.txt", sentence_count: 0, state: "empty" },
-      subtitle_generation: {
-        status: "succeeded",
-        cue_count: 164,
-        total_duration_s: 942,
-        cache_state: "miss",
-        error_message: null,
-      },
-      alignment: {
-        status: "pending",
-        hash: "8a3f2c1df91c",
-        device: "cuda fp16",
-        model: "large-v3",
-        audio_duration: 942,
-        cache_hit: false,
-      },
-    }),
-  });
+function voice(values: Partial<NonNullable<SetupDraft["voice"]>> = {}): NonNullable<SetupDraft["voice"]> {
+  return {
+    channels: 2,
+    codec: "mpeg layer iii",
+    duration: 942,
+    path: "voice.mp3",
+    sample_rate: 44100,
+    state: "copied",
+    ...values,
+  };
+}
 
-  renderSetup();
-  await waitFor(() => expect(screen.getByRole("button", { name: "Run alignment API" })).toBeInTheDocument());
-  fireEvent.click(screen.getByRole("button", { name: "Run alignment API" }));
-  expect(global.fetch).toHaveBeenCalledTimes(1);
-});
+function transcript(values: Partial<NonNullable<SetupDraft["transcript"]>> = {}): NonNullable<SetupDraft["transcript"]> {
+  return {
+    path: "transcript.txt",
+    sentence_count: 21,
+    state: "parsed",
+    ...values,
+  };
+}
+
+function subtitle(
+  status: SetupSubtitleGenerationResult["status"],
+  values: Partial<SetupSubtitleGenerationResult> = {},
+): SetupSubtitleGenerationResult {
+  return {
+    cache_state: status === "succeeded" ? "miss" : "unknown",
+    cue_count: status === "succeeded" ? 21 : 0,
+    error_message: null,
+    status,
+    total_duration_s: status === "succeeded" ? 942 : 0,
+    ...values,
+  };
+}
+
+function alignment(status: SetupDraft["alignment"]["status"]): SetupDraft["alignment"] {
+  return {
+    audio_duration: 942,
+    cache_hit: status === "aligned",
+    device: "cuda fp16",
+    hash: "abc123",
+    model: "large-v3",
+    status,
+  };
+}

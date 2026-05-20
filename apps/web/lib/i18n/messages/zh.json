@@ -185,7 +185,7 @@
         "outputPreset": "????"
       },
       "presets": {
-        "final": "??? ? 1080p ? CRF 18",
+        "final": "Final / 1080p / CRF 18",
         "draft": "?? ? 720p ? ultrafast",
         "vertical": "?? ? 9:16 ? 1080w"
       },
@@ -211,11 +211,27 @@
         "empty": "?",
         "transcriptDetected": "{count} ????"
       },
+      "voice": {
+        "title": "Voice",
+        "emptyTitle": "Voice for video",
+        "choose": "Choose audio",
+        "replace": "Replace"
+      },
+      "alignmentSection": {
+        "title": "Subtitle Alignment",
+        "transcriptTitle": "transcript for alignment",
+        "transcriptMeta": "Transcript for alignment",
+        "watermarkTitle": "Watermark for video",
+        "optional": "optional",
+        "choose": "Choose"
+      },
       "alignment": {
         "title": "??",
         "state": {
+          "ready": "ready",
           "pending": "???",
           "running": "???",
+          "succeeded": "succeeded",
           "aligned": "???",
           "failed": "??"
         },
@@ -238,15 +254,29 @@
         "running": "??? ? {eta}",
         "introDynamic": "WhisperX timestamps the provided transcript against <mono></mono>. The text is the reference; ASR never runs.",
         "hashDynamic": "sha256({voice} + {transcript}) = {hash}",
-        "voiceFile": "voice file"
+        "voiceFile": "voice file",
+        "readyBody": "Upload transcript.txt optionally, then run alignment.",
+        "successBody": "Alignment finished. {count} subtitle updates applied.",
+        "correctionTitle": "subtitle correction",
+        "outputSubtitles": "subtitles",
+        "outputDuration": "duration",
+        "outputCorrections": "corrections"
       },
       "subtitle": {
         "title": "Subtitle Generate",
-        "filename": "subtitles.srt",
+        "filename": "subtitle.srt",
         "pending": "Waiting for project name and voice",
         "summary": "{count} cues ? {duration}",
         "generate": "Generate subtitle",
         "running": "Generating subtitle...",
+        "pendingBody": "Pick an audio file first, then run subtitle generation.",
+        "readyBody": "subtitle.srt is ready. You can continue with alignment.",
+        "failedBody": "subtitle.srt generation failed: {error}",
+        "failedFallback": "generator timeout.",
+        "outputTitle": "subtitle output",
+        "outputSubtitles": "subtitles",
+        "outputDuration": "duration",
+        "outputSummary": "{count} subtitles / {duration}",
         "state": {
           "ready": "ready",
           "running": "running",
