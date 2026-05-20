@@ -40,6 +40,16 @@ import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 
 type BgLayer = Extract<Layer, { kind: "bg" }>;
 type ClipLayer = Extract<Layer, { kind: "fg" | "pip" }>;
+type ClipCacheState = "warm" | "cold" | "partial" | "invalid";
+type ClipCacheSummary = { cachedCount: number; state: ClipCacheState; totalCount: number };
+type LocalCacheInvalidation = "none" | "clip" | "output";
+type CacheSummaryError = string | null;
+type RenderCacheResponse = {
+  cached_count: number;
+  project_id: string;
+  state: ClipCacheState;
+  total_count: number;
+};
 
 function projectIdFromPathname(pathname: string): string {
   const prefix = "/editor/";
@@ -97,6 +107,9 @@ function EditorContent() {
   const [query, setQuery] = useState("");
   const [currentMatch, setCurrentMatch] = useState(0);
   const [renderJob, setRenderJob] = useState<EditorRenderJob>({ phase: "", progress: 0, running: false, status: "idle" });
+  const [serverCacheSummary, setServerCacheSummary] = useState<ClipCacheSummary | null>(null);
+  const [localCacheInvalidation, setLocalCacheInvalidation] = useState<LocalCacheInvalidation>("none");
+  const [cacheSummaryError, setCacheSummaryError] = useState<CacheSummaryError>(null);
   const [assignRange, setAssignRange] = useState<[number, number]>([1, 1]);
   const [assignEdit, setAssignEdit] = useState<{ itemId?: string; layerId?: string } | null>(null);
   const [saveStatus, setSaveStatus] = useState<"pending" | "saving" | "saved" | "failed">("pending");
@@ -113,10 +126,12 @@ function EditorContent() {
   const [sentences, setSentences] = useState<AlignedSentence[]>([]);
   const duration = sentences.at(-1)?.end_s ?? 0;
   const timelineDuration = duration;
-  const visualClipCount = useMemo(() => {
-    return layers.reduce((total, layer) => total + (layer.kind === "sub" ? 0 : layer.items.length), 0);
-  }, [layers]);
-  const cacheLabel = `cache ${visualClipCount}/${visualClipCount}`;
+  const localCacheSummary = useMemo(() => deriveClipCacheSummaryFromLayers(layers), [layers]);
+  const effectiveCacheSummary = useMemo(
+    () => resolveClipCacheSummary(localCacheSummary, serverCacheSummary, localCacheInvalidation),
+    [localCacheInvalidation, localCacheSummary, serverCacheSummary],
+  );
+  const cacheLabel = `cache ${effectiveCacheSummary.state} ${effectiveCacheSummary.cachedCount}/${effectiveCacheSummary.totalCount}`;
   const activeRange = useMemo<[number, number]>(() => {
     const active = sentences.find((sentence) => currentTime >= sentence.start_s && currentTime < sentence.end_s);
     return active ? [active.index, active.index] : [sentences[0]?.index ?? 1, sentences[0]?.index ?? 1];
@@ -138,8 +153,27 @@ function EditorContent() {
     [media],
   );
 
+  const refreshRenderCacheSummary = useCallback(async (id: string, fallback: ClipCacheSummary) => {
+    try {
+      const cacheResponse = await request<RenderCacheResponse>(`/projects/${encodeURIComponent(id)}/render-cache` as `/${string}`);
+      setServerCacheSummary(normalizeRenderCacheSummary(cacheResponse, fallback));
+      setCacheSummaryError(null);
+    } catch (error) {
+      if (!(error instanceof ServerRequestError)) {
+        throw error;
+      }
+      setServerCacheSummary(fallback);
+      const summaryError = summarizeCacheSummaryError(error);
+      setCacheSummaryError(summaryError);
+      console.warn("Editor render-cache summary fetch failed", { error: summaryError, projectId: id });
+    }
+  }, []);
+
   const loadProject = useCallback(async (id: string) => {
     try {
+      setServerCacheSummary(null);
+      setLocalCacheInvalidation("none");
+      setCacheSummaryError(null);
       const response = await request<ProjectConfigLoadResponse>(`/projects/${encodeURIComponent(id)}/config` as `/${string}`);
       const config = response.config;
       const resolvedProjectPath = await resolveProjectPath(id);
@@ -160,6 +194,20 @@ function EditorContent() {
         subtitles: working.subtitles,
         watermark: working.watermark,
       };
+      let loadedCacheSummary = deriveClipCacheSummaryFromLayers(working.layers);
+      try {
+        const cacheResponse = await request<RenderCacheResponse>(`/projects/${encodeURIComponent(id)}/render-cache` as `/${string}`);
+        loadedCacheSummary = normalizeRenderCacheSummary(cacheResponse, loadedCacheSummary);
+        setCacheSummaryError(null);
+      } catch (error) {
+        if (!(error instanceof ServerRequestError)) {
+          throw error;
+        }
+        const summaryError = summarizeCacheSummaryError(error);
+        setCacheSummaryError(summaryError);
+        console.warn("Editor render-cache summary fetch failed", { error: summaryError, projectId: id });
+        // Keep config-derived cache summary when cache endpoint is unavailable.
+      }
       const selected = selectRecoverySelection(recoveryState?.selected ?? null, working.layers);
       loadedProjectRef.current = true;
       skipAutosaveRef.current = true;
@@ -178,6 +226,7 @@ function EditorContent() {
       setLayers(working.layers);
       const configMedia = toEditorMediaItemsFromConfig(workingConfig.media ?? []);
       setMedia(normalizeEditorMediaItems(configMedia));
+      setServerCacheSummary(loadedCacheSummary);
       setSelected(selected);
       setResolution(normalizeResolutionPreset(recoveryState?.resolution, config.output?.resolution));
     } catch {
@@ -188,6 +237,9 @@ function EditorContent() {
       setProjectPath("");
       setLayers([]);
       setMedia([]);
+      setServerCacheSummary(null);
+      setLocalCacheInvalidation("none");
+      setCacheSummaryError(null);
       setSelected(null);
       setSelectedSentenceRange(null);
       setResolution("1080p");
@@ -361,6 +413,10 @@ function EditorContent() {
       const transcriptSentences = sanitizeTranscriptSentences(result.state.transcript);
       setSentences(transcriptSentences.length > 0 ? transcriptSentences : alignmentSentences);
       setResolution(normalizeResolutionPreset(result.state.output?.resolution, resolution));
+      const hasInvalidLayers = deriveClipCacheSummaryFromLayers(result.state.layers).state === "invalid";
+      const previousResolution = normalizeResolutionPreset(project.output?.resolution, resolution);
+      const nextResolution = normalizeResolutionPreset(result.state.output?.resolution, previousResolution);
+      setLocalCacheInvalidation(nextResolution !== previousResolution ? "output" : hasInvalidLayers ? "clip" : "none");
       setHasUnrenderedChanges(true);
       setSaveStatus("pending");
     }
@@ -391,11 +447,13 @@ function EditorContent() {
         setHasUnrenderedChanges(false);
         setLatestConfigHash(savedConfigHash);
         setLastRenderedConfigHash(savedConfigHash);
+        setLocalCacheInvalidation("none");
+        void refreshRenderCacheSummary(projectId, deriveClipCacheSummaryFromLayers(layers));
       });
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false, status: "failed", message: "Render failed to start." });
     }
-  }, [project, projectId, renderDisabled, resolution, saveNow]);
+  }, [layers, project, projectId, refreshRenderCacheSummary, renderDisabled, resolution, saveNow]);
 
   const cancelDraft = useCallback(async () => {
     if (!renderJob.renderId || (renderJob.status !== "queued" && renderJob.status !== "running")) return;
@@ -480,6 +538,7 @@ function EditorContent() {
         after: updatedLayers,
       });
     }
+    setLocalCacheInvalidation("clip");
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
   }, [layers, project, projectId]);
@@ -652,6 +711,7 @@ function EditorContent() {
         after: { layers: nextLayers, transcript: nextTranscript },
       });
     }
+    setLocalCacheInvalidation("clip");
     setSelectedSentenceRange([mergeResult.range[0], mergeResult.range[0]]);
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
@@ -668,6 +728,7 @@ function EditorContent() {
       after: nextOutput,
     });
     setProject({ ...project, output: nextOutput });
+    setLocalCacheInvalidation("output");
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
   }, [project, projectId, resolution]);
@@ -781,7 +842,11 @@ function EditorContent() {
           selectedRange={selectedSentenceRange}
           sentences={sentences}
         />
-        <main className="flex min-h-0 min-w-0 flex-col bg-(--bg-0)" data-testid="editor-center-pane">
+        <main
+          className="flex min-h-0 min-w-0 flex-col bg-(--bg-0)"
+          data-cache-summary-error={cacheSummaryError ?? ""}
+          data-testid="editor-center-pane"
+        >
           <div className="flex min-h-0 flex-1 flex-col" data-testid="preview-stack">
             <PreviewSurface
               currentTime={currentTime}
@@ -967,6 +1032,70 @@ function defaultSelectionFromLayers(layers: Layer[]): EditorSelection {
 
 function hasVisualItemId(value: unknown): value is { id: string } {
   return typeof value === "object" && value !== null && "id" in value && typeof value.id === "string";
+}
+
+function deriveClipCacheSummaryFromLayers(layers: Layer[]): ClipCacheSummary {
+  const visualItems = layers
+    .filter((layer) => layer.kind === "bg" || layer.kind === "fg" || layer.kind === "pip")
+    .flatMap((layer) => layer.items);
+  const totalCount = visualItems.length;
+  let cachedCount = 0;
+  let hasInvalid = false;
+  for (const item of visualItems) {
+    const status = cacheStatusFromItem(item);
+    if (status === "warm") {
+      cachedCount += 1;
+      continue;
+    }
+    if (status === "invalid" || status === "orphaned") {
+      hasInvalid = true;
+    }
+  }
+  if (totalCount === 0 || cachedCount === 0) {
+    return { state: hasInvalid ? "invalid" : "cold", cachedCount, totalCount };
+  }
+  if (hasInvalid) {
+    return { state: "invalid", cachedCount, totalCount };
+  }
+  if (cachedCount === totalCount) {
+    return { state: "warm", cachedCount, totalCount };
+  }
+  return { state: "partial", cachedCount, totalCount };
+}
+
+function resolveClipCacheSummary(local: ClipCacheSummary, remote: ClipCacheSummary | null, localInvalidation: LocalCacheInvalidation): ClipCacheSummary {
+  if (!remote) return local;
+  if (remote.totalCount !== local.totalCount) return local;
+  if (localInvalidation === "output") {
+    return { state: local.totalCount > 0 ? "invalid" : "cold", cachedCount: 0, totalCount: local.totalCount };
+  }
+  if (localInvalidation === "clip") return local;
+  return remote;
+}
+
+function normalizeRenderCacheSummary(response: RenderCacheResponse, fallback: ClipCacheSummary): ClipCacheSummary {
+  const totalCount = Math.max(0, Number.isFinite(response.total_count) ? response.total_count : fallback.totalCount);
+  const rawCached = Number.isFinite(response.cached_count) ? response.cached_count : fallback.cachedCount;
+  const cachedCount = Math.max(0, Math.min(rawCached, totalCount));
+  const state: ClipCacheState = response.state === "warm" || response.state === "cold" || response.state === "partial" || response.state === "invalid"
+    ? response.state
+    : fallback.state;
+  return { cachedCount, totalCount, state };
+}
+
+function summarizeCacheSummaryError(error: ServerRequestError): string {
+  const payload = error.payload as { error?: { code?: unknown } } | null;
+  const code = payload?.error?.code;
+  if (typeof code === "string" && code.trim()) {
+    return code;
+  }
+  return `status:${error.status}`;
+}
+
+function cacheStatusFromItem(item: unknown): string | null {
+  if (typeof item !== "object" || item === null || !("cache_status" in item)) return null;
+  const status = (item as { cache_status?: unknown }).cache_status;
+  return typeof status === "string" ? status : null;
 }
 
 function findVisualItemById(layers: Layer[], layerId: string, itemId: string): {

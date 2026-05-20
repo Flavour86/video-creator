@@ -8,27 +8,29 @@ import pytest
 
 from server.db.projects import project_id_for_path, touch_recent
 from server.db.renders import insert_render, mark_render_finished
+from server.domain.project import load_project
 from server.main import app
 from server.pipeline import render as render_pipeline
+from server.pipeline.clip_render import clip_cache_path_for_item
 from server.pipeline.render import RenderError, RenderResult
+from server.routes import projects as project_routes
 from server.settings import settings
 
 
-def _write_project(project_dir: Path) -> None:
+def _write_project(project_dir: Path, project: dict[str, object] | None = None) -> None:
     project_dir.mkdir(exist_ok=True)
+    payload = project or {
+        "version": 1,
+        "name": "test",
+        "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": {"preset": "draft"},
+        "layers": [],
+        "subtitles": None,
+        "watermark": None,
+    }
     (project_dir / "project.json").write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "name": "test",
-                "audio": "voice.wav",
-                "transcript": {"kind": "plain_text", "path": "transcript.txt"},
-                "output": {"preset": "draft"},
-                "layers": [],
-                "subtitles": None,
-                "watermark": None,
-            }
-        ),
+        json.dumps(payload),
         encoding="utf-8",
     )
 
@@ -339,6 +341,347 @@ async def test_play_partial_render_is_rejected(monkeypatch, tmp_path: Path) -> N
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "RENDER_NOT_PLAYABLE"
+
+
+@pytest.mark.asyncio
+async def test_project_render_cache_uses_config_keys_and_detects_partial_on_media_hash_change(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    fg_item = {
+        "id": "fg-1",
+        "mediaId": "fg.png",
+        "sentences": [1, 1],
+        "start": 0,
+        "end": 3,
+        "motion": {"kind": "none", "easing": "ease_in_out"},
+        "transitions": {"in": "fade", "out": "cut"},
+        "cache_status": "warm",
+    }
+    pip_item = {
+        "id": "pip-1",
+        "mediaId": "pip.png",
+        "sentences": [2, 2],
+        "start": 3,
+        "end": 6,
+        "motion": {"kind": "none", "easing": "ease_in_out"},
+        "transitions": {"in": "fade", "out": "cut"},
+        "cache_status": "warm",
+        "pip": {"posX": 80, "posY": 20, "size": 30, "radius": 12, "opacity": 90},
+    }
+    _write_project(
+        project_dir,
+        project={
+            "version": 1,
+            "name": "cache-project",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [
+                {"id": "fg-z1", "kind": "fg", "name": "Foreground z1", "items": [fg_item]},
+                {"id": "pip-z2", "kind": "pip", "name": "PiP z2", "items": [pip_item]},
+            ],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    touch_recent(project_dir, "cache-project")
+    project_id = project_id_for_path(project_dir)
+    media_dir = project_dir / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "fg.png").write_bytes(b"fg-v1")
+    (media_dir / "pip.png").write_bytes(b"pip-v1")
+
+    loaded = load_project(project_dir)
+    fg_model_item = None
+    pip_model_item = None
+    for layer_container in loaded.layers:
+        layer = getattr(layer_container, "root", layer_container)
+        if getattr(layer, "kind", None) == "fg":
+            fg_model_item = layer.items[0]
+        if getattr(layer, "kind", None) == "pip":
+            pip_model_item = layer.items[0]
+    assert fg_model_item is not None
+    assert pip_model_item is not None
+
+    fg_cache_path = clip_cache_path_for_item(
+        item=fg_model_item,
+        project_dir=project_dir,
+        resolution="1920x1080",
+    )
+    pip_cache_path = clip_cache_path_for_item(
+        item=pip_model_item,
+        project_dir=project_dir,
+        resolution="1920x1080",
+    )
+    fg_cache_path.parent.mkdir(parents=True, exist_ok=True)
+    fg_cache_path.write_bytes(b"fg-cache")
+    pip_cache_path.write_bytes(b"pip-cache")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        first = await client.get(f"/projects/{project_id}/render-cache")
+        (media_dir / "fg.png").write_bytes(b"fg-v2")
+        second = await client.get(f"/projects/{project_id}/render-cache")
+
+    assert first.status_code == 200
+    assert first.json()["state"] == "warm"
+    assert first.json()["cached_count"] == 2
+    assert first.json()["total_count"] == 2
+
+    assert second.status_code == 200
+    assert second.json()["state"] == "partial"
+    assert second.json()["cached_count"] == 1
+    assert second.json()["total_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_project_render_cache_defaults_missing_resolution_to_editor_1080p_keys(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    fg_item = {
+        "id": "fg-1",
+        "mediaId": "fg.png",
+        "sentences": [1, 1],
+        "start": 0,
+        "end": 3,
+        "motion": {"kind": "none", "easing": "ease_in_out"},
+        "transitions": {"in": "fade", "out": "cut"},
+        "cache_status": "warm",
+    }
+    _write_project(
+        project_dir,
+        project={
+            "version": 1,
+            "name": "cache-project",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [
+                {"id": "fg-z1", "kind": "fg", "name": "Foreground z1", "items": [fg_item]},
+            ],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    touch_recent(project_dir, "cache-project")
+    project_id = project_id_for_path(project_dir)
+    media_dir = project_dir / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "fg.png").write_bytes(b"fg-v1")
+
+    loaded = load_project(project_dir)
+    fg_model_item = None
+    for layer_container in loaded.layers:
+        layer = getattr(layer_container, "root", layer_container)
+        if getattr(layer, "kind", None) == "fg":
+            fg_model_item = layer.items[0]
+            break
+    assert fg_model_item is not None
+
+    legacy_draft_cache_path = clip_cache_path_for_item(
+        item=fg_model_item,
+        project_dir=project_dir,
+        resolution="1280x720",
+    )
+    legacy_draft_cache_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_draft_cache_path.write_bytes(b"legacy-draft-cache")
+
+    expected_editor_cache_path = clip_cache_path_for_item(
+        item=fg_model_item,
+        project_dir=project_dir,
+        resolution="1920x1080",
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        before_editor_default = await client.get(f"/projects/{project_id}/render-cache")
+        expected_editor_cache_path.write_bytes(b"editor-default-cache")
+        after_editor_default = await client.get(f"/projects/{project_id}/render-cache")
+
+    assert before_editor_default.status_code == 200
+    assert before_editor_default.json()["state"] == "cold"
+    assert before_editor_default.json()["cached_count"] == 0
+    assert before_editor_default.json()["total_count"] == 1
+
+    assert after_editor_default.status_code == 200
+    assert after_editor_default.json()["state"] == "warm"
+    assert after_editor_default.json()["cached_count"] == 1
+    assert after_editor_default.json()["total_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_project_render_cache_ignores_stale_invalid_status_when_expected_cache_exists(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    fg_item = {
+        "id": "fg-1",
+        "mediaId": "fg.png",
+        "sentences": [1, 1],
+        "start": 0,
+        "end": 3,
+        "motion": {"kind": "none", "easing": "ease_in_out"},
+        "transitions": {"in": "fade", "out": "cut"},
+        "cache_status": "invalid",
+    }
+    _write_project(
+        project_dir,
+        project={
+            "version": 1,
+            "name": "cache-project",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [
+                {"id": "fg-z1", "kind": "fg", "name": "Foreground z1", "items": [fg_item]},
+            ],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    touch_recent(project_dir, "cache-project")
+    project_id = project_id_for_path(project_dir)
+    media_dir = project_dir / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "fg.png").write_bytes(b"fg-v1")
+
+    loaded = load_project(project_dir)
+    fg_model_item = None
+    for layer_container in loaded.layers:
+        layer = getattr(layer_container, "root", layer_container)
+        if getattr(layer, "kind", None) == "fg":
+            fg_model_item = layer.items[0]
+            break
+    assert fg_model_item is not None
+
+    fg_cache_path = clip_cache_path_for_item(
+        item=fg_model_item,
+        project_dir=project_dir,
+        resolution="1920x1080",
+    )
+    fg_cache_path.parent.mkdir(parents=True, exist_ok=True)
+    fg_cache_path.write_bytes(b"fg-cache")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/projects/{project_id}/render-cache")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "warm"
+    assert response.json()["cached_count"] == 1
+    assert response.json()["total_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_project_render_cache_marks_missing_media_as_invalid(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(
+        project_dir,
+        project={
+            "version": 1,
+            "name": "cache-project",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [
+                {
+                    "id": "fg-z1",
+                    "kind": "fg",
+                    "name": "Foreground z1",
+                    "items": [
+                        {
+                            "id": "fg-1",
+                            "mediaId": "missing.png",
+                            "sentences": [1, 1],
+                            "start": 0,
+                            "end": 3,
+                            "motion": {"kind": "none", "easing": "ease_in_out"},
+                            "transitions": {"in": "fade", "out": "cut"},
+                            "cache_status": "warm",
+                        }
+                    ],
+                }
+            ],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    touch_recent(project_dir, "cache-project")
+    project_id = project_id_for_path(project_dir)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/projects/{project_id}/render-cache")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "invalid"
+    assert response.json()["cached_count"] == 0
+    assert response.json()["total_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_project_render_cache_does_not_swallow_unexpected_clip_key_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(
+        project_dir,
+        project={
+            "version": 1,
+            "name": "cache-project",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [
+                {
+                    "id": "fg-z1",
+                    "kind": "fg",
+                    "name": "Foreground z1",
+                    "items": [
+                        {
+                            "id": "fg-1",
+                            "mediaId": "fg.png",
+                            "sentences": [1, 1],
+                            "start": 0,
+                            "end": 3,
+                            "motion": {"kind": "none", "easing": "ease_in_out"},
+                            "transitions": {"in": "fade", "out": "cut"},
+                            "cache_status": "warm",
+                        }
+                    ],
+                }
+            ],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    touch_recent(project_dir, "cache-project")
+    project_id = project_id_for_path(project_dir)
+
+    def raise_type_error(*args, **kwargs):
+        raise TypeError("bad clip shape")
+
+    monkeypatch.setattr(project_routes, "clip_cache_path_for_item", raise_type_error)
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/projects/{project_id}/render-cache")
+
+    assert response.status_code == 500
 
 
 def datetime_now():

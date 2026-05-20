@@ -44,7 +44,7 @@ export function EditorBar({
             {displayProjectName(projectName)}
           </h2>
           <p className="sr-only">projectId: {projectId.slice(0, 11)}</p>
-          <p className="sr-only">{cacheLabel}</p>
+          <p className="text-[11px] text-(--text-3)">{cacheLabel}</p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-2">

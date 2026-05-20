@@ -179,6 +179,17 @@ const TEST_PROJECT_NO_BG = {
   layers: TEST_PROJECT.layers.filter((layer) => layer.kind !== "bg"),
 };
 
+const TEST_PROJECT_STALE_INVALID = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => {
+    if (layer.kind !== "fg") return layer;
+    return {
+      ...layer,
+      items: layer.items.map((item, index) => index === 0 ? { ...item, cache_status: "invalid" as const } : item),
+    };
+  }),
+};
+
 const TEST_PROJECT_FG_OVERLAP = {
   ...TEST_PROJECT,
   layers: TEST_PROJECT.layers.map((layer) => {
@@ -256,12 +267,25 @@ function mockTest01Fetch(options: {
   hasUnrenderedChanges?: boolean;
   lastRenderedConfigHash?: string | null;
   project?: typeof TEST_PROJECT;
+  renderCache?: { cached_count: number; state: "warm" | "cold" | "partial" | "invalid"; total_count: number };
+  renderCacheSequence?: Array<{ cached_count: number; state: "warm" | "cold" | "partial" | "invalid"; total_count: number } | null>;
   saveHasUnrenderedChanges?: boolean;
   uploadsResult?: Array<{ mediaId: string; media: Record<string, unknown> }>;
 } = {}) {
   const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
   const lastRenderedConfigHash = options.lastRenderedConfigHash ?? null;
   const project = options.project ?? TEST_PROJECT;
+  const defaultRenderCacheTotal = (project.layers ?? [])
+    .filter((layer) => layer.kind === "bg" || layer.kind === "fg" || layer.kind === "pip")
+    .reduce((count, layer) => count + layer.items.length, 0);
+  const defaultRenderCache = {
+    state: defaultRenderCacheTotal > 0 ? "warm" as const : "cold" as const,
+    cached_count: defaultRenderCacheTotal,
+    total_count: defaultRenderCacheTotal,
+  };
+  const renderCache = options.renderCache;
+  const renderCacheSequence = options.renderCacheSequence ?? null;
+  let renderCacheCallCount = 0;
   const saveHasUnrenderedChanges = options.saveHasUnrenderedChanges ?? true;
   const uploadsResult = options.uploadsResult ?? [];
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -282,6 +306,16 @@ function mockTest01Fetch(options: {
         last_rendered_config_hash: lastRenderedConfigHash,
         has_unrendered_changes: hasUnrenderedChanges,
       });
+    }
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/render-cache`)) {
+      const currentRenderCache = renderCacheSequence
+        ? renderCacheSequence[Math.min(renderCacheCallCount, renderCacheSequence.length - 1)] ?? null
+        : renderCache ?? defaultRenderCache;
+      renderCacheCallCount += 1;
+      if (currentRenderCache) {
+        return ok({ ...currentRenderCache, project_id: TEST_PROJECT_ID });
+      }
+      return { ok: false, status: 503, json: async () => ({}) } as Response;
     }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/media`)) return ok(TEST_MEDIA);
     if (url.endsWith("/uploads") && init?.method === "POST") return ok(uploadsResult);
@@ -310,7 +344,7 @@ it("renders the test01 editor from project, alignment, and media data", async ()
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
   expect(screen.getByText(`projectId: ${TEST_PROJECT_ID}`)).toBeInTheDocument();
-  expect(screen.getByText("cache 3/3")).toBeInTheDocument();
+  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
   expect(await screen.findByText("Transcript · 5 aligned")).toBeInTheDocument();
   expect(screen.getByText("Subtitles · 1")).toBeInTheDocument();
   expect(screen.getAllByText("PiP · z3").length).toBeGreaterThanOrEqual(1);
@@ -322,6 +356,71 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("PiP opacity")).toHaveValue("100");
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("reflects backend render-cache state/count when response is available", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ renderCache: { state: "partial", cached_count: 1, total_count: 3 } });
+
+  renderEditor();
+
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(screen.getByText("cache partial 1/3")).toBeInTheDocument();
+});
+
+it("clears stale persisted invalid cache status when backend render-cache is warm", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    project: TEST_PROJECT_STALE_INVALID,
+    renderCache: { state: "warm", cached_count: 3, total_count: 3 },
+  });
+
+  renderEditor();
+
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+});
+
+it("shows local invalid cache state immediately after clip edit even when backend cache was warm on load", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ renderCache: { state: "warm", cached_count: 3, total_count: 3 } });
+
+  renderEditor();
+
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
+  fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "zoom_in" } });
+
+  expect(screen.getByText("cache invalid 2/3")).toBeInTheDocument();
+});
+
+it("shows local cache invalidation after output resolution changes from a warm backend cache", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ renderCache: { state: "warm", cached_count: 3, total_count: 3 } });
+
+  renderEditor();
+
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("radio", { name: "720p" }));
+
+  expect(screen.getByText("cache invalid 0/3")).toBeInTheDocument();
+});
+
+it("tracks render-cache fetch failures as observable state without breaking editor load", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  mockTest01Fetch({ renderCacheSequence: [null] });
+
+  renderEditor();
+
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(screen.getByTestId("editor-center-pane")).toHaveAttribute("data-cache-summary-error", "status:503");
+  expect(warn).toHaveBeenCalledWith(
+    "Editor render-cache summary fetch failed",
+    expect.objectContaining({ error: "status:503", projectId: TEST_PROJECT_ID }),
+  );
 });
 
 it("uses responsive layout guards so preview/transport do not clip on narrow widths", async () => {
@@ -522,10 +621,11 @@ it("saves background motion with schema-valid values after Change Background", a
 
 it("edits background inspector controls and invalidates only background cache entries", async () => {
   _projectIdParam = TEST_PROJECT_ID;
-  mockTest01Fetch();
+  mockTest01Fetch({ renderCache: { state: "warm", cached_count: 3, total_count: 3 } });
 
   renderEditor();
   await screen.findByText("test01");
+  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
 
   fireEvent.change(screen.getByLabelText("Background crossfade"), { target: { value: "1.2" } });
@@ -533,6 +633,7 @@ it("edits background inspector controls and invalidates only background cache en
   fireEvent.change(screen.getByLabelText("Background easing"), { target: { value: "ease_out" } });
 
   expect(readUndo()).toHaveLength(3);
+  expect(screen.getByText("cache invalid 2/3")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
@@ -1259,6 +1360,59 @@ it("disables render actions after draft completes with the latest saved hash", a
     expect(screen.getByRole("button", { name: /render draft/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /render final/i })).toBeDisabled();
   });
+});
+
+it("reconciles cache summary from invalid back to warm after successful draft render completion", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    hasUnrenderedChanges: true,
+    saveHasUnrenderedChanges: true,
+    renderCacheSequence: [
+      { state: "warm", cached_count: 3, total_count: 3 },
+      { state: "warm", cached_count: 3, total_count: 3 },
+    ],
+  });
+  const sockets: MockWebSocket[] = [];
+  class MockWebSocket {
+    onerror: (() => void) | null = null;
+    onmessage: ((message: { data: string }) => void) | null = null;
+    url: string;
+
+    constructor(url: string) {
+      this.url = url;
+      sockets.push(this);
+    }
+
+    close = vi.fn();
+  }
+  vi.stubGlobal("WebSocket", MockWebSocket);
+
+  renderEditor();
+  await screen.findByText("test01");
+  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
+  fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "zoom_in" } });
+  expect(screen.getByText("cache invalid 2/3")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: /render draft/i }));
+  await screen.findByText("Rendering draft : queued");
+  sockets[0]?.onmessage?.({
+    data: JSON.stringify({
+      type: "progress",
+      render_id: "r-test01",
+      stage: "done",
+      percent: 100,
+      message: "done",
+      output_path: "renders/r-test01.mp4",
+    }),
+  });
+
+  await waitFor(() => expect(screen.getByText("cache warm 3/3")).toBeInTheDocument());
+  const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(([input]) =>
+    String(input).includes(`/projects/${TEST_PROJECT_ID}/render-cache`),
+  );
+  expect(calls.length).toBeGreaterThanOrEqual(2);
 });
 
 it("Render Final saves, queues final with selected resolution, and navigates to render path", async () => {

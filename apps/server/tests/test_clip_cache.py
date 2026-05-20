@@ -273,6 +273,63 @@ def test_render_video_clip_plays_once_without_looping(
     assert ffmpeg_command[ffmpeg_command.index("-t") + 1] == "3"
 
 
+def test_clip_cache_rebuilds_only_edited_clip_and_reuses_unaffected_clip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_dir = tmp_path / "media"
+    fg_media = _write_media(media_dir / "fg.png")
+    pip_media = _write_media(media_dir / "pip.png")
+    fg_item = {
+        "id": "fg-1",
+        "media_id": fg_media.name,
+        "start": 0.0,
+        "end": 4.0,
+        "motion": {"kind": "none", "easing": "ease_in_out"},
+        "transitions": {"in": "fade", "out": "cut"},
+    }
+    pip_item = {
+        "id": "pip-1",
+        "media_id": pip_media.name,
+        "start": 4.0,
+        "end": 8.0,
+        "motion": {"kind": "none", "easing": "ease_in_out"},
+        "transitions": {"in": "fade", "out": "cut"},
+        "pip": {"posX": 75, "posY": 25, "size": 30, "radius": 8, "opacity": 90},
+    }
+    rendered_outputs: list[Path] = []
+
+    def fake_render(
+        *,
+        item: object,
+        project_dir: Path,
+        output_path: Path,
+        resolution: str,
+        fps: int,
+        crf: int,
+    ) -> Path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"rendered")
+        rendered_outputs.append(output_path)
+        return output_path
+
+    monkeypatch.setattr("server.pipeline.clip_render.render_clip", fake_render)
+
+    fg_path_before = render_clip_to_cache(item=fg_item, project_dir=tmp_path)
+    pip_path_before = render_clip_to_cache(item=pip_item, project_dir=tmp_path)
+    assert len(rendered_outputs) == 2
+    pip_mtime_before = pip_path_before.stat().st_mtime_ns
+
+    edited_fg = {**fg_item, "motion": {"kind": "zoom_in", "easing": "ease_in_out"}}
+    fg_path_after = render_clip_to_cache(item=edited_fg, project_dir=tmp_path)
+    pip_path_after = render_clip_to_cache(item=pip_item, project_dir=tmp_path)
+
+    assert len(rendered_outputs) == 3
+    assert fg_path_after != fg_path_before
+    assert pip_path_after == pip_path_before
+    assert pip_path_after.stat().st_mtime_ns == pip_mtime_before
+
+
 @pytest.mark.skipif(
     os.environ.get("VC_INTEGRATION") != "1",
     reason="Set VC_INTEGRATION=1 to run ffmpeg clip render integration tests.",

@@ -7,7 +7,7 @@ import { EditorBar } from "./EditorBar";
 
 function renderBar(overrides: Partial<ComponentProps<typeof EditorBar>> = {}) {
   const props: ComponentProps<typeof EditorBar> = {
-    cacheLabel: "cache 2/3",
+    cacheLabel: "cache warm 2/3",
     onHome: vi.fn(),
     onRenderDraft: vi.fn(),
     onRenderFinal: vi.fn(),
@@ -44,6 +44,11 @@ describe("EditorBar", () => {
 
     expect(screen.queryByRole("button", { name: /subtitles/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /change bg/i })).not.toBeInTheDocument();
+  });
+
+  it("shows cache state in the toolbar", () => {
+    renderBar();
+    expect(screen.getByText("cache warm 2/3")).toBeVisible();
   });
 
   it("disables render actions when config has no unrendered changes", () => {

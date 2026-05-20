@@ -49,6 +49,8 @@ from server.domain.project import (
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.chunker import segment
+from server.pipeline.clip_render import ClipRenderItem, clip_cache_path_for_item
+from server.pipeline.filtergraph import PRESETS, visual_items_bottom_to_top
 from server.routes.alignment import get_alignment, run_alignment
 from server.routes.setup import (
     SETUP_SESSION_COOKIE,
@@ -993,28 +995,115 @@ class RenderCacheResponse(BaseModel):
     state: str  # warm | cold | partial | invalid
 
 
+EDITOR_DEFAULT_RENDER_RESOLUTION = "1920x1080"
+
+
 @router.get("/{project_id}/render-cache", response_model=RenderCacheResponse)
 async def get_render_cache(project_id: str) -> RenderCacheResponse | JSONResponse:
     project_dir = _project_path_or_error(project_id)
     if isinstance(project_dir, JSONResponse):
         return project_dir
-    clips_dir = project_dir / ".vc" / "clips"
-    cached = 0
-    if clips_dir.is_dir():
-        cached = sum(
-            1 for p in clips_dir.iterdir()
-            if p.is_file() and p.suffix == ".mp4" and p.stat().st_size > 0
-        )
-    total = cached  # total matches cached in absence of config-based counting
-    if cached == 0 and total == 0:
+
+    cached, total, has_invalid = _render_cache_counts(project_dir)
+    if has_invalid:
+        state = "invalid"
+    elif total == 0 or cached == 0:
         state = "cold"
-    elif cached > 0 and cached == total:
+    elif cached == total:
         state = "warm"
     else:
         state = "partial"
+
     return RenderCacheResponse(
         project_id=project_id,
         cached_count=cached,
         total_count=total,
         state=state,
     )
+
+
+def _render_cache_counts(project_dir: Path) -> tuple[int, int, bool]:
+    project = _load_recent_card_project(project_dir)
+    if project is None:
+        return (0, 0, False)
+
+    output_preset = getattr(project.output, "preset", None)
+    preset_value = getattr(output_preset, "value", output_preset)
+    preset = "final" if preset_value == "final" else "draft"
+    preset_config = PRESETS[preset]
+    resolution = _render_cache_resolution(
+        getattr(project.output, "resolution", None),
+        preset_config.resolution,
+        missing_fallback=EDITOR_DEFAULT_RENDER_RESOLUTION,
+    )
+    fps = _render_cache_fps(getattr(project.output, "fps", None), preset_config.fps)
+    crf = preset_config.crf
+
+    total = 0
+    cached = 0
+    has_invalid = False
+    for item in visual_items_bottom_to_top(project):
+        total += 1
+        try:
+            path = clip_cache_path_for_item(
+                item=item,
+                project_dir=project_dir,
+                resolution=resolution,
+                fps=fps,
+                crf=crf,
+            )
+        except FileNotFoundError:
+            # Missing media for an expected visual clip is a real invalid cache condition.
+            has_invalid = True
+            continue
+        exists = path.is_file() and path.stat().st_size > 0
+        if exists:
+            cached += 1
+        status = _clip_item_cache_status(item)
+        # Stale "invalid" should not force invalid once the expected cache output exists.
+        if status == "orphaned":
+            has_invalid = True
+        elif status == "invalid" and not exists:
+            has_invalid = True
+    return (cached, total, has_invalid)
+
+
+def _render_cache_resolution(
+    output_resolution: object,
+    fallback: str,
+    *,
+    missing_fallback: str = EDITOR_DEFAULT_RENDER_RESOLUTION,
+) -> str:
+    mapping = {
+        "1080p": "1920x1080",
+        "720p": "1280x720",
+        "9:16": "1080x1920",
+        "1920x1080": "1920x1080",
+        "1280x720": "1280x720",
+        "1080x1920": "1080x1920",
+    }
+    candidate = getattr(output_resolution, "value", output_resolution)
+    if candidate is None:
+        return missing_fallback
+    value = mapping.get(str(candidate))
+    return value if value is not None else fallback
+
+
+def _render_cache_fps(output_fps: object, fallback: int) -> int:
+    if isinstance(output_fps, int | float) and output_fps > 0:
+        return max(1, round(float(output_fps)))
+    return fallback
+
+
+def _clip_item_cache_status(item: ClipRenderItem) -> str | None:
+    raw = getattr(item, "root", item)
+    if isinstance(raw, dict):
+        value = raw.get("cache_status")
+    else:
+        value = getattr(raw, "cache_status", None)
+    if value is None:
+        return None
+    candidate = getattr(value, "value", value)
+    if not isinstance(candidate, str):
+        return None
+    return candidate
