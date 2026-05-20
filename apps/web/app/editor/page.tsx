@@ -121,6 +121,7 @@ function EditorContent() {
   const loadedProjectRef = useRef(false);
   const skipAutosaveRef = useRef(false);
   const renderSocketRef = useRef<WebSocket | null>(null);
+  const appliedAlignmentSignatureRef = useRef("");
 
   const alignmentSentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
   const [sentences, setSentences] = useState<AlignedSentence[]>([]);
@@ -264,6 +265,10 @@ function EditorContent() {
   }, [loadProject, projectId]);
 
   useEffect(() => {
+    appliedAlignmentSignatureRef.current = "";
+  }, [projectId]);
+
+  useEffect(() => {
     const transcriptSentences = sanitizeTranscriptSentences(project?.transcript);
     setSentences(transcriptSentences.length > 0 ? transcriptSentences : alignmentSentences);
     if (pendingSelectedRangeRef.current) {
@@ -271,6 +276,23 @@ function EditorContent() {
       pendingSelectedRangeRef.current = null;
     }
   }, [alignmentSentences, project?.transcript]);
+
+  useEffect(() => {
+    if (!project || !loadedProjectRef.current) return;
+    const transcriptSentences = sanitizeTranscriptSentences(project.transcript);
+    if (transcriptSentences.length > 0 || alignmentSentences.length === 0) return;
+    const signature = alignmentSignature(alignmentSentences);
+    if (appliedAlignmentSignatureRef.current === signature) return;
+    appliedAlignmentSignatureRef.current = signature;
+    const remapped = remapLayersAfterAlignmentRerun(layers, alignmentSentences);
+    if (!remapped.changed) return;
+    setLayers(remapped.layers);
+    setProject({ ...project, layers: remapped.layers as Project["layers"] });
+    setSelected((current) => selectRecoverySelection(current as EditorRecoverySelection, remapped.layers));
+    setLocalCacheInvalidation(deriveClipCacheSummaryFromLayers(remapped.layers).state === "invalid" ? "clip" : "none");
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [alignmentSentences, layers, project]);
 
   useEffect(() => {
     const container = transcriptScrollRef.current;
@@ -1189,6 +1211,87 @@ function sanitizeTranscriptSentences(transcript: Project["transcript"] | null | 
       text: sentence.text.trim(),
     }));
   return normalized;
+}
+
+function alignmentSignature(sentences: AlignedSentence[]): string {
+  return sentences.map((sentence) => `${sentence.index}:${sentence.start_s}:${sentence.end_s}:${sentence.text}`).join("|");
+}
+
+function remapLayersAfterAlignmentRerun(layers: Layer[], sentences: AlignedSentence[]): { changed: boolean; layers: Layer[] } {
+  const sentenceByIndex = new Map(sentences.map((sentence) => [sentence.index, sentence] as const));
+  let changed = false;
+  const nextLayers = layers.map((layer) => {
+    if (layer.kind !== "fg" && layer.kind !== "pip") return layer;
+    let layerChanged = false;
+    const nextItems = layer.items.map((item) => {
+      if (!isSentenceAnchoredItem(item)) return item;
+      const nextItem = remapSentenceAnchoredItem(item, sentenceByIndex);
+      if (nextItem !== item) {
+        changed = true;
+        layerChanged = true;
+      }
+      return nextItem;
+    });
+    return layerChanged ? { ...layer, items: nextItems } : layer;
+  });
+  return { changed, layers: nextLayers };
+}
+
+type SentenceAnchoredItem = {
+  anchor?: "sentences" | "time";
+  cache_status?: "warm" | "partial" | "cold" | "invalid" | "orphaned";
+  end: number;
+  orphan_reason?: string | null;
+  orphaned?: boolean;
+  sentences: [number, number];
+  start: number;
+};
+
+function isSentenceAnchoredItem(value: unknown): value is SentenceAnchoredItem {
+  return hasSentenceBounds(value) && hasTimeBounds(value);
+}
+
+function remapSentenceAnchoredItem<T extends SentenceAnchoredItem>(
+  item: T,
+  sentenceByIndex: ReadonlyMap<number, AlignedSentence>,
+): T {
+  if (item.anchor === "time") return item;
+  const range = normalizeSentenceRange(item.sentences);
+  const startSentence = sentenceByIndex.get(range[0]);
+  const endSentence = sentenceByIndex.get(range[1]);
+  const orphaned = !startSentence || !endSentence;
+  const nextStart = startSentence?.start_s ?? item.start;
+  const nextEnd = endSentence?.end_s ?? item.end;
+  const nextOrphaned = orphaned ? true : item.orphaned === true ? false : item.orphaned;
+  let nextOrphanReason = item.orphan_reason;
+  if (orphaned) {
+    nextOrphanReason = item.orphan_reason ?? "missing_sentence_anchor";
+  } else if (item.orphan_reason != null) {
+    nextOrphanReason = null;
+  }
+  const nextCacheStatus = orphaned
+    ? "orphaned"
+    : item.cache_status === "orphaned" || item.orphaned === true || item.orphan_reason
+      ? "invalid"
+      : item.cache_status;
+  const changed =
+    range[0] !== item.sentences[0] ||
+    range[1] !== item.sentences[1] ||
+    nextStart !== item.start ||
+    nextEnd !== item.end ||
+    nextOrphaned !== item.orphaned ||
+    nextOrphanReason !== item.orphan_reason ||
+    nextCacheStatus !== item.cache_status;
+  if (!changed) return item;
+  return {
+    ...item,
+    sentences: range,
+    start: nextStart,
+    end: nextEnd,
+    orphaned: nextOrphaned,
+    orphan_reason: nextOrphanReason,
+    cache_status: nextCacheStatus,
+  };
 }
 
 function mergeConfigMedia(existing: MediaAsset[], incoming: MediaAsset[]): MediaAsset[] {

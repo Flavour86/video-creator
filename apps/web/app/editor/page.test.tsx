@@ -109,6 +109,17 @@ const TEST_ALIGNMENT = {
   cache_hit: true,
 };
 
+const TEST_ALIGNMENT_RERUN = {
+  sentences: [
+    { index: 1, text: "Capitalism begins here.", start_s: 1, end_s: 6, confidence_avg: 0.95 },
+    { index: 2, text: "A product demo uses PiP.", start_s: 7, end_s: 14, confidence_avg: 0.92 },
+    { index: 3, text: "Capitalism changes incentives.", start_s: 15, end_s: 21, confidence_avg: 0.93 },
+    { index: 4, text: "The foreground returns.", start_s: 22, end_s: 29, confidence_avg: 0.91 },
+  ],
+  words: [],
+  cache_hit: false,
+};
+
 const TEST_PROJECT_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"].map((filename) => ({
   id: filename,
   name: filename,
@@ -271,6 +282,7 @@ const TEST_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foreground.png"
 }));
 
 function mockTest01Fetch(options: {
+  alignment?: typeof TEST_ALIGNMENT;
   hasUnrenderedChanges?: boolean;
   lastRenderedConfigHash?: string | null;
   project?: typeof TEST_PROJECT;
@@ -281,6 +293,7 @@ function mockTest01Fetch(options: {
 } = {}) {
   const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
   const lastRenderedConfigHash = options.lastRenderedConfigHash ?? null;
+  const alignment = options.alignment ?? TEST_ALIGNMENT;
   const project = options.project ?? TEST_PROJECT;
   const defaultRenderCacheTotal = (project.layers ?? [])
     .filter((layer) => layer.kind === "bg" || layer.kind === "fg" || layer.kind === "pip")
@@ -301,7 +314,7 @@ function mockTest01Fetch(options: {
       return ok({ path: "E:/projects/test01" });
     }
     if (url.endsWith("/projects")) return ok([{ project_id: TEST_PROJECT_ID, path: "E:/projects/test01" }]);
-    if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(TEST_ALIGNMENT);
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(alignment);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") {
       return ok({ project_id: TEST_PROJECT_ID, config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: saveHasUnrenderedChanges });
     }
@@ -363,6 +376,61 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("PiP opacity")).toHaveValue("100");
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("remaps clip timestamps on alignment rerun and keeps unmappable anchors orphaned without deleting clips", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const project = {
+    ...TEST_PROJECT,
+    media: [...TEST_PROJECT.media, { ...TEST_PROJECT.media[0], id: "orphan.png", name: "orphan.png", path: "media/orphan.png" }],
+    layers: TEST_PROJECT.layers.map((layer) => {
+      if (layer.kind !== "fg") return layer;
+      return {
+        ...layer,
+        items: [
+          ...layer.items,
+          {
+            id: "fg-orphan",
+            mediaId: "orphan.png",
+            sentences: [5, 5] as [number, number],
+            start: 20,
+            end: 25,
+            motion: { kind: "none", easing: "ease_in_out" },
+            transitions: { in: "fade", out: "cut" },
+            cache_status: "warm" as const,
+          },
+        ],
+      };
+    }),
+  };
+  mockTest01Fetch({ project, alignment: TEST_ALIGNMENT_RERUN });
+
+  renderEditor();
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "orphan.png over s5" })).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText("cache invalid 3/4")).toBeInTheDocument());
+
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCalls).toHaveLength(1);
+  });
+
+  const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+  const putBody = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+  const savedLayers = putBody.config.layers as Array<{ kind: string; items: Array<Record<string, unknown>> }>;
+  const pipItem = savedLayers.find((layer) => layer.kind === "pip")?.items.find((item) => item.id === "pip-1");
+  expect(pipItem?.start).toBe(7);
+  expect(pipItem?.end).toBe(14);
+  expect(pipItem?.orphaned).not.toBe(true);
+
+  const orphanItem = savedLayers.find((layer) => layer.kind === "fg")?.items.find((item) => item.id === "fg-orphan");
+  expect(orphanItem).toBeDefined();
+  expect(orphanItem?.sentences).toEqual([5, 5]);
+  expect(orphanItem?.orphaned).toBe(true);
+  expect(orphanItem?.orphan_reason).toBe("missing_sentence_anchor");
 });
 
 it("reflects backend render-cache state/count when response is available", async () => {
