@@ -88,6 +88,13 @@ it("reads project id from the dynamic editor path", () => {
   expect(screen.getByText("projectId: p_path_demo")).toBeInTheDocument();
 });
 
+it("shows launcher recovery for invalid dynamic editor path segment", () => {
+  _projectIdParam = null;
+  _pathname = "/editor/E:/projects/demo";
+  renderEditor();
+  expect(screen.getByText(/No project open/i)).toBeInTheDocument();
+});
+
 const TEST_PROJECT_ID = "p_test01";
 
 const TEST_ALIGNMENT = {

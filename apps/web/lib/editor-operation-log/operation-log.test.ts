@@ -84,6 +84,52 @@ describe("editor operation log", () => {
     expect(redone.state.layers[0].items).toHaveLength(1);
   });
 
+  it("keeps byte-identical state after replay plus undo/redo of delete, move, and stretch", () => {
+    const baseWithClip: EditorWorkingState = {
+      ...BASE_STATE,
+      layers: [
+        {
+          ...BG_LAYER,
+          items: [{ id: "bg-1", mediaId: "bg.jpg", start: 0, end: 5, sentences: [1, 1] as [number, number] }],
+        },
+      ],
+    };
+
+    appendOperation("p_demo", {
+      type: "move",
+      layerId: "bg-main",
+      itemId: "bg-1",
+      before: { start: 0, end: 5 },
+      after: { start: 1, end: 6 },
+    });
+    appendOperation("p_demo", {
+      type: "stretch",
+      layerId: "bg-main",
+      itemId: "bg-1",
+      before: { start: 1, end: 6 },
+      after: { start: 1, end: 8 },
+    });
+    appendOperation("p_demo", {
+      type: "delete",
+      layerId: "bg-main",
+      item: { id: "bg-1", mediaId: "bg.jpg", start: 1, end: 8, sentences: [1, 1] },
+      index: 0,
+    });
+
+    const replayed = recoverWorkingState("p_demo", baseWithClip);
+    expect(replayed.layers[0].items).toEqual([]);
+
+    const undo1 = undoLast("p_demo", replayed).state;
+    const undo2 = undoLast("p_demo", undo1).state;
+    const undo3 = undoLast("p_demo", undo2).state;
+    expect(JSON.stringify(undo3)).toBe(JSON.stringify(baseWithClip));
+
+    const redo1 = redoLast("p_demo", undo3).state;
+    const redo2 = redoLast("p_demo", redo1).state;
+    const redo3 = redoLast("p_demo", redo2).state;
+    expect(JSON.stringify(redo3)).toBe(JSON.stringify(replayed));
+  });
+
   it("records global, subtitle, and watermark config updates", () => {
     appendOperation("p_demo", { before: { preset: "draft" }, after: { preset: "final" }, type: "global_config_update" });
     appendOperation("p_demo", { before: null, after: { burn_in: true, style: { font: "Arial", size: 28, position: "bottom", max_chars_per_line: 42, bg_style: "shadow" } }, type: "subtitle_settings_update" });
