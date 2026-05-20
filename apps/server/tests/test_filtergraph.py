@@ -50,6 +50,10 @@ def _fg_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object
     return {"id": layer_id, "kind": "fg", "name": layer_id, "items": items}
 
 
+def _bg_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object]:
+    return {"id": layer_id, "kind": "bg", "name": layer_id, "items": items}
+
+
 def _pip_layer(layer_id: str, items: list[dict[str, object]]) -> dict[str, object]:
     return {"id": layer_id, "kind": "pip", "name": layer_id, "items": items}
 
@@ -328,6 +332,64 @@ def test_watermark_appends_topmost_overlay(tmp_path: Path) -> None:
     assert "[1:v]scale=102.4:-1,format=rgba,colorchannelmixer=aa=0.6[wm]" in filtergraph
     assert "[bg][wm]overlay=x='(W-w)*1':y='(H-h)*1':eof_action=pass[vwm]" in filtergraph
     assert "[vwm]format=yuv420p[vout]" in filtergraph
+
+
+def test_filter_chain_order_is_black_bg_fg_pip_subtitles_watermark(tmp_path: Path) -> None:
+    _write_media(tmp_path, "bg.jpg", b"bg")
+    _write_media(tmp_path, "fg.jpg", b"fg")
+    _write_media(tmp_path, "pip.png", b"pip")
+    _write_media(tmp_path, "logo.png", b"logo")
+    project = _project(
+        [
+            _pip_layer(
+                "pip-top",
+                [
+                    {
+                        **_item("pip.png", 2.0, 4.0, "pip-1"),
+                        "pip": {"posX": 50, "posY": 20, "size": 22, "radius": 16, "opacity": 70},
+                    }
+                ],
+            ),
+            _fg_layer("fg-z1", [_item("fg.jpg", 1.0, 5.0, "fg-1")]),
+            _bg_layer("bg-z0", [{**_item("bg.jpg", 0.0, 10.0, "bg-1"), "crossfade": 0.0}]),
+        ],
+        subtitles={
+            "burn_in": True,
+            "style": {
+                "font": "Arial",
+                "size": 28,
+                "position": "bottom",
+                "max_chars_per_line": 42,
+                "bg_style": "shadow",
+            },
+        },
+        watermark={
+            "mediaId": "logo.png",
+            "posX": 90,
+            "posY": 90,
+            "scale": 0.08,
+            "opacity": 60,
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    filtergraph = _filtergraph(command)
+    assert "color=black:s=1280x720:r=30:d=10[bg]" in filtergraph
+    bg_overlay = filtergraph.index("[bg][clip1]overlay=enable='between(t,0,10)':eof_action=pass[v1]")
+    fg_overlay = filtergraph.index("[v1][clip2]overlay=enable='between(t,1,5)':eof_action=pass[v2]")
+    pip_overlay = filtergraph.index(
+        "[v2][pip3]overlay=x='(W-w)*0.5':y='(H-h)*0.2':enable='between(t,2,4)':eof_action=pass[v3]"
+    )
+    subtitles_overlay = filtergraph.index("[v3]subtitles='")
+    watermark_overlay = filtergraph.index("[vsub][wm]overlay=")
+    assert bg_overlay < fg_overlay < pip_overlay < subtitles_overlay < watermark_overlay
 
 
 def test_pip_items_are_overlaid_after_foreground_before_subtitles(tmp_path: Path) -> None:

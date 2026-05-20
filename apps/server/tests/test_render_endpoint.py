@@ -149,6 +149,46 @@ async def test_render_endpoint_accepts_query_preset_and_resolution(
 
 
 @pytest.mark.asyncio
+async def test_render_endpoint_accepts_editor_resolution_aliases(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _write_project(tmp_path)
+
+    async def fake_start_render_project(
+        *,
+        project_dir: Path,
+        preset: str,
+        resolution: str | None = None,
+    ) -> RenderResult:
+        assert project_dir == tmp_path
+        assert preset == "final"
+        assert resolution == "9:16"
+        return RenderResult(
+            render_id="r-alias",
+            output_path=tmp_path / "renders" / "alias.mp4",
+        )
+
+    monkeypatch.setattr(render_pipeline, "start_render_project", fake_start_render_project)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/projects/render",
+            params={
+                "project": str(tmp_path),
+                "preset": "final",
+                "resolution": "9:16",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "render_id": "r-alias",
+        "output_path": str(tmp_path / "renders" / "alias.mp4"),
+    }
+
+
+@pytest.mark.asyncio
 async def test_project_id_cancel_render_route(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     _write_project(tmp_path)

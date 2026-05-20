@@ -27,7 +27,7 @@ from server.pipeline.render import RenderError
 router = APIRouter(tags=["render"])
 
 
-RenderResolution = Literal["1920x1080", "1280x720", "1080x1920"]
+RenderResolution = Literal["1080p", "720p", "9:16", "1920x1080", "1280x720", "1080x1920"]
 
 
 class RenderRequest(BaseModel):

@@ -95,6 +95,39 @@ def test_finished_render_marks_project_config_rendered(monkeypatch, tmp_path: Pa
     assert after["has_unrendered_changes"] == 0
 
 
+def test_insert_render_captures_current_config_hash(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    digest = save_config_snapshot(
+        project_dir,
+        {
+            "version": 1,
+            "name": "test",
+            "audio": "",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    insert_render(
+        render_id="r-hash",
+        project_path=project_dir,
+        output_path=project_dir / ".vc" / "drafts" / "draft.mp4",
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+
+    rows = list_renders_for_project(project_dir)
+    assert rows[0]["id"] == "r-hash"
+    assert rows[0]["config_hash"] == digest
+
+
 def test_render_history_records_failed_render(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     project_dir = tmp_path / "project"

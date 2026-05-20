@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from server.db.projects import project_id_for_path
-from server.db.renders import insert_render
+from server.db.renders import insert_render, list_render_events
 from server.main import app
 from server.pipeline.render_progress import (
     _latest,
@@ -85,6 +85,65 @@ async def test_late_subscriber_receives_latest_event(
     await events.aclose()
     assert event.stage == "cache_warm"
     assert event.percent == 5.0
+
+
+@pytest.mark.asyncio
+async def test_progress_persists_queued_and_stage_messages(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    render_id = "r-stages"
+    _seed_render(monkeypatch, tmp_path, render_id)
+    await publish_progress(
+        RenderProgressEvent(
+            render_id=render_id,
+            stage="cache_warm",
+            percent=0.0,
+            message="queued",
+        )
+    )
+    await publish_progress(
+        RenderProgressEvent(
+            render_id=render_id,
+            stage="cache_warm",
+            percent=1.0,
+            message="verifying cache",
+        )
+    )
+    await publish_progress(
+        RenderProgressEvent(
+            render_id=render_id,
+            stage="cache_warm",
+            percent=4.0,
+            message="building subtitles.srt",
+        )
+    )
+    await publish_progress(
+        RenderProgressEvent(
+            render_id=render_id,
+            stage="compose",
+            percent=12.0,
+            message="ffmpeg compose",
+        )
+    )
+    await publish_progress(
+        RenderProgressEvent(
+            render_id=render_id,
+            stage="muxing",
+            percent=98.0,
+            message="muxing audio",
+        )
+    )
+
+    phases = [str(row["phase"]) for row in list_render_events(render_id)]
+    messages = [str(row["message"]) for row in list_render_events(render_id)]
+    assert phases == ["cache_warm", "cache_warm", "cache_warm", "compose", "muxing"]
+    assert messages == [
+        "queued",
+        "verifying cache",
+        "building subtitles.srt",
+        "ffmpeg compose",
+        "muxing audio",
+    ]
 
 
 @pytest.mark.asyncio

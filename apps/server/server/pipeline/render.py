@@ -180,6 +180,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
     timer = time.perf_counter()
 
     try:
+        await _emit(job.render_id, "cache_warm", 0.0, message="queued")
         await _emit(job.render_id, "cache_warm", 1.0, message="verifying cache")
         await _emit(job.render_id, "cache_warm", 4.0, message="building subtitles.srt")
         alignment = await _ensure_alignment(job.project_dir, job.project)
@@ -316,6 +317,9 @@ async def _warm_clip_cache(
     render_id: str,
 ) -> None:
     items = visual_items_bottom_to_top(project)
+    if not items:
+        await _emit(render_id, "cache_warm", 10.0, message="pre-rendering clips")
+        return
     total = max(1, len(items))
     for index, item in enumerate(items, start=1):
         await asyncio.to_thread(
