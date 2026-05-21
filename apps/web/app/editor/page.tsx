@@ -483,7 +483,7 @@ function EditorContent() {
     renderSocketRef.current?.close();
     setRenderJob((job) => ({ ...job, phase: "cancelling", running: true, status: "running" }));
     try {
-      await request(`/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(renderJob.renderId)}/cancel` as `/${string}`, { method: "POST" });
+      await request(`/projects/${encodeURIComponent(projectId)}/render/${encodeURIComponent(renderJob.renderId)}` as `/${string}`, { method: "DELETE" });
       setRenderJob((job) => ({ ...job, phase: "cancelled", progress: 0, running: false, status: "cancelled", message: "Render cancelled." }));
     } catch {
       setRenderJob((job) => ({ ...job, phase: "cancel failed", running: false, status: "failed", message: "Render cancel failed." }));

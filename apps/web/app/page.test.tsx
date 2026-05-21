@@ -182,7 +182,7 @@ describe("LauncherPage", () => {
     expect(screen.getByRole("dialog", { name: "Preview Rendered" })).toBeInTheDocument();
     expect(screen.getByLabelText("Video preview for Rendered")).toHaveAttribute(
       "src",
-      "/api/server/projects/p_done/renders/r_latest/file",
+      "/api/server/projects/p_done/render/r_latest",
     );
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog", { name: "Preview Rendered" })).not.toBeInTheDocument();

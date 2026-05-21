@@ -5,7 +5,7 @@
 - [x] Task 1: Lock the SPEC_RENDER shared contract
   - Acceptance: generated types cover presets, resolutions, stages, page states, history rows, output metadata, artifacts/events, and backend capabilities.
   - Verify: `rtk pnpm gen:types`, `rtk pnpm gen:py`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`
-- [ ] Task 2: Replace the backend render API with the spec surface
+- [x] Task 2: Replace the backend render API with the spec surface
   - Acceptance: start, cancel, history, history delete, and video playback use `SPEC_RENDER.md` project-scoped paths; old conflicting callers/tests are rewritten.
   - Verify: `rtk pnpm -F @vc/server test -- test_render_endpoint.py`, `rtk pnpm -F @vc/server test -- test_render_history.py`, `rtk pnpm -F @vc/server lint`
 - [ ] Task 3: Add project-scoped render persistence and queue semantics

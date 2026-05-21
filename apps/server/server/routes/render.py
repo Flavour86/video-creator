@@ -177,6 +177,79 @@ async def render_project_by_id(
     )
 
 
+@router.delete("/projects/{project_id}/render/{render_id}", response_model=None)
+async def cancel_project_render_by_id(
+    project_id: str,
+    render_id: str,
+) -> dict[str, bool] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    canceled = await render_pipeline.cancel_render(render_id)
+    if not canceled:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    return {"ok": True}
+
+
+@router.get("/projects/{project_id}/history", response_model=list[RenderHistoryResponse])
+async def list_project_history(
+    project_id: str,
+    limit: int = Query(50, ge=1, le=500),
+) -> list[RenderHistoryResponse] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    rows = list_renders_for_project(project_dir, limit=limit)
+    return [_render_history_response(row) for row in rows]
+
+
+@router.delete("/projects/{project_id}/history/{render_id}", response_model=None)
+async def delete_project_history_row(
+    project_id: str,
+    render_id: str,
+) -> dict[str, bool] | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    deleted_row = delete_render(render_id)
+    if deleted_row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    _delete_output_file(_resolve_stored_path(str(deleted_row["output_path"])))
+    return {"ok": True}
+
+
+@router.get("/projects/{project_id}/render/{render_id}", response_model=None)
+async def get_project_render_video(project_id: str, render_id: str) -> FileResponse | JSONResponse:
+    project_dir = _project_path_or_error(project_id)
+    if isinstance(project_dir, JSONResponse):
+        return project_dir
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
+    if row["status"] != "rendered":
+        return _error(
+            409,
+            "RENDER_NOT_PLAYABLE",
+            "Render is not playable.",
+            {"render_id": render_id},
+        )
+    output_path = _resolve_stored_path(str(row["output_path"]))
+    if not output_path.is_file():
+        return _error(
+            404,
+            "OUTPUT_NOT_FOUND",
+            "Render output not found.",
+            {"path": str(output_path)},
+        )
+    return FileResponse(str(output_path), media_type="video/mp4")
+
+
 @router.get("/render/job/{render_id}", response_model=RenderHistoryResponse)
 async def get_render_job(render_id: str) -> RenderHistoryResponse | JSONResponse:
     row = get_render(render_id)
@@ -273,10 +346,7 @@ async def list_project_renders(
     project_id: str,
     limit: int = Query(10, ge=1, le=500),
 ) -> list[RenderHistoryResponse] | JSONResponse:
-    project_dir = _project_path_or_error(project_id)
-    if isinstance(project_dir, JSONResponse):
-        return project_dir
-    return await list_renders(project=str(project_dir), limit=limit)
+    return await list_project_history(project_id=project_id, limit=limit)
 
 
 @router.get("/projects/{project_id}/renders/{render_id}", response_model=RenderHistoryResponse)
@@ -301,6 +371,9 @@ async def cancel_render(
     project_dir = Path(project)
     if not (project_dir / "project.json").exists():
         return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
+    row = get_render_for_project(render_id, project_dir)
+    if row is None:
+        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
     canceled = await render_pipeline.cancel_render(render_id)
     if not canceled:
         return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
@@ -312,14 +385,7 @@ async def delete_project_render(
     project_id: str,
     render_id: str,
 ) -> dict[str, bool] | JSONResponse:
-    project_dir = _project_path_or_error(project_id)
-    if isinstance(project_dir, JSONResponse):
-        return project_dir
-    row = get_render_for_project(render_id, project_dir)
-    if row is None:
-        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
-    delete_render(render_id)
-    return {"ok": True}
+    return await delete_project_history_row(project_id=project_id, render_id=render_id)
 
 
 @router.post("/projects/{project_id}/renders/{render_id}/cancel", response_model=None)
@@ -327,10 +393,7 @@ async def cancel_project_render(
     project_id: str,
     render_id: str,
 ) -> dict[str, bool] | JSONResponse:
-    project_dir = _project_path_or_error(project_id)
-    if isinstance(project_dir, JSONResponse):
-        return project_dir
-    return await cancel_render(render_id=render_id, project=str(project_dir))
+    return await cancel_project_render_by_id(project_id=project_id, render_id=render_id)
 
 
 @router.post("/projects/renders/{render_id}/reveal", response_model=None)
@@ -416,28 +479,7 @@ async def play_project_render(
 
 @router.get("/projects/{project_id}/renders/{render_id}/file", response_model=None)
 async def get_project_render_file(project_id: str, render_id: str) -> FileResponse | JSONResponse:
-    project_dir = _project_path_or_error(project_id)
-    if isinstance(project_dir, JSONResponse):
-        return project_dir
-    row = get_render_for_project(render_id, project_dir)
-    if row is None:
-        return _error(404, "RENDER_NOT_FOUND", "Render not found.", {"render_id": render_id})
-    if row["status"] != "rendered":
-        return _error(
-            409,
-            "RENDER_NOT_PLAYABLE",
-            "Render is not playable.",
-            {"render_id": render_id},
-        )
-    output_path = _resolve_stored_path(str(row["output_path"]))
-    if not output_path.is_file():
-        return _error(
-            404,
-            "OUTPUT_NOT_FOUND",
-            "Render output not found.",
-            {"path": str(output_path)},
-        )
-    return FileResponse(str(output_path), media_type="video/mp4")
+    return await get_project_render_video(project_id=project_id, render_id=render_id)
 
 
 def _render_history_response(row: Mapping[str, object]) -> RenderHistoryResponse:
@@ -517,6 +559,7 @@ def _artifact_rows_for_contract(render_id: str, project_id: str) -> list[RenderA
     for row in list_render_artifacts(render_id):
         kind = str(row.get("kind", "companion"))
         path = str(row.get("path", ""))
+        size_value = row.get("size_bytes")
         artifacts.append(
             RenderArtifactResponse(
                 artifact_id=str(row.get("id", "")),
@@ -524,7 +567,7 @@ def _artifact_rows_for_contract(render_id: str, project_id: str) -> list[RenderA
                 project_id=project_id,
                 kind=kind,
                 path=path,
-                size=int(row["size_bytes"]) if isinstance(row.get("size_bytes"), int | float | str) else None,
+                size=int(size_value) if isinstance(size_value, int | float | str) else None,
                 created_at=str(row.get("created_at", "")),
                 playable=kind == "output" and Path(path).is_file(),
                 reusable=kind != "partial",
@@ -538,6 +581,7 @@ def _event_rows_for_contract(render_id: str, status: str) -> list[RenderEventRes
     for row in list_render_events(render_id):
         phase = str(row.get("phase", "compose"))
         message = str(row["message"]) if row.get("message") is not None else None
+        progress_value = row.get("progress")
         events.append(
             RenderEventResponse(
                 event_id=str(row.get("id", "")),
@@ -545,7 +589,11 @@ def _event_rows_for_contract(render_id: str, status: str) -> list[RenderEventRes
                 kind="progress",
                 stage=_stage_for_contract(phase, message),
                 state=_state_for_contract(status),
-                percent=float(row["progress"]) if isinstance(row.get("progress"), int | float | str) else None,
+                percent=(
+                    float(progress_value)
+                    if isinstance(progress_value, int | float | str)
+                    else None
+                ),
                 message=message,
                 detail_json=str(row["detail_json"]) if row.get("detail_json") is not None else None,
                 created_at=str(row.get("ts", "")),

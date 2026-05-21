@@ -51,7 +51,7 @@ type RenderStartResponse = {
   output_path: string;
 };
 
-export function useRenderProgress(projectPath: string) {
+export function useRenderProgress(projectId: string) {
   const [state, setState] = useState<RenderProgressState>({ status: "idle" });
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -116,16 +116,12 @@ export function useRenderProgress(projectPath: string) {
   }, []);
 
   const startRender = useCallback(async (preset: RenderPreset) => {
-    if (!projectPath || state.status === "starting" || state.status === "running") return;
+    if (!projectId || state.status === "starting" || state.status === "running") return;
     setState({ status: "starting" });
     try {
       const response = await fetch(
-        `/api/server/projects/render?project=${encodeURIComponent(projectPath)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ preset }),
-        },
+        `/api/server/projects/${encodeURIComponent(projectId)}/render?preset=${encodeURIComponent(preset)}`,
+        { method: "POST" },
       );
       if (!response.ok) {
         const body = (await response.json()) as { error?: { message?: string } };
@@ -149,7 +145,7 @@ export function useRenderProgress(projectPath: string) {
     } catch (error) {
       setState({ status: "error", percent: 0, message: String(error) });
     }
-  }, [connect, projectPath, state.status]);
+  }, [connect, projectId, state.status]);
 
   const startDraft = useCallback(async () => {
     await startRender("draft");
@@ -163,11 +159,11 @@ export function useRenderProgress(projectPath: string) {
     if (state.status !== "running") return;
     socketRef.current?.close();
     await fetch(
-      `/api/server/projects/render/${encodeURIComponent(state.renderId)}?project=${encodeURIComponent(projectPath)}`,
+      `/api/server/projects/${encodeURIComponent(projectId)}/render/${encodeURIComponent(state.renderId)}`,
       { method: "DELETE" },
     );
     setState({ status: "idle" });
-  }, [projectPath, state]);
+  }, [projectId, state]);
 
   const isActive = state.status === "starting" || state.status === "running";
   const percent =

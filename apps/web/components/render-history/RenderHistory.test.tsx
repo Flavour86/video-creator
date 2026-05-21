@@ -3,6 +3,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import { RenderHistory } from "./RenderHistory";
 
+const openMock = vi.fn();
+
 beforeEach(() => {
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
@@ -20,10 +22,12 @@ beforeEach(() => {
       },
     ],
   });
+  openMock.mockReset();
+  vi.stubGlobal("open", openMock);
 });
 
 it("renders render history rows", async () => {
-  render(<RenderHistory projectPath="E:/project" />);
+  render(<RenderHistory projectId="p-1" />);
 
   await waitFor(() => {
     expect(screen.getByText("E:/project/.vc/drafts/r-1.mp4")).toBeInTheDocument();
@@ -34,29 +38,30 @@ it("renders render history rows", async () => {
 });
 
 it("calls reveal endpoint when open is clicked", async () => {
-  render(<RenderHistory projectPath="E:/project" />);
+  render(<RenderHistory projectId="p-1" />);
 
   const button = await screen.findByRole("button", { name: /open r-1/i });
   fireEvent.click(button);
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
-      "/api/server/projects/renders/r-1/reveal?project=E%3A%2Fproject",
+      "/api/server/projects/p-1/renders/r-1/reveal",
       { method: "POST" },
     );
   });
 });
 
-it("calls play endpoint when play is clicked", async () => {
-  render(<RenderHistory projectPath="E:/project" />);
+it("opens playback URL when play is clicked", async () => {
+  render(<RenderHistory projectId="p-1" />);
 
   const button = await screen.findByRole("button", { name: /play r-1/i });
   fireEvent.click(button);
 
   await waitFor(() => {
-    expect(global.fetch).toHaveBeenCalledWith(
-      "/api/server/projects/renders/r-1/play?project=E%3A%2Fproject",
-      { method: "POST" },
+    expect(openMock).toHaveBeenCalledWith(
+      "/api/server/projects/p-1/render/r-1",
+      "_blank",
+      "noopener,noreferrer",
     );
   });
 });

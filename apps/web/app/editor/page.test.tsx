@@ -344,7 +344,7 @@ function mockTest01Fetch(options: {
     }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/media`)) return ok(TEST_MEDIA);
     if (url.endsWith("/uploads") && init?.method === "POST") return ok(uploadsResult);
-    if (url.includes(`/projects/${TEST_PROJECT_ID}/renders/r-test01/cancel`)) return ok({ ok: true });
+    if (url.includes(`/projects/${TEST_PROJECT_ID}/render/r-test01`)) return ok({ ok: true });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render`)) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
     return { ok: false, json: async () => ({}) } as Response;
   });

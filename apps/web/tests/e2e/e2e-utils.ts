@@ -138,7 +138,10 @@ export async function mockLauncherApi(page: Page, options: LauncherApiMockOption
       return;
     }
 
-    if (path.includes("/renders/") && path.endsWith("/file")) {
+    if (
+      method === "GET"
+      && /^\/api\/server\/projects\/[^/]+\/render\/[^/]+$/.test(path)
+    ) {
       await route.fulfill({ body: "", contentType: "video/mp4" });
       return;
     }

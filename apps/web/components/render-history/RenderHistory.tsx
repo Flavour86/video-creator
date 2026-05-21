@@ -16,27 +16,27 @@ type RenderHistoryItem = {
 };
 
 type Props = {
-  projectPath: string;
+  projectId: string;
   refreshKey?: string;
 };
 
-export function RenderHistory({ projectPath, refreshKey = "" }: Props) {
+export function RenderHistory({ projectId, refreshKey = "" }: Props) {
   const [rows, setRows] = useState<RenderHistoryItem[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!projectPath) return;
+    if (!projectId) return;
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectPath, refreshKey, showAll]);
+  }, [projectId, refreshKey, showAll]);
 
   async function load() {
     setIsLoading(true);
     try {
       const limit = showAll ? 500 : 10;
       const response = await fetch(
-        `/api/server/projects/renders?project=${encodeURIComponent(projectPath)}&limit=${limit}`,
+        `/api/server/projects/${encodeURIComponent(projectId)}/history?limit=${limit}`,
       );
       if (response.ok) {
         setRows((await response.json()) as RenderHistoryItem[]);
@@ -48,16 +48,15 @@ export function RenderHistory({ projectPath, refreshKey = "" }: Props) {
 
   async function reveal(renderId: string) {
     await fetch(
-      `/api/server/projects/renders/${encodeURIComponent(renderId)}/reveal?project=${encodeURIComponent(projectPath)}`,
+      `/api/server/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(renderId)}/reveal`,
       { method: "POST" },
     );
   }
 
   async function play(renderId: string) {
-    await fetch(
-      `/api/server/projects/renders/${encodeURIComponent(renderId)}/play?project=${encodeURIComponent(projectPath)}`,
-      { method: "POST" },
-    );
+    if (typeof window === "undefined") return;
+    const url = `/api/server/projects/${encodeURIComponent(projectId)}/render/${encodeURIComponent(renderId)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   return (

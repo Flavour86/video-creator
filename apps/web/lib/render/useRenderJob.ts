@@ -15,9 +15,12 @@ export function useRenderJob(projectId: string, jobId: string | null) {
   const socketRef = useRef<WebSocket | null>(null);
 
   const loadJob = useCallback(async (id: string) => {
-    const row = projectId
-      ? await request<RenderHistoryResponse>(`/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(id)}` as `/${string}`)
-      : await request<RenderHistoryResponse>(`/render/job/${encodeURIComponent(id)}` as `/${string}`);
+    if (!projectId) throw new Error("Project id is required.");
+    const rows = await request<RenderHistoryResponse[]>(
+      `/projects/${encodeURIComponent(projectId)}/history?limit=500` as `/${string}`,
+    );
+    const row = rows.find((entry) => (entry.render_id ?? entry.id) === id);
+    if (!row) throw new Error(`Render ${id} not found.`);
     setBaseRow(row);
     setJob(normalizeJob(row));
     return row;

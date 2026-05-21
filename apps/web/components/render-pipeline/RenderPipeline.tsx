@@ -16,6 +16,7 @@ type RenderStepId = "verify" | "clips" | "subtitles" | "compose" | "mux";
 type StepStatus = "pending" | "active" | "done" | "error";
 
 type Props = {
+  projectId: string;
   projectPath: string;
   state: RenderProgressState;
   onCancel: () => void;
@@ -29,7 +30,7 @@ const STEPS: Array<{ id: RenderStepId; label: string; detail: string }> = [
   { id: "mux", label: "Muxing Audio", detail: "Finalizing video and audio streams" },
 ];
 
-export function RenderPipeline({ projectPath, state, onCancel }: Props) {
+export function RenderPipeline({ projectId, projectPath, state, onCancel }: Props) {
   const percent = progressPercent(state);
   const eta = state.status === "running" ? formatEta(state.etaSeconds) : "";
   const renderId =
@@ -61,7 +62,7 @@ export function RenderPipeline({ projectPath, state, onCancel }: Props) {
             <>
               <button
                 className="inline-flex items-center gap-1.5 rounded bg-neutral-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-800"
-                onClick={() => void renderAction("play", projectPath, renderId)}
+                onClick={() => void renderAction("play", projectId, renderId)}
                 type="button"
               >
                 <Play size={14} />
@@ -69,7 +70,7 @@ export function RenderPipeline({ projectPath, state, onCancel }: Props) {
               </button>
               <button
                 className="inline-flex items-center gap-1.5 rounded border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50"
-                onClick={() => void renderAction("reveal", projectPath, renderId)}
+                onClick={() => void renderAction("reveal", projectId, renderId)}
                 type="button"
               >
                 <FolderOpen size={14} />
@@ -166,24 +167,25 @@ function statusForStep(step: RenderStepId, state: RenderProgressState): StepStat
   if (state.status === "error") return step === "compose" ? "error" : "pending";
   if (state.status === "idle") return "pending";
   if (state.status === "starting") return step === "verify" ? "active" : "pending";
-  if (state.stage === "cache_warm") {
-    if (step === "verify") return state.percent <= 1.5 ? "active" : "done";
-    if (step === "clips") return state.percent > 1.5 ? "active" : "pending";
-    return "pending";
-  }
-  if (state.stage === "compose") {
-    if (step === "verify" || step === "clips" || step === "subtitles") return "done";
-    return step === "compose" ? "active" : "pending";
-  }
-  if (state.stage === "muxing") {
-    return step === "mux" ? "active" : "done";
-  }
+  const activeIndex = stageProgressIndex(state.stage, state.percent);
+  const stepIndex = stepIdIndex(step);
+  if (activeIndex >= 5) return "done";
+  if (stepIndex < activeIndex) return "done";
+  if (stepIndex === activeIndex) return "active";
   return "pending";
 }
 
-function stageLabel(stage: "cache_warm" | "compose" | "muxing"): string {
+function stageLabel(stage: string): string {
   if (stage === "cache_warm") return "pre-rendering clips";
   if (stage === "compose") return "ffmpeg compose";
+  if (stage === "muxing") return "muxing audio";
+  if (stage === "queued") return "queued";
+  if (stage === "verify_alignment_cache") return "verifying cache";
+  if (stage === "pre_render_cached_clips") return "pre-rendering clips";
+  if (stage === "build_subtitles_srt") return "building subtitles";
+  if (stage === "compose_filtergraph") return "ffmpeg compose";
+  if (stage === "mux_mp4_faststart") return "muxing audio";
+  if (stage === "append_render_history_to_app_db") return "writing history";
   return "muxing audio";
 }
 
@@ -195,9 +197,40 @@ function formatEta(value: number | undefined): string {
   return `${minutes}m ${seconds}s remaining`;
 }
 
-async function renderAction(action: "play" | "reveal", projectPath: string, renderId: string) {
-  await fetch(
-    `/api/server/projects/renders/${encodeURIComponent(renderId)}/${action}?project=${encodeURIComponent(projectPath)}`,
-    { method: "POST" },
-  );
+async function renderAction(
+  action: "play" | "reveal",
+  projectId: string,
+  renderId: string,
+) {
+  if (!projectId) return;
+  if (action === "play") {
+    if (typeof window === "undefined") return;
+    const url = `/api/server/projects/${encodeURIComponent(projectId)}/render/${encodeURIComponent(renderId)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  await fetch(`/api/server/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(renderId)}/reveal`, {
+    method: "POST",
+  });
+}
+
+function stepIdIndex(step: RenderStepId): number {
+  if (step === "verify") return 0;
+  if (step === "clips") return 1;
+  if (step === "subtitles") return 2;
+  if (step === "compose") return 3;
+  return 4;
+}
+
+function stageProgressIndex(stage: string, percent: number): number {
+  if (stage === "queued" || stage === "verify_alignment_cache") return 0;
+  if (stage === "pre_render_cached_clips") return 1;
+  if (stage === "build_subtitles_srt") return 2;
+  if (stage === "compose_filtergraph") return 3;
+  if (stage === "mux_mp4_faststart") return 4;
+  if (stage === "append_render_history_to_app_db") return 5;
+  if (stage === "cache_warm") return percent <= 1.5 ? 0 : 1;
+  if (stage === "compose") return 3;
+  if (stage === "muxing") return 4;
+  return 0;
 }

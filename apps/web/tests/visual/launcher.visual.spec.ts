@@ -166,7 +166,7 @@ async function routeLauncher(page: Page, preview: boolean) {
   await page.route("**/api/server/health", async (route) => {
     await route.fulfill({ json: { status: "ok", version: "0.1.0" } });
   });
-  await page.route("**/api/server/projects/p_tokyo/renders/r_tokyo/file", async (route) => {
+  await page.route("**/api/server/projects/p_tokyo/render/r_tokyo", async (route) => {
     await route.fulfill({ body: "", contentType: "video/mp4" });
   });
 }

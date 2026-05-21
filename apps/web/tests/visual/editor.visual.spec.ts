@@ -282,7 +282,7 @@ async function routeEditorApi(page: Page): Promise<void> {
       await route.fulfill({ json: { output_path: "renders/r-visual.mp4", render_id: "r-visual" } });
       return;
     }
-    if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/renders/r-visual/cancel` && method === "POST") {
+    if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/render/r-visual` && method === "DELETE") {
       await route.fulfill({ json: { ok: true } });
       return;
     }

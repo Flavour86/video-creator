@@ -138,7 +138,7 @@ test.describe("Launcher Task 11 flows", () => {
     await expect(previewDialog).toBeVisible();
     const previewVideo = previewDialog.getByLabel("Video preview for Newest Rendered");
     await expect(previewVideo).toBeVisible();
-    await expect(previewVideo).toHaveAttribute("src", /\/api\/server\/projects\/p_a\/renders\/r_a\/file$/);
+    await expect(previewVideo).toHaveAttribute("src", /\/api\/server\/projects\/p_a\/render\/r_a$/);
     await expect(
       previewVideo.evaluate(async (node) => {
         const video = node as HTMLVideoElement;

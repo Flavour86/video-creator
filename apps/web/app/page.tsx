@@ -158,6 +158,6 @@ export default function LauncherPage() {
 
 function previewVideoSrc(project: RecentProjectCard): string {
   return project.latest_render_id
-    ? `/api/server/projects/${encodeURIComponent(project.project_id)}/renders/${encodeURIComponent(project.latest_render_id)}/file`
+    ? `/api/server/projects/${encodeURIComponent(project.project_id)}/render/${encodeURIComponent(project.latest_render_id)}`
     : "";
 }

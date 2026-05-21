@@ -1,10 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { RenderPipeline } from "./RenderPipeline";
 
+const openMock = vi.fn();
+
 beforeEach(() => {
   global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  openMock.mockReset();
+  vi.stubGlobal("open", openMock);
 });
 
 it("renders stage rows and running progress", () => {
@@ -12,6 +16,7 @@ it("renders stage rows and running progress", () => {
   render(
     <RenderPipeline
       onCancel={onCancel}
+      projectId="p-1"
       projectPath="E:/project"
       state={{
         status: "running",
@@ -37,10 +42,11 @@ it("renders stage rows and running progress", () => {
   expect(onCancel).toHaveBeenCalledTimes(1);
 });
 
-it("plays and opens a completed render", async () => {
+it("opens play URL and calls reveal endpoint for completed render", async () => {
   render(
     <RenderPipeline
       onCancel={vi.fn()}
+      projectId="p-1"
       projectPath="E:/project"
       state={{
         status: "done",
@@ -56,13 +62,39 @@ it("plays and opens a completed render", async () => {
   fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
 
   await waitFor(() => {
-    expect(global.fetch).toHaveBeenCalledWith(
-      "/api/server/projects/renders/r-1/play?project=E%3A%2Fproject",
-      { method: "POST" },
+    expect(openMock).toHaveBeenCalledWith(
+      "/api/server/projects/p-1/render/r-1",
+      "_blank",
+      "noopener,noreferrer",
     );
     expect(global.fetch).toHaveBeenCalledWith(
-      "/api/server/projects/renders/r-1/reveal?project=E%3A%2Fproject",
+      "/api/server/projects/p-1/renders/r-1/reveal",
       { method: "POST" },
     );
   });
+});
+
+it("maps canonical compose stage to active compose step", () => {
+  render(
+    <RenderPipeline
+      onCancel={vi.fn()}
+      projectId="p-1"
+      projectPath="E:/project"
+      state={{
+        status: "running",
+        renderId: "r-1",
+        outputPath: "E:/project/renders/r-1.mp4",
+        stage: "compose_filtergraph",
+        percent: 55,
+        message: "compose",
+      }}
+    />,
+  );
+
+  const composeRow = screen.getByText("FFmpeg Compose").closest("div.rounded.border");
+  const subtitlesRow = screen.getByText("Building Subtitles").closest("div.rounded.border");
+  expect(composeRow).not.toBeNull();
+  expect(subtitlesRow).not.toBeNull();
+  expect(within(composeRow as HTMLElement).getByText("active")).toBeInTheDocument();
+  expect(within(subtitlesRow as HTMLElement).getByText("done")).toBeInTheDocument();
 });

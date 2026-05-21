@@ -7,7 +7,13 @@ import httpx
 import pytest
 
 from server.db.projects import project_id_for_path, touch_recent
-from server.db.renders import add_render_event, insert_render, mark_render_finished
+from server.db.renders import (
+    add_render_event,
+    insert_render,
+    mark_render_cancelled,
+    mark_render_failed,
+    mark_render_finished,
+)
 from server.domain.project import load_project
 from server.main import app
 from server.pipeline import render as render_pipeline
@@ -39,6 +45,8 @@ def _write_project(project_dir: Path, project: dict[str, object] | None = None) 
 @pytest.mark.asyncio
 async def test_render_endpoint_returns_render_result(monkeypatch, tmp_path: Path) -> None:
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
 
     async def fake_start_render_project(
         *,
@@ -59,8 +67,7 @@ async def test_render_endpoint_returns_render_result(monkeypatch, tmp_path: Path
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/projects/render",
-            params={"project": str(tmp_path)},
+            f"/projects/{project_id}/render",
             json={"preset": "draft"},
         )
 
@@ -98,14 +105,14 @@ async def test_project_id_render_routes(monkeypatch, tmp_path: Path) -> None:
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        rows = await client.get(f"/projects/{project_id}/renders")
-        item = await client.get(f"/projects/{project_id}/renders/r-by-id")
-        delete = await client.delete(f"/projects/{project_id}/renders/r-by-id")
+        rows = await client.get(f"/projects/{project_id}/history")
+        file = await client.get(f"/projects/{project_id}/render/r-by-id")
+        delete = await client.delete(f"/projects/{project_id}/history/r-by-id")
 
     assert rows.status_code == 200
     assert rows.json()[0]["id"] == "r-by-id"
-    assert item.status_code == 200
-    assert item.json()["id"] == "r-by-id"
+    assert file.status_code == 200
+    assert file.headers["content-type"] == "video/mp4"
     assert delete.status_code == 200
 
 
@@ -114,6 +121,8 @@ async def test_render_endpoint_accepts_query_preset_and_resolution(
     monkeypatch, tmp_path: Path
 ) -> None:
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
 
     async def fake_start_render_project(
         *,
@@ -134,12 +143,8 @@ async def test_render_endpoint_accepts_query_preset_and_resolution(
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/projects/render",
-            params={
-                "project": str(tmp_path),
-                "preset": "final",
-                "resolution": "1080x1920",
-            },
+            f"/projects/{project_id}/render",
+            params={"preset": "final", "resolution": "1080x1920"},
         )
 
     assert response.status_code == 200
@@ -152,16 +157,14 @@ async def test_render_endpoint_accepts_query_preset_and_resolution(
 @pytest.mark.asyncio
 async def test_render_endpoint_rejects_editor_resolution_aliases(tmp_path: Path) -> None:
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/projects/render",
-            params={
-                "project": str(tmp_path),
-                "preset": "final",
-                "resolution": "9:16",
-            },
+            f"/projects/{project_id}/render",
+            params={"preset": "final", "resolution": "9:16"},
         )
 
     assert response.status_code == 422
@@ -173,6 +176,16 @@ async def test_project_id_cancel_render_route(monkeypatch, tmp_path: Path) -> No
     _write_project(tmp_path)
     touch_recent(tmp_path, "Render")
     project_id = project_id_for_path(tmp_path)
+    insert_render(
+        render_id="r-cancel",
+        project_path=tmp_path,
+        output_path=tmp_path / ".vc" / "drafts" / "draft.mp4",
+        preset="draft",
+        started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
     cancelled: list[str] = []
 
     async def fake_cancel_render(render_id: str) -> bool:
@@ -183,7 +196,7 @@ async def test_project_id_cancel_render_route(monkeypatch, tmp_path: Path) -> No
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(f"/projects/{project_id}/renders/r-cancel/cancel")
+        response = await client.delete(f"/projects/{project_id}/render/r-cancel")
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
@@ -191,12 +204,86 @@ async def test_project_id_cancel_render_route(monkeypatch, tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_project_id_cancel_render_rejects_cross_project_id(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    owner_dir = tmp_path / "owner"
+    caller_dir = tmp_path / "caller"
+    _write_project(owner_dir)
+    _write_project(caller_dir)
+    touch_recent(owner_dir, "Owner")
+    touch_recent(caller_dir, "Caller")
+    caller_project_id = project_id_for_path(caller_dir)
+    insert_render(
+        render_id="r-cross-project",
+        project_path=owner_dir,
+        output_path=owner_dir / ".vc" / "drafts" / "draft.mp4",
+        preset="draft",
+        started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    cancelled: list[str] = []
+
+    async def fake_cancel_render(render_id: str) -> bool:
+        cancelled.append(render_id)
+        return True
+
+    monkeypatch.setattr(render_pipeline, "cancel_render", fake_cancel_render)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.delete(f"/projects/{caller_project_id}/render/r-cross-project")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RENDER_NOT_FOUND"
+    assert cancelled == []
+
+
+@pytest.mark.asyncio
+async def test_legacy_cancel_render_rejects_cross_project_id(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    owner_dir = tmp_path / "owner"
+    caller_dir = tmp_path / "caller"
+    _write_project(owner_dir)
+    _write_project(caller_dir)
+    touch_recent(owner_dir, "Owner")
+    insert_render(
+        render_id="r-cross-project",
+        project_path=owner_dir,
+        output_path=owner_dir / ".vc" / "drafts" / "draft.mp4",
+        preset="draft",
+        started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    cancelled: list[str] = []
+
+    async def fake_cancel_render(render_id: str) -> bool:
+        cancelled.append(render_id)
+        return True
+
+    monkeypatch.setattr(render_pipeline, "cancel_render", fake_cancel_render)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.delete(
+            "/projects/render/r-cross-project",
+            params={"project": str(caller_dir)},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RENDER_NOT_FOUND"
+    assert cancelled == []
+
+
+@pytest.mark.asyncio
 async def test_render_endpoint_project_not_found(tmp_path: Path) -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/projects/render",
-            params={"project": str(tmp_path / "missing")},
+            "/projects/p-missing/render",
             json={"preset": "draft"},
         )
 
@@ -210,6 +297,8 @@ async def test_render_endpoint_rejects_in_progress_error(
     tmp_path: Path,
 ) -> None:
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
 
     async def busy_start_render_project(
         *,
@@ -224,8 +313,7 @@ async def test_render_endpoint_rejects_in_progress_error(
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/projects/render",
-            params={"project": str(tmp_path)},
+            f"/projects/{project_id}/render",
             json={"preset": "draft"},
         )
 
@@ -237,6 +325,8 @@ async def test_render_endpoint_rejects_in_progress_error(
 async def test_list_renders_returns_history(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
     output_path = tmp_path / ".vc" / "drafts" / "draft.mp4"
     output_path.parent.mkdir(parents=True)
     output_path.write_bytes(b"mp4")
@@ -258,7 +348,7 @@ async def test_list_renders_returns_history(monkeypatch, tmp_path: Path) -> None
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/projects/renders", params={"project": str(tmp_path)})
+        response = await client.get(f"/projects/{project_id}/history")
 
     assert response.status_code == 200
     rows = response.json()
@@ -271,9 +361,97 @@ async def test_list_renders_returns_history(monkeypatch, tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
+async def test_project_history_is_scoped_to_project(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    _write_project(first_dir)
+    _write_project(second_dir)
+    touch_recent(first_dir, "First")
+    touch_recent(second_dir, "Second")
+    first_project_id = project_id_for_path(first_dir)
+
+    first_output = first_dir / ".vc" / "drafts" / "first.mp4"
+    first_output.parent.mkdir(parents=True, exist_ok=True)
+    first_output.write_bytes(b"1")
+    insert_render(
+        render_id="r-first",
+        project_path=first_dir,
+        output_path=first_output,
+        preset="draft",
+        started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    mark_render_finished(render_id="r-first", finished_at=datetime_now(), duration_s=1.0)
+
+    second_output = second_dir / ".vc" / "drafts" / "second.mp4"
+    second_output.parent.mkdir(parents=True, exist_ok=True)
+    second_output.write_bytes(b"2")
+    insert_render(
+        render_id="r-second",
+        project_path=second_dir,
+        output_path=second_output,
+        preset="draft",
+        started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    mark_render_finished(render_id="r-second", finished_at=datetime_now(), duration_s=1.0)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/projects/{first_project_id}/history")
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == ["r-first"]
+
+
+@pytest.mark.asyncio
+async def test_delete_project_history_rejects_cross_project_render_id(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    owner_dir = tmp_path / "owner"
+    caller_dir = tmp_path / "caller"
+    _write_project(owner_dir)
+    _write_project(caller_dir)
+    touch_recent(owner_dir, "Owner")
+    touch_recent(caller_dir, "Caller")
+    owner_project_id = project_id_for_path(owner_dir)
+    caller_project_id = project_id_for_path(caller_dir)
+
+    output_path = owner_dir / "renders" / "final.mp4"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-owner",
+        project_path=owner_dir,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
+    )
+    mark_render_finished(render_id="r-owner", finished_at=datetime_now(), duration_s=1.0)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        delete_response = await client.delete(f"/projects/{caller_project_id}/history/r-owner")
+        owner_history_response = await client.get(f"/projects/{owner_project_id}/history")
+
+    assert delete_response.status_code == 404
+    assert delete_response.json()["error"]["code"] == "RENDER_NOT_FOUND"
+    assert [row["id"] for row in owner_history_response.json()] == ["r-owner"]
+
+
+@pytest.mark.asyncio
 async def test_list_renders_maps_canonical_render_event_stages(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
     output_path = tmp_path / "renders" / "final.mp4"
     output_path.parent.mkdir(parents=True)
     output_path.write_bytes(b"mp4")
@@ -306,7 +484,7 @@ async def test_list_renders_maps_canonical_render_event_stages(monkeypatch, tmp_
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/projects/renders", params={"project": str(tmp_path)})
+        response = await client.get(f"/projects/{project_id}/history")
 
     assert response.status_code == 200
     row = response.json()[0]
@@ -332,6 +510,8 @@ async def test_list_renders_maps_canonical_in_progress_states(
     expected_state: str,
 ) -> None:
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
     output_path = tmp_path / "renders" / "state.mp4"
     monkeypatch.setattr(
         render_routes,
@@ -370,7 +550,7 @@ async def test_list_renders_maps_canonical_in_progress_states(
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/projects/renders", params={"project": str(tmp_path)})
+        response = await client.get(f"/projects/{project_id}/history")
 
     assert response.status_code == 200
     row = response.json()[0]
@@ -378,9 +558,11 @@ async def test_list_renders_maps_canonical_in_progress_states(
 
 
 @pytest.mark.asyncio
-async def test_reveal_render_calls_opener(monkeypatch, tmp_path: Path) -> None:
+async def test_get_project_render_file_serves_mp4(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
     output_path = tmp_path / "renders" / "final.mp4"
     output_path.parent.mkdir()
     output_path.write_bytes(b"mp4")
@@ -394,30 +576,37 @@ async def test_reveal_render_calls_opener(monkeypatch, tmp_path: Path) -> None:
         width=1920,
         height=1080,
     )
-    opened: list[Path] = []
-    monkeypatch.setattr(render_pipeline, "reveal_in_file_browser", opened.append)
+    mark_render_finished(
+        render_id="r-open",
+        finished_at=datetime_now(),
+        duration_s=2.0,
+    )
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/projects/renders/r-open/reveal",
-            params={"project": str(tmp_path)},
-        )
+        response = await client.get(f"/projects/{project_id}/render/r-open")
 
     assert response.status_code == 200
-    assert opened == [output_path]
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.content == b"mp4"
 
 
 @pytest.mark.asyncio
-async def test_play_render_calls_default_player(monkeypatch, tmp_path: Path) -> None:
+async def test_get_project_render_file_rejects_cross_project_render_id(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
-    _write_project(tmp_path)
-    output_path = tmp_path / "renders" / "final.mp4"
+    owner_dir = tmp_path / "owner"
+    caller_dir = tmp_path / "caller"
+    _write_project(owner_dir)
+    _write_project(caller_dir)
+    touch_recent(owner_dir, "Owner")
+    touch_recent(caller_dir, "Caller")
+    caller_project_id = project_id_for_path(caller_dir)
+    output_path = owner_dir / "renders" / "final.mp4"
     output_path.parent.mkdir()
     output_path.write_bytes(b"mp4")
     insert_render(
         render_id="r-play",
-        project_path=tmp_path,
+        project_path=owner_dir,
         output_path=output_path,
         preset="final",
         started_at=datetime_now(),
@@ -430,24 +619,21 @@ async def test_play_render_calls_default_player(monkeypatch, tmp_path: Path) -> 
         finished_at=datetime_now(),
         duration_s=2.0,
     )
-    opened: list[Path] = []
-    monkeypatch.setattr(render_pipeline, "open_in_default_player", opened.append)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/projects/renders/r-play/play",
-            params={"project": str(tmp_path)},
-        )
+        response = await client.get(f"/projects/{caller_project_id}/render/r-play")
 
-    assert response.status_code == 200
-    assert opened == [output_path]
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RENDER_NOT_FOUND"
 
 
 @pytest.mark.asyncio
-async def test_play_partial_render_is_rejected(monkeypatch, tmp_path: Path) -> None:
+async def test_get_project_render_file_rejects_partial_render(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
     output_path = tmp_path / ".vc" / "drafts" / "draft.partial"
     output_path.parent.mkdir(parents=True)
     output_path.write_bytes(b"partial")
@@ -464,13 +650,95 @@ async def test_play_partial_render_is_rejected(monkeypatch, tmp_path: Path) -> N
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/projects/renders/r-partial/play",
-            params={"project": str(tmp_path)},
-        )
+        response = await client.get(f"/projects/{project_id}/render/r-partial")
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "RENDER_NOT_PLAYABLE"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "mark_row"),
+    [
+        (
+            "failed",
+            lambda render_id: mark_render_failed(
+                render_id=render_id,
+                finished_at=datetime_now(),
+                message="ffmpeg failed",
+            ),
+        ),
+        (
+            "cancelled",
+            lambda render_id: mark_render_cancelled(
+                render_id=render_id,
+                finished_at=datetime_now(),
+                message="cancelled",
+            ),
+        ),
+    ],
+)
+async def test_get_project_render_file_rejects_failed_or_cancelled(
+    monkeypatch,
+    tmp_path: Path,
+    status: str,
+    mark_row,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
+    output_path = tmp_path / "renders" / f"{status}.mp4"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(status.encode("utf-8"))
+    insert_render(
+        render_id=f"r-{status}",
+        project_path=tmp_path,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
+    )
+    mark_row(f"r-{status}")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/projects/{project_id}/render/r-{status}")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RENDER_NOT_PLAYABLE"
+
+
+@pytest.mark.asyncio
+async def test_get_project_render_file_rejects_missing_output(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
+    output_path = tmp_path / "renders" / "missing.mp4"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-missing",
+        project_path=tmp_path,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
+    )
+    mark_render_finished(render_id="r-missing", finished_at=datetime_now(), duration_s=1.0)
+    output_path.unlink()
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/projects/{project_id}/render/r-missing")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "OUTPUT_NOT_FOUND"
 
 
 @pytest.mark.asyncio
