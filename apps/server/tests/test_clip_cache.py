@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from time import perf_counter
 
 import pytest
 
@@ -328,6 +329,65 @@ def test_clip_cache_rebuilds_only_edited_clip_and_reuses_unaffected_clip(
     assert fg_path_after != fg_path_before
     assert pip_path_after == pip_path_before
     assert pip_path_after.stat().st_mtime_ns == pip_mtime_before
+
+
+def test_cached_clip_rerender_after_single_property_edit_meets_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_dir = tmp_path / "media"
+    fg_media = _write_media(media_dir / "fg.png")
+    pip_media = _write_media(media_dir / "pip.png")
+    voice_duration_s = 60.0
+    target_ms = voice_duration_s * 0.2 * 1000
+    fg_item = {
+        "id": "fg-1",
+        "media_id": fg_media.name,
+        "start": 0.0,
+        "end": voice_duration_s,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+    }
+    pip_item = {
+        "id": "pip-1",
+        "media_id": pip_media.name,
+        "start": 0.0,
+        "end": voice_duration_s,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+        "pip": {"posX": 75, "posY": 25, "size": 30, "radius": 8, "opacity": 90},
+    }
+    rendered_outputs: list[Path] = []
+
+    def fake_render(
+        *,
+        item: object,
+        project_dir: Path,
+        output_path: Path,
+        resolution: str,
+        fps: int,
+        crf: int,
+    ) -> Path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"rendered")
+        rendered_outputs.append(output_path)
+        return output_path
+
+    monkeypatch.setattr("server.pipeline.clip_render.render_clip", fake_render)
+
+    render_clip_to_cache(item=fg_item, project_dir=tmp_path)
+    pip_path_before = render_clip_to_cache(item=pip_item, project_dir=tmp_path)
+    rendered_outputs.clear()
+    edited_fg = {**fg_item, "motion": {"kind": "ken_burns", "easing": "linear"}}
+
+    started_at = perf_counter()
+    render_clip_to_cache(item=edited_fg, project_dir=tmp_path)
+    pip_path_after = render_clip_to_cache(item=pip_item, project_dir=tmp_path)
+    elapsed_ms = (perf_counter() - started_at) * 1000
+
+    assert elapsed_ms < target_ms
+    assert rendered_outputs == [clip_cache_path_for_item(item=edited_fg, project_dir=tmp_path)]
+    assert pip_path_after == pip_path_before
 
 
 @pytest.mark.skipif(

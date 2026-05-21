@@ -1,6 +1,6 @@
 import { ImagePlus, Play, Search, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { KeyboardEvent, RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Kbd } from "@/components/ui";
 import { formatDuration, formatRangeLabel } from "@/lib/format";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
@@ -23,6 +23,11 @@ type TranscriptPaneProps = {
   sentences: AlignedSentence[];
 };
 
+const TRANSCRIPT_ROW_HEIGHT_PX = 40;
+const TRANSCRIPT_OVERSCAN_ROWS = 2;
+const TRANSCRIPT_VIRTUALIZATION_THRESHOLD = 160;
+const TRANSCRIPT_FALLBACK_VIEWPORT_PX = 240;
+
 export function TranscriptPane({
   activeRange,
   currentMatch,
@@ -42,17 +47,62 @@ export function TranscriptPane({
 }: TranscriptPaneProps) {
   const t = useTranslations("pages.editor");
   const [menu, setMenu] = useState<{ index: number; range: [number, number]; x: number; y: number } | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(TRANSCRIPT_FALLBACK_VIEWPORT_PX);
+  const localScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const visibleSentences = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return sentences;
     return sentences.filter((sentence) => sentence.text.toLowerCase().includes(normalized) || `s${sentence.index}`.includes(normalized));
   }, [query, sentences]);
+  const shouldVirtualize = visibleSentences.length > TRANSCRIPT_VIRTUALIZATION_THRESHOLD;
+  const virtualWindow = useMemo(() => {
+    if (!shouldVirtualize) {
+      return {
+        paddingBottom: 0,
+        paddingTop: 0,
+        sentences: visibleSentences,
+        startIndex: 0,
+      };
+    }
+    const firstVisibleIndex = Math.max(0, Math.floor(scrollTop / TRANSCRIPT_ROW_HEIGHT_PX) - TRANSCRIPT_OVERSCAN_ROWS);
+    const visibleCount = Math.ceil(viewportHeight / TRANSCRIPT_ROW_HEIGHT_PX) + TRANSCRIPT_OVERSCAN_ROWS * 2;
+    const renderedSentences = visibleSentences.slice(firstVisibleIndex, firstVisibleIndex + visibleCount);
+    const remainingRows = Math.max(0, visibleSentences.length - firstVisibleIndex - renderedSentences.length);
+    return {
+      paddingBottom: remainingRows * TRANSCRIPT_ROW_HEIGHT_PX,
+      paddingTop: firstVisibleIndex * TRANSCRIPT_ROW_HEIGHT_PX,
+      sentences: renderedSentences,
+      startIndex: firstVisibleIndex,
+    };
+  }, [scrollTop, shouldVirtualize, viewportHeight, visibleSentences]);
   const activeMatchRef = useRef<HTMLDivElement | null>(null);
+  const setScrollContainerNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      localScrollContainerRef.current = node;
+      if (node) {
+        const nextViewportHeight = node.clientHeight || TRANSCRIPT_FALLBACK_VIEWPORT_PX;
+        setViewportHeight((current) => (current === nextViewportHeight ? current : nextViewportHeight));
+      }
+      if (scrollContainerRef) {
+        (scrollContainerRef as { current: HTMLDivElement | null }).current = node;
+      }
+    },
+    [scrollContainerRef],
+  );
 
   useEffect(() => {
     if (!query.trim()) return;
+    if (shouldVirtualize) {
+      const nextScrollTop = Math.max(0, currentMatch * TRANSCRIPT_ROW_HEIGHT_PX);
+      if (localScrollContainerRef.current) {
+        localScrollContainerRef.current.scrollTop = nextScrollTop;
+      }
+      setScrollTop(nextScrollTop);
+      return;
+    }
     activeMatchRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-  }, [currentMatch, query, visibleSentences]);
+  }, [currentMatch, query, shouldVirtualize]);
 
   useEffect(() => {
     if (!menu) return;
@@ -73,8 +123,18 @@ export function TranscriptPane({
       return;
     }
     if (!selectedRange) return;
+    if (shouldVirtualize) {
+      const selectedIndex = visibleSentences.findIndex((sentence) => sentence.index === selectedRange[1]);
+      if (selectedIndex === -1) return;
+      const nextScrollTop = Math.max(0, (selectedIndex - TRANSCRIPT_OVERSCAN_ROWS) * TRANSCRIPT_ROW_HEIGHT_PX);
+      if (localScrollContainerRef.current) {
+        localScrollContainerRef.current.scrollTop = nextScrollTop;
+      }
+      setScrollTop(nextScrollTop);
+      return;
+    }
     sentenceRefs.current.get(selectedRange[1])?.scrollIntoView({ block: "center", behavior: "auto" });
-  }, [selectedRange]);
+  }, [selectedRange, shouldVirtualize, visibleSentences]);
 
   return (
     <aside className="relative flex min-h-0 flex-col bg-(--bg-1)">
@@ -107,18 +167,28 @@ export function TranscriptPane({
       <div
         data-testid="transcript-list"
         className="min-h-0 flex-1 overflow-y-auto py-[6px]"
-        onScroll={(event) => onScrollPositionChange?.(event.currentTarget.scrollTop)}
-        ref={scrollContainerRef}
+        onScroll={(event) => {
+          const nextScrollTop = event.currentTarget.scrollTop;
+          if (shouldVirtualize) {
+            const nextViewportHeight = event.currentTarget.clientHeight || TRANSCRIPT_FALLBACK_VIEWPORT_PX;
+            setViewportHeight((current) => (current === nextViewportHeight ? current : nextViewportHeight));
+            setScrollTop(nextScrollTop);
+          }
+          onScrollPositionChange?.(nextScrollTop);
+        }}
+        ref={setScrollContainerNode}
       >
         {visibleSentences.length === 0 && query.trim() ? (
           <div className="px-4 py-6 text-sm text-(--text-3)" role="status">
             {t("searchNoResults", { query: query.trim() })}
           </div>
         ) : null}
-        {visibleSentences.map((sentence, index) => {
+        {virtualWindow.paddingTop > 0 ? <div aria-hidden="true" style={{ height: virtualWindow.paddingTop }} /> : null}
+        {virtualWindow.sentences.map((sentence, index) => {
+          const sentencePosition = virtualWindow.startIndex + index;
           const active = sentence.index >= activeRange[0] && sentence.index <= activeRange[1];
           const selected = selectedRange ? sentence.index >= selectedRange[0] && sentence.index <= selectedRange[1] : false;
-          const currentSearchMatch = query.trim() ? index === currentMatch : false;
+          const currentSearchMatch = query.trim() ? sentencePosition === currentMatch : false;
           const lowConfidence = sentence.confidence_avg < 0.75;
           const orphan = sentence.end_s <= sentence.start_s;
           const activeNow = sentence.index === activeRange[0];
@@ -199,6 +269,7 @@ export function TranscriptPane({
             </div>
           );
         })}
+        {virtualWindow.paddingBottom > 0 ? <div aria-hidden="true" style={{ height: virtualWindow.paddingBottom }} /> : null}
       </div>
       {menu ? (
         <SentenceContextMenu

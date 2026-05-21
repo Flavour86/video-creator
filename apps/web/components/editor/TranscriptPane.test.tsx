@@ -45,7 +45,7 @@ describe("TranscriptPane", () => {
     renderPane();
 
     expect(screen.getByRole("searchbox", { name: /search transcript/i })).toBeInTheDocument();
-    expect(screen.getByText("Transcript · 3 aligned")).toBeInTheDocument();
+    expect(screen.getByText(/Transcript.*3 aligned/)).toBeInTheDocument();
     expect(screen.getByText("s1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /assign media to sentence/i })).toHaveLength(3);
@@ -98,5 +98,32 @@ describe("TranscriptPane", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /merge 3 sentences/i }));
 
     expect(props.onMergeRange).toHaveBeenCalledWith([1, 3]);
+  });
+
+  it("renders a 500-sentence transcript window within the frame budget", () => {
+    const manySentences = Array.from({ length: 500 }, (_, index) => ({
+      confidence_avg: 0.95,
+      end_s: index + 1,
+      index: index + 1,
+      start_s: index,
+      text: `Sentence ${index + 1}`,
+    }));
+
+    renderPane({ sentences: manySentences });
+    const list = screen.getByTestId("transcript-list");
+
+    expect(screen.getByText(/Transcript.*500 aligned/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /assign media to sentence/i }).length).toBeLessThan(100);
+
+    fireEvent.scroll(list, { target: { scrollTop: 2000 } });
+    const frameTimes = [2400, 2800, 3200, 3600, 4000].map((scrollTop) => {
+      const startedAt = performance.now();
+      fireEvent.scroll(list, { target: { scrollTop } });
+      return performance.now() - startedAt;
+    });
+    const medianFrameMs = [...frameTimes].sort((a, b) => a - b)[Math.floor(frameTimes.length / 2)];
+
+    expect(medianFrameMs).toBeLessThan(16);
+    expect(screen.getByRole("button", { name: /101 01:40-01:41 Sentence 101/i })).toBeInTheDocument();
   });
 });

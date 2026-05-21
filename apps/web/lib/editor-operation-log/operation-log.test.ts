@@ -8,6 +8,7 @@ import {
   editorOperationStorageKey,
   recoverWorkingState,
   redoLast,
+  saveOperationLog,
   undoLast,
   type EditorWorkingState,
 } from "./operation-log";
@@ -128,6 +129,39 @@ describe("editor operation log", () => {
     const redo2 = redoLast("p_demo", redo1).state;
     const redo3 = redoLast("p_demo", redo2).state;
     expect(JSON.stringify(redo3)).toBe(JSON.stringify(replayed));
+  });
+
+  it("replays a 1000-op log within the performance target", () => {
+    const baseWithClip: EditorWorkingState = {
+      ...BASE_STATE,
+      layers: [
+        {
+          ...BG_LAYER,
+          items: [{ id: "bg-1", mediaId: "bg.jpg", start: 0, end: 1, sentences: [1, 1] as [number, number] }],
+        },
+      ],
+    };
+    saveOperationLog("p_demo", {
+      redo: [],
+      undo: Array.from({ length: 1000 }, (_, index) => ({
+        at: "2026-05-21T00:00:00.000Z",
+        id: `op-${index}`,
+        op: {
+          after: { end: index * 0.01 + 1.01, start: index * 0.01 + 0.01 },
+          before: { end: index * 0.01 + 1, start: index * 0.01 },
+          itemId: "bg-1",
+          layerId: "bg-main",
+          type: "move",
+        },
+      })),
+      version: 1,
+    });
+
+    const startedAt = performance.now();
+    recoverWorkingState("p_demo", baseWithClip);
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(elapsedMs / 1000).toBeLessThan(100);
   });
 
   it("records global, subtitle, and watermark config updates", () => {

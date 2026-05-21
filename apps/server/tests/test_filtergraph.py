@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 
 import pytest
 
@@ -390,6 +391,34 @@ def test_filter_chain_order_is_black_bg_fg_pip_subtitles_watermark(tmp_path: Pat
     subtitles_overlay = filtergraph.index("[v3]subtitles='")
     watermark_overlay = filtergraph.index("[vsub][wm]overlay=")
     assert bg_overlay < fg_overlay < pip_overlay < subtitles_overlay < watermark_overlay
+
+
+def test_filtergraph_build_for_50_layers_meets_target(tmp_path: Path) -> None:
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    layers: list[dict[str, object]] = []
+    for index in range(50):
+        media_path = media_dir / f"fg-{index}.jpg"
+        media_path.write_bytes(b"media")
+        layers.append(
+            _fg_layer(
+                f"fg-z{index}",
+                [_item(media_path.name, float(index), float(index) + 1.0, f"fg-{index}")],
+            )
+        )
+    project = _project(layers)
+
+    started_at = perf_counter()
+    build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(duration_s=60.0),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+    elapsed_ms = (perf_counter() - started_at) * 1000
+
+    assert elapsed_ms < 50
 
 
 def test_pip_items_are_overlaid_after_foreground_before_subtitles(tmp_path: Path) -> None:

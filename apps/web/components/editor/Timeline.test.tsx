@@ -175,4 +175,36 @@ describe("Timeline", () => {
     expect(onDeleteItem).toHaveBeenCalledWith({ itemId: "pip-1", layerId: "pip-z1" });
     expect(screen.queryByRole("button", { name: /Delete bg-a.png over s1-s4/i })).not.toBeInTheDocument();
   });
+
+  it("handles timeline drag at 100 clips within the frame budget", () => {
+    const manyClips: Layer[] = [{
+      id: "fg-z1",
+      kind: "fg",
+      name: "Foreground z1",
+      items: Array.from({ length: 100 }, (_, index) => ({
+        id: `fg-${index}`,
+        mediaId: `fg-${index}.png`,
+        sentences: [index + 1, index + 1] as [number, number],
+        start: index,
+        end: index + 0.75,
+        motion: { kind: "none", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+      })),
+    }];
+    const { onUpdateClipTiming } = renderTimeline({
+      duration: 120,
+      layers: manyClips,
+      selected: { layerId: "fg-z1", itemId: "fg-50" },
+    });
+    const clip = screen.getByRole("button", { name: "fg-50.png over s51" });
+
+    const startedAt = performance.now();
+    fireEvent.mouseDown(clip, { clientX: 50 });
+    fireEvent.mouseMove(window, { clientX: 60 });
+    fireEvent.mouseUp(window, { clientX: 60 });
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(elapsedMs).toBeLessThan(16);
+    expect(onUpdateClipTiming).toHaveBeenCalledWith(expect.objectContaining({ itemId: "fg-50", layerId: "fg-z1" }));
+  });
 });
