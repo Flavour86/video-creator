@@ -247,3 +247,4 @@ User: Option 1
   2. Block Task 17 completion until we add executable benchmark checks for all listed targets and they pass.
   3. Allow Task 17 completion with a committed performance report documenting measured results plus explicit owner/follow-up for any unmet target.
 User: Option 3
+Closure note: Command gates are green. Targets without a reliable executable benchmark in the current gate are recorded in the Task 17 performance report with explicit owner/follow-up.

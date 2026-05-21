@@ -71,7 +71,7 @@
   - Acceptance: every `SPEC_EDITOR.md` screenshot has exactly one parity owner/test across dark/light and modal/interaction states.
   - Verify: `rtk pnpm -F @vc/web test:visual -- editor`, `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`
 - [x] Task 17: Run the Editor acceptance and performance gate
-  - Acceptance: functional acceptance, hash rules, operation replay, cache precision, performance targets, recoverable errors, and full verification gates pass.
+  - Acceptance: functional acceptance, hash rules, operation replay, cache precision, recoverable errors, and full verification gates pass; performance target status is closed under Option 3 with measured values where available and follow-up owners where unmeasured.
   - Note: Performance gate status and Option 3 closure are documented in `docs/designs/tasks/editor/task17-performance-report.md`.
   - Verify: `rtk pnpm test`, `rtk pnpm lint`, `rtk pnpm build`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`, `rtk pnpm -F @vc/web test:visual -- editor`
 - [x] Checkpoint: Complete
