@@ -8,9 +8,10 @@ from __future__ import annotations
 import asyncio
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+import numpy.typing as npt
 
 from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult, Sentence
 
@@ -20,6 +21,7 @@ _align_device: str | None = None
 _transcribe_model: Any = None
 _transcribe_model_name: str | None = None
 _transcribe_device: str | None = None
+FloatArray = npt.NDArray[np.float32]
 
 
 def _device() -> str:
@@ -143,7 +145,7 @@ def _run_transcribe(
     return _segments_to_alignment_result(result.get("segments", []))
 
 
-def _load_audio_array(audio_path: Path, sample_rate: int = 16000) -> np.ndarray:
+def _load_audio_array(audio_path: Path, sample_rate: int = 16000) -> FloatArray:
     """Decode audio without torchcodec/torio so Windows FFmpeg DLL issues do not break ASR."""
     try:
         return _load_audio_with_ffmpeg(audio_path, sample_rate)
@@ -156,7 +158,7 @@ def _load_audio_array(audio_path: Path, sample_rate: int = 16000) -> np.ndarray:
             ) from soundfile_error
 
 
-def _load_audio_with_ffmpeg(audio_path: Path, sample_rate: int) -> np.ndarray:
+def _load_audio_with_ffmpeg(audio_path: Path, sample_rate: int) -> FloatArray:
     try:
         result = subprocess.run(
             [
@@ -186,7 +188,7 @@ def _load_audio_with_ffmpeg(audio_path: Path, sample_rate: int) -> np.ndarray:
     return np.frombuffer(result.stdout, dtype=np.float32).copy()
 
 
-def _load_audio_with_soundfile(audio_path: Path, sample_rate: int) -> np.ndarray:
+def _load_audio_with_soundfile(audio_path: Path, sample_rate: int) -> FloatArray:
     try:
         import soundfile  # type: ignore[import-untyped]
 
@@ -199,10 +201,10 @@ def _load_audio_with_soundfile(audio_path: Path, sample_rate: int) -> np.ndarray
     mono = np.asarray(data, dtype=np.float32).mean(axis=1)
     if int(source_rate) != sample_rate:
         mono = _resample_linear(mono, int(source_rate), sample_rate)
-    return mono.astype(np.float32, copy=False)
+    return cast(FloatArray, mono.astype(np.float32, copy=False))
 
 
-def _resample_linear(audio: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
+def _resample_linear(audio: FloatArray, source_rate: int, target_rate: int) -> FloatArray:
     if source_rate <= 0 or target_rate <= 0 or source_rate == target_rate:
         return audio
     if audio.size == 0:
@@ -211,7 +213,7 @@ def _resample_linear(audio: np.ndarray, source_rate: int, target_rate: int) -> n
     target_size = max(1, round(duration * target_rate))
     source_positions = np.linspace(0.0, duration, num=audio.size, endpoint=False)
     target_positions = np.linspace(0.0, duration, num=target_size, endpoint=False)
-    return np.interp(target_positions, source_positions, audio).astype(np.float32)
+    return cast(FloatArray, np.interp(target_positions, source_positions, audio).astype(np.float32))
 
 
 def _segments_to_alignment_result(segments: list[dict[str, Any]]) -> AlignmentResult:

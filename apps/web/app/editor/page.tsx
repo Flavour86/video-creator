@@ -1221,18 +1221,33 @@ function remapLayersAfterAlignmentRerun(layers: Layer[], sentences: AlignedSente
   const sentenceByIndex = new Map(sentences.map((sentence) => [sentence.index, sentence] as const));
   let changed = false;
   const nextLayers = layers.map((layer) => {
-    if (layer.kind !== "fg" && layer.kind !== "pip") return layer;
-    let layerChanged = false;
-    const nextItems = layer.items.map((item) => {
-      if (!isSentenceAnchoredItem(item)) return item;
-      const nextItem = remapSentenceAnchoredItem(item, sentenceByIndex);
-      if (nextItem !== item) {
-        changed = true;
-        layerChanged = true;
-      }
-      return nextItem;
-    });
-    return layerChanged ? { ...layer, items: nextItems } : layer;
+    if (layer.kind === "fg") {
+      let layerChanged = false;
+      const nextItems: typeof layer.items = layer.items.map((item) => {
+        if (!isSentenceAnchoredItem(item)) return item;
+        const nextItem = remapSentenceAnchoredItem(item, sentenceByIndex);
+        if (nextItem !== item) {
+          changed = true;
+          layerChanged = true;
+        }
+        return nextItem;
+      });
+      return layerChanged ? { ...layer, items: nextItems } : layer;
+    }
+    if (layer.kind === "pip") {
+      let layerChanged = false;
+      const nextItems: typeof layer.items = layer.items.map((item) => {
+        if (!isSentenceAnchoredItem(item)) return item;
+        const nextItem = remapSentenceAnchoredItem(item, sentenceByIndex);
+        if (nextItem !== item) {
+          changed = true;
+          layerChanged = true;
+        }
+        return nextItem;
+      });
+      return layerChanged ? { ...layer, items: nextItems } : layer;
+    }
+    return layer;
   });
   return { changed, layers: nextLayers };
 }

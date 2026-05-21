@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Cookie, Query, Response
@@ -1029,7 +1029,7 @@ def _render_cache_counts(project_dir: Path) -> tuple[int, int, bool]:
 
     output_preset = getattr(project.output, "preset", None)
     preset_value = getattr(output_preset, "value", output_preset)
-    preset = "final" if preset_value == "final" else "draft"
+    preset: Literal["draft", "final"] = "final" if preset_value == "final" else "draft"
     preset_config = PRESETS[preset]
     resolution = _render_cache_resolution(
         getattr(project.output, "resolution", None),
