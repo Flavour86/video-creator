@@ -197,6 +197,11 @@ const TEST_PROJECT_NO_BG = {
   layers: TEST_PROJECT.layers.filter((layer) => layer.kind !== "bg"),
 };
 
+const TEST_PROJECT_NO_SUBTITLES_LAYER = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.filter((layer) => layer.kind !== "sub"),
+};
+
 const TEST_PROJECT_STALE_INVALID = {
   ...TEST_PROJECT,
   layers: TEST_PROJECT.layers.map((layer) => {
@@ -356,6 +361,12 @@ function readUndo(projectId = TEST_PROJECT_ID): Array<{ op?: Record<string, unkn
   return parsed.undo ?? [];
 }
 
+async function openAssignModalFromSentence(sentenceName: RegExp) {
+  const sentence = await screen.findByRole("button", { name: sentenceName });
+  fireEvent.contextMenu(sentence, { clientX: 30, clientY: 40 });
+  fireEvent.click(await screen.findByRole("menuitem", { name: /assign media to range/i }));
+}
+
 it("renders the test01 editor from project, alignment, and media data", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
@@ -366,7 +377,7 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByText(`projectId: ${TEST_PROJECT_ID}`)).toBeInTheDocument();
   expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
   expect(await screen.findByText("Transcript · 5 aligned")).toBeInTheDocument();
-  expect(screen.getByText("Subtitles · 1")).toBeInTheDocument();
+  expect(await screen.findByText("Subtitles · 5")).toBeInTheDocument();
   expect(screen.getAllByText("PiP · z3").length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
   expect(screen.getByText("Background · 1")).toBeInTheDocument();
@@ -376,6 +387,30 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("PiP opacity")).toHaveValue("100");
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("restores the subtitles timeline layer for aligned projects whose saved config is missing it", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: false, project: TEST_PROJECT_NO_SUBTITLES_LAYER });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(await screen.findByText("Subtitles · 5")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Layers - 4" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
+
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCall).toBeDefined();
+    const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
+    expect(payload?.config?.layers?.[0]).toMatchObject({
+      id: "subtitles",
+      kind: "sub",
+      name: "Subtitles",
+    });
+  });
 });
 
 it("remaps clip timestamps on alignment rerun and keeps unmappable anchors orphaned without deleting clips", async () => {
@@ -645,9 +680,9 @@ it("edits foreground via inspector Assign modal and invalidates only the edited 
   fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
   fireEvent.click(screen.getByTitle("CHANGE"));
 
-  expect(await screen.findByRole("heading", { name: "Edit clip" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Edit media to range" })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Motion"), { target: { value: "zoom_in" } });
-  fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+  fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
   expect(readUndo()).toHaveLength(1);
   expect(readUndo()[0]?.op?.type).toBe("replace_layers");
@@ -1022,7 +1057,7 @@ it("Apply in subtitles modal updates defaults, appends one operation, and closes
   fireEvent.change(within(modal).getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
   fireEvent.change(within(modal).getByLabelText("Max chars / line"), { target: { value: "30" } });
   fireEvent.change(within(modal).getByLabelText("Size"), { target: { value: "40" } });
-  fireEvent.click(within(modal).getByRole("switch", { name: "Burn-in" }));
+  fireEvent.click(within(modal).getByRole("switch", { name: "Show subtitles" }));
   fireEvent.click(within(modal).getByRole("button", { name: "Apply" }));
 
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -1215,7 +1250,10 @@ it("merges transcript sentences, remaps clip anchors, and appends one operation-
 
   renderEditor();
 
-  fireEvent.contextMenu(await screen.findByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i }), { clientX: 30, clientY: 40 });
+  const firstSentence = await screen.findByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i });
+  fireEvent.click(firstSentence);
+  fireEvent.click(screen.getByRole("button", { name: /2 00:05-00:10 A product demo uses PiP/i }), { shiftKey: true });
+  fireEvent.contextMenu(firstSentence, { clientX: 30, clientY: 40 });
   fireEvent.click(screen.getByRole("menuitem", { name: /merge 2 sentences/i }));
 
   expect(await screen.findByText(/Transcript .* 4 aligned/i)).toBeInTheDocument();
@@ -1263,8 +1301,7 @@ it("imports media through POST /uploads and shows the imported asset in modal", 
   });
 
   renderEditor();
-  fireEvent.click(await screen.findByRole("button", { name: "Assign media to sentence 5" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: /assign media to range/i }));
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
 
   const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
   expect(fileInput).not.toBeNull();
@@ -1284,11 +1321,10 @@ it("creates a foreground clip from assign modal and appends one replace_layers o
   mockTest01Fetch();
 
   renderEditor();
-  fireEvent.click(await screen.findByRole("button", { name: "Assign media to sentence 5" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: /assign media to range/i }));
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
 
   fireEvent.click(screen.getByAltText("PIP.png").closest("button")!);
-  fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+  fireEvent.click(screen.getByRole("button", { name: /add to project/i }));
 
   expect(await screen.findByRole("button", { name: "PIP.png over s5" })).toBeInTheDocument();
   const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
@@ -1304,8 +1340,7 @@ it("opens assign media with the clicked sentence range and real thumbnails", asy
 
   renderEditor();
 
-  fireEvent.click(await screen.findByRole("button", { name: "Assign media to sentence 5" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: /assign media to range/i }));
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
 
   const dialog = await screen.findByRole("dialog");
   expect(within(dialog).getByLabelText("From")).toHaveValue(5);
@@ -1514,7 +1549,7 @@ it("writes browser autosave recovery state without PUT config sync", async () =>
   renderEditor();
   await screen.findByText("test01");
 
-  fireEvent.click(await screen.findByRole("button", { name: /assign media to sentence 5/i }));
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
 
   await waitFor(() => {
     expect(window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID))).not.toBeNull();

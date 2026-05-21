@@ -15,6 +15,8 @@ export type EditorVisualAction =
   | "inspector-light"
   | "inspector-foreground"
   | "assign-modal"
+  | "assign-modal-edit"
+  | "assign-modal-edit-scrolled"
   | "assign-modal-scrolled"
   | "background-modal"
   | "subtitles-modal";
@@ -69,8 +71,8 @@ export const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
   { action: "none", name: "inspector background", reference: "editor-inspector-1.png", theme: "dark", capture: "inspector" },
   { action: "inspector-foreground", name: "inspector foreground", reference: "editor-inspector-2.png", theme: "dark", capture: "inspector" },
   { action: "assign-modal", name: "assign modal dark", reference: "AssignModal.png", theme: "dark", capture: "dialog" },
-  { action: "assign-modal", name: "assign modal light", reference: "AssignModal-light.png", theme: "light", capture: "dialog" },
-  { action: "assign-modal-scrolled", name: "assign modal light scrolled", reference: "AssignModal-light-1.png", theme: "light", capture: "dialog" },
+  { action: "assign-modal-edit", name: "assign modal light", reference: "AssignModal-light.png", theme: "light", capture: "dialog" },
+  { action: "assign-modal-edit-scrolled", name: "assign modal light scrolled", reference: "AssignModal-light-1.png", theme: "light", capture: "dialog" },
   { action: "background-modal", name: "background modal light", reference: "change-background-light.png", theme: "light", capture: "dialog" },
   { action: "subtitles-modal", name: "subtitles modal dark", reference: "SubtitleModal.png", theme: "dark", capture: "dialog" },
 ];

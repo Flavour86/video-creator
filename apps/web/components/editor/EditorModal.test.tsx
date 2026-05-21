@@ -94,7 +94,7 @@ describe("EditorModal", () => {
     fireEvent.change(screen.getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
     fireEvent.change(screen.getByLabelText("Max chars / line"), { target: { value: "32" } });
     fireEvent.change(screen.getByLabelText("Size"), { target: { value: "40" } });
-    fireEvent.click(screen.getByRole("switch", { name: "Burn-in" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show subtitles" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(onApplySubtitles).toHaveBeenCalledWith({

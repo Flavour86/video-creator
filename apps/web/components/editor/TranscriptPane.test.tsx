@@ -41,15 +41,15 @@ function renderPane(overrides: Partial<ComponentProps<typeof TranscriptPane>> = 
 }
 
 describe("TranscriptPane", () => {
-  it("renders search, count, range chip, add handles, and distinct sentence states", () => {
+  it("renders search, count, range chip, and distinct sentence states", () => {
     renderPane();
 
     expect(screen.getByRole("searchbox", { name: /search transcript/i })).toBeInTheDocument();
     expect(screen.getByText(/Transcript.*3 aligned/)).toBeInTheDocument();
     expect(screen.getByText("s1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /assign media to sentence/i })).toHaveLength(3);
-    expect(screen.getByText("low conf")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /assign media to sentence/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("low conf")).not.toBeInTheDocument();
     expect(screen.getByText("orphan")).toBeInTheDocument();
     expect(screen.queryByText("**Orphan** row.")).not.toBeInTheDocument();
   });
@@ -74,21 +74,18 @@ describe("TranscriptPane", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /3 00:10-00:10 Orphan row/i }), { shiftKey: true });
     expect(props.onSelectRange).toHaveBeenLastCalledWith([1, 3]);
-    expect(props.onSeek).toHaveBeenLastCalledWith(10);
+    expect(props.onSeek).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the sentence menu from right-click and add handle", () => {
+  it("opens the sentence menu from right-click without seeking", () => {
     const props = renderPane();
 
     fireEvent.contextMenu(screen.getByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i }), { clientX: 30, clientY: 40 });
     expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /merge/i })).not.toBeInTheDocument();
+    expect(props.onSeek).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("menuitem", { name: /assign media to range/i }));
     expect(props.onAssignRange).toHaveBeenCalledWith([1, 1]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Assign media to sentence 2" }));
-    expect(screen.getByRole("menuitem", { name: /play from here/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("menuitem", { name: /merge 2 sentences/i }));
-    expect(props.onMergeRange).toHaveBeenCalledWith([2, 2]);
   });
 
   it("uses the selected contiguous range for merge count and callback", () => {
@@ -98,6 +95,15 @@ describe("TranscriptPane", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /merge 3 sentences/i }));
 
     expect(props.onMergeRange).toHaveBeenCalledWith([1, 3]);
+  });
+
+  it("uses the selected contiguous range for assign from the context menu", () => {
+    const props = renderPane({ selectedRange: [1, 3] });
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: /2 00:05-00:10 Low confidence sentence/i }), { clientX: 18, clientY: 22 });
+    fireEvent.click(screen.getByRole("menuitem", { name: /assign media to range/i }));
+
+    expect(props.onAssignRange).toHaveBeenCalledWith([1, 3]);
   });
 
   it("renders a 500-sentence transcript window within the frame budget", () => {
@@ -113,7 +119,7 @@ describe("TranscriptPane", () => {
     const list = screen.getByTestId("transcript-list");
 
     expect(screen.getByText(/Transcript.*500 aligned/)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /assign media to sentence/i }).length).toBeLessThan(100);
+    expect(screen.queryByRole("button", { name: /assign media to sentence/i })).not.toBeInTheDocument();
 
     fireEvent.scroll(list, { target: { scrollTop: 2000 } });
     const frameTimes = [2400, 2800, 3200, 3600, 4000].map((scrollTop) => {

@@ -88,30 +88,86 @@ function applyIgnoredRegions(png: PNG, regions: ReadonlyArray<{ x: number; y: nu
 function applyBoxBlur(png: PNG, radius: number): void {
   const r = Math.max(1, Math.floor(radius));
   const source = Buffer.from(png.data);
-  for (let y = 0; y < png.height; y += 1) {
-    for (let x = 0; x < png.width; x += 1) {
-      let red = 0;
-      let green = 0;
-      let blue = 0;
-      let count = 0;
-      const startY = Math.max(0, y - r);
-      const endY = Math.min(png.height - 1, y + r);
-      const startX = Math.max(0, x - r);
-      const endX = Math.min(png.width - 1, x + r);
-      for (let sampleY = startY; sampleY <= endY; sampleY += 1) {
-        for (let sampleX = startX; sampleX <= endX; sampleX += 1) {
-          const sampleIndex = (sampleY * png.width + sampleX) * 4;
-          red += source[sampleIndex] ?? 0;
-          green += source[sampleIndex + 1] ?? 0;
-          blue += source[sampleIndex + 2] ?? 0;
-          count += 1;
-        }
+  const { height, width } = png;
+  const horizontal = new Float64Array(width * height * 3);
+
+  for (let y = 0; y < height; y += 1) {
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let count = 0;
+    const rowOffset = y * width;
+    const firstEndX = Math.min(width - 1, r);
+    for (let x = 0; x <= firstEndX; x += 1) {
+      const sourceIndex = (rowOffset + x) * 4;
+      red += source[sourceIndex] ?? 0;
+      green += source[sourceIndex + 1] ?? 0;
+      blue += source[sourceIndex + 2] ?? 0;
+      count += 1;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const targetIndex = (rowOffset + x) * 3;
+      const divisor = Math.max(1, count);
+      horizontal[targetIndex] = red / divisor;
+      horizontal[targetIndex + 1] = green / divisor;
+      horizontal[targetIndex + 2] = blue / divisor;
+
+      const removeX = x - r;
+      if (removeX >= 0) {
+        const sourceIndex = (rowOffset + removeX) * 4;
+        red -= source[sourceIndex] ?? 0;
+        green -= source[sourceIndex + 1] ?? 0;
+        blue -= source[sourceIndex + 2] ?? 0;
+        count -= 1;
       }
-      const index = (y * png.width + x) * 4;
-      png.data[index] = Math.round(red / Math.max(1, count));
-      png.data[index + 1] = Math.round(green / Math.max(1, count));
-      png.data[index + 2] = Math.round(blue / Math.max(1, count));
-      png.data[index + 3] = 255;
+      const addX = x + r + 1;
+      if (addX < width) {
+        const sourceIndex = (rowOffset + addX) * 4;
+        red += source[sourceIndex] ?? 0;
+        green += source[sourceIndex + 1] ?? 0;
+        blue += source[sourceIndex + 2] ?? 0;
+        count += 1;
+      }
+    }
+  }
+
+  for (let x = 0; x < width; x += 1) {
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let count = 0;
+    const firstEndY = Math.min(height - 1, r);
+    for (let y = 0; y <= firstEndY; y += 1) {
+      const horizontalIndex = (y * width + x) * 3;
+      red += horizontal[horizontalIndex] ?? 0;
+      green += horizontal[horizontalIndex + 1] ?? 0;
+      blue += horizontal[horizontalIndex + 2] ?? 0;
+      count += 1;
+    }
+    for (let y = 0; y < height; y += 1) {
+      const targetIndex = (y * width + x) * 4;
+      const divisor = Math.max(1, count);
+      png.data[targetIndex] = Math.round(red / divisor);
+      png.data[targetIndex + 1] = Math.round(green / divisor);
+      png.data[targetIndex + 2] = Math.round(blue / divisor);
+      png.data[targetIndex + 3] = 255;
+
+      const removeY = y - r;
+      if (removeY >= 0) {
+        const horizontalIndex = (removeY * width + x) * 3;
+        red -= horizontal[horizontalIndex] ?? 0;
+        green -= horizontal[horizontalIndex + 1] ?? 0;
+        blue -= horizontal[horizontalIndex + 2] ?? 0;
+        count -= 1;
+      }
+      const addY = y + r + 1;
+      if (addY < height) {
+        const horizontalIndex = (addY * width + x) * 3;
+        red += horizontal[horizontalIndex] ?? 0;
+        green += horizontal[horizontalIndex + 1] ?? 0;
+        blue += horizontal[horizontalIndex + 2] ?? 0;
+        count += 1;
+      }
     }
   }
 }

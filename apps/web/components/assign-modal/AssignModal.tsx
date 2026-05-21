@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { buildFgItem, hasSentenceOverlap, nextZIndex } from "@/lib/layers";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
@@ -144,6 +145,50 @@ function withEditCacheStatus(existing: AssignVisualItem | undefined, next: Assig
   return { ...next, cache_status: "invalid" };
 }
 
+function removeEditedItem(layers: Layer[], layerId: string | undefined, itemId: string | undefined): Layer[] {
+  if (!layerId || !itemId) return layers;
+  return layers.flatMap((layer) => {
+    if (layer.id !== layerId || layer.kind === "sub") return [layer];
+    const items = layer.items.filter((item) => (item as { id?: string }).id !== itemId);
+    if ((layer.kind === "fg" || layer.kind === "pip") && items.length === 0) return [];
+    return [{ ...layer, items } as Layer];
+  });
+}
+
+function appendItemToLayer(
+  layers: Layer[],
+  layerId: string,
+  item: AssignVisualItem,
+): Layer[] {
+  return layers.map((layer) => {
+    if (layer.id !== layerId || layer.kind === "sub" || layer.kind === "bg") return layer;
+    return { ...layer, items: [...layer.items, item] } as Layer;
+  });
+}
+
+function replaceItemInLayer(
+  layers: Layer[],
+  layerId: string,
+  itemId: string,
+  item: AssignVisualItem,
+): Layer[] {
+  return layers.map((layer) => {
+    if (layer.id !== layerId || layer.kind === "sub" || layer.kind === "bg") return layer;
+    return {
+      ...layer,
+      items: layer.items.map((candidate) => ((candidate as { id?: string }).id === itemId ? item : candidate)),
+    } as Layer;
+  });
+}
+
+function insertVisualLayer(layers: Layer[], layer: Layer): Layer[] {
+  const bgIdx = layers.findIndex((candidate) => candidate.kind === "bg");
+  if (bgIdx >= 0) {
+    return [...layers.slice(0, bgIdx), layer, ...layers.slice(bgIdx)];
+  }
+  return [...layers, layer];
+}
+
 export function AssignModal({
   open,
   fromSentence,
@@ -195,8 +240,8 @@ export function AssignModal({
             from?: string;
             to?: string;
             sentences: [number, number];
-            motion: { kind: string; easing: string };
-            transitions: { in: string; out: string };
+            motion?: { kind: string; easing: string };
+            transitions?: { in: string; out: string };
             pip?: { posX: number; posY: number; size: number; radius: number; opacity: number };
           }
         | undefined;
@@ -206,10 +251,10 @@ export function AssignModal({
         setAnchorMode(item.anchor ?? "sentences");
         setFromTime(item.from ?? fmtClock(fromSentence));
         setToTime(item.to ?? fmtClock(toSentence));
-        setMotion(item.motion.kind);
-        setEasing(item.motion.easing);
-        setTransIn(item.transitions.in);
-        setTransOut(item.transitions.out);
+        setMotion(item.motion?.kind ?? "none");
+        setEasing(item.motion?.easing ?? "linear");
+        setTransIn(item.transitions?.in ?? "cut");
+        setTransOut(item.transitions?.out ?? "cut");
         setCompositing(layer?.kind === "pip" ? "pip" : "fg");
         setLayerId(editLayerId);
         if (layer?.kind === "pip") {
@@ -249,12 +294,10 @@ export function AssignModal({
   >[];
 
   useEffect(() => {
-    if (matchingLayers.length > 0 && layerId === "new") {
-      setLayerId(matchingLayers[0]!.id);
-    } else if (matchingLayers.length === 0) {
+    if (layerId !== "new" && !matchingLayers.some((layer) => layer.id === layerId)) {
       setLayerId("new");
     }
-  }, [compositing, matchingLayers.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [compositing, layerId, matchingLayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Range preview
   const fromSentObj = sentences.find((s) => s.index === from);
@@ -265,6 +308,16 @@ export function AssignModal({
       : fromSentObj && toSentObj
         ? `s${from}–s${to} · ${fmtTime(fromSentObj.start_s)}–${fmtTime(toSentObj.end_s)} · ${(toSentObj.end_s - fromSentObj.start_s).toFixed(1)}s`
         : `s${from}–s${to}`;
+  const rangeSentences = from <= to
+    ? sentences.filter((sentence) => sentence.index >= from && sentence.index <= to)
+    : [];
+  const rangeDuration = fromSentObj && toSentObj
+    ? Math.max(0, toSentObj.end_s - fromSentObj.start_s)
+    : 0;
+  const rangeTimeLabel = fromSentObj && toSentObj
+    ? `${fmtTime(fromSentObj.start_s)}–${fmtTime(toSentObj.end_s)} · ${rangeDuration.toFixed(1)}s`
+    : rangePreview;
+  const fieldClass = "rounded border border-(--line) bg-(--bg-2) px-2 py-1.5 text-sm text-(--text) outline-none focus:border-(--amber)";
 
   const parsedFromTime = parseClock(fromTime);
   const parsedToTime = parseClock(toTime);
@@ -353,8 +406,11 @@ export function AssignModal({
     let newLayerId = layerId;
     let updatedLayers: Layer[];
 
-    if (layerId === "new" || !targetLayer) {
-      const z = nextZIndex(layers, compositing);
+    if (editItemId && editLayerId && layerId !== "new" && targetLayer?.id === editLayerId) {
+      updatedLayers = replaceItemInLayer(layers, editLayerId, editItemId, finalItem as AssignVisualItem);
+    } else if (layerId === "new" || !targetLayer) {
+      const baseLayers = editItemId ? removeEditedItem(layers, editLayerId, editItemId) : layers;
+      const z = nextZIndex(baseLayers, compositing);
       newLayerId = `L-${compositing}-${Date.now()}`;
       const newLayer: Layer =
         compositing === "fg"
@@ -371,31 +427,13 @@ export function AssignModal({
               items: [finalItem as Extract<Layer, { kind: "pip" }>["items"][number]],
             };
 
-      // Insert before BG layer (or at end)
-      const bgIdx = layers.findIndex((l) => l.kind === "bg");
-      if (bgIdx >= 0) {
-        updatedLayers = [...layers.slice(0, bgIdx), newLayer, ...layers.slice(bgIdx)];
-      } else {
-        updatedLayers = [...layers, newLayer];
-      }
+      updatedLayers = insertVisualLayer(baseLayers, newLayer);
     } else if (editItemId) {
-      // Edit existing item
-      updatedLayers = layers.map((l) => {
-        if (l.id !== layerId) return l;
-        return {
-          ...l,
-          items: l.items.map((it) => {
-            if ((it as { id: string }).id !== editItemId) return it;
-            return finalItem;
-          }),
-        } as Layer;
-      });
+      const baseLayers = removeEditedItem(layers, editLayerId, editItemId);
+      updatedLayers = appendItemToLayer(baseLayers, layerId, finalItem as AssignVisualItem);
     } else {
       // Add to existing layer
-      updatedLayers = layers.map((l) => {
-        if (l.id !== layerId) return l;
-        return { ...l, items: [...l.items, finalItem] } as Layer;
-      });
+      updatedLayers = appendItemToLayer(layers, layerId, finalItem as AssignVisualItem);
     }
 
     onConfirm(updatedLayers, newLayerId, newItemId);
@@ -405,63 +443,81 @@ export function AssignModal({
   return (
     <Dialog.Root onOpenChange={(o) => { if (!o) onClose(); }} open={open}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex w-full max-w-xl -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-xl bg-white p-6 shadow-2xl">
-          <Dialog.Title className="text-lg font-semibold">
-            {editItemId ? "Edit clip" : "Assign media"}
-          </Dialog.Title>
-          <Dialog.Description className="sr-only">Assign media to a sentence range.</Dialog.Description>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[94vh] w-[min(820px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-(--line) bg-(--bg-1) text-(--text) shadow-(--shadow-2)">
+          <header className="flex items-start gap-4 border-b border-(--line-soft) px-6 py-4">
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-[18px] font-semibold tracking-normal">
+                {editItemId ? "Edit media to range" : "Assign media to range"}
+              </Dialog.Title>
+              <Dialog.Description className="mt-1 text-[13px] text-(--text-3)">
+                Place a media asset over a span of sentences. The timeline is computed automatically.
+              </Dialog.Description>
+            </div>
+            <button aria-label="Close" className="rounded p-1 text-(--text-3) hover:text-(--text)" onClick={onClose} type="button">
+              <X className="h-5 w-5" />
+            </button>
+          </header>
 
+          <div className="flex flex-col gap-4 overflow-y-auto px-6 py-4" data-testid="assign-modal-body">
           {/* ── Asset picker ── */}
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">Asset</p>
-            {onImport ? (
-              <div className="mb-2">
-                <button
-                  className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-100"
-                  onClick={() => inputRef.current?.click()}
-                  type="button"
-                >
-                  Import from disk...
-                </button>
-                <input
-                  className="hidden"
-                  multiple
-                  onChange={(event) => {
-                    void onImport(event.target.files);
-                    event.currentTarget.value = "";
-                  }}
-                  ref={inputRef}
-                  type="file"
-                />
-              </div>
-            ) : null}
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Asset</p>
+              {onImport ? (
+                <>
+                  <button
+                    className="rounded border border-(--line) bg-(--bg-2) px-2.5 py-1.5 text-xs font-semibold text-(--text-2) hover:bg-(--bg-3)"
+                    onClick={() => inputRef.current?.click()}
+                    type="button"
+                  >
+                    Import from disk...
+                  </button>
+                  <input
+                    className="hidden"
+                    multiple
+                    onChange={(event) => {
+                      void onImport(event.target.files);
+                      event.currentTarget.value = "";
+                    }}
+                    ref={inputRef}
+                    type="file"
+                  />
+                </>
+              ) : null}
+            </div>
             {media.length === 0 ? (
-              <p className="text-sm opacity-50">No media added yet.</p>
+              <p className="text-sm text-(--text-3)">No media added yet.</p>
             ) : (
-              <div className="grid max-h-40 grid-cols-5 gap-2 overflow-y-auto">
+              <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto">
                 {media.map((item) => (
                   <button
-                    className={`aspect-video overflow-hidden rounded border-2 transition-colors ${
+                    className={`overflow-hidden rounded-md border p-1 text-left transition-colors ${
                       selectedMedia === item.filename
-                        ? "border-sky-500"
-                        : "border-transparent hover:border-neutral-300"
+                        ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                        : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
                     }`}
                     key={item.filename}
                     onClick={() => setSelectedMedia(item.filename)}
                     type="button"
                   >
-                    {item.thumb_url ? (
-                      <img
-                        alt={item.filename}
-                        className="h-full w-full object-cover"
-                        src={`/api/server${item.thumb_url}`}
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center bg-neutral-100 text-xs opacity-40">
-                        {item.kind === "video" ? "▶" : "□"}
-                      </div>
-                    )}
+                    <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
+                      {item.thumb_url ? (
+                        <img
+                          alt={item.filename}
+                          className="h-full w-full object-cover"
+                          src={`/api/server${item.thumb_url}`}
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))] text-xs text-white/60">
+                          {item.kind === "video" ? "MP4" : "IMG"}
+                        </div>
+                      )}
+                      <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
+                        {item.kind === "video" ? "MP4" : "IMG"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
                   </button>
                 ))}
               </div>
@@ -470,55 +526,20 @@ export function AssignModal({
 
           {/* ── Sentence range ── */}
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">
-              Anchor
-            </p>
-            <div className="mb-3 flex gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  checked={anchorMode === "sentences"}
-                  onChange={() => setAnchorMode("sentences")}
-                  type="radio"
-                />
-                Sentences
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  checked={anchorMode === "time"}
-                  onChange={() => setAnchorMode("time")}
-                  type="radio"
-                />
-                Time range
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1 text-sm">
-                From
-                <input
-                  className="w-16 rounded border border-neutral-200 px-2 py-1 text-center text-sm"
-                  min={1}
-                  onChange={(e) => setFrom(parseInt(e.target.value) || 1)}
-                  type="number"
-                  value={from}
-                />
-              </label>
-              <label className="flex items-center gap-1 text-sm">
-                To
-                <input
-                  className="w-16 rounded border border-neutral-200 px-2 py-1 text-center text-sm"
-                  min={1}
-                  onChange={(e) => setTo(parseInt(e.target.value) || 1)}
-                  type="number"
-                  value={to}
-                />
-              </label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">
+                Sentence range
+              </p>
+              <span className="rounded-full bg-sky-100 px-2.5 py-1 font-mono text-xs font-semibold text-sky-600 dark:bg-sky-950 dark:text-sky-300">
+                ● {rangeTimeLabel}
+              </span>
             </div>
             {anchorMode === "time" && (
-              <div className="mt-2 flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <label className="flex items-center gap-1 text-sm">
                   From
                   <input
-                    className="w-28 rounded border border-neutral-200 px-2 py-1 font-mono text-sm"
+                    className={`${fieldClass} w-32 font-mono`}
                     onChange={(e) => setFromTime(e.target.value)}
                     value={fromTime}
                   />
@@ -526,112 +547,107 @@ export function AssignModal({
                 <label className="flex items-center gap-1 text-sm">
                   To
                   <input
-                    className="w-28 rounded border border-neutral-200 px-2 py-1 font-mono text-sm"
+                    className={`${fieldClass} w-32 font-mono`}
                     onChange={(e) => setToTime(e.target.value)}
                     value={toTime}
                   />
                 </label>
               </div>
             )}
-            <p className="mt-1 font-mono text-xs opacity-50">{rangePreview}</p>
+            {anchorMode === "sentences" ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm text-(--text-2)">
+                    From
+                    <input
+                      className={`${fieldClass} w-20 text-center`}
+                      min={1}
+                      onChange={(e) => setFrom(parseInt(e.target.value) || 1)}
+                      type="number"
+                      value={from}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-(--text-2)">
+                    To
+                    <input
+                      className={`${fieldClass} w-20 text-center`}
+                      min={1}
+                      onChange={(e) => setTo(parseInt(e.target.value) || 1)}
+                      type="number"
+                      value={to}
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 max-h-32 overflow-y-auto rounded border border-(--line) bg-(--bg-2)">
+                  {rangeSentences.length > 0 ? (
+                    rangeSentences.map((sentence) => (
+                      <div
+                        className="grid grid-cols-[48px_1fr] border-b border-(--line-soft) px-3 py-2 text-sm last:border-b-0"
+                        key={sentence.index}
+                      >
+                        <span className="font-mono text-xs text-(--text-3)">s{sentence.index}</span>
+                        <span className="text-(--text-2)">{sentence.text}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-sm text-(--text-3)">No sentences in range.</p>
+                  )}
+                </div>
+              </>
+            ) : null}
           </div>
 
           {/* ── Compositing ── */}
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">
               Compositing
             </p>
-            <div className="flex gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  checked={compositing === "fg"}
-                  onChange={() => setCompositing("fg")}
-                  type="radio"
-                />
-                Fullscreen
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  checked={compositing === "pip"}
-                  onChange={() => setCompositing("pip")}
-                  type="radio"
-                />
-                Picture-in-Picture
-              </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                aria-pressed={compositing === "fg"}
+                className={`rounded-md border p-3 text-left transition-colors ${
+                  compositing === "fg"
+                    ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                    : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
+                }`}
+                onClick={() => setCompositing("fg")}
+                type="button"
+              >
+                <div className="aspect-[16/9] rounded-sm bg-[linear-gradient(135deg,oklch(0.38_0.07_270),oklch(0.56_0.13_55))]" />
+                <p className="mt-2 text-sm font-semibold text-(--text)">Fullscreen</p>
+                <p className="mt-1 text-xs text-(--text-3)">Foreground replaces background while active.</p>
+              </button>
+              <button
+                aria-pressed={compositing === "pip"}
+                className={`rounded-md border p-3 text-left transition-colors ${
+                  compositing === "pip"
+                    ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                    : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
+                }`}
+                onClick={() => setCompositing("pip")}
+                type="button"
+              >
+                <div className="relative aspect-[16/9] rounded-sm bg-[linear-gradient(135deg,oklch(0.25_0.06_65),oklch(0.36_0.08_60))]">
+                  <span className="absolute bottom-4 right-4 h-16 w-36 rounded bg-[linear-gradient(135deg,oklch(0.42_0.09_270),oklch(0.58_0.12_20))] shadow-lg" />
+                </div>
+                <p className="mt-2 text-sm font-semibold text-(--text)">Picture-in-picture</p>
+                <p className="mt-1 text-xs text-(--text-3)">Overlay sits on top; multi-stack supported.</p>
+              </button>
             </div>
           </div>
 
-          {compositing === "pip" ? (
-            <div className="grid grid-cols-2 gap-4">
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
-                  Placement
-                </span>
-                <select
-                  className="rounded border border-neutral-200 px-2 py-1.5"
-                  onChange={(event) => setPipPosition(event.target.value as PipPositionValue)}
-                  value={pipPosition}
-                >
-                  {PIP_POSITION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.value} - {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
-                  Size %
-                </span>
-                <input
-                  className="rounded border border-neutral-200 px-2 py-1.5"
-                  max={60}
-                  min={15}
-                  onChange={(event) => setPipSize(Math.max(15, Math.min(60, Number(event.target.value) || 15)))}
-                  type="number"
-                  value={pipSize}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
-                  Radius px
-                </span>
-                <input
-                  className="rounded border border-neutral-200 px-2 py-1.5"
-                  max={32}
-                  min={0}
-                  onChange={(event) => setPipRadius(Math.max(0, Math.min(32, Number(event.target.value) || 0)))}
-                  type="number"
-                  value={pipRadius}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
-                  Opacity %
-                </span>
-                <input
-                  className="rounded border border-neutral-200 px-2 py-1.5"
-                  max={100}
-                  min={10}
-                  onChange={(event) => setPipOpacity(Math.max(10, Math.min(100, Number(event.target.value) || 10)))}
-                  type="number"
-                  value={pipOpacity}
-                />
-              </label>
-            </div>
-          ) : null}
-
           {/* ── Layer dropdown ── */}
           <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-widest opacity-40">Layer</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Layer</p>
             <select
-              className="w-full rounded border border-neutral-200 px-2 py-1.5 text-sm"
+              aria-label="Layer"
+              className={`${fieldClass} w-full`}
               onChange={(e) => setLayerId(e.target.value)}
               value={layerId}
             >
               {matchingLayers.map((l, i) => (
                 <option key={l.id} value={l.id}>
-                  {l.name || `${compositing === "fg" ? "Foreground" : "PiP"} · z${i + 1}`}
+                  {`${l.name || `${compositing === "fg" ? "Foreground" : "PiP"} · z${i + 1}`} · ${l.items.length} items`}
                 </option>
               ))}
               <option value="new">
@@ -641,6 +657,67 @@ export function AssignModal({
             </select>
           </div>
 
+          {compositing === "pip" ? (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">PiP placement</p>
+              <div className="grid grid-cols-[180px_1fr] gap-5">
+                <div className="grid grid-cols-3 gap-1 rounded border border-(--line) bg-(--bg-2) p-1">
+                  {PIP_POSITION_OPTIONS.map((option) => (
+                    <button
+                      aria-label={option.label}
+                      aria-pressed={pipPosition === option.value}
+                      className={`h-9 rounded text-xs font-semibold ${
+                        pipPosition === option.value
+                          ? "bg-(--amber) text-white"
+                          : "bg-(--bg-1) text-(--text-3) hover:text-(--text)"
+                      }`}
+                      key={option.value}
+                      onClick={() => setPipPosition(option.value)}
+                      type="button"
+                    >
+                      {option.value}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid gap-3">
+                  <label className="grid grid-cols-[80px_1fr_48px] items-center gap-3 text-sm">
+                    <span className="text-(--text-3)">Size</span>
+                    <input
+                      max={60}
+                      min={15}
+                      onChange={(event) => setPipSize(Math.max(15, Math.min(60, Number(event.target.value) || 15)))}
+                      type="range"
+                      value={pipSize}
+                    />
+                    <span className="text-right text-xs text-(--text-3)">{pipSize}%</span>
+                  </label>
+                  <label className="grid grid-cols-[80px_1fr_48px] items-center gap-3 text-sm">
+                    <span className="text-(--text-3)">Radius</span>
+                    <input
+                      max={32}
+                      min={0}
+                      onChange={(event) => setPipRadius(Math.max(0, Math.min(32, Number(event.target.value) || 0)))}
+                      type="range"
+                      value={pipRadius}
+                    />
+                    <span className="text-right text-xs text-(--text-3)">{pipRadius}px</span>
+                  </label>
+                  <label className="grid grid-cols-[80px_1fr_48px] items-center gap-3 text-sm">
+                    <span className="text-(--text-3)">Opacity</span>
+                    <input
+                      max={100}
+                      min={10}
+                      onChange={(event) => setPipOpacity(Math.max(10, Math.min(100, Number(event.target.value) || 10)))}
+                      type="range"
+                      value={pipOpacity}
+                    />
+                    <span className="text-right text-xs text-(--text-3)">{pipOpacity}%</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {/* ── Motion & Easing ── */}
           <div className="grid grid-cols-2 gap-4">
             <label className="flex flex-col gap-1 text-sm">
@@ -648,7 +725,7 @@ export function AssignModal({
                 Motion
               </span>
               <select
-                className="rounded border border-neutral-200 px-2 py-1.5"
+                className={fieldClass}
                 onChange={(e) => setMotion(e.target.value)}
                 value={motion}
               >
@@ -664,7 +741,7 @@ export function AssignModal({
                 Easing
               </span>
               <select
-                className="rounded border border-neutral-200 px-2 py-1.5 disabled:opacity-40"
+                className={`${fieldClass} disabled:opacity-40`}
                 disabled={motion === "none"}
                 onChange={(e) => setEasing(e.target.value)}
                 value={easing}
@@ -685,7 +762,7 @@ export function AssignModal({
                 Transition In
               </span>
               <select
-                className="rounded border border-neutral-200 px-2 py-1.5"
+                className={fieldClass}
                 onChange={(e) => setTransIn(e.target.value)}
                 value={transIn}
               >
@@ -701,7 +778,7 @@ export function AssignModal({
                 Transition Out
               </span>
               <select
-                className="rounded border border-neutral-200 px-2 py-1.5"
+                className={fieldClass}
                 onChange={(e) => setTransOut(e.target.value)}
                 value={transOut}
               >
@@ -721,22 +798,24 @@ export function AssignModal({
             <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-600">{submitError}</p>
           )}
 
-          <div className="flex justify-end gap-3">
+          </div>
+
+          <footer className="flex justify-end gap-3 border-t border-(--line-soft) bg-(--bg-2) px-6 py-4">
             <Dialog.Close
-              className="rounded px-3 py-1.5 text-sm opacity-50 hover:opacity-100"
+              className="rounded px-3 py-1.5 text-sm text-(--text-2) hover:text-(--text)"
               onClick={onClose}
             >
               Cancel
             </Dialog.Close>
             <button
-              className="rounded bg-neutral-950 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
+              className="rounded bg-(--text) px-4 py-1.5 text-sm font-semibold text-(--bg-0) disabled:opacity-40"
               disabled={!selectedMedia || !!rangeError}
               onClick={handleConfirm}
               type="button"
             >
-              Confirm
+              {editItemId ? "Save changes" : "Add to project"}
             </button>
-          </div>
+          </footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

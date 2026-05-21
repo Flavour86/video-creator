@@ -118,6 +118,82 @@ describe("BgModal", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
   });
 
+  it("renders edit mode with existing mediaIds playlist selection", () => {
+    renderModal({
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-1",
+          mediaId: "bg.jpg",
+          mediaIds: ["bg.jpg", "bg-2.jpg"],
+          sentences: [1, 6],
+          start: 0,
+          end: 10,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0.5,
+        }],
+      },
+    });
+    expect(screen.getByText("2 selected · images only")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /bg\.jpg/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /bg-2\.jpg/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("preserves a mediaIds-only background playlist when saving without changes", () => {
+    const existing = {
+      id: "bg-main",
+      kind: "bg" as const,
+      name: "Background",
+      items: [{
+        id: "bg-playlist",
+        mediaIds: ["bg.jpg", "bg-2.jpg"],
+        sentences: [1, 6] as [number, number],
+        start: 0,
+        end: 10,
+        motion: { kind: "ken_burns", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        crossfade: 0,
+        cache_status: "warm" as const,
+      }],
+    } as unknown as NonNullable<Parameters<typeof BgModal>[0]["existing"]>;
+    const { onSave } = renderModal({ existing });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(existing);
+  });
+
+  it("rebuilds a mediaIds-only playlist when the existing timing is stale", () => {
+    const existing = {
+      id: "bg-main",
+      kind: "bg" as const,
+      name: "Background",
+      items: [{
+        id: "bg-playlist",
+        mediaIds: ["bg.jpg", "bg-2.jpg"],
+        sentences: [1, 6] as [number, number],
+        start: 0,
+        end: 8,
+        motion: { kind: "ken_burns", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        crossfade: 0,
+        cache_status: "warm" as const,
+      }],
+    } as unknown as NonNullable<Parameters<typeof BgModal>[0]["existing"]>;
+    const { onSave } = renderModal({ existing, duration: 10 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    const layer = onSave.mock.calls[0][0];
+    expect(layer).not.toBe(existing);
+    expect(layer.items).toHaveLength(2);
+    expect(layer.items[0]).toMatchObject({ mediaId: "bg.jpg", start: 0, end: 5 });
+    expect(layer.items[1]).toMatchObject({ mediaId: "bg-2.jpg", start: 5, end: 10 });
+  });
+
   it("supports import from disk", () => {
     const { onImport } = renderModal();
     const fileInput = screen.getByLabelText("Import from disk");
@@ -139,11 +215,24 @@ describe("BgModal", () => {
   });
 
   it("shows invalid crossfade state and disables submit", () => {
-    renderModal();
-    fireEvent.click(screen.getByRole("button", { name: /bg\.jpg/i }));
-    fireEvent.change(screen.getByLabelText(/crossfade/i), { target: { value: "2.5" } });
+    renderModal({
+      existing: {
+        id: "bg-main",
+        type: "BG",
+        items: [
+          {
+            id: "bg-invalid",
+            source_ref: "asset-img-1",
+            start: 0,
+            end: 10,
+            crossfade: 2.5,
+            loop: true,
+          },
+        ],
+      },
+    });
     expect(screen.getByRole("alert")).toHaveTextContent("Crossfade must be between 0 and 2 seconds.");
-    expect(screen.getByRole("button", { name: "Add background" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it("builds image playlists to evenly span full duration", () => {

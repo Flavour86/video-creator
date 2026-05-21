@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import { Check, Folder, X } from "lucide-react";
 
 type MediaItem = {
   duration?: number | null;
@@ -21,6 +21,7 @@ type BgLayer = {
   items: Array<{
     id: string;
     mediaId: string;
+    mediaIds?: string[];
     sentences: [number, number];
     start: number;
     end: number;
@@ -62,12 +63,62 @@ function normalizeMotionKind(value: string | undefined): string {
 
 function initialState(existing?: BgLayer) {
   const existingItem = existing?.items[0];
+  const selectedMedia = existingSelection(existing);
   return {
     crossfadeInput: String(existingItem?.crossfade ?? 0),
-    easing: existingItem?.motion.easing ?? "linear",
-    motionKind: normalizeMotionKind(existingItem?.motion.kind),
-    selectedMedia: existing?.items.map((item) => item.mediaId) ?? [],
+    easing: existingItem?.motion?.easing ?? "linear",
+    motionKind: normalizeMotionKind(existingItem?.motion?.kind),
+    selectedMedia,
   };
+}
+
+function existingSelection(existing?: BgLayer): string[] {
+  const existingItem = existing?.items[0];
+  if (existingItem?.mediaIds && existingItem.mediaIds.length > 0) {
+    return existingItem.mediaIds.filter(Boolean);
+  }
+  return existing?.items.map((item) => item.mediaId).filter((id): id is string => !!id) ?? [];
+}
+
+function sameOrderedList(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((entry, index) => entry === right[index]);
+}
+
+function isMediaIdsOnlyPlaylistUnchanged(
+  existing: BgLayer | undefined,
+  selectedMedia: string[],
+  motionKind: string,
+  easing: string,
+  crossfade: number,
+  duration: number,
+  totalSentences: number,
+): boolean {
+  const existingItem = existing?.items[0];
+  const runtimeItem = existingItem as (typeof existingItem & { mediaId?: string }) | undefined;
+  if (
+    !existing ||
+    existing.items.length !== 1 ||
+    !runtimeItem ||
+    runtimeItem.mediaId ||
+    !runtimeItem.mediaIds ||
+    runtimeItem.mediaIds.length === 0 ||
+    !Number.isFinite(crossfade)
+  ) {
+    return false;
+  }
+  const fullRangeEnd = Math.max(totalSentences, 1);
+  return (
+    sameOrderedList(existingSelection(existing), selectedMedia) &&
+    normalizeMotionKind(runtimeItem.motion?.kind) === motionKind &&
+    runtimeItem.motion?.easing === easing &&
+    runtimeItem.crossfade === crossfade &&
+    runtimeItem.start === 0 &&
+    runtimeItem.end === duration &&
+    runtimeItem.sentences[0] === 1 &&
+    runtimeItem.sentences[1] === fullRangeEnd &&
+    runtimeItem.transitions.in === "cut" &&
+    runtimeItem.transitions.out === "cut"
+  );
 }
 
 function hasBackgroundItemChanged(
@@ -188,6 +239,11 @@ export function BgModal({
 
   function handleSave() {
     if (state.selectedMedia.length === 0 || !isCrossfadeValid) return;
+    if (existing && isMediaIdsOnlyPlaylistUnchanged(existing, state.selectedMedia, state.motionKind, state.easing, crossfade, duration, totalSentences)) {
+      onSave(existing);
+      onClose();
+      return;
+    }
     const selectedKind = lockedKind ?? mediaById.get(state.selectedMedia[0] ?? "")?.kind;
     if (!selectedKind) return;
     const nextItems = selectedKind === "image"
@@ -222,51 +278,45 @@ export function BgModal({
     });
   }
 
-  function moveMedia(mediaId: string, direction: -1 | 1) {
-    setState((current) => {
-      const index = current.selectedMedia.indexOf(mediaId);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.selectedMedia.length) return current;
-      const next = [...current.selectedMedia];
-      const currentItem = next[index];
-      const swapItem = next[nextIndex];
-      if (!currentItem || !swapItem) return current;
-      next[index] = swapItem;
-      next[nextIndex] = currentItem;
-      return { ...current, selectedMedia: next };
-    });
-  }
-
   if (!open) return null;
 
   return (
     <Dialog.Root onOpenChange={(next) => { if (!next) onClose(); }} open={open}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-2xl">
-          <Dialog.Title className="mb-2 text-lg font-semibold">
-            {isEdit ? "Change background" : "Add background"}
-          </Dialog.Title>
-          <Dialog.Description className="sr-only">
-            Configure background playlist assets, motion, easing, and crossfade.
-          </Dialog.Description>
-          <p className="mb-5 text-sm text-neutral-600">
-            {state.selectedMedia.length} selected · {selectedLabel}
-          </p>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-(--line) bg-(--bg-1) text-(--text) shadow-(--shadow-2)">
+          <header className="flex items-start gap-4 border-b border-(--line-soft) px-6 py-4">
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-[18px] font-semibold tracking-normal">
+                {isEdit ? "Change background" : "Add background"}
+              </Dialog.Title>
+              <Dialog.Description className="mt-1 text-[13px] text-(--text-3)">
+                The background spans the entire video and shows whenever no foreground is active.
+              </Dialog.Description>
+            </div>
+            <button aria-label="Close" className="rounded p-1 text-(--text-3) hover:text-(--text)" onClick={onClose} type="button">
+              <X className="h-5 w-5" />
+            </button>
+          </header>
 
-          <div className="mb-5">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-widest opacity-40">
-                Assets
-              </p>
+          <div className="flex flex-col gap-6 overflow-y-auto px-6 py-5">
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Assets</p>
+                  <span className="font-mono text-[11px] text-(--text-3)">
+                    {state.selectedMedia.length} selected · {selectedLabel}
+                  </span>
+                </div>
               <button
-                className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-100"
+                className="inline-flex items-center gap-2 rounded border border-(--line) bg-(--bg-2) px-2.5 py-1.5 text-xs font-semibold text-(--text-2) hover:bg-(--bg-3)"
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
               >
+                <Folder aria-hidden="true" className="h-3.5 w-3.5" />
                 Import from disk...
               </button>
-            </div>
+              </div>
             <input
               aria-label="Import from disk"
               className="hidden"
@@ -279,36 +329,43 @@ export function BgModal({
               type="file"
             />
             {media.length === 0 ? (
-              <p className="text-sm opacity-50">No media added yet.</p>
+              <p className="text-sm text-(--text-3)">No media added yet.</p>
             ) : (
-              <div className="grid max-h-44 grid-cols-4 gap-2 overflow-y-auto">
+              <div className="grid max-h-[260px] grid-cols-4 gap-2 overflow-y-auto">
                 {media.map((item) => (
                   <button
                     aria-pressed={state.selectedMedia.includes(item.mediaId)}
-                    className={`relative aspect-video overflow-hidden rounded border-2 transition-colors ${
+                    className={`relative overflow-hidden rounded-md border p-1 text-left transition-colors ${
                       state.selectedMedia.includes(item.mediaId)
-                        ? "border-sky-500 bg-sky-50"
-                        : "border-transparent hover:border-neutral-300"
+                        ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                        : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
                     }`}
                     key={item.mediaId}
                     onClick={() => toggleMedia(item.mediaId)}
                     type="button"
                   >
-                    {item.thumb_url ? (
-                      <Image
-                        alt={item.filename}
-                        className="h-full w-full object-cover"
-                        height={90}
-                        src={`/api/server${item.thumb_url}`}
-                        width={160}
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center bg-neutral-100 text-xs opacity-40">
-                        {item.kind === "video" ? "▶" : "□"}
-                      </div>
-                    )}
+                    <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
+                      {item.thumb_url ? (
+                        <img
+                          alt={item.filename}
+                          className="h-full w-full object-cover"
+                          src={`/api/server${item.thumb_url}`}
+                        />
+                      ) : (
+                        <div className="h-full w-full bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))]" />
+                      )}
+                      <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
+                        {item.kind === "video" ? "MP4" : "IMG"}
+                      </span>
+                      {state.selectedMedia.includes(item.mediaId) ? (
+                        <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-(--amber) text-(--bg-0)">
+                          <Check aria-hidden="true" className="h-3 w-3" />
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
                     {!state.selectedMedia.includes(item.mediaId) && lockedKind && item.kind !== lockedKind ? (
-                      <span className="pointer-events-none absolute inset-x-1 bottom-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-800">
+                      <span className="pointer-events-none absolute inset-x-2 bottom-7 rounded bg-(--amber-bg) px-1 py-0.5 text-center text-[10px] font-semibold text-(--amber)">
                         Will replace
                       </span>
                     ) : null}
@@ -317,50 +374,23 @@ export function BgModal({
                 ))}
               </div>
             )}
-          </div>
+              {state.selectedMedia.length > 1 ? (
+                <p className="mt-2 text-[12px] text-(--text-3)">
+                  {lockedKind === "video"
+                    ? `${state.selectedMedia.length} clips play in sequence. Short video leaves black fallback; long video is cut.`
+                    : `${state.selectedMedia.length} images split the full duration evenly.`}{" "}
+                  Reorder by clicking to deselect, then re-select in the desired order.
+                </p>
+              ) : null}
+            </section>
 
-          {state.selectedMedia.length > 0 && (
-            <div className="mb-5">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-widest opacity-40">
-                Order
-              </p>
-              <div className="flex max-h-28 flex-col gap-1 overflow-y-auto">
-                {state.selectedMedia.map((mediaId, index) => (
-                  <div
-                    className="grid grid-cols-[1fr_auto_auto] items-center gap-1 rounded border border-neutral-200 px-2 py-1 text-xs"
-                    key={mediaId}
-                  >
-                    <span className="truncate">{mediaById.get(mediaId)?.filename ?? mediaId}</span>
-                    <button
-                      className="rounded px-1.5 py-0.5 opacity-50 hover:bg-neutral-100 hover:opacity-100 disabled:opacity-20"
-                      disabled={index === 0}
-                      onClick={() => moveMedia(mediaId, -1)}
-                      type="button"
-                    >
-                      Up
-                    </button>
-                    <button
-                      className="rounded px-1.5 py-0.5 opacity-50 hover:bg-neutral-100 hover:opacity-100 disabled:opacity-20"
-                      disabled={index === state.selectedMedia.length - 1}
-                      onClick={() => moveMedia(mediaId, 1)}
-                      type="button"
-                    >
-                      Down
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Options */}
-          <div className="mb-6 grid grid-cols-2 gap-4">
+          <section className="grid grid-cols-2 gap-4">
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">
                 Motion
               </span>
               <select
-                className="rounded border border-neutral-200 px-2 py-1.5 text-sm"
+                className="rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-sm text-(--text)"
                 onChange={(event) => setState((current) => ({ ...current, motionKind: event.target.value }))}
                 value={state.motionKind}
               >
@@ -372,11 +402,11 @@ export function BgModal({
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">
                 Easing
               </span>
               <select
-                className="rounded border border-neutral-200 px-2 py-1.5 text-sm"
+                className="rounded border border-(--line) bg-(--bg-2) px-3 py-2 text-sm text-(--text)"
                 onChange={(event) => setState((current) => ({ ...current, easing: event.target.value }))}
                 value={state.easing}
               >
@@ -387,44 +417,55 @@ export function BgModal({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-widest opacity-40">
-                Crossfade (s)
-              </span>
+          </section>
+          <section>
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)" htmlFor="background-crossfade">
+              Crossfade between cycles
+            </label>
+            <div className="flex items-center gap-3">
               <input
-                className="rounded border border-neutral-200 px-2 py-1.5 text-sm"
+                aria-label="Crossfade between cycles"
+                className="h-2 min-w-0 flex-1 accent-(--amber)"
+                id="background-crossfade"
                 max={2}
                 min={0}
                 onChange={(event) => setState((current) => ({ ...current, crossfadeInput: event.target.value }))}
                 step={0.1}
-                type="number"
+                type="range"
                 value={state.crossfadeInput}
               />
-            </label>
-          </div>
+              <span className="w-10 text-right font-mono text-[12px] text-(--text-2)">
+                {Number.isFinite(crossfade) ? `${crossfade.toFixed(1)}s` : `${state.crossfadeInput}s`}
+              </span>
+            </div>
+            <p className="mt-2 text-[12px] text-(--text-3)">
+              When the background image cycles to the next asset in the playlist, this is how long the crossfade takes.
+            </p>
+          </section>
           {!isCrossfadeValid ? (
-            <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+            <p className="rounded border border-(--red)/40 bg-(--red)/10 px-3 py-2 text-sm text-(--red)" role="alert">
               Crossfade must be between 0 and 2 seconds.
             </p>
           ) : null}
+          </div>
 
-          <div className="flex justify-end gap-3">
+          <footer className="flex justify-end gap-3 border-t border-(--line-soft) bg-(--bg-2) px-6 py-4">
             <button
-              className="rounded px-3 py-1.5 text-sm opacity-50 hover:opacity-100"
+              className="rounded px-3 py-1.5 text-sm text-(--text-2) hover:text-(--text)"
               onClick={onClose}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="rounded bg-neutral-950 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
+              className="rounded bg-(--text) px-4 py-1.5 text-sm font-semibold text-(--bg-0) disabled:opacity-40"
               disabled={state.selectedMedia.length === 0 || !isCrossfadeValid}
               onClick={handleSave}
               type="button"
             >
               {isEdit ? "Save changes" : "Add background"}
             </button>
-          </div>
+          </footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -197,18 +197,19 @@ function SubtitlesFields({
         {t("burnIn")}
       </label>
       <div className={`relative rounded-md border border-(--line) bg-(--bg-2) ${aspectClass}`} data-testid="subtitles-live-preview">
-        <div
-          className={`absolute inset-x-6 text-center font-semibold text-white ${cuePositionClass} ${cueBackgroundClass}`}
-          style={{
-            fontFamily: value.style.font,
-            fontSize: `${Math.max(14, (value.style.size / 28) * 14)}px`,
-            opacity: value.burn_in ? 1 : 0.5,
-          }}
-        >
-          {cueLines.map((line, index) => (
-            <div key={`${line}-${index}`}>{line}</div>
-          ))}
-        </div>
+        {value.burn_in ? (
+          <div
+            className={`absolute inset-x-6 text-center font-semibold text-white ${cuePositionClass} ${cueBackgroundClass}`}
+            style={{
+              fontFamily: value.style.font,
+              fontSize: `${Math.max(14, (value.style.size / 28) * 14)}px`,
+            }}
+          >
+            {cueLines.map((line, index) => (
+              <div key={`${line}-${index}`}>{line}</div>
+            ))}
+          </div>
+        ) : null}
         <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white">
           Preview · {previewResolution === "9:16" ? "9:16" : "16:9"}
         </span>
@@ -251,26 +252,33 @@ function MediaFields({
           />
         </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
-          {media.map((item) => (
-            <button
-              aria-label={`Select ${item.filename}`}
-              className="rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)"
-              disabled={item.importing}
-              key={item.filename}
-              type="button"
-            >
-              <Image alt={item.filename} className="aspect-video w-full rounded-sm bg-(--bg-3) object-cover" src={mediaSrc(projectPath, item)} />
-              <div className="mt-2 truncate font-mono text-[11px] text-(--text-2)">{item.filename}</div>
-              <div className="truncate font-mono text-[10px] text-(--text-3)">
-                {formatKindBadge(item)} · {formatBytes(item.size)}
-              </div>
-              <div className="truncate font-mono text-[10px] text-(--text-3)">{formatMeta(item)}</div>
-              {item.importing ? (
-                <div className="truncate font-mono text-[10px] text-(--blue)">Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%</div>
-              ) : null}
-              {item.import_error ? <div className="truncate font-mono text-[10px] text-(--red)">Import failed: {item.import_error}</div> : null}
-            </button>
-          ))}
+          {media.map((item) => {
+            const src = mediaSrc(projectPath, item);
+            return (
+              <button
+                aria-label={`Select ${item.filename}`}
+                className="rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)"
+                disabled={item.importing}
+                key={item.filename}
+                type="button"
+              >
+                {src ? (
+                  <Image alt={item.filename} className="aspect-video w-full rounded-sm bg-(--bg-3) object-cover" src={src} />
+                ) : (
+                  <div aria-hidden="true" className="aspect-video w-full rounded-sm bg-(--bg-3)" />
+                )}
+                <div className="mt-2 truncate font-mono text-[11px] text-(--text-2)">{item.filename}</div>
+                <div className="truncate font-mono text-[10px] text-(--text-3)">
+                  {formatKindBadge(item)} · {formatBytes(item.size)}
+                </div>
+                <div className="truncate font-mono text-[10px] text-(--text-3)">{formatMeta(item)}</div>
+                {item.importing ? (
+                  <div className="truncate font-mono text-[10px] text-(--blue)">Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%</div>
+                ) : null}
+                {item.import_error ? <div className="truncate font-mono text-[10px] text-(--red)">Import failed: {item.import_error}</div> : null}
+              </button>
+            );
+          })}
         </div>
       </Field>
       {upload ? (
@@ -285,11 +293,12 @@ function MediaFields({
   );
 }
 
-function mediaSrc(projectPath: string, item: EditorMediaItem): string {
+function mediaSrc(projectPath: string, item: EditorMediaItem): string | null {
   if (item.thumb_url) return `/api/server${item.thumb_url}`;
   if (item.path.startsWith("uploads/")) {
     return `/api/server/uploads/media-file?filename=${encodeURIComponent(item.mediaId)}`;
   }
+  if (!projectPath) return null;
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(item.filename)}`;
 }
 

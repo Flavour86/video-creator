@@ -63,6 +63,7 @@ export function PreviewSurface({
   const { height: canvasHeight, width: canvasWidth } = useMemo(() => resolutionDimensions(resolution), [resolution]);
 
   const activeVideoDecoderIds = useMemo(() => {
+    if (!projectPath) return [];
     const ids = new Set<string>();
     const windowStart = Math.max(0, displayTime - DECODER_LOOKBEHIND_SECONDS);
     const windowEnd = displayTime + DECODER_LOOKAHEAD_SECONDS;
@@ -78,7 +79,7 @@ export function PreviewSurface({
       ids.add(watermark.mediaId);
     }
     return [...ids];
-  }, [displayTime, layers, watermark]);
+  }, [displayTime, layers, projectPath, watermark]);
 
   const registerVideoDecoder = useCallback((mediaId: string, node: HTMLVideoElement | null) => {
     if (node) {
@@ -109,6 +110,7 @@ export function PreviewSurface({
   }, [currentTime, playbackClock]);
 
   const resolveSource = useCallback((mediaId: string, clockTime: number): HTMLImageElement | HTMLVideoElement | null => {
+    if (!projectPath) return null;
     if (isVideoMediaId(mediaId)) {
       const decoder = videoDecoderRefs.current.get(mediaId);
       if (!decoder) return null;
@@ -120,7 +122,7 @@ export function PreviewSurface({
       return null;
     }
     return image;
-  }, [ensureImage]);
+  }, [ensureImage, projectPath]);
 
   const drawFrame = useCallback((clockTime: number) => {
     const canvas = canvasRef.current;
@@ -310,6 +312,7 @@ export function PreviewSurface({
 }
 
 function mediaUrl(projectPath: string, filename: string): string {
+  if (!projectPath) return "";
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(filename)}`;
 }
 

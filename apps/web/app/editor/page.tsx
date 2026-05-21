@@ -187,15 +187,16 @@ function EditorContent() {
         subtitles: config.subtitles,
         watermark: config.watermark,
       });
+      const workingLayers = ensureSubtitleLayer(working.layers);
       const workingConfig = {
         ...config,
-        layers: working.layers as Project["layers"],
+        layers: workingLayers as Project["layers"],
         transcript: working.transcript,
         output: working.output,
         subtitles: working.subtitles,
         watermark: working.watermark,
       };
-      let loadedCacheSummary = deriveClipCacheSummaryFromLayers(working.layers);
+      let loadedCacheSummary = deriveClipCacheSummaryFromLayers(workingLayers);
       try {
         const cacheResponse = await request<RenderCacheResponse>(`/projects/${encodeURIComponent(id)}/render-cache` as `/${string}`);
         loadedCacheSummary = normalizeRenderCacheSummary(cacheResponse, loadedCacheSummary);
@@ -209,7 +210,7 @@ function EditorContent() {
         console.warn("Editor render-cache summary fetch failed", { error: summaryError, projectId: id });
         // Keep config-derived cache summary when cache endpoint is unavailable.
       }
-      const selected = selectRecoverySelection(recoveryState?.selected ?? null, working.layers);
+      const selected = selectRecoverySelection(recoveryState?.selected ?? null, workingLayers);
       loadedProjectRef.current = true;
       skipAutosaveRef.current = true;
       pendingScrollTopRef.current = recoveryState?.transcriptScrollTop ?? 0;
@@ -219,12 +220,12 @@ function EditorContent() {
       setProjectName(workingConfig.name ?? id);
       setProjectPath(resolvedProjectPath);
       setAudioFile(workingConfig.audio ?? "");
-      const dirty = response.has_unrendered_changes || operationLog.undo.length > 0;
+      const dirty = response.has_unrendered_changes || operationLog.undo.length > 0 || workingLayers !== working.layers;
       setHasUnrenderedChanges(dirty);
       setLatestConfigHash(response.config_hash);
       setLastRenderedConfigHash(response.last_rendered_config_hash ?? null);
       setSaveStatus(dirty ? "pending" : "saved");
-      setLayers(working.layers);
+      setLayers(workingLayers);
       const configMedia = toEditorMediaItemsFromConfig(workingConfig.media ?? []);
       setMedia(normalizeEditorMediaItems(configMedia));
       setServerCacheSummary(loadedCacheSummary);
@@ -655,6 +656,36 @@ function EditorContent() {
     seekTo(boundedStart);
   }, [applyLayerMutation, layers, seekTo, sentences, timelineDuration]);
 
+  const updateSubtitleCueTiming = useCallback((input: { sentenceIndex: number; start: number; end: number }) => {
+    if (!project) return;
+    const target = sentences.find((sentence) => sentence.index === input.sentenceIndex);
+    if (!target) return;
+    const boundedStart = clamp(input.start, 0, Math.max(0, timelineDuration - MIN_CLIP_DURATION_SECONDS));
+    const boundedEnd = clamp(input.end, boundedStart + MIN_CLIP_DURATION_SECONDS, Math.max(timelineDuration, boundedStart + MIN_CLIP_DURATION_SECONDS));
+    const nextSentences = sentences.map((sentence) => (
+      sentence.index === input.sentenceIndex
+        ? { ...sentence, start_s: boundedStart, end_s: boundedEnd }
+        : sentence
+    ));
+    const nextTranscript: Project["transcript"] = {
+      ...project.transcript,
+      sentences: toTranscriptSentenceCues(nextSentences),
+    };
+    setSentences(nextSentences);
+    setProject({ ...project, transcript: nextTranscript });
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "transcript_timing_update",
+        before: project.transcript,
+        after: nextTranscript,
+      });
+    }
+    setSelectedSentenceRange([input.sentenceIndex, input.sentenceIndex]);
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+    seekTo(boundedStart);
+  }, [project, projectId, seekTo, sentences, timelineDuration]);
+
   const deleteInspectorItem = useCallback((layerId: string, itemId: string) => {
     const updatedLayers = deleteVisualItem(layers, layerId, itemId);
     applyLayerMutation(updatedLayers, { nextSelection: defaultSelectionFromLayers(updatedLayers) });
@@ -896,10 +927,6 @@ function EditorContent() {
               <LayersPopover
                 layers={layers}
                 onClose={() => setLayersOpen(false)}
-                onAdd={() => {
-                  setAssignEdit(null);
-                  setModal("upload");
-                }}
                 onRemoveBackground={(layerId) => {
                   removeBackgroundLayer(layerId);
                   setLayersOpen(false);
@@ -922,8 +949,10 @@ function EditorContent() {
             onDeleteItem={({ layerId, itemId }) => deleteInspectorItem(layerId, itemId)}
             onSeek={seekTo}
             onSelect={setSelected}
+            onUpdateSubtitleCueTiming={updateSubtitleCueTiming}
             onUpdateClipTiming={updateTimelineClipTiming}
             selected={selected}
+            sentences={sentences}
           />
         </main>
         <Inspector
@@ -1050,6 +1079,20 @@ function defaultSelectionFromLayers(layers: Layer[]): EditorSelection {
     if (item) return { layerId: layer.id, itemId: item.id };
   }
   return null;
+}
+
+function defaultSubtitleLayer(): Extract<Layer, { kind: "sub" }> {
+  return {
+    id: "subtitles",
+    kind: "sub",
+    name: "Subtitles",
+    items: [{ id: "sub-auto", auto: true, label: "Auto subtitles", style: "default" }],
+  };
+}
+
+function ensureSubtitleLayer(layers: Layer[]): Layer[] {
+  if (layers.some((layer) => layer.kind === "sub")) return layers;
+  return [defaultSubtitleLayer(), ...layers];
 }
 
 function hasVisualItemId(value: unknown): value is { id: string } {
@@ -1211,6 +1254,17 @@ function sanitizeTranscriptSentences(transcript: Project["transcript"] | null | 
       text: sentence.text.trim(),
     }));
   return normalized;
+}
+
+function toTranscriptSentenceCues(sentences: AlignedSentence[]): [TranscriptSentenceCue, ...TranscriptSentenceCue[]] | undefined {
+  if (sentences.length === 0) return undefined;
+  return sentences.map((sentence): TranscriptSentenceCue => ({
+    confidence_avg: sentence.confidence_avg,
+    end_s: sentence.end_s,
+    index: sentence.index,
+    start_s: sentence.start_s,
+    text: sentence.text,
+  })) as [TranscriptSentenceCue, ...TranscriptSentenceCue[]];
 }
 
 function alignmentSignature(sentences: AlignedSentence[]): string {

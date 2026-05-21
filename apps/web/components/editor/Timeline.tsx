@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import { packRowsByTime } from "@/lib/layers";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { EditorSelection } from "./types";
@@ -14,8 +15,10 @@ type TimelineProps = {
   onDeleteItem: (selection: { layerId: string; itemId: string }) => void;
   onSeek: (time: number) => void;
   onSelect: (selection: EditorSelection) => void;
+  onUpdateSubtitleCueTiming: (input: { sentenceIndex: number; start: number; end: number }) => void;
   onUpdateClipTiming: (input: { layerId: string; itemId: string; start: number; end: number }) => void;
   selected: EditorSelection;
+  sentences: AlignedSentence[];
 };
 
 type LayerKind = Layer["kind"];
@@ -29,6 +32,7 @@ type TimelineClip = {
   mediaId: string;
   mediaIds?: string[];
   orphaned?: boolean;
+  sentenceIndex?: number;
   sentences?: [number, number];
   start: number;
   synthetic?: boolean;
@@ -59,7 +63,7 @@ const TRACK_RIGHT_PADDING_PX = 10;
 const WAVEFORM_BARS = Array.from(
   { length: 200 },
   (_, index) => 30 + Math.abs(Math.sin(index * 0.5) * 30) + Math.abs(Math.sin(index * 0.13) * 25) + (index % 7 === 0 ? 15 : 0),
-);
+).map((height) => `${height.toFixed(4)}%`);
 
 export function Timeline({
   cacheLabel,
@@ -70,16 +74,15 @@ export function Timeline({
   onDeleteItem,
   onSeek,
   onSelect,
+  onUpdateSubtitleCueTiming,
   onUpdateClipTiming,
   selected,
+  sentences,
 }: TimelineProps) {
   const t = useTranslations("pages.editor");
   const dragStateRef = useRef<DragState | null>(null);
-  const rows = useTimelineRows(layers, duration);
-  const clipCount = rows.reduce(
-    (total, row) => total + row.clips.filter((clip) => !(row.kind === "sub" && clip.synthetic === true)).length,
-    0,
-  );
+  const rows = useTimelineRows(layers, duration, sentences);
+  const clipCount = rows.reduce((total, row) => total + row.clips.length, 0);
   const subtitleCueCount = rows.find((row) => row.kind === "sub")?.clips.length ?? 0;
   const cacheCount = clipCount + Math.max(0, subtitleCueCount - 4);
   const inferredCacheLabel = `cache ${cacheCount}/${cacheCount}`;
@@ -101,12 +104,20 @@ export function Timeline({
       if (!drag) return;
       const clientX = Number.isFinite(event.clientX) && event.clientX !== 0 ? event.clientX : drag.lastClientX;
       const patch = computeDragPatch(drag, clientX, duration);
-      onUpdateClipTiming({
-        layerId: drag.clip.layerId,
-        itemId: drag.clip.id,
-        start: patch.start,
-        end: patch.end,
-      });
+      if (drag.clip.kind === "sub" && typeof drag.clip.sentenceIndex === "number") {
+        onUpdateSubtitleCueTiming({
+          sentenceIndex: drag.clip.sentenceIndex,
+          start: patch.start,
+          end: patch.end,
+        });
+      } else {
+        onUpdateClipTiming({
+          layerId: drag.clip.layerId,
+          itemId: drag.clip.id,
+          start: patch.start,
+          end: patch.end,
+        });
+      }
       onSeek(patch.start);
       dragStateRef.current = null;
     }
@@ -117,7 +128,7 @@ export function Timeline({
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [duration, onSeek, onUpdateClipTiming]);
+  }, [duration, onSeek, onUpdateClipTiming, onUpdateSubtitleCueTiming]);
 
   return (
     <section className="relative flex shrink-0 flex-col border-t border-(--line) bg-(--bg-1)">
@@ -156,9 +167,9 @@ export function Timeline({
               const played = percent <= playheadPercent;
               return (
               <span
-                className={`w-px flex-1 rounded ${played ? "bg-(--amber)" : "bg-[oklch(0.45_0.04_60)]"}`}
+                className={`min-h-[2px] w-px flex-1 rounded ${played ? "bg-(--amber)" : "bg-[oklch(0.45_0.04_60)]"}`}
                 key={index}
-                style={{ height: `${height}%`, minHeight: "2px" }}
+                style={{ height }}
               />
               );
             })}
@@ -192,7 +203,7 @@ export function Timeline({
   );
 }
 
-function useTimelineRows(layers: Layer[], duration: number): TimelineRow[] {
+function useTimelineRows(layers: Layer[], duration: number, sentences: AlignedSentence[]): TimelineRow[] {
   const sorted = [...layers].sort((left, right) => ROW_ORDER_TOP_TO_BOTTOM.indexOf(left.kind) - ROW_ORDER_TOP_TO_BOTTOM.indexOf(right.kind));
   const rows: TimelineRow[] = [];
   let subtitleRowAdded = false;
@@ -217,9 +228,13 @@ function useTimelineRows(layers: Layer[], duration: number): TimelineRow[] {
       }));
 
     if (layer.kind === "sub") {
-      const subtitleClips = clips.length > 0 ? clips : synthesizeSubtitleClips(layer.id, duration, deriveSubtitleCueCount(rawItems));
+      const subtitleClips = sentences.length > 0
+        ? clipsFromSentences(layer.id, sentences)
+        : clips.length > 0
+          ? clips
+          : synthesizeSubtitleClips(layer.id, duration, deriveSubtitleCueCount(rawItems));
       rows.push({
-        count: Math.max(1, rawItems.length),
+        count: Math.max(1, subtitleClips.length),
         kind: "sub",
         label: layer.name,
         rowId: `${layer.id}-0`,
@@ -484,6 +499,19 @@ function synthesizeSubtitleClips(layerId: string, duration: number, cueCount: nu
       synthetic: true,
     };
   });
+}
+
+function clipsFromSentences(layerId: string, sentences: AlignedSentence[]): TimelineClip[] {
+  return sentences.map((sentence) => ({
+    end: sentence.end_s,
+    id: `${layerId}-s${sentence.index}`,
+    kind: "sub",
+    layerId,
+    mediaId: `s${sentence.index}`,
+    sentenceIndex: sentence.index,
+    sentences: [sentence.index, sentence.index],
+    start: sentence.start_s,
+  }));
 }
 
 function resolveMediaLabel(item: { mediaId?: string; mediaIds?: string[] }): string {

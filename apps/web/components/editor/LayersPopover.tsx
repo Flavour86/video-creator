@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
 import { Trash } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Button, IconButton } from "@/components/ui";
+import { IconButton } from "@/components/ui";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
 type LayersPopoverProps = {
   layers: Layer[];
-  onAdd: () => void;
   open: boolean;
   selected: { layerId: string; itemId: string } | null;
   onSelectLayerItem: (layerId: string, itemId: string) => void;
@@ -16,7 +15,6 @@ type LayersPopoverProps = {
 
 export function LayersPopover({
   layers,
-  onAdd,
   open,
   selected,
   onSelectLayerItem,
@@ -97,11 +95,6 @@ export function LayersPopover({
             ) : null}
           </div>
         ))}
-      </div>
-      <div className="mt-2 border-t border-(--line-soft) pt-2">
-        <Button className="w-full justify-center" onClick={onAdd} size="extra-small" variant="ghost">
-          {t("add")}
-        </Button>
       </div>
     </div>
   );

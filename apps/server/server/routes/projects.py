@@ -299,11 +299,39 @@ def _optional_str(value: object) -> str | None:
 
 
 def _write_valid_project_config(project_dir: Path, data: dict[str, Any]) -> str:
-    updated = Project.model_validate(data)
+    updated = Project.model_validate(_ensure_subtitles_layer_config(data))
     return save_config_snapshot(
         project_dir,
         updated.model_dump(mode="json", by_alias=True, exclude_none=False),
     )
+
+
+def _default_subtitles_layer() -> dict[str, object]:
+    return {
+        "id": "subtitles",
+        "kind": "sub",
+        "name": "Subtitles",
+        "items": [
+            {
+                "id": "sub-auto",
+                "auto": True,
+                "label": "Auto subtitles",
+                "style": "default",
+            }
+        ],
+    }
+
+
+def _ensure_subtitles_layer_config(data: dict[str, Any]) -> dict[str, Any]:
+    layers = data.get("layers")
+    if not isinstance(layers, list):
+        return data
+    for layer in layers:
+        if isinstance(layer, dict) and layer.get("kind") == "sub":
+            return data
+    updated = dict(data)
+    updated["layers"] = [_default_subtitles_layer(), *layers]
+    return updated
 
 
 def _output_for_setup_preset(output_preset: object) -> dict[str, object]:
@@ -448,7 +476,7 @@ def _materialize_project_from_setup_draft(setup_id: str) -> ProjectResponse | JS
                 "transcript": {"kind": "plain_text", "path": "transcript.txt"},
                 "output": _output_for_setup_preset(record.output_preset),
                 "media": media_entries,
-                "layers": [],
+                "layers": [_default_subtitles_layer()],
                 "subtitles": None,
                 "watermark": watermark_payload,
             }
@@ -947,8 +975,10 @@ async def get_project_config(project_id: str) -> ProjectConfigLoadResponse | JSO
     config = latest_config_for_project_path(project_dir)
     if config is None:
         config = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+        config = _ensure_subtitles_layer_config(config)
         config_hash = save_config_snapshot(project_dir, config)
     else:
+        config = _ensure_subtitles_layer_config(config)
         config_hash = save_config_snapshot(project_dir, config)
     row = get_project_by_path(project_dir)
     return ProjectConfigLoadResponse(

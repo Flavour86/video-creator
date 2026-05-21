@@ -97,10 +97,18 @@ const DRAG_LAYER: Layer[] = [{
   }],
 }];
 
+const SENTENCES = [
+  { index: 1, text: "First subtitle.", start_s: 0, end_s: 4, confidence_avg: 0.95 },
+  { index: 2, text: "Second subtitle.", start_s: 4, end_s: 8, confidence_avg: 0.94 },
+  { index: 3, text: "Third subtitle.", start_s: 8, end_s: 12, confidence_avg: 0.93 },
+  { index: 4, text: "Fourth subtitle.", start_s: 12, end_s: 16, confidence_avg: 0.92 },
+];
+
 function renderTimeline(overrides: Partial<ComponentProps<typeof Timeline>> = {}) {
   const onDeleteItem = vi.fn();
   const onSeek = vi.fn();
   const onSelect = vi.fn();
+  const onUpdateSubtitleCueTiming = vi.fn();
   const onUpdateClipTiming = vi.fn();
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -113,13 +121,15 @@ function renderTimeline(overrides: Partial<ComponentProps<typeof Timeline>> = {}
         onDeleteItem={onDeleteItem}
         onSeek={onSeek}
         onSelect={onSelect}
+        onUpdateSubtitleCueTiming={onUpdateSubtitleCueTiming}
         onUpdateClipTiming={onUpdateClipTiming}
         selected={{ layerId: "fg-z1", itemId: "fg-1" }}
+        sentences={SENTENCES}
         {...overrides}
       />
     </NextIntlClientProvider>,
   );
-  return { onDeleteItem, onSeek, onSelect, onUpdateClipTiming };
+  return { onDeleteItem, onSeek, onSelect, onUpdateClipTiming, onUpdateSubtitleCueTiming };
 }
 
 describe("Timeline", () => {
@@ -167,6 +177,26 @@ describe("Timeline", () => {
     const startPatch = onUpdateClipTiming.mock.calls.at(-1)?.[0] as { start: number; end: number };
     expect(startPatch.start).toBeCloseTo(6.5, 4);
     expect(startPatch.end).toBeCloseTo(7, 4);
+  });
+
+  it("renders aligned subtitle cues as top-row timeline clips and resizes them through transcript timing", () => {
+    const { onUpdateClipTiming, onUpdateSubtitleCueTiming } = renderTimeline({
+      layers: [LAYERS[0] as Layer],
+      selected: { layerId: "subtitles", itemId: "subtitles-s1" },
+    });
+    const clip = screen.getByRole("button", { name: "s1 over s1" });
+
+    fireEvent.mouseDown(screen.getByRole("button", { name: /Resize end s1 over s1/i }), { clientX: 0 });
+    fireEvent.mouseMove(window, { clientX: 25 });
+    fireEvent.mouseUp(window, { clientX: 25 });
+
+    expect(onUpdateClipTiming).not.toHaveBeenCalled();
+    expect(onUpdateSubtitleCueTiming).toHaveBeenCalledWith(expect.objectContaining({
+      sentenceIndex: 1,
+      start: 0,
+      end: 9,
+    }));
+    expect(clip).toBeInTheDocument();
   });
 
   it("shows clip x delete for non-background clips only", () => {

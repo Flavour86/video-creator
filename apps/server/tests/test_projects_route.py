@@ -144,9 +144,43 @@ async def test_create_project_from_setup_draft_materializes_final_layout(tmp_pat
     assert config.status_code == 200
     payload = config.json()["config"]
     assert payload["output"]["resolution"] == "9:16"
+    assert payload["layers"][0] == {
+        "id": "subtitles",
+        "kind": "sub",
+        "name": "Subtitles",
+        "items": [
+            {
+                "id": "sub-auto",
+                "auto": True,
+                "label": "Auto subtitles",
+                "style": "default",
+            }
+        ],
+    }
     assert payload["watermark"]["mediaId"] == "watermark-1"
     assert payload["media"][0]["name"] == "watermark.png"
     assert not (settings.app_db_path.parent / "setup-cache" / setup_id).exists()
+
+
+@pytest.mark.asyncio
+async def test_get_project_config_backfills_missing_subtitle_layer(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "missing-subtitles-layer"
+    _write_project(project_dir, "First sentence.")
+    touch_recent(project_dir, "Missing Subtitles Layer")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        project_id = (await client.get("/projects")).json()["items"][0]["project_id"]
+        response = await client.get(f"/projects/{project_id}/config")
+
+    assert response.status_code == 200
+    layers = response.json()["config"]["layers"]
+    assert layers[0]["kind"] == "sub"
+    assert layers[0]["items"][0]["id"] == "sub-auto"
 
 
 @pytest.mark.asyncio

@@ -153,6 +153,7 @@ export function Inspector({
   const isBackground = layer.kind === "bg";
   const isPip = layer.kind === "pip" && isPipItem(item);
   const bgAssets = backgroundAssets(media);
+  const assetSrc = asset ? mediaSrc(projectPath, asset) : null;
   const placement = isPip ? placementFromCoords(item.pip.posX, item.pip.posY) : "MC";
   const edgeMarginX = isPip ? edgeMarginXFromPlacement(placement, item.pip.posX) : 0;
   const edgeMarginY = isPip ? edgeMarginYFromPlacement(placement, item.pip.posY) : 0;
@@ -187,11 +188,11 @@ export function Inspector({
           type="button"
         >
           <div className="h-8 w-14 overflow-hidden rounded-sm bg-(--bg-3)">
-            {asset ? (
+            {assetSrc ? (
               <img
                 alt=""
                 className="h-full w-full object-cover"
-                src={mediaSrc(projectPath, asset)}
+                src={assetSrc}
               />
             ) : null}
           </div>
@@ -403,11 +404,15 @@ export function Inspector({
           <div className="col-span-2 grid grid-cols-3 gap-2">
             {bgAssets.map((entry) => (
               <div className="min-w-0 overflow-hidden rounded border border-(--line) bg-(--bg-2)" key={entry.filename}>
-                <img
-                  alt={entry.filename}
-                  className="aspect-video w-full object-cover"
-                  src={mediaSrc(projectPath, entry)}
-                />
+                {mediaSrc(projectPath, entry) ? (
+                  <img
+                    alt={entry.filename}
+                    className="aspect-video w-full object-cover"
+                    src={mediaSrc(projectPath, entry) ?? undefined}
+                  />
+                ) : (
+                  <div aria-hidden="true" className="aspect-video w-full bg-(--bg-3)" />
+                )}
                 <div className="truncate px-1.5 py-1 font-mono text-[10px] text-(--text-3)">{entry.filename}</div>
               </div>
             ))}
@@ -521,11 +526,12 @@ function backgroundAssets(media: EditorMediaItem[]): EditorMediaItem[] {
   return assets.length > 0 ? assets : media.filter((entry) => entry.kind === "image");
 }
 
-function mediaSrc(projectPath: string, item: EditorMediaItem): string {
+function mediaSrc(projectPath: string, item: EditorMediaItem): string | null {
   if (item.thumb_url) return `/api/server${item.thumb_url}`;
   if (item.path.startsWith("uploads/")) {
     return `/api/server/uploads/media-file?filename=${encodeURIComponent(item.mediaId)}`;
   }
+  if (!projectPath) return null;
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(item.filename)}`;
 }
 
@@ -631,7 +637,7 @@ function GlobalControls({
           type="button"
         >
           <span className="inline-flex items-center gap-[7px] text-(--text-2)"><Type aria-hidden="true" className="h-3.5 w-3.5" />{t("subtitles")}</span>
-          <span className="font-mono text-[10.5px] text-(--text-4)">{subtitles?.burn_in ? "Burn-in" : "Sidecar"}</span>
+          <span className="font-mono text-[10.5px] text-(--text-4)">{subtitles?.burn_in ? t("subtitlesVisible") : t("subtitlesHidden")}</span>
         </button>
         <button
           aria-label={hasBackground ? t("changeBackground") : t("addBackground")}

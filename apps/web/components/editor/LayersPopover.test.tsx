@@ -41,7 +41,6 @@ function renderPopover(overrides: Partial<ComponentProps<typeof LayersPopover>> 
         }],
       },
     ],
-    onAdd: vi.fn(),
     onClose: vi.fn(),
     onRemoveBackground: vi.fn(),
     onSelectLayerItem: vi.fn(),

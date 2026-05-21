@@ -48,20 +48,20 @@ describe("AssignModal", () => {
     render(<AssignModal {...BASE_PROPS} />);
     await waitFor(() => {
       expect(screen.getByAltText("img.jpg")).toBeInTheDocument();
-      expect(screen.getByText("▶")).toBeInTheDocument();
+      expect(screen.getAllByText("MP4").length).toBeGreaterThan(0);
     });
   });
 
   it("shows sentence range preview with time info", async () => {
     render(<AssignModal {...BASE_PROPS} fromSentence={1} toSentence={2} />);
     await waitFor(() => {
-      expect(screen.getByText(/s1–s2/)).toBeInTheDocument();
+      expect(screen.getByText(/0:00\.0–0:10\.0/)).toBeInTheDocument();
+      expect(screen.getByText("First sentence.")).toBeInTheDocument();
     });
   });
 
   it("shows validation error when from > to", async () => {
     render(<AssignModal {...BASE_PROPS} fromSentence={3} toSentence={1} />);
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
     await waitFor(() =>
       expect(screen.getByText(/"From" must be ≤ "To"/i)).toBeInTheDocument(),
     );
@@ -70,7 +70,7 @@ describe("AssignModal", () => {
   it("Confirm is disabled until an asset is selected", async () => {
     render(<AssignModal {...BASE_PROPS} />);
     await waitFor(() => screen.getByRole("dialog"));
-    const confirmBtn = screen.getByRole("button", { name: /confirm/i });
+    const confirmBtn = screen.getByRole("button", { name: /add to project/i });
     expect(confirmBtn).toBeDisabled();
   });
 
@@ -80,7 +80,7 @@ describe("AssignModal", () => {
     await waitFor(() => screen.getByRole("dialog"));
 
     fireEvent.click(screen.getByAltText("img.jpg").closest("button")!);
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to project/i }));
 
     await waitFor(() => {
       expect(onConfirm).toHaveBeenCalledOnce();
@@ -93,7 +93,8 @@ describe("AssignModal", () => {
     });
   });
 
-  it("shows overlap error when sentence range conflicts with existing item in same layer", async () => {
+  it("defaults to a new layer when an existing foreground layer has an overlapping range", async () => {
+    const onConfirm = vi.fn();
     const existingLayer = {
       id: "L-fg-1",
       kind: "fg" as const,
@@ -117,16 +118,18 @@ describe("AssignModal", () => {
         fromSentence={2}
         toSentence={4}
         layers={[existingLayer]}
+        onConfirm={onConfirm}
       />,
     );
     await waitFor(() => screen.getByRole("dialog"));
 
     fireEvent.click(screen.getByAltText("img.jpg").closest("button")!);
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to project/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/overlap/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledOnce());
+    const [updatedLayers] = onConfirm.mock.calls[0] as [Array<{ kind: string; items: unknown[] }>, string, string];
+    expect(updatedLayers.filter((layer) => layer.kind === "fg")).toHaveLength(2);
+    expect(screen.queryByText(/overlap/i)).not.toBeInTheDocument();
   });
 
   it("marks edited item cache invalid when edit mode changes clip fields", async () => {
@@ -159,7 +162,7 @@ describe("AssignModal", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Motion"), { target: { value: "zoom_in" } });
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     await waitFor(() => {
       expect(onConfirm).toHaveBeenCalledOnce();
@@ -199,13 +202,58 @@ describe("AssignModal", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     await waitFor(() => {
       expect(onConfirm).toHaveBeenCalledOnce();
       const [updatedLayers] = onConfirm.mock.calls[0] as [Array<{ id: string; items: Array<Record<string, unknown>> }>, string, string];
       const layer = updatedLayers.find((entry) => entry.id === "L-fg-1");
       expect(layer?.items[0]?.cache_status).toBe("warm");
+    });
+  });
+
+  it("moves an edited item when compositing changes without leaving the original clip behind", async () => {
+    const onConfirm = vi.fn();
+    const existingPipLayer = {
+      id: "L-pip-1",
+      kind: "pip" as const,
+      name: "PiP · z1",
+      items: [
+        {
+          id: "item-1",
+          mediaId: "img.jpg",
+          sentences: [1, 2] as [number, number],
+          start: 0,
+          end: 10,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          pip: { opacity: 100, posX: 88, posY: 88, radius: 12, size: 30 },
+          cache_status: "warm" as const,
+        },
+      ],
+    };
+    render(
+      <AssignModal
+        {...BASE_PROPS}
+        editItemId="item-1"
+        editLayerId="L-pip-1"
+        layers={[existingPipLayer]}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /fullscreen/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledOnce());
+    const [updatedLayers] = onConfirm.mock.calls[0] as [Array<{ id: string; kind: string; items: Array<Record<string, unknown>> }>, string, string];
+    expect(updatedLayers.find((layer) => layer.id === "L-pip-1")).toBeUndefined();
+    const fgLayer = updatedLayers.find((layer) => layer.kind === "fg");
+    expect(fgLayer?.items).toHaveLength(1);
+    expect(fgLayer?.items[0]).toMatchObject({
+      id: "item-1",
+      mediaId: "img.jpg",
+      cache_status: "invalid",
     });
   });
 });

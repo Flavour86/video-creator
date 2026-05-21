@@ -101,9 +101,12 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
     case "none":
       return;
     case "render-draft":
+      await page.getByRole("button", { name: "tokyo-skyline.jpg over s6-s7" }).first().click();
+      await waitForInspectorHeading(page, inspectorHeading("Foreground", 1));
+      await setReferencePlayback(page);
       await mockDraftRenderSocket(page);
       await page.getByRole("button", { name: /render draft/i }).click();
-      await page.getByText("Rendering draft : queued").waitFor();
+      await page.getByText(/pre-rendering clips/i).first().waitFor();
       return;
     case "transcript-selection-range": {
       const ninth = page.getByRole("button", { name: /A folder on your disk is the project/i }).first();
@@ -150,10 +153,21 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
     case "assign-modal":
       await openAssignModal(page);
       return;
+    case "assign-modal-edit":
+      await openAssignEditModal(page);
+      return;
+    case "assign-modal-edit-scrolled": {
+      await openAssignEditModal(page);
+      const body = page.getByTestId("assign-modal-body");
+      await body.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      return;
+    }
     case "assign-modal-scrolled": {
       await openAssignModal(page);
-      const dialog = page.getByRole("dialog").first();
-      await dialog.evaluate((node) => {
+      const body = page.getByTestId("assign-modal-body");
+      await body.evaluate((node) => {
         node.scrollTop = node.scrollHeight;
       });
       return;
@@ -348,9 +362,19 @@ async function locatePreviewCanvasRegion(page: Page): Promise<IgnoreRegion | nul
 }
 
 async function openAssignModal(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Layers -/i }).click();
-  await page.getByRole("button", { name: /Add layer item/i }).click();
-  await page.getByRole("heading", { name: /Assign media|Edit clip/i }).first().waitFor();
+  const sentence = page.getByRole("button", { name: /You record voice, you write transcript/i }).first();
+  await sentence.click({ button: "right" });
+  await page.getByRole("menuitem", { name: /Assign media to range/i }).click();
+  await page.getByRole("heading", { name: /Assign media|Edit media/i }).first().waitFor();
+  await page.getByRole("button", { name: /tokyo-skyline\.jpg/i }).first().click();
+}
+
+async function openAssignEditModal(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "callout-map.png over s6-s10" }).first().click();
+  await waitForInspectorHeading(page, inspectorHeading("PiP", 3));
+  const inspector = page.getByTestId("editor-layout-grid").locator("aside").nth(1);
+  await inspector.getByRole("button", { name: /callout-map\.png/i }).first().click();
+  await page.getByRole("heading", { name: /Edit media to range/i }).first().waitFor();
 }
 
 async function mockDraftRenderSocket(page: Page): Promise<void> {
@@ -368,6 +392,18 @@ async function mockDraftRenderSocket(page: Page): Promise<void> {
         queueMicrotask(() => {
           if (typeof this.onopen === "function") {
             this.onopen(new Event("open"));
+          }
+          const renderId = new URL(this.url, window.location.href).searchParams.get("render_id") ?? "r-visual";
+          if (typeof this.onmessage === "function") {
+            this.onmessage(new MessageEvent("message", {
+              data: JSON.stringify({
+                message: "Pre-rendering clips",
+                percent: 21,
+                render_id: renderId,
+                stage: "cache_warm",
+                type: "progress",
+              }),
+            }));
           }
         });
       }
