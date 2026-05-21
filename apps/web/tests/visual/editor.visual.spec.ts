@@ -21,6 +21,8 @@ const EDITOR_DEVICE_SCALE_FACTOR = 1.5;
 const UI_SSIM_THRESHOLD = 0.9;
 const TEST_PROJECT_ID = "p_test01";
 const DEFAULT_SCENE_SEEK_SECONDS = 38.399;
+const INSPECTOR_SEPARATOR = "\u00B7";
+const INSPECTOR_SEPARATOR_PATTERN = /[\u00B7\u2022\u2219\u30FB]/g;
 
 type IgnoreRegion = { x: number; y: number; width: number; height: number };
 
@@ -135,15 +137,15 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
       return;
     case "inspector-dark":
       await page.getByRole("button", { name: "quote-card.png over s9-s11" }).first().click();
-      await page.getByRole("heading", { name: /PiP/i }).waitFor();
+      await waitForInspectorHeading(page, inspectorHeading("PiP", 4));
       return;
     case "inspector-light":
       await page.getByRole("button", { name: "callout-map.png over s6-s10" }).first().click();
-      await page.getByRole("heading", { name: /PiP/i }).waitFor();
+      await waitForInspectorHeading(page, inspectorHeading("PiP", 3));
       return;
     case "inspector-foreground":
       await page.getByRole("button", { name: "quote-card.png over s10-s11" }).first().click();
-      await page.getByRole("heading", { name: /Foreground/i }).waitFor();
+      await waitForInspectorHeading(page, inspectorHeading("Foreground", 1));
       return;
     case "assign-modal":
       await openAssignModal(page);
@@ -170,6 +172,37 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
     }
   }
 }
+
+function normalizeInspectorHeading(text: string): string {
+  return text
+    .normalize("NFKC")
+    .replace(INSPECTOR_SEPARATOR_PATTERN, INSPECTOR_SEPARATOR)
+    .replace(/\s*\u00B7\s*/g, ` ${INSPECTOR_SEPARATOR} `)
+    .replace(/^(PiP|Foreground)\s*\u00B7\s*\1\s*\u00B7\s*/i, `$1 ${INSPECTOR_SEPARATOR} `)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inspectorHeading(kind: "PiP" | "Foreground", z: number): string {
+  return `${kind} ${INSPECTOR_SEPARATOR} z${z}`;
+}
+
+async function waitForInspectorHeading(page: Page, expected: string): Promise<void> {
+  const inspector = page.getByTestId("editor-layout-grid").locator("aside").nth(1);
+  const contextualHeading = inspector.getByRole("heading").filter({ hasText: /z\d+/i }).first();
+  const expectedNormalized = normalizeInspectorHeading(expected);
+  await contextualHeading.waitFor({ state: "visible" });
+  await expect
+    .poll(
+      async () => {
+        const heading = await contextualHeading.textContent();
+        return normalizeInspectorHeading(heading ?? "");
+      },
+      { message: `Expected inspector heading ${expectedNormalized}`, timeout: 10_000 },
+    )
+    .toBe(expectedNormalized);
+}
+
 async function prepareVisualPage(page: Page, theme: Theme): Promise<void> {
   await page.addInitScript(
     ({ projectId, themeValue }) => {

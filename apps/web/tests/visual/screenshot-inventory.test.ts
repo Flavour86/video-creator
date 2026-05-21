@@ -38,6 +38,14 @@ function entriesByScreenshot() {
   return entries;
 }
 
+function findDuplicates(items: ReadonlyArray<string>): string[] {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    counts.set(item, (counts.get(item) ?? 0) + 1);
+  }
+  return [...counts].filter(([, count]) => count > 1).map(([item]) => item);
+}
+
 describe("split-spec screenshot ownership inventory", () => {
   it("declares exactly one owner for every split-spec visuals reference", () => {
     const expected = new Set<string>();
@@ -149,7 +157,7 @@ describe("split-spec screenshot ownership inventory", () => {
 
     const missing = [...editorRefs].filter((screenshot) => !uniqueVisualCaseRefs.includes(screenshot));
     const extra = uniqueVisualCaseRefs.filter((screenshot) => !editorRefs.has(screenshot));
-    const duplicates = [...new Set(visualCaseRefs.filter((screenshot, index) => visualCaseRefs.indexOf(screenshot) !== index))];
+    const duplicates = findDuplicates(visualCaseRefs);
 
     expect(
       { duplicates, extra, missing },
