@@ -234,10 +234,16 @@ User: (1) yes, use HTML5 `<canvas>` in `PreviewSurface` with React + Canvas 2D; 
   3. Re-baseline canonical editor screenshots in `docs/designs/visuals/` to current implementation output, then keep strict SSIM checks on the new baseline.
 User: Option 1
 
-- [ ] 2026-05-20: Editor inspector visual references disagree on PiP motion controls. `editor-dark.png` default PiP inspector matches the merged `Motion & transitions` runtime section, while targeted `editor-inspector-dark.png` for PiP z4 shows separate `Motion`, `Easing`, and `Transitions` sections. Should runtime PiP inspector keep the merged section, restore separate sections for all PiP/foreground clips, or should the stale reference be re-authored before continuing strict SSIM work?
+- [X] 2026-05-20: Editor inspector visual references disagree on PiP motion controls. `editor-dark.png` default PiP inspector matches the merged `Motion & transitions` runtime section, while targeted `editor-inspector-dark.png` for PiP z4 shows separate `Motion`, `Easing`, and `Transitions` sections. Should runtime PiP inspector keep the merged section, restore separate sections for all PiP/foreground clips, or should the stale reference be re-authored before continuing strict SSIM work?
 User: The `Editor inspector` visual references should be following the one  `editor-inspector-dark.png`,  for all PiP/foreground/background clips, they stay with their own inspector
 
 - [X] 2026-05-19: Follow-up implementation boundary for Option 1 strict parity. After replacing editor visual fixtures with prototype-aligned data and media mocks, first-case SSIM improved from `0.2120` to `0.4157`, but remaining mismatch is now mostly structural layout/UI (left/center/right pane geometry and inspector control composition order/style). Which canonical implementation path should we take?
   1. Continue full runtime UI refactor so normal `/editor/:projectId` layout/components match the reference screenshots directly (broader product UI changes).
   2. Keep runtime UI behavior as-is and finish parity through a dedicated visual renderer mode (for example `?visual=1`) used only by visual tests, while preserving strict SSIM against the canonical references.
 User: Option 1
+
+- [X] 2026-05-21: Editor Task 17 requires performance-gate acceptance (cached-clip re-render target, filter-chain build for 50 layers, undo/redo replay 1000-op, 500 sentence chips, timeline drag at 100 clips), but current required verification commands (`pnpm test/lint/build`, web/server tests, visual editor tests) do not execute explicit benchmark assertions for these thresholds. Which canonical completion rule should Task 17 follow?
+  1. Treat current command-gate green runs as sufficient for Task 17 completion, and track performance targets separately.
+  2. Block Task 17 completion until we add executable benchmark checks for all listed targets and they pass.
+  3. Allow Task 17 completion with a committed performance report documenting measured results plus explicit owner/follow-up for any unmet target.
+User: Option 3

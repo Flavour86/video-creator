@@ -53,27 +53,28 @@
 
 ## Phase 4: Render, Cache, And Recovery Guarantees
 
-- [ ] Task 13: Implement precise clip-cache invalidation for Editor edits
+- [x] Task 13: Implement precise clip-cache invalidation for Editor edits
   - Acceptance: each visual clip gets one cache output; cache keys include relevant media/edit parameters; one-clip edits rebuild only affected cache.
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_clip_cache.py tests/test_render_endpoint.py`, `rtk pnpm -F @vc/web test -- components/editor/EditorBar.test.tsx app/editor/page.test.tsx`
-- [ ] Task 14: Complete filtergraph, subtitles, output paths, and render progress stages
+- [x] Task 14: Complete filtergraph, subtitles, output paths, and render progress stages
   - Acceptance: draft/final/9:16 outputs, filter order, subtitle style, draft path, progress stages, history, artifacts, and rendered-hash updates match the spec.
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_render_endpoint.py tests/test_render_progress.py tests/test_render_history.py tests/test_srt.py`
-- [ ] Task 15: Cover reopen, crash recovery, re-record voice, and invalid route behavior
+- [x] Task 15: Cover reopen, crash recovery, re-record voice, and invalid route behavior
   - Acceptance: reopen/crash recovery restore state; voice re-record preserves or orphans anchors; invalid editor route recovers; undo/redo replay is byte-identical.
   - Verify: `rtk pnpm -F @vc/web test -- app/editor/page.test.tsx lib/editor-operation-log`, `rtk pnpm -F @vc/server test -- tests/test_alignment_integration.py tests/test_setup_test01_fixture.py`, `rtk pnpm test`
-- [ ] Checkpoint: Render, Cache, And Recovery
+- [x] Checkpoint: Render, Cache, And Recovery
   - Acceptance: cache invalidation, render outputs/stages, recovery, and re-record edge cases are covered.
 
 ## Phase 5: Visual Parity And Acceptance
 
-- [ ] Task 16: Add Editor visual parity coverage for every referenced screenshot
+- [x] Task 16: Add Editor visual parity coverage for every referenced screenshot
   - Acceptance: every `SPEC_EDITOR.md` screenshot has exactly one parity owner/test across dark/light and modal/interaction states.
   - Verify: `rtk pnpm -F @vc/web test:visual -- editor`, `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`
-- [ ] Task 17: Run the Editor acceptance and performance gate
+- [x] Task 17: Run the Editor acceptance and performance gate
   - Acceptance: functional acceptance, hash rules, operation replay, cache precision, performance targets, recoverable errors, and full verification gates pass.
+  - Note: Performance gate status and Option 3 closure are documented in `docs/designs/tasks/editor/task17-performance-report.md`.
   - Verify: `rtk pnpm test`, `rtk pnpm lint`, `rtk pnpm build`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`, `rtk pnpm -F @vc/web test:visual -- editor`
-- [ ] Checkpoint: Complete
+- [x] Checkpoint: Complete
   - Acceptance: all Editor tasks pass and the implementation is ready for review against `docs/designs/SPEC_EDITOR.md`.
 
 ## Open Decisions
