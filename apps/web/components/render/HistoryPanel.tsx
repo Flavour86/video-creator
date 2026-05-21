@@ -12,11 +12,12 @@ type HistoryPanelProps = {
   entries: RenderHistoryEntry[];
   onDelete: (id: string) => void;
   onPurge: () => void;
+  revealEnabled: boolean;
   onReveal: (path: string) => void;
   onSelect: (id: string) => void;
 };
 
-export function HistoryPanel({ activeId, entries, onDelete, onPurge, onReveal, onSelect }: HistoryPanelProps) {
+export function HistoryPanel({ activeId, entries, onDelete, onPurge, revealEnabled, onReveal, onSelect }: HistoryPanelProps) {
   const t = useTranslations("pages.render.history");
   const [deleteTarget, setDeleteTarget] = useState<RenderHistoryEntry | null>(null);
 
@@ -54,9 +55,9 @@ export function HistoryPanel({ activeId, entries, onDelete, onPurge, onReveal, o
               <span className="pr-[6px]">
                 {excluded ? (
                   <IconButton icon={Trash} label={t("delete")} onClick={() => setDeleteTarget(entry)} />
-                ) : (
+                ) : revealEnabled ? (
                   <IconButton icon={Folder} label={t("reveal")} onClick={() => onReveal(entry.outputPath)} />
-                )}
+                ) : null}
               </span>
             </div>
           );

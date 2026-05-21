@@ -8,9 +8,10 @@ type AfterRenderPanelProps = {
   job: RenderJob | null;
   onPlay: () => void;
   onReveal: () => void;
+  revealEnabled: boolean;
 };
 
-export function AfterRenderPanel({ job, onPlay, onReveal }: AfterRenderPanelProps) {
+export function AfterRenderPanel({ job, onPlay, onReveal, revealEnabled }: AfterRenderPanelProps) {
   const t = useTranslations("pages.render.after");
   const enabled = job?.phase === "done" && job.outputExists;
 
@@ -18,10 +19,12 @@ export function AfterRenderPanel({ job, onPlay, onReveal }: AfterRenderPanelProp
     <section className="flex flex-col overflow-hidden rounded-[10px] border border-(--line) bg-(--bg-2)">
       <PanelHead title={t("head")} />
       <div className="flex flex-col gap-[8px] px-[14px] py-[14px]">
-        <Button aria-disabled={!enabled} disabled={!enabled} onClick={onReveal} variant="ghost">
-          <Folder aria-hidden="true" className="h-4 w-4" />
-          {t("reveal")}
-        </Button>
+        {revealEnabled ? (
+          <Button aria-disabled={!enabled} disabled={!enabled} onClick={onReveal} variant="ghost">
+            <Folder aria-hidden="true" className="h-4 w-4" />
+            {t("reveal")}
+          </Button>
+        ) : null}
         <Button aria-disabled={!enabled} disabled={!enabled} onClick={onPlay} variant="ghost">
           <Play aria-hidden="true" className="h-4 w-4" />
           {t("playLocally")}

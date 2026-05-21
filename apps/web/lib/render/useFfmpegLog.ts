@@ -22,7 +22,7 @@ export function useFfmpegLog(jobId: string | null, phase: string) {
         pushLine(setLines, { glyph: "info", line: event.line, timestamp: timestamp() });
       } else if (event.type === "progress") {
         pushLine(setLines, {
-          glyph: event.stage === "done" ? "ok" : event.stage === "error" ? "err" : event.stage === "cancelled" ? "warn" : undefined,
+          glyph: event.stage === "done" ? "ok" : event.stage === "error" || event.stage === "failed" ? "err" : event.stage === "cancelled" ? "warn" : undefined,
           line: event.message ?? `${event.stage} ${Math.round(event.percent)}%`,
           timestamp: timestamp(),
         });
@@ -35,7 +35,7 @@ export function useFfmpegLog(jobId: string | null, phase: string) {
   }, [jobId]);
 
   useEffect(() => {
-    if (phase === "done" || phase === "error" || phase === "cancelled") {
+    if (phase === "done" || phase === "failed" || phase === "ffmpegFatalError" || phase === "cancelled") {
       setPaused(true);
     }
   }, [phase]);

@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type RenderStage = "cache_warm" | "compose" | "muxing" | "done" | "error";
+export type RenderStage =
+  | "queued"
+  | "verify_alignment_cache"
+  | "pre_render_cached_clips"
+  | "build_subtitles_srt"
+  | "compose_filtergraph"
+  | "mux_mp4_faststart"
+  | "append_render_history_to_app_db"
+  | "done"
+  | "failed"
+  | "cancelled"
+  | "cache_warm"
+  | "compose"
+  | "muxing"
+  | "error";
 export type RenderPreset = "draft" | "final";
 
 export type RenderProgressEvent = {
@@ -22,7 +36,7 @@ export type RenderProgressState =
       status: "running";
       renderId: string;
       outputPath: string;
-      stage: Exclude<RenderStage, "done" | "error">;
+      stage: Exclude<RenderStage, "done" | "error" | "failed" | "cancelled">;
       percent: number;
       etaSeconds?: number;
       currentFrame?: number;
@@ -66,13 +80,13 @@ export function useRenderProgress(projectPath: string) {
         ws.close();
         return;
       }
-      if (event.stage === "error") {
+      if (event.stage === "error" || event.stage === "failed" || event.stage === "cancelled") {
         setState({
           status: "error",
           renderId,
           outputPath,
           percent: event.percent,
-          message: event.message ?? "Render failed.",
+          message: event.message ?? (event.stage === "cancelled" ? "Render cancelled." : "Render failed."),
         });
         ws.close();
         return;
@@ -127,9 +141,9 @@ export function useRenderProgress(projectPath: string) {
         status: "running",
         renderId: body.render_id,
         outputPath: body.output_path,
-        stage: "cache_warm",
+        stage: "queued",
         percent: 0,
-        message: "verifying cache",
+        message: "queued",
       });
       connect(body.render_id, body.output_path);
     } catch (error) {

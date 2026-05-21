@@ -29,6 +29,7 @@ function RenderContent() {
   const cancelRender = useRenderCancel(projectId);
   const reveal = useSystemReveal();
   const open = useSystemOpen();
+  const revealEnabled = job?.capabilities?.reveal_in_explorer_supported ?? false;
 
   const goEditor = useCallback(() => {
     const target = projectId ? `/editor?projectId=${encodeURIComponent(projectId)}` : "/editor";
@@ -40,9 +41,10 @@ function RenderContent() {
   }, [projectId, router]);
 
   const revealOutput = useCallback((path?: string) => {
+    if (!revealEnabled) return;
     const target = path ?? job?.outputPath;
     if (target && job?.outputExists) void reveal(target);
-  }, [job?.outputExists, job?.outputPath, reveal]);
+  }, [job?.outputExists, job?.outputPath, reveal, revealEnabled]);
 
   const playOutput = useCallback(() => {
     if (job?.outputPath && job.outputExists) void open(job.outputPath);
@@ -63,7 +65,7 @@ function RenderContent() {
   }, [job, projectId, selectedJobId, startFinal]);
 
   useEffect(() => {
-    if (job?.phase === "done" || job?.phase === "error" || job?.phase === "cancelled") {
+    if (job?.phase === "done" || job?.phase === "failed" || job?.phase === "ffmpegFatalError" || job?.phase === "cancelled") {
       void refresh();
     }
   }, [job?.phase, refresh]);
@@ -93,6 +95,7 @@ function RenderContent() {
         onCancel={() => setConfirmCancel(true)}
         onRetry={() => void startFinal()}
         onReveal={() => revealOutput()}
+        revealEnabled={revealEnabled}
       />
       <RenderCard job={job} />
       <LogCard job={job} />
@@ -107,6 +110,7 @@ function RenderContent() {
         onPurgeHistory={() => {
           void purgeAll().then(refresh);
         }}
+        revealEnabled={revealEnabled}
         onReveal={revealOutput}
         onSelectHistory={(id) => router.replace(`/render?projectId=${encodeURIComponent(projectId)}&job=${encodeURIComponent(id)}` as Parameters<typeof router.replace>[0])}
       />

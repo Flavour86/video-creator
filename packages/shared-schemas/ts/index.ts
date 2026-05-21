@@ -90,7 +90,24 @@ export type ProjectStatus = "ready" | "missing" | "corrupt" | "alignment_pending
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "RenderStatus".
  */
-export type RenderStatus = "queued" | "running" | "done" | "error" | "cancelled" | "partial";
+export type RenderStatus =
+  | "idle"
+  | "queued"
+  | "verifying"
+  | "prerender"
+  | "subtitles"
+  | "composing"
+  | "muxing"
+  | "logging_history"
+  | "done"
+  | "cancelling"
+  | "cancelled"
+  | "failed"
+  | "output_missing"
+  | "partial_excluded"
+  | "ffmpeg_warning"
+  | "ffmpeg_fatal_error"
+  | "history_empty";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "LauncherRenderStatusTag".
@@ -103,6 +120,45 @@ export type LauncherRenderStatusTag = "unrendered" | "queued" | "rendering" | "r
 export type RenderPreset = "draft" | "final";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderResolution".
+ */
+export type RenderResolution = "1920x1080" | "1280x720" | "1080x1920";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderStage".
+ */
+export type RenderStage =
+  | "queued"
+  | "verify_alignment_cache"
+  | "pre_render_cached_clips"
+  | "build_subtitles_srt"
+  | "compose_filtergraph"
+  | "mux_mp4_faststart"
+  | "append_render_history_to_app_db";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderPageState".
+ */
+export type RenderPageState =
+  | "idle"
+  | "queued"
+  | "verifying"
+  | "prerender"
+  | "subtitles"
+  | "composing"
+  | "muxing"
+  | "logging_history"
+  | "done"
+  | "cancelling"
+  | "cancelled"
+  | "failed"
+  | "output_missing"
+  | "partial_excluded"
+  | "ffmpeg_warning"
+  | "ffmpeg_fatal_error"
+  | "history_empty";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "SetupOutputPreset".
  */
 export type SetupOutputPreset = "draft" | "final" | "vertical";
@@ -111,10 +167,12 @@ export type SetupOutputPreset = "draft" | "final" | "vertical";
  * via the `definition` "RenderArtifactKind".
  */
 export type RenderArtifactKind =
+  | "output"
   | "final_mp4"
   | "draft_mp4"
   | "partial"
   | "log"
+  | "graph"
   | "filtergraph"
   | "subtitles"
   | "thumbnail"
@@ -129,6 +187,11 @@ export type SetupSubtitleGenerationState = "ready" | "running" | "succeeded" | "
  * via the `definition` "SetupSubtitleCacheState".
  */
 export type SetupSubtitleCacheState = "unknown" | "hit" | "miss";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderEventKind".
+ */
+export type RenderEventKind = "progress" | "log";
 
 export interface Project {
   version: 1;
@@ -550,21 +613,46 @@ export interface RenderArtifact {
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderEvent".
+ */
+export interface RenderEvent {
+  event_id: string;
+  render_id: string;
+  kind: RenderEventKind;
+  stage: RenderStage;
+  state?: RenderPageState | null;
+  percent?: number | null;
+  message?: string | null;
+  detail_json?: string | null;
+  created_at: string;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "RenderBackendCapabilities".
+ */
+export interface RenderBackendCapabilities {
+  reveal_in_explorer_supported: boolean;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "RenderHistoryRow".
  */
 export interface RenderHistoryRow {
   render_id: string;
   project_id: string;
-  preset: RenderPreset;
+  preset?: RenderPreset | null;
+  resolution?: RenderResolution | null;
   status: RenderStatus;
   filename?: string | null;
-  resolution?: string | null;
-  duration?: number | null;
+  duration_s?: number | null;
   file_size?: number | null;
+  output_path: string;
+  output_exists: boolean;
   config_hash?: string | null;
   created_at: string;
   completed_at?: string | null;
   artifacts: RenderArtifact[];
+  events: RenderEvent[];
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema

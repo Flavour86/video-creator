@@ -24,7 +24,8 @@ export function BigBar({ job }: { job: RenderJob | null }) {
 
 function fillClassForPhase(phase: RenderJob["phase"] | undefined): string {
   if (phase === "done") return "bg-(--green)";
-  if (phase === "error") return "bg-(--red)";
+  if (phase === "failed" || phase === "ffmpegFatalError") return "bg-(--red)";
+  if (phase === "ffmpegWarning") return "bg-(--amber)";
   if (phase === "cancelled") return "bg-(--bg-4)";
   return "bg-gradient-to-r from-[var(--amber)] to-[var(--amber-light)]";
 }

@@ -264,15 +264,28 @@ def _render_status_for_contract(status: object) -> str | None:
         return None
     value = str(status)
     mapping = {
+        "idle": "idle",
         "queued": "queued",
-        "running": "running",
-        "rendering": "running",
+        "running": "verifying",
+        "rendering": "verifying",
+        "verifying": "verifying",
+        "prerender": "prerender",
+        "subtitles": "subtitles",
+        "composing": "composing",
+        "muxing": "muxing",
+        "logging_history": "logging_history",
         "done": "done",
         "rendered": "done",
-        "error": "error",
-        "failed": "error",
+        "cancelling": "cancelling",
         "cancelled": "cancelled",
-        "partial": "partial",
+        "error": "failed",
+        "failed": "failed",
+        "output_missing": "output_missing",
+        "partial": "partial_excluded",
+        "partial_excluded": "partial_excluded",
+        "ffmpeg_warning": "ffmpeg_warning",
+        "ffmpeg_fatal_error": "ffmpeg_fatal_error",
+        "history_empty": "history_empty",
     }
     return mapping.get(value)
 
@@ -283,12 +296,25 @@ def _launcher_render_status(row: dict[str, object]) -> LauncherRenderStatusTag |
         return LauncherRenderStatusTag.unrendered
     mapping = {
         "queued": LauncherRenderStatusTag.queued,
+        "idle": LauncherRenderStatusTag.unrendered,
         "running": LauncherRenderStatusTag.rendering,
         "rendering": LauncherRenderStatusTag.rendering,
+        "verifying": LauncherRenderStatusTag.rendering,
+        "prerender": LauncherRenderStatusTag.rendering,
+        "subtitles": LauncherRenderStatusTag.rendering,
+        "composing": LauncherRenderStatusTag.rendering,
+        "muxing": LauncherRenderStatusTag.rendering,
+        "logging_history": LauncherRenderStatusTag.rendering,
+        "cancelling": LauncherRenderStatusTag.rendering,
         "done": LauncherRenderStatusTag.rendered,
         "rendered": LauncherRenderStatusTag.rendered,
         "error": LauncherRenderStatusTag.failed,
         "failed": LauncherRenderStatusTag.failed,
+        "output_missing": LauncherRenderStatusTag.failed,
+        "partial": LauncherRenderStatusTag.failed,
+        "partial_excluded": LauncherRenderStatusTag.failed,
+        "ffmpeg_warning": LauncherRenderStatusTag.failed,
+        "ffmpeg_fatal_error": LauncherRenderStatusTag.failed,
         "cancelled": LauncherRenderStatusTag.cancelled,
     }
     return mapping.get(str(status), LauncherRenderStatusTag.failed)

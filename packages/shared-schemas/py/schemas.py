@@ -60,12 +60,23 @@ class ProjectStatus(Enum):
 
 
 class RenderStatus(Enum):
+    idle = 'idle'
     queued = 'queued'
-    running = 'running'
+    verifying = 'verifying'
+    prerender = 'prerender'
+    subtitles = 'subtitles'
+    composing = 'composing'
+    muxing = 'muxing'
+    logging_history = 'logging_history'
     done = 'done'
-    error = 'error'
+    cancelling = 'cancelling'
     cancelled = 'cancelled'
-    partial = 'partial'
+    failed = 'failed'
+    output_missing = 'output_missing'
+    partial_excluded = 'partial_excluded'
+    ffmpeg_warning = 'ffmpeg_warning'
+    ffmpeg_fatal_error = 'ffmpeg_fatal_error'
+    history_empty = 'history_empty'
 
 
 class LauncherRenderStatusTag(Enum):
@@ -82,6 +93,42 @@ class RenderPreset(Enum):
     final = 'final'
 
 
+class RenderResolution(Enum):
+    field_1920x1080 = '1920x1080'
+    field_1280x720 = '1280x720'
+    field_1080x1920 = '1080x1920'
+
+
+class RenderStage(Enum):
+    queued = 'queued'
+    verify_alignment_cache = 'verify_alignment_cache'
+    pre_render_cached_clips = 'pre_render_cached_clips'
+    build_subtitles_srt = 'build_subtitles_srt'
+    compose_filtergraph = 'compose_filtergraph'
+    mux_mp4_faststart = 'mux_mp4_faststart'
+    append_render_history_to_app_db = 'append_render_history_to_app_db'
+
+
+class RenderPageState(Enum):
+    idle = 'idle'
+    queued = 'queued'
+    verifying = 'verifying'
+    prerender = 'prerender'
+    subtitles = 'subtitles'
+    composing = 'composing'
+    muxing = 'muxing'
+    logging_history = 'logging_history'
+    done = 'done'
+    cancelling = 'cancelling'
+    cancelled = 'cancelled'
+    failed = 'failed'
+    output_missing = 'output_missing'
+    partial_excluded = 'partial_excluded'
+    ffmpeg_warning = 'ffmpeg_warning'
+    ffmpeg_fatal_error = 'ffmpeg_fatal_error'
+    history_empty = 'history_empty'
+
+
 class SetupOutputPreset(Enum):
     draft = 'draft'
     final = 'final'
@@ -89,10 +136,12 @@ class SetupOutputPreset(Enum):
 
 
 class RenderArtifactKind(Enum):
+    output = 'output'
     final_mp4 = 'final_mp4'
     draft_mp4 = 'draft_mp4'
     partial = 'partial'
     log = 'log'
+    graph = 'graph'
     filtergraph = 'filtergraph'
     subtitles = 'subtitles'
     thumbnail = 'thumbnail'
@@ -650,6 +699,35 @@ class RenderArtifact(BaseModel):
     reusable: bool
 
 
+class RenderEventKind(Enum):
+    progress = 'progress'
+    log = 'log'
+
+
+class RenderEvent(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    event_id: constr(min_length=1)
+    render_id: constr(min_length=1)
+    kind: RenderEventKind
+    stage: RenderStage
+    state: RenderPageState | None = None
+    percent: confloat(ge=0.0, le=100.0) | None = None
+    message: str | None = None
+    detail_json: str | None = None
+    created_at: AwareDatetime
+
+
+class RenderBackendCapabilities(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    reveal_in_explorer_supported: bool
+
+
 class RenderHistoryRow(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -657,16 +735,19 @@ class RenderHistoryRow(BaseModel):
     )
     render_id: constr(min_length=1)
     project_id: constr(min_length=1)
-    preset: RenderPreset
+    preset: RenderPreset | None = None
+    resolution: RenderResolution | None = None
     status: RenderStatus
     filename: str | None = None
-    resolution: str | None = None
-    duration: confloat(ge=0.0) | None = None
+    duration_s: confloat(ge=0.0) | None = None
     file_size: conint(ge=0) | None = None
+    output_path: constr(min_length=1)
+    output_exists: bool
     config_hash: str | None = None
     created_at: AwareDatetime
     completed_at: AwareDatetime | None = None
     artifacts: list[RenderArtifact]
+    events: list[RenderEvent]
 
 
 class ProjectConfigSaveResponse(BaseModel):

@@ -63,3 +63,67 @@ def test_shared_schemas_include_launcher_and_setup_contracts() -> None:
     assert "render_status_tag" in project_card_fields
     assert "last_render_at" in project_card_fields
     assert not project_card_fields["last_render_at"].is_required()
+
+
+def test_shared_schemas_include_spec_render_contracts() -> None:
+    assert hasattr(schemas, "RenderPreset")
+    assert [item.value for item in schemas.RenderPreset] == ["draft", "final"]
+
+    assert hasattr(schemas, "RenderResolution")
+    assert [item.value for item in schemas.RenderResolution] == [
+        "1920x1080",
+        "1280x720",
+        "1080x1920",
+    ]
+
+    assert hasattr(schemas, "RenderStage")
+    assert [item.value for item in schemas.RenderStage] == [
+        "queued",
+        "verify_alignment_cache",
+        "pre_render_cached_clips",
+        "build_subtitles_srt",
+        "compose_filtergraph",
+        "mux_mp4_faststart",
+        "append_render_history_to_app_db",
+    ]
+
+    assert hasattr(schemas, "RenderPageState")
+    assert [item.value for item in schemas.RenderPageState] == [
+        "idle",
+        "queued",
+        "verifying",
+        "prerender",
+        "subtitles",
+        "composing",
+        "muxing",
+        "logging_history",
+        "done",
+        "cancelling",
+        "cancelled",
+        "failed",
+        "output_missing",
+        "partial_excluded",
+        "ffmpeg_warning",
+        "ffmpeg_fatal_error",
+        "history_empty",
+    ]
+
+    assert hasattr(schemas, "RenderBackendCapabilities")
+    capabilities_fields = schemas.RenderBackendCapabilities.model_fields
+    assert "reveal_in_explorer_supported" in capabilities_fields
+
+    assert hasattr(schemas, "RenderHistoryRow")
+    history_fields = schemas.RenderHistoryRow.model_fields
+    for field_name in (
+        "filename",
+        "preset",
+        "resolution",
+        "duration_s",
+        "status",
+        "output_path",
+        "output_exists",
+        "file_size",
+        "artifacts",
+        "events",
+    ):
+        assert field_name in history_fields

@@ -2,7 +2,7 @@
 
 ## Phase 1: Contracts And Public Surface
 
-- [ ] Task 1: Lock the SPEC_RENDER shared contract
+- [x] Task 1: Lock the SPEC_RENDER shared contract
   - Acceptance: generated types cover presets, resolutions, stages, page states, history rows, output metadata, artifacts/events, and backend capabilities.
   - Verify: `rtk pnpm gen:types`, `rtk pnpm gen:py`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`
 - [ ] Task 2: Replace the backend render API with the spec surface

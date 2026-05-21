@@ -263,7 +263,7 @@ async def test_subscriber_recovers_latest_event_from_db(
     events = subscribe_progress(render_id, project_id=project_id)
     event = await events.__anext__()
     await events.aclose()
-    assert event.stage == "compose"
+    assert event.stage == "compose_filtergraph"
     assert event.percent == 55.0
     assert event.eta_seconds == 9
     assert event.current_frame == 320

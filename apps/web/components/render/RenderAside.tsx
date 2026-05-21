@@ -10,6 +10,7 @@ type RenderAsideProps = {
   onDeleteHistory: (id: string) => void;
   onPlay: () => void;
   onPurgeHistory: () => void;
+  revealEnabled: boolean;
   onReveal: (path?: string) => void;
   onSelectHistory: (id: string) => void;
 };
@@ -21,6 +22,7 @@ export function RenderAside({
   onDeleteHistory,
   onPlay,
   onPurgeHistory,
+  revealEnabled,
   onReveal,
   onSelectHistory,
 }: RenderAsideProps) {
@@ -32,10 +34,11 @@ export function RenderAside({
         entries={entries}
         onDelete={onDeleteHistory}
         onPurge={onPurgeHistory}
+        revealEnabled={revealEnabled}
         onReveal={(path) => onReveal(path)}
         onSelect={onSelectHistory}
       />
-      <AfterRenderPanel job={job} onPlay={onPlay} onReveal={() => onReveal()} />
+      <AfterRenderPanel job={job} onPlay={onPlay} onReveal={() => onReveal()} revealEnabled={revealEnabled} />
     </aside>
   );
 }

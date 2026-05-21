@@ -1,6 +1,9 @@
 """Render endpoints."""
 from __future__ import annotations
 
+import os
+import shutil
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
@@ -15,6 +18,8 @@ from server.db.renders import (
     delete_renders,
     get_render,
     get_render_for_project,
+    list_render_artifacts,
+    list_render_events,
     list_renders_for_project,
 )
 from server.db.renders import (
@@ -27,7 +32,7 @@ from server.pipeline.render import RenderError
 router = APIRouter(tags=["render"])
 
 
-RenderResolution = Literal["1080p", "720p", "9:16", "1920x1080", "1280x720", "1080x1920"]
+RenderResolution = Literal["1920x1080", "1280x720", "1080x1920"]
 
 
 class RenderRequest(BaseModel):
@@ -40,17 +45,60 @@ class RenderResponse(BaseModel):
     output_path: str
 
 
+class RenderCapabilitiesResponse(BaseModel):
+    reveal_in_explorer_supported: bool
+
+
+class RenderArtifactResponse(BaseModel):
+    artifact_id: str
+    render_id: str
+    project_id: str
+    kind: str
+    path: str
+    size: int | None
+    hash: str | None = None
+    created_at: str
+    playable: bool
+    reusable: bool
+
+
+class RenderEventResponse(BaseModel):
+    event_id: str
+    render_id: str
+    kind: Literal["progress", "log"]
+    stage: Literal[
+        "queued",
+        "verify_alignment_cache",
+        "pre_render_cached_clips",
+        "build_subtitles_srt",
+        "compose_filtergraph",
+        "mux_mp4_faststart",
+        "append_render_history_to_app_db",
+    ]
+    state: str | None
+    percent: float | None
+    message: str | None
+    detail_json: str | None
+    created_at: str
+
+
 class RenderHistoryResponse(BaseModel):
     id: str
+    render_id: str
+    project_id: str
     output_path: str
     output_exists: bool
-    preset: str
+    preset: str | None
+    resolution: RenderResolution | None
     started_at: str
     finished_at: str | None
     duration_s: float | None
     status: str
     message: str | None
     file_size: int | None
+    artifacts: list[RenderArtifactResponse]
+    events: list[RenderEventResponse]
+    capabilities: RenderCapabilitiesResponse
 
 
 class RenderCancelRequest(BaseModel):
@@ -396,17 +444,25 @@ def _render_history_response(row: Mapping[str, object]) -> RenderHistoryResponse
     output_path = _resolve_stored_path(str(row["output_path"]))
     output_exists = output_path.is_file()
     duration = row["duration_s"]
+    render_id = str(row["id"])
+    project_id = str(row["project_id"])
     return RenderHistoryResponse(
-        id=str(row["id"]),
+        id=render_id,
+        render_id=render_id,
+        project_id=project_id,
         output_path=str(output_path),
         output_exists=output_exists,
-        preset=str(row["preset"]),
+        preset=str(row["preset"]) if row["preset"] is not None else None,
+        resolution=_resolution_for_contract(row.get("resolution")),
         started_at=str(row["started_at"]),
         finished_at=str(row["finished_at"]) if row["finished_at"] is not None else None,
         duration_s=float(duration) if isinstance(duration, int | float | str) else None,
         status=str(row["status"]),
         message=str(row["message"]) if row["message"] is not None else None,
         file_size=output_path.stat().st_size if output_exists else None,
+        artifacts=_artifact_rows_for_contract(render_id, project_id),
+        events=_event_rows_for_contract(render_id, str(row["status"])),
+        capabilities=RenderCapabilitiesResponse(reveal_in_explorer_supported=_reveal_in_explorer_supported()),
     )
 
 
@@ -439,3 +495,147 @@ def _delete_output_file(path: Path) -> None:
         return
     if safe_path.is_file():
         safe_path.unlink()
+
+
+def _resolution_for_contract(value: object) -> RenderResolution | None:
+    if value is None:
+        return None
+    raw = str(value)
+    mapping: dict[str, RenderResolution] = {
+        "1080p": "1920x1080",
+        "720p": "1280x720",
+        "9:16": "1080x1920",
+        "1920x1080": "1920x1080",
+        "1280x720": "1280x720",
+        "1080x1920": "1080x1920",
+    }
+    return mapping.get(raw)
+
+
+def _artifact_rows_for_contract(render_id: str, project_id: str) -> list[RenderArtifactResponse]:
+    artifacts: list[RenderArtifactResponse] = []
+    for row in list_render_artifacts(render_id):
+        kind = str(row.get("kind", "companion"))
+        path = str(row.get("path", ""))
+        artifacts.append(
+            RenderArtifactResponse(
+                artifact_id=str(row.get("id", "")),
+                render_id=render_id,
+                project_id=project_id,
+                kind=kind,
+                path=path,
+                size=int(row["size_bytes"]) if isinstance(row.get("size_bytes"), int | float | str) else None,
+                created_at=str(row.get("created_at", "")),
+                playable=kind == "output" and Path(path).is_file(),
+                reusable=kind != "partial",
+            )
+        )
+    return artifacts
+
+
+def _event_rows_for_contract(render_id: str, status: str) -> list[RenderEventResponse]:
+    events: list[RenderEventResponse] = []
+    for row in list_render_events(render_id):
+        phase = str(row.get("phase", "compose"))
+        message = str(row["message"]) if row.get("message") is not None else None
+        events.append(
+            RenderEventResponse(
+                event_id=str(row.get("id", "")),
+                render_id=render_id,
+                kind="progress",
+                stage=_stage_for_contract(phase, message),
+                state=_state_for_contract(status),
+                percent=float(row["progress"]) if isinstance(row.get("progress"), int | float | str) else None,
+                message=message,
+                detail_json=str(row["detail_json"]) if row.get("detail_json") is not None else None,
+                created_at=str(row.get("ts", "")),
+            )
+        )
+    return events
+
+
+def _stage_for_contract(phase: str, message: str | None) -> Literal[
+    "queued",
+    "verify_alignment_cache",
+    "pre_render_cached_clips",
+    "build_subtitles_srt",
+    "compose_filtergraph",
+    "mux_mp4_faststart",
+    "append_render_history_to_app_db",
+]:
+    canonical_stage_mapping: dict[
+        str,
+        Literal[
+            "queued",
+            "verify_alignment_cache",
+            "pre_render_cached_clips",
+            "build_subtitles_srt",
+            "compose_filtergraph",
+            "mux_mp4_faststart",
+            "append_render_history_to_app_db",
+        ],
+    ] = {
+        "queued": "queued",
+        "verify_alignment_cache": "verify_alignment_cache",
+        "pre_render_cached_clips": "pre_render_cached_clips",
+        "build_subtitles_srt": "build_subtitles_srt",
+        "compose_filtergraph": "compose_filtergraph",
+        "mux_mp4_faststart": "mux_mp4_faststart",
+        "append_render_history_to_app_db": "append_render_history_to_app_db",
+    }
+    mapped_canonical_stage = canonical_stage_mapping.get(phase)
+    if mapped_canonical_stage is not None:
+        return mapped_canonical_stage
+
+    if phase == "cache_warm":
+        text = (message or "").lower()
+        if "queued" in text:
+            return "queued"
+        if "subtitle" in text:
+            return "build_subtitles_srt"
+        if "pre-render" in text:
+            return "pre_render_cached_clips"
+        return "verify_alignment_cache"
+    if phase == "compose":
+        return "compose_filtergraph"
+    if phase == "muxing":
+        return "mux_mp4_faststart"
+    if phase in {"done", "failed", "cancelled", "error"}:
+        return "append_render_history_to_app_db"
+    return "compose_filtergraph"
+
+
+def _state_for_contract(status: str) -> str | None:
+    mapping = {
+        "queued": "queued",
+        "running": "verifying",
+        "rendering": "verifying",
+        "verifying": "verifying",
+        "prerender": "prerender",
+        "subtitles": "subtitles",
+        "composing": "composing",
+        "muxing": "muxing",
+        "logging_history": "logging_history",
+        "done": "done",
+        "rendered": "done",
+        "cancelled": "cancelled",
+        "cancelling": "cancelling",
+        "error": "failed",
+        "failed": "failed",
+        "partial": "partial_excluded",
+        "partial_excluded": "partial_excluded",
+        "output_missing": "output_missing",
+        "ffmpeg_warning": "ffmpeg_warning",
+        "ffmpeg_fatal_error": "ffmpeg_fatal_error",
+        "history_empty": "history_empty",
+        "idle": "idle",
+    }
+    return mapping.get(status)
+
+
+def _reveal_in_explorer_supported() -> bool:
+    if os.name == "nt":
+        return callable(getattr(os, "startfile", None))
+    if sys.platform == "darwin":
+        return True
+    return shutil.which("xdg-open") is not None

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "@/lib/api/server";
-import { normalizeJob, type RenderHistoryResponse } from "./normalize";
+import { normalizeJob, phaseFromStatus, type RenderHistoryResponse } from "./normalize";
 import type { RenderJob, RenderPreset, RenderProgressEvent, RenderSocketEvent } from "./types";
 
 type RenderStartResponse = {
@@ -40,7 +40,9 @@ export function useRenderJob(projectId: string, jobId: string | null) {
 
   useEffect(() => {
     const row = baseRow;
-    if (!row || row.status !== "running") return;
+    if (!row) return;
+    const phase = phaseFromStatus(row.status);
+    if (!["queued", "verifying", "prerender", "subtitles", "composing", "muxing", "loggingHistory", "cancelling"].includes(phase)) return;
     socketRef.current?.close();
     const ws = new WebSocket(renderWsUrl(row.id));
     socketRef.current = ws;
@@ -48,7 +50,7 @@ export function useRenderJob(projectId: string, jobId: string | null) {
       const event = parseSocketEvent(message.data);
       if (!event || event.type !== "progress") return;
       setJob(normalizeJob(row, event));
-      if (event.stage === "done" || event.stage === "error" || event.stage === "cancelled") {
+      if (event.stage === "done" || event.stage === "error" || event.stage === "failed" || event.stage === "cancelled") {
         ws.close();
         window.setTimeout(() => {
           void loadJob(row.id).catch(() => undefined);

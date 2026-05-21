@@ -7,13 +7,14 @@ import httpx
 import pytest
 
 from server.db.projects import project_id_for_path, touch_recent
-from server.db.renders import insert_render, mark_render_finished
+from server.db.renders import add_render_event, insert_render, mark_render_finished
 from server.domain.project import load_project
 from server.main import app
 from server.pipeline import render as render_pipeline
 from server.pipeline.clip_render import clip_cache_path_for_item
 from server.pipeline.render import RenderError, RenderResult
 from server.routes import projects as project_routes
+from server.routes import render as render_routes
 from server.settings import settings
 
 
@@ -149,26 +150,8 @@ async def test_render_endpoint_accepts_query_preset_and_resolution(
 
 
 @pytest.mark.asyncio
-async def test_render_endpoint_accepts_editor_resolution_aliases(
-    monkeypatch, tmp_path: Path
-) -> None:
+async def test_render_endpoint_rejects_editor_resolution_aliases(tmp_path: Path) -> None:
     _write_project(tmp_path)
-
-    async def fake_start_render_project(
-        *,
-        project_dir: Path,
-        preset: str,
-        resolution: str | None = None,
-    ) -> RenderResult:
-        assert project_dir == tmp_path
-        assert preset == "final"
-        assert resolution == "9:16"
-        return RenderResult(
-            render_id="r-alias",
-            output_path=tmp_path / "renders" / "alias.mp4",
-        )
-
-    monkeypatch.setattr(render_pipeline, "start_render_project", fake_start_render_project)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -181,11 +164,7 @@ async def test_render_endpoint_accepts_editor_resolution_aliases(
             },
         )
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "render_id": "r-alias",
-        "output_path": str(tmp_path / "renders" / "alias.mp4"),
-    }
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -285,6 +264,117 @@ async def test_list_renders_returns_history(monkeypatch, tmp_path: Path) -> None
     rows = response.json()
     assert rows[0]["id"] == "r-history"
     assert rows[0]["file_size"] == 3
+    assert rows[0]["artifacts"][0]["kind"] == "output"
+    assert rows[0]["artifacts"][0]["path"].endswith("draft.mp4")
+    assert rows[0]["events"] == []
+    assert rows[0]["capabilities"]["reveal_in_explorer_supported"] in {True, False}
+
+
+@pytest.mark.asyncio
+async def test_list_renders_maps_canonical_render_event_stages(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    output_path = tmp_path / "renders" / "final.mp4"
+    output_path.parent.mkdir(parents=True)
+    output_path.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-canonical-stages",
+        project_path=tmp_path,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
+    )
+    canonical_stages = [
+        "queued",
+        "verify_alignment_cache",
+        "pre_render_cached_clips",
+        "build_subtitles_srt",
+        "compose_filtergraph",
+        "mux_mp4_faststart",
+        "append_render_history_to_app_db",
+    ]
+    for idx, phase in enumerate(canonical_stages):
+        add_render_event(
+            render_id="r-canonical-stages",
+            phase=phase,
+            progress=float(idx),
+            message=f"stage:{phase}",
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects/renders", params={"project": str(tmp_path)})
+
+    assert response.status_code == 200
+    row = response.json()[0]
+    assert [event["stage"] for event in row["events"]] == canonical_stages
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "expected_state"),
+    [
+        ("verifying", "verifying"),
+        ("prerender", "prerender"),
+        ("subtitles", "subtitles"),
+        ("composing", "composing"),
+        ("muxing", "muxing"),
+        ("logging_history", "logging_history"),
+    ],
+)
+async def test_list_renders_maps_canonical_in_progress_states(
+    monkeypatch,
+    tmp_path: Path,
+    status: str,
+    expected_state: str,
+) -> None:
+    _write_project(tmp_path)
+    output_path = tmp_path / "renders" / "state.mp4"
+    monkeypatch.setattr(
+        render_routes,
+        "list_renders_for_project",
+        lambda project_dir, limit=10: [
+            {
+                "id": "r-state-mapping",
+                "project_id": "p-state",
+                "output_path": str(output_path),
+                "preset": "final",
+                "resolution": "1920x1080",
+                "started_at": datetime_now().isoformat(),
+                "finished_at": None,
+                "duration_s": None,
+                "status": status,
+                "message": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        render_routes,
+        "list_render_events",
+        lambda render_id: [
+            {
+                "id": 1,
+                "render_id": render_id,
+                "ts": datetime_now().isoformat(),
+                "phase": "compose_filtergraph",
+                "progress": 55.0,
+                "message": "composing",
+                "detail_json": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(render_routes, "list_render_artifacts", lambda render_id: [])
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects/renders", params={"project": str(tmp_path)})
+
+    assert response.status_code == 200
+    row = response.json()[0]
+    assert row["events"][0]["state"] == expected_state
 
 
 @pytest.mark.asyncio

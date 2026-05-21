@@ -16,14 +16,14 @@ export function LogCard({ job }: { job: RenderJob | null }) {
     sticky.scrollIfSticky();
   }, [lines.length, sticky]);
 
-  const terminal = job?.phase === "done" || job?.phase === "error" || job?.phase === "cancelled";
+  const terminal = job?.phase === "done" || job?.phase === "failed" || job?.phase === "ffmpegFatalError" || job?.phase === "cancelled";
 
   return (
     <section className="col-start-1 row-start-3 flex flex-col overflow-hidden rounded-[10px] border border-(--line) bg-(--bg-2) self-start">
       <div className="flex items-center justify-between border-b border-(--line) px-[14px] py-[10px]">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-2)">{t("head")}</h2>
         <button className="font-mono text-[10.5px] text-(--text-3)" onClick={() => { follow(); sticky.follow(); }} type="button">
-          {terminal ? t(`meta${job?.phase === "cancelled" ? "Cancelled" : job?.phase === "error" ? "Stopped" : "Finished"}`) : paused || sticky.paused ? t("metaPaused") : t("meta")}
+          {terminal ? t(`meta${job?.phase === "cancelled" ? "Cancelled" : job?.phase === "failed" || job?.phase === "ffmpegFatalError" ? "Stopped" : "Finished"}`) : paused || sticky.paused ? t("metaPaused") : t("meta")}
         </button>
       </div>
       <div

@@ -10,7 +10,23 @@ from pydantic import BaseModel
 
 from server.db.renders import add_render_event, get_latest_render_event
 
-RenderStage = Literal["cache_warm", "compose", "muxing", "done", "error", "cancelled"]
+RenderStage = Literal[
+    "queued",
+    "verify_alignment_cache",
+    "pre_render_cached_clips",
+    "build_subtitles_srt",
+    "compose_filtergraph",
+    "mux_mp4_faststart",
+    "append_render_history_to_app_db",
+    "done",
+    "failed",
+    "cancelled",
+    # Legacy in-flight stage names accepted during contract migration.
+    "cache_warm",
+    "compose",
+    "muxing",
+    "error",
+]
 
 
 class RenderProgressEvent(BaseModel):
@@ -98,8 +114,26 @@ def _event_from_db(render_id: str) -> RenderProgressEvent | None:
         return None
     detail = _parse_detail(row.get("detail_json"))
     phase = str(row.get("phase") or "compose")
-    if phase not in {"cache_warm", "compose", "muxing", "done", "error", "cancelled"}:
-        phase = "compose"
+    phase_aliases = {
+        "cache_warm": "verify_alignment_cache",
+        "compose": "compose_filtergraph",
+        "muxing": "mux_mp4_faststart",
+        "error": "failed",
+    }
+    phase = phase_aliases.get(phase, phase)
+    if phase not in {
+        "queued",
+        "verify_alignment_cache",
+        "pre_render_cached_clips",
+        "build_subtitles_srt",
+        "compose_filtergraph",
+        "mux_mp4_faststart",
+        "append_render_history_to_app_db",
+        "done",
+        "failed",
+        "cancelled",
+    }:
+        phase = "compose_filtergraph"
     progress = row.get("progress")
     eta_seconds = detail.get("eta_seconds")
     current_frame = detail.get("current_frame")

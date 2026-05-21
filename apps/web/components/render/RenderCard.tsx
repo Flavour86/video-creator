@@ -29,14 +29,15 @@ export function RenderCard({ job }: { job: RenderJob | null }) {
       <BigBar job={job} />
       <RenderStats job={job} />
       <StagesList job={job} />
-      {job?.phase === "error" ? <p className="mt-4 rounded border border-(--red-line) bg-(--red-bg) px-3 py-2 text-sm text-(--text)">{t("errorHint")}</p> : null}
+      {job?.phase === "failed" || job?.phase === "ffmpegFatalError" ? <p className="mt-4 rounded border border-(--red-line) bg-(--red-bg) px-3 py-2 text-sm text-(--text)">{t("errorHint")}</p> : null}
     </section>
   );
 }
 
 function tagVariant(phase: RenderJob["phase"] | undefined): StatusTagVariant {
   if (phase === "done") return "ready";
-  if (phase === "error") return "error";
+  if (phase === "failed" || phase === "ffmpegFatalError") return "error";
+  if (phase === "ffmpegWarning") return "warning";
   if (phase === "cancelled") return "idle";
   if (phase === "composing" || phase === "muxing") return "warning";
   return "info";
@@ -44,7 +45,8 @@ function tagVariant(phase: RenderJob["phase"] | undefined): StatusTagVariant {
 
 function tagKey(phase: RenderJob["phase"] | undefined): string {
   if (phase === "done") return "done";
-  if (phase === "error") return "failed";
+  if (phase === "failed" || phase === "ffmpegFatalError") return "failed";
+  if (phase === "ffmpegWarning") return "warning";
   if (phase === "cancelled") return "cancelled";
   if (phase === "composing") return "composing";
   if (phase === "muxing") return "muxing";

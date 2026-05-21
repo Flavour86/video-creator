@@ -9,10 +9,11 @@ type RenderHeadProps = {
   onBack: () => void;
   onCancel: () => void;
   onReveal: () => void;
+  revealEnabled: boolean;
   onRetry: () => void;
 };
 
-export function RenderHead({ job, onBack, onCancel, onReveal, onRetry }: RenderHeadProps) {
+export function RenderHead({ job, onBack, onCancel, onReveal, revealEnabled, onRetry }: RenderHeadProps) {
   const t = useTranslations("pages.render");
   const phase = job?.phase ?? "idle";
   const titleKey = phase === "done" && job?.preset === "draft" ? "title.doneDraft" : `title.${phase}`;
@@ -38,13 +39,13 @@ export function RenderHead({ job, onBack, onCancel, onReveal, onRetry }: RenderH
             {t("cancel")}
           </Button>
         ) : null}
-        {phase === "done" && job?.outputExists ? (
+        {revealEnabled && phase === "done" && job?.outputExists ? (
           <Button onClick={onReveal} size="extra-small" variant="ghost">
             <Folder aria-hidden="true" className="h-4 w-4" />
             {t("revealOutput")}
           </Button>
         ) : null}
-        {phase === "error" ? (
+        {phase === "failed" || phase === "ffmpegFatalError" ? (
           <Button onClick={onRetry} size="extra-small" variant="ghost">
             <RotateCcw aria-hidden="true" className="h-4 w-4" />
             {t("retry")}
@@ -62,5 +63,5 @@ export function RenderHead({ job, onBack, onCancel, onReveal, onRetry }: RenderH
 }
 
 function running(phase: string): boolean {
-  return ["verifying", "prerender", "subtitles", "composing", "muxing"].includes(phase);
+  return ["queued", "verifying", "prerender", "subtitles", "composing", "muxing", "loggingHistory", "cancelling"].includes(phase);
 }
