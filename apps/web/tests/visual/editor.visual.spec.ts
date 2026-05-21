@@ -1,4 +1,4 @@
-﻿import { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
@@ -362,17 +362,17 @@ const TEST_ALIGNMENT = {
     { confidence_avg: 0.95, end_s: 25, index: 4, start_s: 19, text: "It treats the transcript as the source of truth and the voice as the timing layer." },
     { confidence_avg: 0.95, end_s: 30, index: 5, start_s: 26, text: "Forced alignment turns sentences into time ranges." },
     { confidence_avg: 0.95, end_s: 37, index: 6, start_s: 32, text: "Drop an image onto a sentence and the editor knows when it should appear." },
-    { confidence_avg: 0.95, end_s: 44, index: 7, start_s: 38, text: "Re-record the voice and your assignments survive �?only the resolved timestamps shift." },
+    { confidence_avg: 0.95, end_s: 44, index: 7, start_s: 38, text: "Re-record the voice and your assignments survive — only the resolved timestamps shift." },
     { confidence_avg: 0.95, end_s: 51, index: 8, start_s: 45, text: "Phase one is local-only. No cloud, no AI generation, no surprise bills." },
     { confidence_avg: 0.95, end_s: 56, index: 9, start_s: 51, text: "A folder on your disk is the project. Voice, transcript, media, renders, cache." },
-    { confidence_avg: 0.95, end_s: 63, index: 10, start_s: 57, text: "Open the folder elsewhere �?same project. Zip it and share �?works." },
+    { confidence_avg: 0.95, end_s: 63, index: 10, start_s: 57, text: "Open the folder elsewhere — same project. Zip it and share — works." },
     { confidence_avg: 0.95, end_s: 70, index: 11, start_s: 64, text: "The editor itself is a single browser tab over a Python sidecar." },
     { confidence_avg: 0.95, end_s: 77, index: 12, start_s: 71, text: "WhisperX runs alignment with the transcript as reference text, never re-transcribing." },
     { confidence_avg: 0.95, end_s: 81, index: 13, start_s: 77, text: "On a Blackwell GPU it finishes a fifteen-minute audio in under a minute." },
     { confidence_avg: 0.95, end_s: 88, index: 14, start_s: 83, text: "On a CPU it takes a few minutes, still inside the work loop." },
     { confidence_avg: 0.95, end_s: 95, index: 15, start_s: 90, text: "ffmpeg does the composition with one filtergraph per render." },
     { confidence_avg: 0.95, end_s: 102, index: 16, start_s: 96, text: "Cached clips per foreground item make iteration cheap." },
-    { confidence_avg: 0.95, end_s: 107, index: 17, start_s: 102, text: "Move an item in time and the cache stays warm �?only recomposition runs." },
+    { confidence_avg: 0.95, end_s: 107, index: 17, start_s: 102, text: "Move an item in time and the cache stays warm — only recomposition runs." },
     { confidence_avg: 0.95, end_s: 114, index: 18, start_s: 109, text: "Two render presets ship out of the gate: draft at 720p and final at 1080p." },
     { confidence_avg: 0.95, end_s: 121, index: 19, start_s: 115, text: "Final lands inside YouTube's transcoder cleanly with no warnings." },
     { confidence_avg: 0.95, end_s: 128, index: 20, start_s: 122, text: "Phase two adds AI generation routed entirely to serverless GPUs." },
