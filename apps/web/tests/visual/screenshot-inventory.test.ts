@@ -4,12 +4,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { EDITOR_VISUAL_SCREENSHOTS } from "./editor-visual-cases";
 import { visualManifest, type VisualOwner } from "./visual-manifest";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(THIS_DIR, "../../../..");
 const VISUAL_REF_PATTERN = /visuals\/([A-Za-z0-9_.-]+\.png)/g;
-const EDITOR_VISUAL_CASE_PATTERN = /reference:\s*"([A-Za-z0-9_.-]+\.png)"/g;
 
 const splitSpecs = [
   { path: "docs/designs/tasks/global-frontend/SPEC_FRONTEND_GLOBAL.md", expectedOwner: "frontend-global" as VisualOwner },
@@ -28,27 +28,6 @@ function collectScreenshotRefs(specRelativePath: string): string[] {
   }
 
   return [...refs];
-}
-
-function collectEditorVisualSpecReferences(): string[] {
-  const editorSpecPath = path.join(THIS_DIR, "editor.visual.spec.ts");
-  const source = fs.readFileSync(editorSpecPath, "utf8");
-  const refs: string[] = [];
-
-  for (const match of source.matchAll(EDITOR_VISUAL_CASE_PATTERN)) {
-    refs.push(`docs/designs/visuals/${match[1]}`);
-  }
-
-  return refs;
-}
-
-function isEditorScreenshotReference(screenshot: string): boolean {
-  return (
-    screenshot.startsWith("docs/designs/visuals/editor-") ||
-    screenshot.startsWith("docs/designs/visuals/AssignModal") ||
-    screenshot === "docs/designs/visuals/change-background-light.png" ||
-    screenshot === "docs/designs/visuals/SubtitleModal.png"
-  );
 }
 
 function entriesByScreenshot() {
@@ -165,7 +144,7 @@ describe("split-spec screenshot ownership inventory", () => {
 
   it("maps every editor screenshot reference to exactly one visual parity case", () => {
     const editorRefs = new Set(collectScreenshotRefs("docs/designs/tasks/editor/SPEC_EDITOR.md"));
-    const visualCaseRefs = collectEditorVisualSpecReferences().filter(isEditorScreenshotReference);
+    const visualCaseRefs = [...EDITOR_VISUAL_SCREENSHOTS];
     const uniqueVisualCaseRefs = [...new Set(visualCaseRefs)].sort();
 
     const missing = [...editorRefs].filter((screenshot) => !uniqueVisualCaseRefs.includes(screenshot));

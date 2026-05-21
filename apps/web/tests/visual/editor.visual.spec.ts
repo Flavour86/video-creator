@@ -1,4 +1,4 @@
-import { Buffer } from "node:buffer";
+﻿import { Buffer } from "node:buffer";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
@@ -8,236 +8,21 @@ import {
   visualActualPath,
   visualReferencePath,
 } from "./visual-test-utils";
+import {
+  EDITOR_VISUAL_CASES,
+  type EditorVisualAction,
+  type EditorVisualCaptureTarget as CaptureTarget,
+  type EditorVisualCase,
+  type EditorVisualTheme as Theme,
+} from "./editor-visual-cases";
 
 const EDITOR_VIEWPORT = { width: 1679, height: 1194 };
 const EDITOR_DEVICE_SCALE_FACTOR = 1.5;
-const PAGE_SSIM_THRESHOLD = 0.45;
-const PREVIEW_SSIM_THRESHOLD = 0.6;
 const UI_SSIM_THRESHOLD = 0.9;
 const TEST_PROJECT_ID = "p_test01";
 const DEFAULT_SCENE_SEEK_SECONDS = 38.399;
 
-type Theme = "dark" | "light";
-type CaptureTarget = "page" | "preview" | "timeline" | "inspector" | "transcript" | "dialog";
 type IgnoreRegion = { x: number; y: number; width: number; height: number };
-
-type EditorVisualCase = {
-  capture: CaptureTarget;
-  clip?: { height: number; width: number; x: number; y: number };
-  name: string;
-  reference: string;
-  run: (page: Page) => Promise<void>;
-  threshold?: number;
-  theme: Theme;
-};
-
-const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
-  { name: "default editor dark", reference: "editor-dark.png", theme: "dark", threshold: PAGE_SSIM_THRESHOLD, capture: "page", run: async () => {} },
-  { name: "default editor light", reference: "editor-light.png", theme: "light", threshold: PAGE_SSIM_THRESHOLD, capture: "page", run: async () => {} },
-  {
-    name: "draft render strip dark",
-    reference: "editor-draft-render-strip-dark.png",
-    theme: "dark",
-    threshold: PAGE_SSIM_THRESHOLD,
-    capture: "page",
-    run: async (page) => {
-      await mockDraftRenderSocket(page);
-      await page.getByRole("button", { name: /render draft/i }).click();
-      await page.getByText("Rendering draft : queued").waitFor();
-    },
-  },
-  {
-    name: "draft render strip light",
-    reference: "editor-draft-render-strip-light.png",
-    theme: "light",
-    threshold: PAGE_SSIM_THRESHOLD,
-    capture: "page",
-    run: async (page) => {
-      await mockDraftRenderSocket(page);
-      await page.getByRole("button", { name: /render draft/i }).click();
-      await page.getByText("Rendering draft : queued").waitFor();
-    },
-  },
-  {
-    name: "transcript selection range",
-    reference: "editor-transcript-1.png",
-    theme: "dark",
-    capture: "transcript",
-    run: async (page) => {
-      const ninth = page.getByRole("button", { name: /A folder on your disk is the project/i }).first();
-      const thirteenth = page.getByRole("button", { name: /On a Blackwell GPU it finishes/i }).first();
-      await ninth.click();
-      await thirteenth.click({ modifiers: ["Shift"] });
-    },
-  },
-  {
-    name: "transcript context menu",
-    reference: "editor-transcript-2.png",
-    theme: "dark",
-    capture: "dialog",
-    clip: { x: 4, y: 300, width: 548, height: 299 },
-    run: async (page) => {
-      const sentence = page.getByRole("button", { name: /Open the folder elsewhere/i }).first();
-      await sentence.click({ button: "right" });
-      await page.getByRole("menuitem", { name: /assign media to range/i }).waitFor();
-    },
-  },
-  {
-    name: "transcript merge action",
-    reference: "editor-transcript-3.png",
-    theme: "dark",
-    capture: "dialog",
-    clip: { x: 0, y: 251, width: 607, height: 537 },
-    run: async (page) => {
-      const ninth = page.getByRole("button", { name: /A folder on your disk is the project/i }).first();
-      const eleventh = page.getByRole("button", { name: /The editor itself is a single browser tab/i }).first();
-      const tenth = page.getByRole("button", { name: /Open the folder elsewhere/i }).first();
-      await ninth.click();
-      await eleventh.click({ modifiers: ["Shift"] });
-      await tenth.click({ button: "right" });
-      await page.getByRole("menuitem", { name: /merge 3 sentences/i }).waitFor();
-    },
-  },
-  {
-    name: "preview dark",
-    reference: "editor-preview-dark.png",
-    theme: "dark",
-    threshold: PREVIEW_SSIM_THRESHOLD,
-    capture: "preview",
-    run: async () => {},
-  },
-  {
-    name: "preview light",
-    reference: "editor-preview-light.png",
-    theme: "light",
-    threshold: PREVIEW_SSIM_THRESHOLD,
-    capture: "preview",
-    run: async () => {},
-  },
-  {
-    name: "preview 9:16",
-    reference: "editor-preview-1.png",
-    theme: "dark",
-    threshold: PREVIEW_SSIM_THRESHOLD,
-    capture: "preview",
-    run: async (page) => {
-      await page.getByRole("radio", { name: "9:16" }).click();
-    },
-  },
-  {
-    name: "preview layers popover",
-    reference: "editor-preview-popover.png",
-    theme: "dark",
-    threshold: PREVIEW_SSIM_THRESHOLD,
-    capture: "preview",
-    run: async (page) => {
-      await page.getByRole("button", { name: /Layers -/i }).click();
-      await page.getByText(/Layer order - top renders on top/i).waitFor();
-    },
-  },
-  {
-    name: "timeline dark",
-    reference: "editor-timeline-dark.png",
-    theme: "dark",
-    capture: "timeline",
-    run: async () => {},
-  },
-  {
-    name: "timeline light",
-    reference: "editor-timeline-light.png",
-    theme: "light",
-    capture: "timeline",
-    run: async () => {},
-  },
-  {
-    name: "inspector dark",
-    reference: "editor-inspector-dark.png",
-    theme: "dark",
-    capture: "inspector",
-    run: async (page) => {
-      await page.getByRole("button", { name: "quote-card.png over s9-s11" }).first().click();
-      await page.getByRole("heading", { name: "PiP · z4" }).waitFor();
-    },
-  },
-  {
-    name: "inspector light",
-    reference: "editor-inspector-light.png",
-    theme: "light",
-    capture: "inspector",
-    run: async (page) => {
-      await page.getByRole("button", { name: "callout-map.png over s6-s10" }).first().click();
-      await page.getByRole("heading", { name: "PiP · z3" }).waitFor();
-    },
-  },
-  {
-    name: "inspector background",
-    reference: "editor-inspector-1.png",
-    theme: "dark",
-    capture: "inspector",
-    run: async () => {},
-  },
-  {
-    name: "inspector foreground",
-    reference: "editor-inspector-2.png",
-    theme: "dark",
-    capture: "inspector",
-    run: async (page) => {
-      await page.getByRole("button", { name: "quote-card.png over s10-s11" }).first().click();
-      await page.getByRole("heading", { name: "Foreground · z1" }).waitFor();
-    },
-  },
-  {
-    name: "assign modal dark",
-    reference: "AssignModal.png",
-    theme: "dark",
-    capture: "dialog",
-    run: async (page) => {
-      await openAssignModal(page);
-    },
-  },
-  {
-    name: "assign modal light",
-    reference: "AssignModal-light.png",
-    theme: "light",
-    capture: "dialog",
-    run: async (page) => {
-      await openAssignModal(page);
-    },
-  },
-  {
-    name: "assign modal light scrolled",
-    reference: "AssignModal-light-1.png",
-    theme: "light",
-    capture: "dialog",
-    run: async (page) => {
-      await openAssignModal(page);
-      const dialog = page.getByRole("dialog").first();
-      await dialog.evaluate((node) => {
-        node.scrollTop = node.scrollHeight;
-      });
-    },
-  },
-  {
-    name: "background modal light",
-    reference: "change-background-light.png",
-    theme: "light",
-    capture: "dialog",
-    run: async (page) => {
-      await page.getByRole("button", { name: /Change Background/i }).click();
-      await page.getByRole("heading", { name: /Change background/i }).waitFor();
-    },
-  },
-  {
-    name: "subtitles modal dark",
-    reference: "SubtitleModal.png",
-    theme: "dark",
-    capture: "dialog",
-    run: async (page) => {
-      await page.getByRole("button", { name: /^Subtitles$/i }).click();
-      await page.getByRole("heading", { name: /^Subtitles$/i }).waitFor();
-    },
-  },
-];
 
 test.describe("editor visual parity", () => {
   test.describe.configure({ mode: "serial" });
@@ -258,7 +43,7 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
   await settleChrome(page);
   await setReferencePlayback(page);
 
-  await visualCase.run(page);
+  await runEditorVisualAction(page, visualCase.action);
   await page.waitForTimeout(100);
   const referencePath = await visualReferencePath(visualCase.reference);
   const actualPath = await visualActualPath(visualCase.reference.replace(".png", ".actual.png"));
@@ -308,6 +93,83 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
   });
 }
 
+
+async function runEditorVisualAction(page: Page, action: EditorVisualAction): Promise<void> {
+  switch (action) {
+    case "none":
+      return;
+    case "render-draft":
+      await mockDraftRenderSocket(page);
+      await page.getByRole("button", { name: /render draft/i }).click();
+      await page.getByText("Rendering draft : queued").waitFor();
+      return;
+    case "transcript-selection-range": {
+      const ninth = page.getByRole("button", { name: /A folder on your disk is the project/i }).first();
+      const thirteenth = page.getByRole("button", { name: /On a Blackwell GPU it finishes/i }).first();
+      await ninth.click();
+      await thirteenth.click({ modifiers: ["Shift"] });
+      return;
+    }
+    case "transcript-context-menu": {
+      const sentence = page.getByRole("button", { name: /Open the folder elsewhere/i }).first();
+      await sentence.click({ button: "right" });
+      await page.getByRole("menuitem", { name: /assign media to range/i }).waitFor();
+      return;
+    }
+    case "transcript-merge-action": {
+      const ninth = page.getByRole("button", { name: /A folder on your disk is the project/i }).first();
+      const eleventh = page.getByRole("button", { name: /The editor itself is a single browser tab/i }).first();
+      const tenth = page.getByRole("button", { name: /Open the folder elsewhere/i }).first();
+      await ninth.click();
+      await eleventh.click({ modifiers: ["Shift"] });
+      await tenth.click({ button: "right" });
+      await page.getByRole("menuitem", { name: /merge 3 sentences/i }).waitFor();
+      return;
+    }
+    case "preview-9x16":
+      await page.getByRole("radio", { name: "9:16" }).click();
+      return;
+    case "preview-layers-popover":
+      await page.getByRole("button", { name: /Layers -/i }).click();
+      await page.getByText(/Layer order - top renders on top/i).waitFor();
+      return;
+    case "inspector-dark":
+      await page.getByRole("button", { name: "quote-card.png over s9-s11" }).first().click();
+      await page.getByRole("heading", { name: /PiP/i }).waitFor();
+      return;
+    case "inspector-light":
+      await page.getByRole("button", { name: "callout-map.png over s6-s10" }).first().click();
+      await page.getByRole("heading", { name: /PiP/i }).waitFor();
+      return;
+    case "inspector-foreground":
+      await page.getByRole("button", { name: "quote-card.png over s10-s11" }).first().click();
+      await page.getByRole("heading", { name: /Foreground/i }).waitFor();
+      return;
+    case "assign-modal":
+      await openAssignModal(page);
+      return;
+    case "assign-modal-scrolled": {
+      await openAssignModal(page);
+      const dialog = page.getByRole("dialog").first();
+      await dialog.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      return;
+    }
+    case "background-modal":
+      await page.getByRole("button", { name: /Change Background/i }).click();
+      await page.getByRole("heading", { name: /Change background/i }).waitFor();
+      return;
+    case "subtitles-modal":
+      await page.getByRole("button", { name: /^Subtitles$/i }).click();
+      await page.getByRole("heading", { name: /^Subtitles$/i }).waitFor();
+      return;
+    default: {
+      const _exhaustive: never = action;
+      return _exhaustive;
+    }
+  }
+}
 async function prepareVisualPage(page: Page, theme: Theme): Promise<void> {
   await page.addInitScript(
     ({ projectId, themeValue }) => {
@@ -500,17 +362,17 @@ const TEST_ALIGNMENT = {
     { confidence_avg: 0.95, end_s: 25, index: 4, start_s: 19, text: "It treats the transcript as the source of truth and the voice as the timing layer." },
     { confidence_avg: 0.95, end_s: 30, index: 5, start_s: 26, text: "Forced alignment turns sentences into time ranges." },
     { confidence_avg: 0.95, end_s: 37, index: 6, start_s: 32, text: "Drop an image onto a sentence and the editor knows when it should appear." },
-    { confidence_avg: 0.95, end_s: 44, index: 7, start_s: 38, text: "Re-record the voice and your assignments survive — only the resolved timestamps shift." },
+    { confidence_avg: 0.95, end_s: 44, index: 7, start_s: 38, text: "Re-record the voice and your assignments survive �?only the resolved timestamps shift." },
     { confidence_avg: 0.95, end_s: 51, index: 8, start_s: 45, text: "Phase one is local-only. No cloud, no AI generation, no surprise bills." },
     { confidence_avg: 0.95, end_s: 56, index: 9, start_s: 51, text: "A folder on your disk is the project. Voice, transcript, media, renders, cache." },
-    { confidence_avg: 0.95, end_s: 63, index: 10, start_s: 57, text: "Open the folder elsewhere — same project. Zip it and share — works." },
+    { confidence_avg: 0.95, end_s: 63, index: 10, start_s: 57, text: "Open the folder elsewhere �?same project. Zip it and share �?works." },
     { confidence_avg: 0.95, end_s: 70, index: 11, start_s: 64, text: "The editor itself is a single browser tab over a Python sidecar." },
     { confidence_avg: 0.95, end_s: 77, index: 12, start_s: 71, text: "WhisperX runs alignment with the transcript as reference text, never re-transcribing." },
     { confidence_avg: 0.95, end_s: 81, index: 13, start_s: 77, text: "On a Blackwell GPU it finishes a fifteen-minute audio in under a minute." },
     { confidence_avg: 0.95, end_s: 88, index: 14, start_s: 83, text: "On a CPU it takes a few minutes, still inside the work loop." },
     { confidence_avg: 0.95, end_s: 95, index: 15, start_s: 90, text: "ffmpeg does the composition with one filtergraph per render." },
     { confidence_avg: 0.95, end_s: 102, index: 16, start_s: 96, text: "Cached clips per foreground item make iteration cheap." },
-    { confidence_avg: 0.95, end_s: 107, index: 17, start_s: 102, text: "Move an item in time and the cache stays warm — only recomposition runs." },
+    { confidence_avg: 0.95, end_s: 107, index: 17, start_s: 102, text: "Move an item in time and the cache stays warm �?only recomposition runs." },
     { confidence_avg: 0.95, end_s: 114, index: 18, start_s: 109, text: "Two render presets ship out of the gate: draft at 720p and final at 1080p." },
     { confidence_avg: 0.95, end_s: 121, index: 19, start_s: 115, text: "Final lands inside YouTube's transcoder cleanly with no warnings." },
     { confidence_avg: 0.95, end_s: 128, index: 20, start_s: 122, text: "Phase two adds AI generation routed entirely to serverless GPUs." },
