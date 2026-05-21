@@ -229,7 +229,7 @@ function EditorContent() {
       setMedia(normalizeEditorMediaItems(configMedia));
       setServerCacheSummary(loadedCacheSummary);
       setSelected(selected);
-      setResolution(normalizeResolutionPreset(recoveryState?.resolution, config.output?.resolution));
+      setResolution(normalizeResolutionPreset(recoveryState?.resolution, working.output?.resolution));
     } catch {
       loadedProjectRef.current = false;
       setCanonicalProject(null);

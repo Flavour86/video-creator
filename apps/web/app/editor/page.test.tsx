@@ -1591,6 +1591,24 @@ it("reload replays operation log and restores recovery range, scroll, and resolu
   await waitFor(() => expect(transcriptScroller?.scrollTop ?? 0).toBeGreaterThan(0));
 });
 
+it("reopen restores resolution from replayed operation log when recovery state is missing", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: false });
+  window.localStorage.setItem(
+    editorOperationStorageKey(TEST_PROJECT_ID),
+    JSON.stringify({
+      version: 1,
+      redo: [],
+      undo: [{ id: "op-1", at: "2026-05-11T00:00:00.000Z", op: { type: "global_config_update", before: { preset: "final" }, after: { preset: "final", resolution: "9:16" } } }],
+    }),
+  );
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("radio", { name: "9:16" })).toHaveAttribute("aria-checked", "true");
+});
+
 it("discards malformed recovery state without blocking canonical project load", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({ hasUnrenderedChanges: false });
