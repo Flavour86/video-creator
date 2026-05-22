@@ -11,6 +11,7 @@ export function BigBar({ job }: { job: RenderJob | null }) {
       aria-valuemax={100}
       aria-valuemin={0}
       aria-valuenow={progress}
+      aria-label="Render progress"
       className="h-[12px] w-full overflow-hidden rounded-full border border-(--line) bg-(--bg-3)"
       role="progressbar"
     >

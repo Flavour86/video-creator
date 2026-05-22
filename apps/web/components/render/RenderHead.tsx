@@ -1,11 +1,12 @@
 import { ArrowLeft, Folder, Play, RotateCcw, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui";
-import { formatRenderResolution } from "@/lib/format/render";
+import { formatRenderResolutionValue } from "@/lib/format/render";
 import type { RenderJob } from "@/lib/render/types";
 
 type RenderHeadProps = {
   job: RenderJob | null;
+  projectName: string;
   onBack: () => void;
   onCancel: () => void;
   onReveal: () => void;
@@ -13,19 +14,21 @@ type RenderHeadProps = {
   onRetry: () => void;
 };
 
-export function RenderHead({ job, onBack, onCancel, onReveal, revealEnabled, onRetry }: RenderHeadProps) {
+export function RenderHead({ job, projectName, onBack, onCancel, onReveal, revealEnabled, onRetry }: RenderHeadProps) {
   const t = useTranslations("pages.render");
   const phase = job?.phase ?? "idle";
-  const titleKey = phase === "done" && job?.preset === "draft" ? "title.doneDraft" : `title.${phase}`;
+  const title = job
+    ? `${projectName} - ${formatRenderResolutionValue(job.resolution, job.preset)} ${job.preset} render`
+    : `${projectName} - render`;
 
   return (
     <header className="col-span-2 mb-[6px] flex items-end justify-between gap-4 max-lg:col-span-1">
       <div>
         <p className="mb-[6px] text-[11px] font-semibold uppercase tracking-[0.1em] text-(--text-3)">
-          {t(`eyebrow.${job?.preset ?? "idle"}`)}
+          {t("eyebrow.idle")}
         </p>
         <h1 className="text-[24px] font-bold leading-tight tracking-normal text-(--text)">
-          {t(titleKey, { resolution: job ? formatRenderResolution(job.preset) : "1080p" })}
+          {title}
         </h1>
       </div>
       <div className="flex items-center gap-2">

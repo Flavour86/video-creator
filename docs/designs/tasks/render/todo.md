@@ -33,7 +33,7 @@
 - [x] Task 7: Replace Render routing and editor gating
   - Acceptance: `/render/:projectId/:render_id` is primary; invalid/missing segments redirect to Launcher; new aligned projects render immediately; already-rendered projects require config hash changes.
   - Verify: `rtk pnpm -F @vc/web test -- editor/page.test.tsx`, `rtk pnpm -F @vc/web test -- render/page.test.tsx`, `rtk pnpm -F @vc/server test -- test_project_load.py`
-- [ ] Task 8: Build the live Render progress page
+- [x] Task 8: Build the live Render progress page
   - Acceptance: header, progress card, stats, stages, status visuals, and ffmpeg log match `SPEC_RENDER.md` and update live.
   - Verify: `rtk pnpm -F @vc/web test -- render/page.test.tsx`, `rtk pnpm -F @vc/web test -- RenderCard`, `rtk pnpm -F @vc/web test -- LogCard`
 - [ ] Task 9: Complete history, output panel, and after-render actions

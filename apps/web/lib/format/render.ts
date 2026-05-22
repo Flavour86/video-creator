@@ -49,6 +49,20 @@ export function manifestForPreset(preset: RenderPreset): RenderManifest {
   return renderManifests[preset];
 }
 
+export function manifestForRender(preset: RenderPreset, resolution?: string | null): RenderManifest {
+  const manifest = { ...renderManifests[preset] };
+  if (resolution === "1280x720") {
+    return { ...manifest, width: 1280, height: 720 };
+  }
+  if (resolution === "1080x1920") {
+    return { ...manifest, width: 1080, height: 1920 };
+  }
+  if (resolution === "1920x1080") {
+    return { ...manifest, width: 1920, height: 1080 };
+  }
+  return manifest;
+}
+
 export function formatPercent(value: number | null | undefined): string {
   const safeValue = Math.min(100, Math.max(0, value ?? 0));
   return `${safeValue.toFixed(1)}%`;
@@ -107,6 +121,13 @@ export function formatColor(matrix: string, pixfmt: string): string {
 
 export function formatRenderResolution(preset: RenderPreset): string {
   return preset === "final" ? "1080p" : "720p";
+}
+
+export function formatRenderResolutionValue(resolution: string | null | undefined, preset?: RenderPreset): string {
+  if (resolution === "1920x1080") return "1080p";
+  if (resolution === "1280x720") return "720p";
+  if (resolution === "1080x1920") return "9:16";
+  return preset ? formatRenderResolution(preset) : "1080p";
 }
 
 export function formatRenderFilename(preset: RenderPreset, startedAt: string | Date): string {

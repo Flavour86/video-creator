@@ -458,6 +458,8 @@
         "composing": "composing",
         "muxing": "muxing",
         "loggingHistory": "history",
+        "outputMissing": "missing output",
+        "partialExcluded": "partial excluded",
         "done": "done",
         "warning": "warning",
         "failed": "failed",
@@ -482,11 +484,11 @@
       },
       "log": {
         "head": "ffmpeg log",
-        "meta": "tail · live",
-        "metaPaused": "tail · paused ↘",
-        "metaFinished": "tail · finished",
-        "metaStopped": "tail · stopped",
-        "metaCancelled": "tail · cancelled",
+        "meta": "tail / live",
+        "metaPaused": "tail / paused",
+        "metaFinished": "tail / finished",
+        "metaStopped": "tail / stopped",
+        "metaCancelled": "tail / cancelled",
         "resume": "Resume tail"
       },
       "out": {

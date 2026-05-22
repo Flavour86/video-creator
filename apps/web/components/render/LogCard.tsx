@@ -11,6 +11,7 @@ export function LogCard({ job }: { job: RenderJob | null }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const { follow, lines, paused } = useFfmpegLog(job?.id ?? null, job?.phase ?? "idle");
   const sticky = useStickyScroll(bodyRef, 8);
+  const visibleLines = lines.length ? lines : persistedLines(job);
 
   useEffect(() => {
     sticky.scrollIfSticky();
@@ -34,7 +35,7 @@ export function LogCard({ job }: { job: RenderJob | null }) {
         }}
         ref={bodyRef}
       >
-        {(lines.length ? lines : idleLines(job)).map((line, index) => (
+        {visibleLines.map((line, index) => (
           <LogRow key={`${line.timestamp}-${index}`} line={line} />
         ))}
         {sticky.paused ? (
@@ -57,16 +58,36 @@ function LogRow({ line }: { line: LogLine }) {
   );
 }
 
-function idleLines(job: RenderJob | null): LogLine[] {
+function persistedLines(job: RenderJob | null): LogLine[] {
   if (!job) return [];
+  const eventLines = job.events
+    .filter((event) => event.message)
+    .slice(-2000)
+    .map((event): LogLine => ({
+      glyph: glyphForEvent(event.stage),
+      line: event.message ?? "",
+      timestamp: event.event_id ?? event.render_id ?? "persisted",
+    }));
+  if (eventLines.length > 0) return eventLines;
+  const logArtifact = job.artifacts.find((artifact) => artifact.kind === "log");
+  if (logArtifact) {
+    return [{ glyph: "info", line: `persisted log: ${logArtifact.path}`, timestamp: "persisted" }];
+  }
   return [{ line: "waiting for ffmpeg output", timestamp: "00:00:00" }];
 }
 
+function glyphForEvent(stage: string | undefined): LogLine["glyph"] {
+  if (stage === "done") return "ok";
+  if (stage === "failed" || stage === "error") return "err";
+  if (stage === "cancelled") return "warn";
+  return "info";
+}
+
 function glyph(kind: LogLine["glyph"]): string {
-  if (kind === "ok") return "✓";
-  if (kind === "warn") return "⚠";
-  if (kind === "err") return "✕";
-  return "▶";
+  if (kind === "ok") return "OK";
+  if (kind === "warn") return "!";
+  if (kind === "err") return "ERR";
+  return ">";
 }
 
 function glyphClass(kind: LogLine["glyph"]): string {

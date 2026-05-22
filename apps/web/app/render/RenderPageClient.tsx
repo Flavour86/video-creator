@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import type { ProjectConfigLoadResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { LogCard } from "@/components/render/LogCard";
 import { RenderAside } from "@/components/render/RenderAside";
 import { RenderCard } from "@/components/render/RenderCard";
 import { RenderHead } from "@/components/render/RenderHead";
 import { Button, ConfirmDialog } from "@/components/ui";
+import { request } from "@/lib/api/server";
 import { useRenderCancel } from "@/lib/render/useRenderCancel";
 import { useRenderHistory } from "@/lib/render/useRenderHistory";
 import { useRenderHotkeys } from "@/lib/render/useRenderHotkeys";
@@ -28,12 +30,28 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
   const validRoute = isValidRenderProjectId(projectId) && isValidRenderId(renderId);
   const activeProjectId = validRoute ? projectId : "";
   const activeRenderId = validRoute ? renderId : null;
+  const [projectName, setProjectName] = useState(projectId || "Render");
   const { entries, purgeAll, refresh, remove } = useRenderHistory(activeProjectId, activeRenderId ?? "");
   const { error, job, startRender } = useRenderJob(activeProjectId, activeRenderId);
   const cancelRender = useRenderCancel(activeProjectId);
   const reveal = useSystemReveal();
   const open = useSystemOpen();
   const revealEnabled = job?.capabilities?.reveal_in_explorer_supported ?? false;
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    let cancelled = false;
+    void request<ProjectConfigLoadResponse>(`/projects/${encodeURIComponent(activeProjectId)}/config` as `/${string}`)
+      .then((response) => {
+        if (!cancelled) setProjectName(response.config.name || activeProjectId);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectName(activeProjectId);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId]);
 
   const goEditor = useCallback(() => {
     const target = activeProjectId ? `/editor?projectId=${encodeURIComponent(activeProjectId)}` : "/editor";
@@ -89,6 +107,7 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
     <PageChrome className="grid h-[calc(100vh-44px-40px)] grid-cols-1 grid-rows-[auto_auto_auto_auto] gap-[18px] overflow-y-auto p-[28px] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_1fr_auto]" variant="workbench">
       <RenderHead
         job={job}
+        projectName={projectName}
         onBack={goEditor}
         onCancel={() => setConfirmCancel(true)}
         onRetry={() => void startFinal()}

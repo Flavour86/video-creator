@@ -82,6 +82,7 @@ beforeEach(() => {
   mocks.startRender.mockResolvedValue("r-started");
   mocks.useRenderHistory.mockReset();
   mocks.useRenderJob.mockReset();
+  global.fetch = vi.fn(async () => ok({ config: { name: "Tokyo Essay" } }));
 });
 
 function renderClient(projectId = "p_demo", renderId = "r-existing") {
@@ -119,9 +120,13 @@ it("redirects invalid dynamic render route segments to Launcher", async () => {
   );
 });
 
-it("renders an existing render from the dynamic route params", () => {
+it("renders the spec header and existing render from the dynamic route params", async () => {
   renderClient();
 
+  expect(await screen.findByRole("heading", { name: "Tokyo Essay - 1080p final render" })).toBeInTheDocument();
+  expect(screen.getByText("Render")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /back to editor/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /cancel render/i })).toBeInTheDocument();
   expect(screen.getByText("Verifying alignment cache")).toBeInTheDocument();
   expect(mocks.useRenderJob).toHaveBeenCalledWith("p_demo", "r-existing");
   expect(mocks.useRenderHistory).toHaveBeenCalledWith("p_demo", "r-existing");
@@ -173,4 +178,11 @@ function renderJob(id: string, phase: string) {
     startedAt: "2026-05-09T00:00:00Z",
     status: phase === "failed" ? "failed" : "running",
   };
+}
+
+function ok(data: unknown): Response {
+  return {
+    ok: true,
+    json: async () => data,
+  } as Response;
 }

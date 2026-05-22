@@ -1,4 +1,4 @@
-import { formatRenderFilename, manifestForPreset, type RenderPreset } from "@/lib/format/render";
+import { formatRenderFilename, manifestForRender, type RenderPreset } from "@/lib/format/render";
 import type {
   RenderArtifact,
   RenderBackendCapabilities,
@@ -57,7 +57,7 @@ export function normalizeJob(row: RenderHistoryResponse, progress?: Partial<Rend
     finishedAt,
     framesWritten: progress?.current_frame ?? 0,
     id: row.render_id ?? row.id,
-    manifest: manifestForPreset(preset),
+    manifest: manifestForRender(preset, resolution),
     outputExists: row.output_exists ?? (row.file_size ?? 0) > 0,
     outputPath,
     phase,

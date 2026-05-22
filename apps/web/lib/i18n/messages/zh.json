@@ -458,6 +458,8 @@
         "composing": "composing",
         "muxing": "muxing",
         "loggingHistory": "history",
+        "outputMissing": "missing output",
+        "partialExcluded": "partial excluded",
         "done": "done",
         "warning": "warning",
         "failed": "failed",
