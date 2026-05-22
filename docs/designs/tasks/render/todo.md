@@ -42,7 +42,7 @@
 - [x] Task 10: Wire cancel UX end to end
   - Acceptance: queued/running cancellation works from UI; active cancel confirms partial removal; exactly one request is sent; cancelling/cancelled state and history update without refresh.
   - Verify: `rtk pnpm -F @vc/web test -- render/page.test.tsx`, `rtk pnpm -F @vc/web test -- useRenderCancel`, `rtk pnpm -F @vc/server test -- test_render_endpoint.py`
-- [ ] Checkpoint: UI
+- [x] Checkpoint: UI
   - Acceptance: route, gating, progress, logs, output, history, actions, and cancel behavior match `SPEC_RENDER.md`.
 
 ## Phase 4: Quality Gates And Acceptance

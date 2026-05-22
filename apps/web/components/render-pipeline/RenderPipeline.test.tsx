@@ -68,8 +68,12 @@ it("opens play URL and calls reveal endpoint for completed render", async () => 
       "noopener,noreferrer",
     );
     expect(global.fetch).toHaveBeenCalledWith(
-      "/api/server/projects/p-1/renders/r-1/reveal",
-      { method: "POST" },
+      "/api/server/system/reveal",
+      {
+        body: JSON.stringify({ path: "E:/project/renders/r-1.mp4" }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      },
     );
   });
 });

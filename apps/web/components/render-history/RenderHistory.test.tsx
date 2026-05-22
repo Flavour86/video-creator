@@ -45,8 +45,12 @@ it("calls reveal endpoint when open is clicked", async () => {
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
-      "/api/server/projects/p-1/renders/r-1/reveal",
-      { method: "POST" },
+      "/api/server/system/reveal",
+      {
+        body: JSON.stringify({ path: "E:/project/.vc/drafts/r-1.mp4" }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      },
     );
   });
 });

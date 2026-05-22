@@ -70,7 +70,7 @@ export function RenderPipeline({ projectId, projectPath, state, onCancel }: Prop
               </button>
               <button
                 className="inline-flex items-center gap-1.5 rounded border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50"
-                onClick={() => void renderAction("reveal", projectId, renderId)}
+                onClick={() => void renderAction("reveal", projectId, renderId, state.outputPath)}
                 type="button"
               >
                 <FolderOpen size={14} />
@@ -201,6 +201,7 @@ async function renderAction(
   action: "play" | "reveal",
   projectId: string,
   renderId: string,
+  outputPath?: string,
 ) {
   if (!projectId) return;
   if (action === "play") {
@@ -209,7 +210,10 @@ async function renderAction(
     window.open(url, "_blank", "noopener,noreferrer");
     return;
   }
-  await fetch(`/api/server/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(renderId)}/reveal`, {
+  if (!outputPath) return;
+  await fetch("/api/server/system/reveal", {
+    body: JSON.stringify({ path: outputPath }),
+    headers: { "Content-Type": "application/json" },
     method: "POST",
   });
 }

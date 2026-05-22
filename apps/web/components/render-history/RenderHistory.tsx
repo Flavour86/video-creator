@@ -46,11 +46,13 @@ export function RenderHistory({ projectId, refreshKey = "" }: Props) {
     }
   }
 
-  async function reveal(renderId: string) {
-    await fetch(
-      `/api/server/projects/${encodeURIComponent(projectId)}/renders/${encodeURIComponent(renderId)}/reveal`,
-      { method: "POST" },
-    );
+  async function reveal(outputPath: string) {
+    if (!outputPath) return;
+    await fetch("/api/server/system/reveal", {
+      body: JSON.stringify({ path: outputPath }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
   }
 
   async function play(renderId: string) {
@@ -115,7 +117,7 @@ export function RenderHistory({ projectId, refreshKey = "" }: Props) {
                 <button
                   aria-label={`Open ${row.id}`}
                   className="rounded border border-neutral-200 p-1 hover:bg-neutral-50"
-                  onClick={() => void reveal(row.id)}
+                  onClick={() => void reveal(row.output_path)}
                   type="button"
                 >
                   <FolderOpen size={13} />
