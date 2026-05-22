@@ -22,10 +22,10 @@
 - [x] Task 5: Persist live progress, ffmpeg logs, and output probes
   - Acceptance: WS emits at least 1 event/sec; stage/log/error events persist; output metadata is probed from disk; refresh/reconnect recovers latest state.
   - Verify: `rtk pnpm -F @vc/server test -- test_render_progress.py`, `rtk pnpm -F @vc/server test -- test_render_history.py`, `rtk pnpm -F @vc/server lint`
-- [ ] Task 6: Complete cancellation and failure recovery
+- [x] Task 6: Complete cancellation and failure recovery
   - Acceptance: queued and active cancellation work; one cancel request is sent; `.partial` handling, cleanup/exclusion, ffmpeg failures, DB failure, missing output, sidecar death, disk issues, and large logs are covered.
   - Verify: `rtk pnpm -F @vc/server test -- test_render_endpoint.py`, `rtk pnpm -F @vc/server test -- test_render_history.py`, `rtk pnpm -F @vc/server test -- test_render_progress.py`
-- [ ] Checkpoint: Execution
+- [x] Checkpoint: Execution
   - Acceptance: draft/final/vertical outputs probe correctly and all terminal/error states persist.
 
 ## Phase 3: Render Routing, Gating, And UI

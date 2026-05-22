@@ -18,6 +18,7 @@ from server.db.renders import (
     list_render_artifacts,
     list_render_events,
     list_renders_for_project,
+    mark_render_started,
 )
 from server.domain.project import Project
 from server.domain.timing import AlignedSentence, AlignmentResult
@@ -63,6 +64,50 @@ def _clear_render_runtime() -> None:
     render_pipeline._active_jobs.clear()
     render_pipeline._project_queues.clear()
     render_pipeline._queued_jobs.clear()
+
+
+async def _fake_alignment(project_dir: Path, project: Project) -> AlignmentResult:
+    return AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text="One sentence.",
+                start_s=0.0,
+                end_s=1.0,
+                confidence_avg=1.0,
+            )
+        ],
+        words=[],
+        cache_hit=True,
+    )
+
+
+async def _noop_warm_clip_cache(**kwargs: object) -> None:
+    return None
+
+
+def _render_job(project_dir: Path, render_id: str) -> render_pipeline.RenderJob:
+    project = Project.model_validate(
+        {
+            "version": 1,
+            "name": "test",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [],
+            "subtitles": None,
+            "watermark": None,
+        }
+    )
+    return render_pipeline.RenderJob(
+        render_id=render_id,
+        project_dir=project_dir,
+        project=project,
+        preset="draft",
+        resolution="1280x720",
+        output_path=project_dir / ".vc" / "drafts" / f"{render_id}.mp4",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+    )
 
 
 def _seed_render(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, render_id: str) -> str:
@@ -176,6 +221,90 @@ async def test_cancel_render_removes_queued_job_without_starting_it(
         release_first.set()
         await asyncio.sleep(0)
         _clear_render_runtime()
+
+
+@pytest.mark.asyncio
+async def test_cancel_active_render_emits_cancelling_before_task_cancel(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    _clear_render_runtime()
+    monkeypatch.setattr(render_pipeline, "_new_render_id", lambda: "r-active-cancel")
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fake_run_job(job: render_pipeline.RenderJob, *, raise_errors: bool) -> None:
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(render_pipeline, "_run_job", fake_run_job)
+
+    try:
+        result = await render_pipeline.start_render_project(project_dir=project_dir, preset="draft")
+        await asyncio.wait_for(started.wait(), timeout=1)
+
+        assert await render_pipeline.cancel_render(result.render_id) is True
+
+        assert list_render_events(result.render_id)[-1]["phase"] == "cancelling"
+    finally:
+        release.set()
+        await asyncio.sleep(0)
+        _clear_render_runtime()
+
+
+@pytest.mark.asyncio
+async def test_active_render_cancel_preserves_partial_and_records_cancelled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    insert_render(
+        render_id="r-active-partial",
+        project_path=project_dir,
+        output_path=project_dir / ".vc" / "drafts" / "r-active-partial.mp4",
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    mark_render_started(render_id="r-active-partial")
+    wrote_partial = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fake_run_ffmpeg(
+        command: list[str],
+        output_path: Path,
+        *,
+        render_id: str,
+        total_s: float,
+        log_path: Path | None = None,
+    ) -> render_pipeline._RenderMediaStats:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"partial")
+        wrote_partial.set()
+        await release.wait()
+        return render_pipeline._RenderMediaStats()
+
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", _fake_alignment)
+    monkeypatch.setattr(render_pipeline, "_warm_clip_cache", _noop_warm_clip_cache)
+    monkeypatch.setattr(render_pipeline, "build_compose_command", lambda **kwargs: ["ffmpeg"])
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+    job = _render_job(project_dir, "r-active-partial")
+    task = asyncio.create_task(render_pipeline._run_job(job, raise_errors=False))
+    await asyncio.wait_for(wrote_partial.wait(), timeout=1)
+
+    task.cancel()
+    await task
+
+    partial_path = job.output_path.with_name(f"{job.output_path.name}.partial")
+    assert partial_path.read_bytes() == b"partial"
+    assert get_render("r-active-partial")["status"] == "cancelled"
+    assert list_render_artifacts("r-active-partial")[0]["kind"] == "partial"
+    assert list_render_events("r-active-partial")[-1]["phase"] == "cancelled"
 
 
 @pytest.mark.asyncio
@@ -382,6 +511,86 @@ def test_probe_output_metadata_reads_ffprobe_json(
     assert metadata.audio_bitrate_kbps == 192
     assert metadata.audio_sample_rate == 48000
     assert metadata.faststart is True
+
+
+@pytest.mark.asyncio
+async def test_ffmpeg_failure_records_failed_event(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    insert_render(
+        render_id="r-ffmpeg-failed",
+        project_path=project_dir,
+        output_path=project_dir / ".vc" / "drafts" / "r-ffmpeg-failed.mp4",
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    mark_render_started(render_id="r-ffmpeg-failed")
+
+    async def fake_run_ffmpeg(*args: object, **kwargs: object) -> render_pipeline._RenderMediaStats:
+        raise render_pipeline.RenderError(500, "FFMPEG_FAILED", "ffmpeg failed")
+
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", _fake_alignment)
+    monkeypatch.setattr(render_pipeline, "_warm_clip_cache", _noop_warm_clip_cache)
+    monkeypatch.setattr(render_pipeline, "build_compose_command", lambda **kwargs: ["ffmpeg"])
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+
+    await render_pipeline._run_job(_render_job(project_dir, "r-ffmpeg-failed"), raise_errors=False)
+
+    assert get_render("r-ffmpeg-failed")["status"] == "failed"
+    assert list_render_events("r-ffmpeg-failed")[-1]["phase"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_history_write_failure_emits_recoverable_failed_event(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    insert_render(
+        render_id="r-history-failed",
+        project_path=project_dir,
+        output_path=project_dir / ".vc" / "drafts" / "r-history-failed.mp4",
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    mark_render_started(render_id="r-history-failed")
+
+    async def fake_run_ffmpeg(
+        command: list[str],
+        output_path: Path,
+        *,
+        render_id: str,
+        total_s: float,
+        log_path: Path | None = None,
+    ) -> render_pipeline._RenderMediaStats:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"mp4")
+        return render_pipeline._RenderMediaStats(duration_s=1.0)
+
+    def fail_mark_render_finished(**kwargs: object) -> None:
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", _fake_alignment)
+    monkeypatch.setattr(render_pipeline, "_warm_clip_cache", _noop_warm_clip_cache)
+    monkeypatch.setattr(render_pipeline, "build_compose_command", lambda **kwargs: ["ffmpeg"])
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+    monkeypatch.setattr(render_pipeline, "mark_render_finished", fail_mark_render_finished)
+
+    await render_pipeline._run_job(_render_job(project_dir, "r-history-failed"), raise_errors=False)
+
+    assert (project_dir / ".vc" / "drafts" / "r-history-failed.mp4").is_file()
+    assert list_render_events("r-history-failed")[-1]["phase"] == "failed"
+    assert "history update failed" in str(list_render_events("r-history-failed")[-1]["message"])
 
 
 @pytest.mark.asyncio

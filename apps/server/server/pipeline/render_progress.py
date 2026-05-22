@@ -19,6 +19,7 @@ RenderStage = Literal[
     "mux_mp4_faststart",
     "append_render_history_to_app_db",
     "done",
+    "cancelling",
     "failed",
     "cancelled",
     # Legacy in-flight stage names accepted during contract migration.
@@ -140,6 +141,7 @@ def _event_from_db(render_id: str) -> RenderProgressEvent | None:
         "mux_mp4_faststart",
         "append_render_history_to_app_db",
         "done",
+        "cancelling",
         "failed",
         "cancelled",
     }:

@@ -173,6 +173,7 @@ async def cancel_render(render_id: str) -> bool:
         )
         await _emit(render_id, "cancelled", 0.0, message="Render canceled before start.")
         return True
+    await _emit(render_id, "cancelling", 0.0, message="cancelling")
     task.cancel()
     return True
 
@@ -271,14 +272,14 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             message=exc.message,
         )
         _discard_partial(job.output_path)
-        await _emit(job.render_id, "error", 0.0, message=exc.message)
+        await _emit(job.render_id, "failed", 0.0, message=exc.message)
         if raise_errors:
             raise
     except Exception as exc:
         message = str(exc) or exc.__class__.__name__
         mark_render_failed(render_id=job.render_id, finished_at=datetime.now(UTC), message=message)
         _discard_partial(job.output_path)
-        await _emit(job.render_id, "error", 0.0, message=message)
+        await _emit(job.render_id, "failed", 0.0, message=message)
         if raise_errors:
             raise RenderError(500, "RENDER_FAILED", message) from exc
     else:
@@ -289,21 +290,42 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             99.0,
             message="appending render history",
         )
-        mark_render_finished(
-            render_id=job.render_id,
-            finished_at=datetime.now(UTC),
-            duration_s=duration_s,
-            output_path=job.output_path,
-            fps=media_stats.fps,
-            speed=media_stats.speed,
-            frame_count=media_stats.frame_count,
-            width=media_stats.width,
-            height=media_stats.height,
-            video_codec=media_stats.video_codec,
-            audio_codec=media_stats.audio_codec,
-            audio_bitrate_kbps=media_stats.audio_bitrate_kbps,
-            audio_sample_rate=media_stats.audio_sample_rate,
-        )
+        try:
+            mark_render_finished(
+                render_id=job.render_id,
+                finished_at=datetime.now(UTC),
+                duration_s=duration_s,
+                output_path=job.output_path,
+                fps=media_stats.fps,
+                speed=media_stats.speed,
+                frame_count=media_stats.frame_count,
+                width=media_stats.width,
+                height=media_stats.height,
+                video_codec=media_stats.video_codec,
+                audio_codec=media_stats.audio_codec,
+                audio_bitrate_kbps=media_stats.audio_bitrate_kbps,
+                audio_sample_rate=media_stats.audio_sample_rate,
+            )
+        except Exception as exc:
+            message = f"Render history update failed: {exc}"
+            with suppress(Exception):
+                mark_render_failed(
+                    render_id=job.render_id,
+                    finished_at=datetime.now(UTC),
+                    message=message,
+                    output_path=job.output_path,
+                )
+            await _emit(
+                job.render_id,
+                "failed",
+                0.0,
+                message=message,
+                output_path=str(job.output_path),
+                metadata=_metadata_detail(media_stats),
+            )
+            if raise_errors:
+                raise RenderError(500, "RENDER_HISTORY_FAILED", message) from exc
+            return
         await _emit(
             job.render_id,
             "done",

@@ -32,5 +32,5 @@ async def _render_events(websocket: WebSocket, render_id: str, project_id: str) 
     await websocket.accept()
     async for event in subscribe_progress(render_id, project_id=project_id):
         await websocket.send_json(event.model_dump(mode="json", exclude_none=True))
-        if event.type == "progress" and event.stage in {"done", "error", "cancelled"}:
+        if event.type == "progress" and event.stage in {"done", "failed", "error", "cancelled"}:
             break
