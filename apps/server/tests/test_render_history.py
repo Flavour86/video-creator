@@ -55,6 +55,50 @@ def test_render_history_records_finished_render(monkeypatch, tmp_path: Path) -> 
     assert artifacts[0]["size_bytes"] is None
 
 
+def test_finished_render_persists_probed_output_metadata(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    output_path = project_dir / "renders" / "vertical.mp4"
+    output_path.parent.mkdir(parents=True)
+    output_path.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-probed",
+        project_path=project_dir,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
+    )
+
+    mark_render_finished(
+        render_id="r-probed",
+        finished_at=datetime(2026, 5, 7, 12, 1, tzinfo=UTC),
+        duration_s=12.5,
+        output_path=output_path,
+        fps=29.97,
+        width=1080,
+        height=1920,
+        video_codec="h264",
+        audio_codec="aac",
+        audio_bitrate_kbps=192,
+        audio_sample_rate=48000,
+    )
+
+    row = list_renders_for_project(project_dir)[0]
+    assert row["duration_s"] == 12.5
+    assert row["resolution"] == "1080x1920"
+    assert row["width"] == 1080
+    assert row["height"] == 1920
+    assert row["fps"] == 29.97
+    assert row["video_codec"] == "h264"
+    assert row["audio_codec"] == "aac"
+    assert row["audio_bitrate_kbps"] == 192
+    assert row["audio_sample_rate"] == 48000
+    assert row["size_bytes"] == 3
+
+
 def test_finished_render_marks_project_config_rendered(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     project_dir = tmp_path / "project"

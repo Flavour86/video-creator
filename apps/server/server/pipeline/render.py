@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import secrets
@@ -23,6 +24,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from server.db.renders import (
+    add_render_artifact,
     get_render,
     insert_render,
     mark_render_cancelled,
@@ -74,9 +76,34 @@ class _SyncProcessState:
 
 @dataclass(frozen=True)
 class _RenderMediaStats:
+    duration_s: float | None = None
     fps: float | None = None
     speed: float | None = None
     frame_count: int | None = None
+    width: int | None = None
+    height: int | None = None
+    video_codec: str | None = None
+    audio_codec: str | None = None
+    audio_bitrate_kbps: int | None = None
+    audio_sample_rate: int | None = None
+    faststart: bool | None = None
+    streams: list[dict[str, object]] | None = None
+
+    def merged_with(self, probed: _RenderMediaStats) -> _RenderMediaStats:
+        return _RenderMediaStats(
+            duration_s=probed.duration_s or self.duration_s,
+            fps=probed.fps or self.fps,
+            speed=self.speed,
+            frame_count=self.frame_count,
+            width=probed.width or self.width,
+            height=probed.height or self.height,
+            video_codec=probed.video_codec or self.video_codec,
+            audio_codec=probed.audio_codec or self.audio_codec,
+            audio_bitrate_kbps=probed.audio_bitrate_kbps or self.audio_bitrate_kbps,
+            audio_sample_rate=probed.audio_sample_rate or self.audio_sample_rate,
+            faststart=probed.faststart if probed.faststart is not None else self.faststart,
+            streams=probed.streams or self.streams,
+        )
 
 
 class RenderError(Exception):
@@ -222,6 +249,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             job.output_path,
             render_id=job.render_id,
             total_s=_alignment_duration_s(alignment),
+            log_path=_render_log_path(job.project_dir, job.render_id),
         )
         await _emit(job.render_id, "mux_mp4_faststart", 98.0, message="muxing audio")
     except asyncio.CancelledError:
@@ -254,7 +282,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
         if raise_errors:
             raise RenderError(500, "RENDER_FAILED", message) from exc
     else:
-        duration_s = time.perf_counter() - timer
+        duration_s = media_stats.duration_s or (time.perf_counter() - timer)
         await _emit(
             job.render_id,
             "append_render_history_to_app_db",
@@ -269,6 +297,12 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             fps=media_stats.fps,
             speed=media_stats.speed,
             frame_count=media_stats.frame_count,
+            width=media_stats.width,
+            height=media_stats.height,
+            video_codec=media_stats.video_codec,
+            audio_codec=media_stats.audio_codec,
+            audio_bitrate_kbps=media_stats.audio_bitrate_kbps,
+            audio_sample_rate=media_stats.audio_sample_rate,
         )
         await _emit(
             job.render_id,
@@ -276,6 +310,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             100.0,
             message="Draft ready" if job.preset == "draft" else "Render ready",
             output_path=str(job.output_path),
+            metadata=_metadata_detail(media_stats),
         )
 
 
@@ -401,7 +436,9 @@ async def _run_ffmpeg(
     *,
     render_id: str,
     total_s: float,
+    log_path: Path | None = None,
 ) -> _RenderMediaStats:
+    resolved_log_path = log_path or output_path.with_suffix(".log")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -415,12 +452,15 @@ async def _run_ffmpeg(
             output_path,
             render_id=render_id,
             total_s=total_s,
+            log_path=resolved_log_path,
         )
     if proc.stdout is None or proc.stderr is None:
         raise RenderError(500, "FFMPEG_FAILED", "ffmpeg progress pipes were not available.")
 
     stderr_lines: list[str] = []
-    stderr_task = asyncio.create_task(_relay_stderr(proc.stderr, render_id, stderr_lines))
+    stderr_task = asyncio.create_task(
+        _relay_stderr(proc.stderr, render_id, stderr_lines, log_path=resolved_log_path)
+    )
     progress: dict[str, str] = {}
     try:
         while True:
@@ -452,10 +492,13 @@ async def _run_ffmpeg(
         raise
     if proc.returncode != 0:
         detail = "\n".join(stderr_lines[-20:]).strip()
+        _persist_render_log_artifact(render_id, resolved_log_path)
         raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
     if not output_path.is_file() or output_path.stat().st_size == 0:
+        _persist_render_log_artifact(render_id, resolved_log_path)
         raise RenderError(500, "OUTPUT_MISSING", "ffmpeg did not produce an output file.")
-    return _stats_from_progress(progress)
+    _persist_render_log_artifact(render_id, resolved_log_path)
+    return _stats_from_progress(progress).merged_with(_probe_output_metadata(output_path))
 
 
 async def _run_ffmpeg_threaded(
@@ -464,11 +507,21 @@ async def _run_ffmpeg_threaded(
     *,
     render_id: str,
     total_s: float,
+    log_path: Path,
 ) -> _RenderMediaStats:
     loop = asyncio.get_running_loop()
     state = _SyncProcessState()
     task = asyncio.create_task(
-        asyncio.to_thread(_run_ffmpeg_sync, command, output_path, render_id, total_s, loop, state)
+        asyncio.to_thread(
+            _run_ffmpeg_sync,
+            command,
+            output_path,
+            render_id,
+            total_s,
+            loop,
+            state,
+            log_path,
+        )
     )
     try:
         return await asyncio.shield(task)
@@ -486,6 +539,7 @@ def _run_ffmpeg_sync(
     total_s: float,
     loop: asyncio.AbstractEventLoop,
     state: _SyncProcessState,
+    log_path: Path,
 ) -> _RenderMediaStats:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
@@ -503,7 +557,7 @@ def _run_ffmpeg_sync(
     stderr_lines: list[str] = []
     stderr_thread = threading.Thread(
         target=_relay_stderr_sync,
-        args=(proc.stderr, render_id, stderr_lines, loop),
+        args=(proc.stderr, render_id, stderr_lines, loop, log_path),
         daemon=True,
     )
     stderr_thread.start()
@@ -524,10 +578,13 @@ def _run_ffmpeg_sync(
 
     if proc.returncode != 0:
         detail = "\n".join(stderr_lines[-20:]).strip()
+        _persist_render_log_artifact(render_id, log_path)
         raise RenderError(500, "FFMPEG_FAILED", detail or "ffmpeg failed.")
     if not output_path.is_file() or output_path.stat().st_size == 0:
+        _persist_render_log_artifact(render_id, log_path)
         raise RenderError(500, "OUTPUT_MISSING", "ffmpeg did not produce an output file.")
-    return _stats_from_progress(progress)
+    _persist_render_log_artifact(render_id, log_path)
+    return _stats_from_progress(progress).merged_with(_probe_output_metadata(output_path))
 
 
 def _terminate_sync_process(proc: subprocess.Popen[str] | None) -> None:
@@ -555,6 +612,7 @@ async def _emit(
     speed: str | None = None,
     message: str | None = None,
     output_path: str | None = None,
+    metadata: dict[str, object] | None = None,
 ) -> None:
     await publish_progress(
         RenderProgressEvent(
@@ -566,6 +624,7 @@ async def _emit(
             speed=speed,
             message=message,
             output_path=output_path,
+            metadata=metadata,
         )
     )
 
@@ -574,10 +633,31 @@ async def _emit_log(render_id: str, line: str) -> None:
     await publish_log(RenderLogEvent(render_id=render_id, line=line))
 
 
+def _render_log_path(project_dir: Path, render_id: str) -> Path:
+    return project_dir / ".vc" / "logs" / f"{render_id}.log"
+
+
+def _append_log_line(log_path: Path, line: str) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as file:
+        file.write(f"{line}\n")
+
+
+def _persist_render_log_artifact(render_id: str, log_path: Path) -> None:
+    if not log_path.is_file() or log_path.stat().st_size == 0:
+        return
+    existing = get_render(render_id)
+    if existing is None:
+        return
+    add_render_artifact(render_id=render_id, kind="log", path=log_path)
+
+
 async def _relay_stderr(
     stream: asyncio.StreamReader,
     render_id: str,
     sink: list[str],
+    *,
+    log_path: Path,
 ) -> None:
     while True:
         line_bytes = await stream.readline()
@@ -589,6 +669,7 @@ async def _relay_stderr(
         sink.append(line)
         if len(sink) > 200:
             del sink[: len(sink) - 200]
+        _append_log_line(log_path, line)
         await _emit_log(render_id, line)
 
 
@@ -597,6 +678,7 @@ def _relay_stderr_sync(
     render_id: str,
     sink: list[str],
     loop: asyncio.AbstractEventLoop,
+    log_path: Path,
 ) -> None:
     for raw_line in stream:
         line = _strip_ansi(str(raw_line).rstrip())
@@ -605,6 +687,7 @@ def _relay_stderr_sync(
         sink.append(line)
         if len(sink) > 200:
             del sink[: len(sink) - 200]
+        _append_log_line(log_path, line)
         _publish_from_thread(loop, _emit_log(render_id, line))
 
 
@@ -647,12 +730,20 @@ def _alignment_duration_s(alignment: AlignmentResult) -> float:
     return 0.001
 
 
-def _int_or_none(value: str | None) -> int | None:
+def _int_or_none(value: object) -> int | None:
     if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if not isinstance(value, str):
         return None
     try:
         return int(value)
-    except ValueError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -661,7 +752,7 @@ def _eta_seconds(total_s: float, out_time_s: float, speed: str | None) -> int | 
         return None
     try:
         speed_value = float(speed[:-1])
-    except ValueError:
+    except (TypeError, ValueError):
         return None
     if speed_value <= 0:
         return None
@@ -678,8 +769,141 @@ def _stats_from_progress(progress: dict[str, str]) -> _RenderMediaStats:
     return _RenderMediaStats(fps=fps, speed=speed_value, frame_count=frame_count)
 
 
-def _float_or_none(value: str | None) -> float | None:
+def _probe_output_metadata(output_path: Path) -> _RenderMediaStats:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            str(output_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return _RenderMediaStats()
+    try:
+        payload = json.loads(result.stdout)
+    except (TypeError, ValueError):
+        return _RenderMediaStats()
+    if not isinstance(payload, dict):
+        return _RenderMediaStats()
+    streams = payload.get("streams")
+    stream_rows: list[dict[str, object]] = (
+        [dict(row) for row in streams if isinstance(row, dict)]
+        if isinstance(streams, list)
+        else []
+    )
+    video = _first_stream(stream_rows, "video")
+    audio = _first_stream(stream_rows, "audio")
+    width = _int_or_none(video.get("width")) if video is not None else None
+    height = _int_or_none(video.get("height")) if video is not None else None
+    raw_format = payload.get("format")
+    format_row: dict[str, object] = dict(raw_format) if isinstance(raw_format, dict) else {}
+    return _RenderMediaStats(
+        duration_s=_float_or_none(format_row.get("duration")),
+        fps=_frame_rate(video.get("avg_frame_rate") if video is not None else None),
+        width=width,
+        height=height,
+        video_codec=(
+            str(video["codec_name"]) if video is not None and video.get("codec_name") else None
+        ),
+        audio_codec=(
+            str(audio["codec_name"]) if audio is not None and audio.get("codec_name") else None
+        ),
+        audio_bitrate_kbps=_kbps(audio.get("bit_rate") if audio is not None else None),
+        audio_sample_rate=_int_or_none(audio.get("sample_rate")) if audio is not None else None,
+        faststart=_has_faststart(output_path),
+        streams=[dict(row) for row in stream_rows],
+    )
+
+
+def _first_stream(streams: list[dict[str, object]], codec_type: str) -> dict[str, object] | None:
+    for stream in streams:
+        if stream.get("codec_type") == codec_type:
+            return stream
+    return None
+
+
+def _frame_rate(raw_value: object) -> float | None:
+    if not isinstance(raw_value, str) or raw_value in {"0/0", ""}:
+        return None
+    if "/" not in raw_value:
+        return _float_or_none(raw_value)
+    numerator, denominator = raw_value.split("/", maxsplit=1)
+    top = _float_or_none(numerator)
+    bottom = _float_or_none(denominator)
+    if top is None or bottom is None or bottom == 0:
+        return None
+    return top / bottom
+
+
+def _kbps(raw_value: object) -> int | None:
+    value = _int_or_none(raw_value)
     if value is None:
+        return None
+    return round(value / 1000)
+
+
+def _has_faststart(output_path: Path) -> bool | None:
+    try:
+        file_size = output_path.stat().st_size
+        with output_path.open("rb") as file:
+            seen_mdat = False
+            offset = 0
+            while offset + 8 <= file_size and offset < 1024 * 1024:
+                header = file.read(8)
+                if len(header) < 8:
+                    return None
+                atom_size = int.from_bytes(header[:4], "big")
+                atom_type = header[4:8]
+                header_size = 8
+                if atom_size == 1:
+                    large_size = file.read(8)
+                    if len(large_size) < 8:
+                        return None
+                    atom_size = int.from_bytes(large_size, "big")
+                    header_size = 16
+                if atom_size < header_size:
+                    return None
+                if atom_type == b"moov":
+                    return not seen_mdat
+                if atom_type == b"mdat":
+                    seen_mdat = True
+                file.seek(atom_size - header_size, os.SEEK_CUR)
+                offset += atom_size
+    except OSError:
+        return None
+    return None
+
+
+def _metadata_detail(stats: _RenderMediaStats) -> dict[str, object]:
+    return {
+        "duration_s": stats.duration_s,
+        "width": stats.width,
+        "height": stats.height,
+        "video_codec": stats.video_codec,
+        "audio_codec": stats.audio_codec,
+        "audio_bitrate_kbps": stats.audio_bitrate_kbps,
+        "audio_sample_rate": stats.audio_sample_rate,
+        "faststart": stats.faststart,
+        "streams": stats.streams or [],
+    }
+
+
+def _float_or_none(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if not isinstance(value, str):
         return None
     try:
         return float(value)

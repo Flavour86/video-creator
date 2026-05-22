@@ -122,10 +122,17 @@ def mark_render_finished(
     fps: float | None = None,
     speed: float | None = None,
     frame_count: int | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    video_codec: str | None = None,
+    audio_codec: str | None = None,
+    audio_bitrate_kbps: int | None = None,
+    audio_sample_rate: int | None = None,
 ) -> None:
     project_path: Path | None = None
     row: Any = None
     resolved_output_path = str(output_path) if output_path is not None else None
+    resolved_resolution = f"{width}x{height}" if width is not None and height is not None else None
     with connection() as conn:
         conn.execute(
             """
@@ -135,8 +142,15 @@ def mark_render_finished(
                 status = ?,
                 message = NULL,
                 output_path = COALESCE(?, output_path),
+                resolution = COALESCE(?, resolution),
+                width = COALESCE(?, width),
+                height = COALESCE(?, height),
                 size_bytes = COALESCE(?, size_bytes),
                 fps = COALESCE(?, fps),
+                video_codec = COALESCE(?, video_codec),
+                audio_codec = COALESCE(?, audio_codec),
+                audio_bitrate_kbps = COALESCE(?, audio_bitrate_kbps),
+                audio_sample_rate = COALESCE(?, audio_sample_rate),
                 speed = COALESCE(?, speed),
                 frame_count = COALESCE(?, frame_count),
                 updated_at = datetime('now')
@@ -148,12 +162,19 @@ def mark_render_finished(
                 duration_s,
                 "rendered",
                 resolved_output_path,
+                resolved_resolution,
+                width,
+                height,
                 (
                     output_path.stat().st_size
                     if output_path is not None and output_path.exists()
                     else None
                 ),
                 fps,
+                video_codec,
+                audio_codec,
+                audio_bitrate_kbps,
+                audio_sample_rate,
                 speed,
                 frame_count,
                 render_id,
@@ -394,16 +415,33 @@ def list_render_events(render_id: str) -> list[RenderEventRow]:
 
 
 def get_latest_render_event(render_id: str) -> RenderEventRow | None:
+    progress_phases = (
+        "queued",
+        "verify_alignment_cache",
+        "pre_render_cached_clips",
+        "build_subtitles_srt",
+        "compose_filtergraph",
+        "mux_mp4_faststart",
+        "append_render_history_to_app_db",
+        "done",
+        "failed",
+        "cancelled",
+        "cache_warm",
+        "compose",
+        "muxing",
+        "error",
+    )
     with connection() as conn:
         row = conn.execute(
             """
             SELECT id, render_id, ts, phase, progress, message, detail_json
             FROM render_events
             WHERE render_id = ?
+              AND phase IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ORDER BY id DESC, ts DESC
             LIMIT 1
             """,
-            (render_id,),
+            (render_id, *progress_phases),
         ).fetchone()
     return dict(row) if row is not None else None
 

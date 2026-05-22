@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,14 +12,22 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from server.db.projects import project_id_for_path
-from server.db.renders import get_render, insert_render, list_render_events, list_renders_for_project
+from server.db.renders import (
+    get_render,
+    insert_render,
+    list_render_artifacts,
+    list_render_events,
+    list_renders_for_project,
+)
 from server.domain.project import Project
 from server.domain.timing import AlignedSentence, AlignmentResult
 from server.main import app
 from server.pipeline import render as render_pipeline
 from server.pipeline.render_progress import (
     _latest,
+    RenderLogEvent,
     RenderProgressEvent,
+    publish_log,
     publish_progress,
     subscribe_progress,
 )
@@ -294,6 +303,88 @@ async def test_progress_persists_queued_and_stage_messages(
 
 
 @pytest.mark.asyncio
+async def test_publish_log_persists_warning_and_fatal_events(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    render_id = "r-log-events"
+    _seed_render(monkeypatch, tmp_path, render_id)
+
+    await publish_log(RenderLogEvent(render_id=render_id, line="warning: clipped samples"))
+    await publish_log(RenderLogEvent(render_id=render_id, line="fatal error: encoder failed"))
+
+    rows = list_render_events(render_id)
+    assert [row["phase"] for row in rows] == ["ffmpeg_warning", "ffmpeg_fatal_error"]
+    assert [row["message"] for row in rows] == [
+        "warning: clipped samples",
+        "fatal error: encoder failed",
+    ]
+
+
+def test_persist_render_log_artifact_records_reopenable_log(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    render_id = "r-log-artifact"
+    _seed_render(monkeypatch, tmp_path, render_id)
+    log_path = tmp_path / "project" / ".vc" / "logs" / "r-log-artifact.log"
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text("line one\n", encoding="utf-8")
+
+    render_pipeline._persist_render_log_artifact(render_id, log_path)
+
+    artifacts = list_render_artifacts(render_id)
+    assert artifacts[0]["kind"] == "log"
+    assert artifacts[0]["path"] == str(log_path.resolve())
+    assert artifacts[0]["size_bytes"] == log_path.stat().st_size
+
+
+def test_probe_output_metadata_reads_ffprobe_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    output_path = tmp_path / "out.mp4"
+    output_path.write_bytes(
+        b"\x00\x00\x00\x08ftyp" b"\x00\x00\x00\x08moov" b"\x00\x00\x00\x08mdat"
+    )
+    payload = {
+        "format": {
+            "duration": "12.5",
+            "bit_rate": "1500000",
+        },
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1080,
+                "height": 1920,
+                "avg_frame_rate": "30000/1001",
+            },
+            {
+                "codec_type": "audio",
+                "codec_name": "aac",
+                "bit_rate": "192000",
+                "sample_rate": "48000",
+            },
+        ],
+    }
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr(render_pipeline.subprocess, "run", fake_run)
+
+    metadata = render_pipeline._probe_output_metadata(output_path)
+
+    assert metadata.duration_s == 12.5
+    assert metadata.width == 1080
+    assert metadata.height == 1920
+    assert metadata.fps == pytest.approx(29.97, rel=0.001)
+    assert metadata.video_codec == "h264"
+    assert metadata.audio_codec == "aac"
+    assert metadata.audio_bitrate_kbps == 192
+    assert metadata.audio_sample_rate == 48000
+    assert metadata.faststart is True
+
+
+@pytest.mark.asyncio
 async def test_runtime_emits_progress_messages_in_spec_order(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -323,6 +414,7 @@ async def test_runtime_emits_progress_messages_in_spec_order(
         *,
         render_id: str,
         total_s: float,
+        log_path: Path | None = None,
     ) -> render_pipeline._RenderMediaStats:
         return render_pipeline._RenderMediaStats()
 

@@ -39,6 +39,7 @@ class RenderProgressEvent(BaseModel):
     speed: str | None = None
     message: str | None = None
     output_path: str | None = None
+    metadata: dict[str, object] | None = None
 
 
 class RenderLogEvent(BaseModel):
@@ -65,6 +66,7 @@ async def publish_progress(event: RenderProgressEvent) -> None:
             "current_frame": event.current_frame,
             "speed": event.speed,
             "output_path": event.output_path,
+            "metadata": event.metadata,
         },
     )
     for queue in list(_subscribers_for_render(event.render_id)):
@@ -72,6 +74,14 @@ async def publish_progress(event: RenderProgressEvent) -> None:
 
 
 async def publish_log(event: RenderLogEvent) -> None:
+    phase = _log_event_phase(event.line)
+    if phase is not None:
+        add_render_event(
+            render_id=event.render_id,
+            phase=phase,
+            message=event.line,
+            detail_json={"kind": "log", "level": phase.removeprefix("ffmpeg_")},
+        )
     for queue in list(_subscribers_for_render(event.render_id)):
         queue.put_nowait(event)
 
@@ -137,6 +147,7 @@ def _event_from_db(render_id: str) -> RenderProgressEvent | None:
     progress = row.get("progress")
     eta_seconds = detail.get("eta_seconds")
     current_frame = detail.get("current_frame")
+    metadata = detail.get("metadata")
     return RenderProgressEvent(
         render_id=render_id,
         stage=cast(RenderStage, phase),
@@ -146,6 +157,7 @@ def _event_from_db(render_id: str) -> RenderProgressEvent | None:
         speed=str(detail["speed"]) if detail.get("speed") is not None else None,
         message=str(row["message"]) if row.get("message") is not None else None,
         output_path=str(detail["output_path"]) if detail.get("output_path") is not None else None,
+        metadata=cast(dict[str, object], metadata) if isinstance(metadata, dict) else None,
     )
 
 
@@ -157,3 +169,12 @@ def _parse_detail(raw_detail: object) -> dict[str, object]:
     except (TypeError, ValueError):
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _log_event_phase(line: str) -> str | None:
+    normalized = line.lower()
+    if "fatal" in normalized or "error" in normalized:
+        return "ffmpeg_fatal_error"
+    if "warning" in normalized:
+        return "ffmpeg_warning"
+    return None
