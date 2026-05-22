@@ -16,7 +16,7 @@
 
 ## Phase 2: Render Execution And Recovery
 
-- [ ] Task 4: Implement the exact render stage pipeline
+- [x] Task 4: Implement the exact render stage pipeline
   - Acceptance: stages execute in spec order; 1080p, 720p, and 9:16 outputs are correct H.264 MP4s with `+faststart`; empty visual config renders over black fallback.
   - Verify: `rtk pnpm -F @vc/server test -- test_render_endpoint.py`, `rtk pnpm -F @vc/server test -- test_filtergraph.py`, `rtk pnpm -F @vc/server test -- test_clip_cache.py`
 - [ ] Task 5: Persist live progress, ffmpeg logs, and output probes

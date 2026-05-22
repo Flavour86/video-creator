@@ -127,6 +127,40 @@ def test_empty_foreground_uses_black_canvas_and_audio(tmp_path: Path) -> None:
     assert "[0:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]" in filtergraph
 
 
+@pytest.mark.parametrize(
+    ("preset", "resolution", "expected_size", "expected_crf"),
+    [
+        ("final", None, "1920x1080", "18"),
+        ("draft", None, "1280x720", "28"),
+        ("final", "1080x1920", "1080x1920", "18"),
+    ],
+)
+def test_compose_command_uses_spec_mp4_outputs(
+    tmp_path: Path,
+    preset: str,
+    resolution: str | None,
+    expected_size: str,
+    expected_crf: str,
+) -> None:
+    project = _project([])
+    output_path = tmp_path / "out.mp4"
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=output_path,
+        preset=preset,
+        resolution=resolution,
+    )
+
+    assert f"color=black:s={expected_size}:r=30:d=10[bg]" in _filtergraph(command)
+    assert command[command.index("-c:v") + 1] == "libx264"
+    assert command[command.index("-crf") + 1] == expected_crf
+    assert command[command.index("-movflags") + 1] == "+faststart"
+    assert command[-1] == str(output_path)
+
+
 def test_compose_duration_uses_audio_when_alignment_is_shorter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

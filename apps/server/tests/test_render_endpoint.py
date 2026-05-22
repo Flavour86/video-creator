@@ -9,6 +9,7 @@ import pytest
 from server.db.projects import project_id_for_path, touch_recent
 from server.db.renders import (
     add_render_event,
+    get_render,
     insert_render,
     mark_render_cancelled,
     mark_render_failed,
@@ -168,6 +169,51 @@ async def test_render_endpoint_rejects_editor_resolution_aliases(tmp_path: Path)
         )
 
     assert response.status_code == 422
+
+
+def test_create_job_avoids_existing_successful_render_id(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    existing_output = tmp_path / ".vc" / "drafts" / "r-collision.mp4"
+    existing_output.parent.mkdir(parents=True)
+    existing_output.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-collision",
+        project_path=tmp_path,
+        output_path=existing_output,
+        preset="draft",
+        started_at=datetime_now(),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    mark_render_finished(render_id="r-collision", finished_at=datetime_now(), duration_s=1.0)
+    ids = iter(["r-collision", "r-fresh"])
+    monkeypatch.setattr(render_pipeline, "_new_render_id", lambda: next(ids))
+
+    job = render_pipeline._create_job(project_dir=tmp_path, preset="draft")
+
+    assert job.render_id == "r-fresh"
+    assert job.output_path.name == "r-fresh.mp4"
+    assert get_render("r-fresh")["status"] == "queued"
+
+
+def test_create_job_avoids_existing_mp4_path_without_overwrite(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    existing_output = tmp_path / ".vc" / "drafts" / "r-file.mp4"
+    existing_output.parent.mkdir(parents=True)
+    existing_output.write_bytes(b"mp4")
+    monkeypatch.setattr(render_pipeline, "_new_render_id", lambda: "r-file")
+
+    job = render_pipeline._create_job(project_dir=tmp_path, preset="draft")
+
+    assert job.render_id == "r-file"
+    assert job.output_path.name == "r-file-2.mp4"
+    assert existing_output.read_bytes() == b"mp4"
+    assert get_render("r-file")["output_path"].endswith("r-file-2.mp4")
 
 
 @pytest.mark.asyncio

@@ -227,7 +227,7 @@ async def test_progress_persists_queued_and_stage_messages(
     await publish_progress(
         RenderProgressEvent(
             render_id=render_id,
-            stage="cache_warm",
+            stage="queued",
             percent=0.0,
             message="queued",
         )
@@ -235,7 +235,7 @@ async def test_progress_persists_queued_and_stage_messages(
     await publish_progress(
         RenderProgressEvent(
             render_id=render_id,
-            stage="cache_warm",
+            stage="verify_alignment_cache",
             percent=1.0,
             message="verifying cache",
         )
@@ -243,7 +243,7 @@ async def test_progress_persists_queued_and_stage_messages(
     await publish_progress(
         RenderProgressEvent(
             render_id=render_id,
-            stage="cache_warm",
+            stage="pre_render_cached_clips",
             percent=9.0,
             message="pre-rendering clips",
         )
@@ -251,7 +251,7 @@ async def test_progress_persists_queued_and_stage_messages(
     await publish_progress(
         RenderProgressEvent(
             render_id=render_id,
-            stage="cache_warm",
+            stage="build_subtitles_srt",
             percent=10.0,
             message="building subtitles.srt",
         )
@@ -259,7 +259,7 @@ async def test_progress_persists_queued_and_stage_messages(
     await publish_progress(
         RenderProgressEvent(
             render_id=render_id,
-            stage="compose",
+            stage="compose_filtergraph",
             percent=12.0,
             message="ffmpeg compose",
         )
@@ -267,7 +267,7 @@ async def test_progress_persists_queued_and_stage_messages(
     await publish_progress(
         RenderProgressEvent(
             render_id=render_id,
-            stage="muxing",
+            stage="mux_mp4_faststart",
             percent=98.0,
             message="muxing audio",
         )
@@ -275,7 +275,14 @@ async def test_progress_persists_queued_and_stage_messages(
 
     phases = [str(row["phase"]) for row in list_render_events(render_id)]
     messages = [str(row["message"]) for row in list_render_events(render_id)]
-    assert phases == ["cache_warm", "cache_warm", "cache_warm", "cache_warm", "compose", "muxing"]
+    assert phases == [
+        "queued",
+        "verify_alignment_cache",
+        "pre_render_cached_clips",
+        "build_subtitles_srt",
+        "compose_filtergraph",
+        "mux_mp4_faststart",
+    ]
     assert messages == [
         "queued",
         "verifying cache",
@@ -361,9 +368,20 @@ async def test_runtime_emits_progress_messages_in_spec_order(
         "building subtitles.srt",
         "ffmpeg compose",
         "muxing audio",
+        "appending render history",
         "Draft ready",
     ]
-    assert [percent for _, percent, _ in events] == [0.0, 1.0, 9.0, 10.0, 12.0, 98.0, 100.0]
+    assert [stage for stage, _, _ in events] == [
+        "queued",
+        "verify_alignment_cache",
+        "pre_render_cached_clips",
+        "build_subtitles_srt",
+        "compose_filtergraph",
+        "mux_mp4_faststart",
+        "append_render_history_to_app_db",
+        "done",
+    ]
+    assert [percent for _, percent, _ in events] == [0.0, 1.0, 9.0, 10.0, 12.0, 98.0, 99.0, 100.0]
     percents = [percent for _, percent, _ in events]
     assert percents == sorted(percents)
 

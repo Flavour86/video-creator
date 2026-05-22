@@ -23,6 +23,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from server.db.renders import (
+    get_render,
     insert_render,
     mark_render_cancelled,
     mark_render_failed,
@@ -163,7 +164,7 @@ def _create_job(
     preset_config = PRESETS[preset]
     resolved_resolution = _resolve_render_resolution(project, preset, resolution)
     width, height = _resolution_dimensions(resolved_resolution)
-    render_id = _new_render_id()
+    render_id = _new_unique_render_id()
     output_path = _output_path(project_dir, preset, render_id)
     started_at = datetime.now(UTC)
     insert_render(
@@ -194,8 +195,8 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
     timer = time.perf_counter()
 
     try:
-        await _emit(job.render_id, "cache_warm", 0.0, message="queued")
-        await _emit(job.render_id, "cache_warm", 1.0, message="verifying cache")
+        await _emit(job.render_id, "queued", 0.0, message="queued")
+        await _emit(job.render_id, "verify_alignment_cache", 1.0, message="verifying cache")
         alignment = await _ensure_alignment(job.project_dir, job.project)
         preset_config = PRESETS[job.preset]
         await _warm_clip_cache(
@@ -206,8 +207,8 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             crf=preset_config.crf,
             render_id=job.render_id,
         )
-        await _emit(job.render_id, "cache_warm", 10.0, message="building subtitles.srt")
-        await _emit(job.render_id, "compose", 12.0, message="ffmpeg compose")
+        await _emit(job.render_id, "build_subtitles_srt", 10.0, message="building subtitles.srt")
+        await _emit(job.render_id, "compose_filtergraph", 12.0, message="ffmpeg compose")
         command = build_compose_command(
             project_dir=job.project_dir,
             project=job.project,
@@ -222,7 +223,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             render_id=job.render_id,
             total_s=_alignment_duration_s(alignment),
         )
-        await _emit(job.render_id, "muxing", 98.0, message="muxing audio")
+        await _emit(job.render_id, "mux_mp4_faststart", 98.0, message="muxing audio")
     except asyncio.CancelledError:
         message = "Render canceled."
         partial_path = _preserve_partial(job.output_path)
@@ -254,6 +255,12 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             raise RenderError(500, "RENDER_FAILED", message) from exc
     else:
         duration_s = time.perf_counter() - timer
+        await _emit(
+            job.render_id,
+            "append_render_history_to_app_db",
+            99.0,
+            message="appending render history",
+        )
         mark_render_finished(
             render_id=job.render_id,
             finished_at=datetime.now(UTC),
@@ -368,7 +375,7 @@ async def _warm_clip_cache(
 ) -> None:
     items = visual_items_bottom_to_top(project)
     if not items:
-        await _emit(render_id, "cache_warm", 9.0, message="pre-rendering clips")
+        await _emit(render_id, "pre_render_cached_clips", 9.0, message="pre-rendering clips")
         return
     total = max(1, len(items))
     for index, item in enumerate(items, start=1):
@@ -382,7 +389,7 @@ async def _warm_clip_cache(
         )
         await _emit(
             render_id,
-            "cache_warm",
+            "pre_render_cached_clips",
             min(9.0, (index / total) * 9.0),
             message="pre-rendering clips",
         )
@@ -625,7 +632,7 @@ async def _emit_ffmpeg_progress(
     speed = progress.get("speed")
     await _emit(
         render_id,
-        "compose",
+        "compose_filtergraph",
         percent,
         eta_seconds=_eta_seconds(total_s, out_time_s, speed),
         current_frame=_int_or_none(progress.get("frame")),
@@ -684,6 +691,14 @@ def _new_render_id() -> str:
     return f"r-{datetime.now(UTC).strftime('%Y-%m-%d-%H%M')}-{secrets.token_hex(3)}"
 
 
+def _new_unique_render_id() -> str:
+    for _ in range(10):
+        render_id = _new_render_id()
+        if get_render(render_id) is None:
+            return render_id
+    raise RenderError(500, "RENDER_ID_COLLISION", "Unable to allocate a render id.")
+
+
 def _resolve_render_resolution(
     project: Project,
     preset: RenderPreset,
@@ -707,8 +722,16 @@ def _resolution_dimensions(resolution: str) -> tuple[int, int]:
 
 def _output_path(project_dir: Path, preset: RenderPreset, render_id: str) -> Path:
     if preset == "draft":
-        return project_dir / ".vc" / "drafts" / f"{render_id}.mp4"
-    return project_dir / "renders" / f"{render_id}.mp4"
+        base_path = project_dir / ".vc" / "drafts" / f"{render_id}.mp4"
+    else:
+        base_path = project_dir / "renders" / f"{render_id}.mp4"
+    if not base_path.exists():
+        return base_path
+    for index in range(2, 1000):
+        candidate = base_path.with_name(f"{base_path.stem}-{index}{base_path.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise RenderError(500, "RENDER_OUTPUT_COLLISION", "Unable to allocate render output path.")
 
 
 def _discard_partial(output_path: Path) -> None:
