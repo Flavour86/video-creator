@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,7 +11,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from server.db.projects import project_id_for_path
-from server.db.renders import insert_render, list_render_events
+from server.db.renders import get_render, insert_render, list_render_events, list_renders_for_project
 from server.domain.project import Project
 from server.domain.timing import AlignedSentence, AlignmentResult
 from server.main import app
@@ -22,6 +23,37 @@ from server.pipeline.render_progress import (
     subscribe_progress,
 )
 from server.settings import settings
+
+
+def _write_project(project_dir: Path) -> None:
+    project_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "name": "test",
+        "audio": "voice.wav",
+        "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+        "output": {"preset": "draft"},
+        "layers": [],
+        "subtitles": None,
+        "watermark": None,
+    }
+    (project_dir / "project.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+async def _wait_for(condition: object) -> None:
+    for _ in range(50):
+        if callable(condition) and condition():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("Timed out waiting for render condition.")
+
+
+def _clear_render_runtime() -> None:
+    render_pipeline._active_projects.clear()
+    render_pipeline._active_tasks.clear()
+    render_pipeline._active_jobs.clear()
+    render_pipeline._project_queues.clear()
+    render_pipeline._queued_jobs.clear()
 
 
 def _seed_render(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, render_id: str) -> str:
@@ -39,6 +71,102 @@ def _seed_render(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, render_id: str
         height=1080,
     )
     return project_id_for_path(project_dir)
+
+
+@pytest.mark.asyncio
+async def test_start_render_project_queues_second_render_for_same_project(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    _clear_render_runtime()
+    ids = iter(["r-queue-1", "r-queue-2"])
+    first_started = asyncio.Event()
+    second_started = asyncio.Event()
+    release_first = asyncio.Event()
+    release_second = asyncio.Event()
+    started: list[str] = []
+
+    async def fake_run_job(job: render_pipeline.RenderJob, *, raise_errors: bool) -> None:
+        started.append(job.render_id)
+        if job.render_id == "r-queue-1":
+            first_started.set()
+            await release_first.wait()
+        else:
+            second_started.set()
+            await release_second.wait()
+
+    monkeypatch.setattr(render_pipeline, "_new_render_id", lambda: next(ids))
+    monkeypatch.setattr(render_pipeline, "_run_job", fake_run_job)
+
+    try:
+        first = await render_pipeline.start_render_project(project_dir=project_dir, preset="draft")
+        await asyncio.wait_for(first_started.wait(), timeout=1)
+        second = await render_pipeline.start_render_project(project_dir=project_dir, preset="final")
+
+        assert first.render_id == "r-queue-1"
+        assert second.render_id == "r-queue-2"
+        assert get_render("r-queue-1")["status"] == "rendering"
+        assert get_render("r-queue-2")["status"] == "queued"
+        assert [row["id"] for row in list_renders_for_project(project_dir)] == [
+            "r-queue-1",
+            "r-queue-2",
+        ]
+        assert [row["phase"] for row in list_render_events("r-queue-2")] == ["queued"]
+        assert render_pipeline.active_render_count() == 1
+
+        release_first.set()
+        await asyncio.wait_for(second_started.wait(), timeout=1)
+        assert started == ["r-queue-1", "r-queue-2"]
+        assert get_render("r-queue-2")["status"] == "rendering"
+
+        release_second.set()
+        await _wait_for(lambda: render_pipeline.active_render_count() == 0)
+    finally:
+        release_first.set()
+        release_second.set()
+        await asyncio.sleep(0)
+        _clear_render_runtime()
+
+
+@pytest.mark.asyncio
+async def test_cancel_render_removes_queued_job_without_starting_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    _clear_render_runtime()
+    ids = iter(["r-active", "r-queued"])
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    started: list[str] = []
+
+    async def fake_run_job(job: render_pipeline.RenderJob, *, raise_errors: bool) -> None:
+        started.append(job.render_id)
+        first_started.set()
+        await release_first.wait()
+
+    monkeypatch.setattr(render_pipeline, "_new_render_id", lambda: next(ids))
+    monkeypatch.setattr(render_pipeline, "_run_job", fake_run_job)
+
+    try:
+        await render_pipeline.start_render_project(project_dir=project_dir, preset="draft")
+        await asyncio.wait_for(first_started.wait(), timeout=1)
+        queued = await render_pipeline.start_render_project(project_dir=project_dir, preset="final")
+
+        assert await render_pipeline.cancel_render(queued.render_id) is True
+        assert get_render("r-queued")["status"] == "cancelled"
+        assert [row["phase"] for row in list_render_events("r-queued")] == ["queued", "cancelled"]
+
+        release_first.set()
+        await _wait_for(lambda: render_pipeline.active_render_count() == 0)
+        assert started == ["r-active"]
+    finally:
+        release_first.set()
+        await asyncio.sleep(0)
+        _clear_render_runtime()
 
 
 @pytest.mark.asyncio

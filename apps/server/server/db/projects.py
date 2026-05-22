@@ -243,18 +243,23 @@ def get_project_by_path(path: Path) -> dict[str, object] | None:
     return dict(row) if row is not None else None
 
 
-def mark_project_rendered(project_path: Path) -> None:
+def mark_project_rendered(project_path: Path, *, config_hash: str | None = None) -> None:
+    if config_hash is None:
+        return
     now = datetime.now(UTC).isoformat()
     with connection() as conn:
         conn.execute(
             """
             UPDATE projects
-            SET last_rendered_config_hash = current_config_hash,
-                has_unrendered_changes = 0,
+            SET last_rendered_config_hash = ?,
+                has_unrendered_changes = CASE
+                    WHEN current_config_hash = ? THEN 0
+                    ELSE 1
+                END,
                 last_render_at = ?
-            WHERE project_path = ? AND current_config_hash IS NOT NULL
+            WHERE project_path = ?
             """,
-            (now, str(project_path.resolve())),
+            (config_hash, config_hash, now, str(project_path.resolve())),
         )
 
 

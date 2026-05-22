@@ -8,10 +8,10 @@
 - [x] Task 2: Replace the backend render API with the spec surface
   - Acceptance: start, cancel, history, history delete, and video playback use `SPEC_RENDER.md` project-scoped paths; old conflicting callers/tests are rewritten.
   - Verify: `rtk pnpm -F @vc/server test -- test_render_endpoint.py`, `rtk pnpm -F @vc/server test -- test_render_history.py`, `rtk pnpm -F @vc/server lint`
-- [ ] Task 3: Add project-scoped render persistence and queue semantics
+- [x] Task 3: Add project-scoped render persistence and queue semantics
   - Acceptance: multiple render starts queue; queued/running/done/cancelled/failed rows persist consistently; successful render updates config-hash gating.
   - Verify: `rtk pnpm -F @vc/server test -- test_render_history.py`, `rtk pnpm -F @vc/server test -- test_render_progress.py`, `rtk pnpm -F @vc/server lint`
-- [ ] Checkpoint: API And Persistence
+- [x] Checkpoint: API And Persistence
   - Acceptance: public paths match `SPEC_RENDER.md`; queue/history/artifact/event state can be inspected for queued, done, cancelled, and failed renders.
 
 ## Phase 2: Render Execution And Recovery

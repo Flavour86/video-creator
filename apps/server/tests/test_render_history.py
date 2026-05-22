@@ -7,12 +7,15 @@ from server.db.renders import (
     add_render_artifact,
     add_render_event,
     delete_render,
+    get_render,
     insert_render,
     list_render_artifacts,
     list_render_events,
     list_renders_for_project,
+    mark_render_cancelled,
     mark_render_failed,
     mark_render_finished,
+    mark_render_started,
 )
 from server.db.project_configs import save_config_snapshot
 from server.db.projects import get_project_by_path
@@ -95,6 +98,61 @@ def test_finished_render_marks_project_config_rendered(monkeypatch, tmp_path: Pa
     assert after["has_unrendered_changes"] == 0
 
 
+def test_finished_render_does_not_clear_newer_config_changes(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    first_digest = save_config_snapshot(
+        project_dir,
+        {
+            "version": 1,
+            "name": "test",
+            "audio": "",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    insert_render(
+        render_id="r-stale-config",
+        project_path=project_dir,
+        output_path=project_dir / "renders" / "final.mp4",
+        preset="final",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
+    )
+    second_digest = save_config_snapshot(
+        project_dir,
+        {
+            "version": 1,
+            "name": "test edited",
+            "audio": "",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+
+    mark_render_finished(
+        render_id="r-stale-config",
+        finished_at=datetime(2026, 5, 7, 12, 1, tzinfo=UTC),
+        duration_s=60.0,
+    )
+
+    after = get_project_by_path(project_dir)
+    assert first_digest != second_digest
+    assert after is not None
+    assert after["current_config_hash"] == second_digest
+    assert after["last_rendered_config_hash"] == first_digest
+    assert after["has_unrendered_changes"] == 1
+
+
 def test_insert_render_captures_current_config_hash(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     project_dir = tmp_path / "project"
@@ -126,6 +184,46 @@ def test_insert_render_captures_current_config_hash(monkeypatch, tmp_path: Path)
     rows = list_renders_for_project(project_dir)
     assert rows[0]["id"] == "r-hash"
     assert rows[0]["config_hash"] == digest
+
+
+def test_render_status_lifecycle_keeps_rows_events_and_artifacts_consistent(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    partial_path = project_dir / ".vc" / "drafts" / "draft.mp4.partial"
+    partial_path.parent.mkdir(parents=True)
+    partial_path.write_bytes(b"partial")
+
+    insert_render(
+        render_id="r-lifecycle",
+        project_path=project_dir,
+        output_path=project_dir / ".vc" / "drafts" / "draft.mp4",
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    assert get_render("r-lifecycle")["status"] == "queued"
+
+    mark_render_started(render_id="r-lifecycle")
+    add_render_event(render_id="r-lifecycle", phase="queued", progress=0.0, message="queued")
+    assert get_render("r-lifecycle")["status"] == "rendering"
+
+    mark_render_cancelled(
+        render_id="r-lifecycle",
+        finished_at=datetime(2026, 5, 7, 12, 1, tzinfo=UTC),
+        message="cancelled",
+        output_path=partial_path,
+    )
+
+    row = get_render("r-lifecycle")
+    assert row["status"] == "cancelled"
+    assert list_render_events("r-lifecycle")[0]["phase"] == "queued"
+    artifacts = list_render_artifacts("r-lifecycle")
+    assert artifacts[0]["kind"] == "partial"
+    assert artifacts[0]["size_bytes"] == 7
 
 
 def test_render_history_records_failed_render(monkeypatch, tmp_path: Path) -> None:

@@ -10,11 +10,13 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from collections.abc import Coroutine, Iterable
 from concurrent.futures import Future
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,7 @@ from server.db.renders import (
     mark_render_cancelled,
     mark_render_failed,
     mark_render_finished,
+    mark_render_started,
 )
 from server.domain.project import Project, load_project
 from server.domain.timing import AlignmentResult
@@ -86,6 +89,8 @@ class RenderError(Exception):
 _active_projects: dict[str, str] = {}
 _active_tasks: dict[str, asyncio.Task[None]] = {}
 _active_jobs: dict[str, RenderJob] = {}
+_project_queues: dict[str, deque[RenderJob]] = {}
+_queued_jobs: dict[str, RenderJob] = {}
 
 _RESOLUTION_ALIASES: dict[str, str] = {
     "1080p": "1920x1080",
@@ -105,14 +110,13 @@ async def start_render_project(
 ) -> RenderResult:
     job = _create_job(project_dir=project_dir, preset=preset, resolution=resolution)
     project_key = str(project_dir.resolve())
-    if project_key in _active_projects:
-        raise RenderError(409, "RENDER_IN_PROGRESS", "Render already running for this project.")
-
-    _active_projects[project_key] = job.render_id
-    _active_jobs[job.render_id] = job
-    task = asyncio.create_task(_run_job(job, raise_errors=False))
-    _active_tasks[job.render_id] = task
-    task.add_done_callback(lambda _task: _clear_active(job))
+    is_queued = project_key in _active_projects or bool(_project_queues.get(project_key))
+    _project_queues.setdefault(project_key, deque()).append(job)
+    _queued_jobs[job.render_id] = job
+    if not is_queued:
+        _start_next_job(project_key)
+    else:
+        await _emit(job.render_id, "queued", 0.0, message="queued")
     return RenderResult(render_id=job.render_id, output_path=job.output_path)
 
 
@@ -123,6 +127,7 @@ async def render_project(
     resolution: str | None = None,
 ) -> RenderResult:
     job = _create_job(project_dir=project_dir, preset=preset, resolution=resolution)
+    mark_render_started(render_id=job.render_id)
     await _run_job(job, raise_errors=True)
     return RenderResult(render_id=job.render_id, output_path=job.output_path)
 
@@ -130,7 +135,16 @@ async def render_project(
 async def cancel_render(render_id: str) -> bool:
     task = _active_tasks.get(render_id)
     if task is None:
-        return False
+        queued_job = _pop_queued_job(render_id)
+        if queued_job is None:
+            return False
+        mark_render_cancelled(
+            render_id=render_id,
+            finished_at=datetime.now(UTC),
+            message="Render canceled before start.",
+        )
+        await _emit(render_id, "cancelled", 0.0, message="Render canceled before start.")
+        return True
     task.cancel()
     return True
 
@@ -264,6 +278,42 @@ def _clear_active(job: RenderJob) -> None:
         _active_projects.pop(project_key, None)
     _active_tasks.pop(job.render_id, None)
     _active_jobs.pop(job.render_id, None)
+    _start_next_job(project_key)
+
+
+def _start_next_job(project_key: str) -> None:
+    queue = _project_queues.get(project_key)
+    if queue is None:
+        return
+    while queue:
+        job = queue.popleft()
+        _queued_jobs.pop(job.render_id, None)
+        mark_render_started(render_id=job.render_id)
+        _active_projects[project_key] = job.render_id
+        _active_jobs[job.render_id] = job
+        task = asyncio.create_task(_run_job(job, raise_errors=False))
+        _active_tasks[job.render_id] = task
+        task.add_done_callback(partial(_handle_task_done, job))
+        break
+    if not queue:
+        _project_queues.pop(project_key, None)
+
+
+def _pop_queued_job(render_id: str) -> RenderJob | None:
+    job = _queued_jobs.pop(render_id, None)
+    if job is None:
+        return None
+    project_key = str(job.project_dir.resolve())
+    queue = _project_queues.get(project_key)
+    if queue is not None:
+        _project_queues[project_key] = deque(item for item in queue if item.render_id != render_id)
+        if not _project_queues[project_key]:
+            _project_queues.pop(project_key, None)
+    return job
+
+
+def _handle_task_done(job: RenderJob, _task: asyncio.Task[None]) -> None:
+    _clear_active(job)
 
 
 async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentResult:

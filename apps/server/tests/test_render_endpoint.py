@@ -292,7 +292,7 @@ async def test_render_endpoint_project_not_found(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_render_endpoint_rejects_in_progress_error(
+async def test_render_endpoint_returns_pipeline_error(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -300,15 +300,15 @@ async def test_render_endpoint_rejects_in_progress_error(
     touch_recent(tmp_path, "Render")
     project_id = project_id_for_path(tmp_path)
 
-    async def busy_start_render_project(
+    async def failing_start_render_project(
         *,
         project_dir: Path,
         preset: str,
         resolution: str | None = None,
     ) -> RenderResult:
-        raise RenderError(409, "RENDER_IN_PROGRESS", "Render already running.")
+        raise RenderError(500, "RENDER_FAILED", "Render failed.")
 
-    monkeypatch.setattr(render_pipeline, "start_render_project", busy_start_render_project)
+    monkeypatch.setattr(render_pipeline, "start_render_project", failing_start_render_project)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -317,8 +317,8 @@ async def test_render_endpoint_rejects_in_progress_error(
             json={"preset": "draft"},
         )
 
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "RENDER_IN_PROGRESS"
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "RENDER_FAILED"
 
 
 @pytest.mark.asyncio

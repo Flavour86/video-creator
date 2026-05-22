@@ -98,7 +98,7 @@ def insert_render(
                 width,
                 height,
                 started_at.isoformat(),
-                "rendering",
+                "queued",
                 None,
                 video_codec,
                 video_crf,
@@ -161,7 +161,7 @@ def mark_render_finished(
         )
         row = conn.execute(
             """
-            SELECT p.project_path, rh.output_path, rh.preset
+            SELECT p.project_path, rh.output_path, rh.preset, rh.config_hash
             FROM render_history rh
             JOIN projects p ON p.project_id = rh.project_id
             WHERE rh.id = ?
@@ -171,12 +171,29 @@ def mark_render_finished(
         if row is not None:
             project_path = Path(str(row["project_path"]))
     if project_path is not None:
-        mark_project_rendered(project_path)
+        mark_project_rendered(
+            project_path,
+            config_hash=str(row["config_hash"]) if row["config_hash"] is not None else None,
+        )
         output_path = Path(str(row["output_path"]))
         add_render_artifact(
             render_id=render_id,
             kind="output",
             path=output_path,
+        )
+
+
+def mark_render_started(*, render_id: str) -> None:
+    with connection() as conn:
+        conn.execute(
+            """
+            UPDATE render_history
+            SET status = ?,
+                message = NULL,
+                updated_at = datetime('now')
+            WHERE id = ? AND status = ?
+            """,
+            ("rendering", render_id, "queued"),
         )
 
 
@@ -427,7 +444,17 @@ def list_renders_for_project(project_path: Path, limit: int = 10) -> list[Render
                 excluded
             FROM render_history
             WHERE project_id = ?
-            ORDER BY started_at DESC
+            ORDER BY
+                CASE status
+                    WHEN 'rendering' THEN 0
+                    WHEN 'queued' THEN 1
+                    ELSE 2
+                END,
+                CASE
+                    WHEN status IN ('rendering', 'queued') THEN started_at
+                    ELSE NULL
+                END ASC,
+                started_at DESC
             LIMIT ?
             """,
             (str(project["project_id"]), limit),
