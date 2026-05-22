@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+import sys
+from collections import deque
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +28,7 @@ from server.main import app
 from server.pipeline import render as render_pipeline
 from server.pipeline.render_progress import (
     _latest,
+    _subscribers,
     RenderLogEvent,
     RenderProgressEvent,
     publish_log,
@@ -591,6 +594,252 @@ async def test_history_write_failure_emits_recoverable_failed_event(
     assert (project_dir / ".vc" / "drafts" / "r-history-failed.mp4").is_file()
     assert list_render_events("r-history-failed")[-1]["phase"] == "failed"
     assert "history update failed" in str(list_render_events("r-history-failed")[-1]["message"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("render_id", "failure"),
+    [
+        (
+            "r-render-failure",
+            render_pipeline.RenderError(500, "RENDER_FAILED", "render failure"),
+        ),
+        (
+            "r-disk-full",
+            render_pipeline.RenderError(507, "DISK_FULL", "disk full while writing output"),
+        ),
+        (
+            "r-drive-disconnected",
+            OSError("drive disconnected during render"),
+        ),
+    ],
+)
+async def test_recoverable_render_failures_record_failed_rows_and_cleanup_partials(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    render_id: str,
+    failure: Exception,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    output_path = project_dir / ".vc" / "drafts" / f"{render_id}.mp4"
+    insert_render(
+        render_id=render_id,
+        project_path=project_dir,
+        output_path=output_path,
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    mark_render_started(render_id=render_id)
+
+    async def fake_run_ffmpeg(*args: object, **kwargs: object) -> render_pipeline._RenderMediaStats:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"partial")
+        raise failure
+
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", _fake_alignment)
+    monkeypatch.setattr(render_pipeline, "_warm_clip_cache", _noop_warm_clip_cache)
+    monkeypatch.setattr(render_pipeline, "build_compose_command", lambda **kwargs: ["ffmpeg"])
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+
+    await render_pipeline._run_job(_render_job(project_dir, render_id), raise_errors=False)
+
+    row = get_render(render_id)
+    assert row["status"] == "failed"
+    assert not output_path.exists()
+    assert list_render_events(render_id)[-1]["phase"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_successful_render_after_failure_requires_no_manual_cleanup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    for render_id in ("r-first-fails", "r-next-succeeds"):
+        insert_render(
+            render_id=render_id,
+            project_path=project_dir,
+            output_path=project_dir / ".vc" / "drafts" / f"{render_id}.mp4",
+            preset="draft",
+            started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+            resolution="1280x720",
+            width=1280,
+            height=720,
+        )
+        mark_render_started(render_id=render_id)
+
+    async def fake_run_ffmpeg(
+        command: list[str],
+        output_path: Path,
+        *,
+        render_id: str,
+        total_s: float,
+        log_path: Path | None = None,
+    ) -> render_pipeline._RenderMediaStats:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if render_id == "r-first-fails":
+            output_path.write_bytes(b"partial")
+            raise render_pipeline.RenderError(500, "FFMPEG_FAILED", "ffmpeg failed")
+        output_path.write_bytes(b"mp4")
+        return render_pipeline._RenderMediaStats(duration_s=1.0)
+
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", _fake_alignment)
+    monkeypatch.setattr(render_pipeline, "_warm_clip_cache", _noop_warm_clip_cache)
+    monkeypatch.setattr(render_pipeline, "build_compose_command", lambda **kwargs: ["ffmpeg"])
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+
+    await render_pipeline._run_job(_render_job(project_dir, "r-first-fails"), raise_errors=False)
+    await render_pipeline._run_job(_render_job(project_dir, "r-next-succeeds"), raise_errors=False)
+
+    assert get_render("r-first-fails")["status"] == "failed"
+    assert get_render("r-next-succeeds")["status"] == "rendered"
+    assert (project_dir / ".vc" / "drafts" / "r-next-succeeds.mp4").is_file()
+
+
+@pytest.mark.asyncio
+async def test_sidecar_task_death_clears_active_render_and_starts_next_queue(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    active_job = _render_job(project_dir, "r-sidecar-dead")
+    queued_job = _render_job(project_dir, "r-after-sidecar")
+    for job in (active_job, queued_job):
+        insert_render(
+            render_id=job.render_id,
+            project_path=project_dir,
+            output_path=job.output_path,
+            preset=job.preset,
+            started_at=job.started_at,
+            resolution=job.resolution,
+            width=1280,
+            height=720,
+        )
+    project_key = str(project_dir.resolve())
+    render_pipeline._active_projects[project_key] = active_job.render_id
+    render_pipeline._active_jobs[active_job.render_id] = active_job
+    render_pipeline._project_queues[project_key] = deque([queued_job])
+    render_pipeline._queued_jobs[queued_job.render_id] = queued_job
+
+    async def failed_sidecar() -> None:
+        raise RuntimeError("sidecar died")
+
+    failed_task = asyncio.create_task(failed_sidecar())
+    with suppress(RuntimeError):
+        await failed_task
+    render_pipeline._active_tasks[active_job.render_id] = failed_task
+
+    started = asyncio.Event()
+    block_next = asyncio.Event()
+
+    async def fake_run_job(job: render_pipeline.RenderJob, *, raise_errors: bool) -> None:
+        started.set()
+        await block_next.wait()
+
+    monkeypatch.setattr(render_pipeline, "_run_job", fake_run_job)
+
+    render_pipeline._handle_task_done(active_job, failed_task)
+    await _wait_for(started.is_set)
+
+    assert active_job.render_id not in render_pipeline._active_jobs
+    assert render_pipeline._active_projects[project_key] == queued_job.render_id
+    assert get_render(queued_job.render_id)["status"] == "rendering"
+
+    next_task = render_pipeline._active_tasks[queued_job.render_id]
+    next_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await next_task
+    _clear_render_runtime()
+
+
+@pytest.mark.asyncio
+async def test_browser_disconnect_unregisters_render_progress_subscriber() -> None:
+    _subscribers.clear()
+
+    async def consume() -> None:
+        async for _event in subscribe_progress("r-browser-close", project_id="p-browser"):
+            pass
+
+    task = asyncio.create_task(consume())
+    await _wait_for(lambda: ("p-browser", "r-browser-close") in _subscribers)
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+    assert ("p-browser", "r-browser-close") not in _subscribers
+
+
+@pytest.mark.asyncio
+async def test_large_render_log_retains_tail_and_writes_full_log(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    render_id = "r-large-log"
+    insert_render(
+        render_id=render_id,
+        project_path=project_dir,
+        output_path=project_dir / ".vc" / "drafts" / f"{render_id}.mp4",
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+    stream = asyncio.StreamReader()
+    for index in range(250):
+        stream.feed_data(f"warning line {index}\n".encode("utf-8"))
+    stream.feed_eof()
+    sink: list[str] = []
+    log_path = project_dir / ".vc" / "logs" / f"{render_id}.log"
+
+    await render_pipeline._relay_stderr(stream, render_id, sink, log_path=log_path)
+
+    assert len(sink) == 200
+    assert sink[0] == "warning line 50"
+    assert sink[-1] == "warning line 249"
+    assert len(log_path.read_text(encoding="utf-8").splitlines()) == 250
+
+
+@pytest.mark.asyncio
+async def test_ffmpeg_nonzero_exit_uses_stderr_tail_and_persists_log_artifact(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    render_id = "r-ffmpeg-nonzero"
+    output_path = project_dir / ".vc" / "drafts" / f"{render_id}.mp4"
+    log_path = project_dir / ".vc" / "logs" / f"{render_id}.log"
+    insert_render(
+        render_id=render_id,
+        project_path=project_dir,
+        output_path=output_path,
+        preset="draft",
+        started_at=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
+        resolution="1280x720",
+        width=1280,
+        height=720,
+    )
+
+    command = [
+        sys.executable,
+        "-c",
+        "import sys\nfor i in range(25): print(f'ffmpeg error {i}', file=sys.stderr)\nsys.exit(2)",
+    ]
+    with pytest.raises(render_pipeline.RenderError) as exc_info:
+        await render_pipeline._run_ffmpeg(command, output_path, render_id=render_id, total_s=1.0, log_path=log_path)
+
+    assert exc_info.value.code == "FFMPEG_FAILED"
+    assert "ffmpeg error 24" in exc_info.value.message
+    assert "ffmpeg error 0" not in exc_info.value.message
+    assert list_render_artifacts(render_id)[0]["path"] == str(log_path)
 
 
 @pytest.mark.asyncio

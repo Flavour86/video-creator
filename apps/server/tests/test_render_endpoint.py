@@ -14,6 +14,7 @@ from server.db.renders import (
     mark_render_cancelled,
     mark_render_failed,
     mark_render_finished,
+    mark_render_started,
 )
 from server.domain.project import load_project
 from server.main import app
@@ -707,6 +708,14 @@ async def test_get_project_render_file_rejects_partial_render(monkeypatch, tmp_p
     ("status", "mark_row"),
     [
         (
+            "queued",
+            lambda render_id: None,
+        ),
+        (
+            "running",
+            lambda render_id: mark_render_started(render_id=render_id),
+        ),
+        (
             "failed",
             lambda render_id: mark_render_failed(
                 render_id=render_id,
@@ -724,7 +733,7 @@ async def test_get_project_render_file_rejects_partial_render(monkeypatch, tmp_p
         ),
     ],
 )
-async def test_get_project_render_file_rejects_failed_or_cancelled(
+async def test_get_project_render_file_rejects_non_playable_rows(
     monkeypatch,
     tmp_path: Path,
     status: str,

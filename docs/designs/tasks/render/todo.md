@@ -47,7 +47,7 @@
 
 ## Phase 4: Quality Gates And Acceptance
 
-- [ ] Task 11: Add backend render edge-case and performance coverage
+- [x] Task 11: Add backend render edge-case and performance coverage
   - Acceptance: all render edge cases and performance targets from `SPEC_RENDER.md` are covered; long-running checks are isolated behind explicit commands.
   - Verify: `rtk pnpm -F @vc/server test`, `rtk pnpm -F @vc/server lint`
 - [ ] Task 12: Add Render visual parity coverage
