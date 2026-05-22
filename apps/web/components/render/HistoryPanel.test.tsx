@@ -74,6 +74,7 @@ it.each<Array<[string, Partial<RenderHistoryEntry>, RegExp]>>([
   ["failed.mp4", { status: "failed" }, /1080p.*failed.*excluded/],
   ["warning.mp4", { status: "ffmpeg_warning" }, /1080p.*ffmpeg warning.*excluded/],
   ["fatal.mp4", { status: "ffmpeg_fatal_error" }, /1080p.*ffmpeg fatal error.*excluded/],
+  ["cancelled.mp4", { status: "cancelled" }, /1080p.*cancelled.*excluded/],
 ])("shows %s state in history", (filename, overrides, expected) => {
   renderPanel({ entries: [entry({ filename, ...overrides })], revealEnabled: true });
   expect(screen.getByText(expected)).toBeInTheDocument();

@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, expect, it, vi } from "vitest";
 import { dictionaries } from "@/lib/i18n/messages";
 
 const mocks = vi.hoisted(() => ({
   back: vi.fn(),
+  cancelRender: vi.fn(),
   historyEntries: [] as Array<Record<string, unknown>>,
   jobPhase: "verifying",
   push: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("@/lib/render/useRenderJob", () => ({
     return {
       error: "",
       job: jobId ? renderJob(jobId, mocks.jobPhase) : null,
+      loadJob: vi.fn().mockResolvedValue(undefined),
       startRender: mocks.startRender,
     };
   },
@@ -55,7 +57,7 @@ vi.mock("@/lib/render/useSystemActions", () => ({
 }));
 
 vi.mock("@/lib/render/useRenderCancel", () => ({
-  useRenderCancel: () => vi.fn(),
+  useRenderCancel: () => mocks.cancelRender,
 }));
 
 vi.mock("@/lib/render/useFfmpegLog", () => ({
@@ -73,6 +75,8 @@ import { RenderPageClient } from "./RenderPageClient";
 
 beforeEach(() => {
   mocks.back.mockReset();
+  mocks.cancelRender.mockReset();
+  mocks.cancelRender.mockResolvedValue(true);
   mocks.historyEntries = [];
   mocks.jobPhase = "verifying";
   mocks.push.mockReset();
@@ -152,6 +156,59 @@ it("plays completed output through the project-scoped render file route", () => 
 
   expect(openSpy).toHaveBeenCalledWith("/api/server/projects/p_demo/render/r-done", "_blank", "noopener,noreferrer");
   openSpy.mockRestore();
+});
+
+it("cancels queued renders without an active-render confirmation", async () => {
+  mocks.jobPhase = "queued";
+  renderClient("p_demo", "r-queued");
+
+  fireEvent.click(screen.getByRole("button", { name: /cancel render/i }));
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await waitFor(() => expect(mocks.cancelRender).toHaveBeenCalledWith("r-queued"));
+  await waitFor(() => expect(screen.getByText("Render cancelled")).toBeInTheDocument());
+});
+
+it("confirms active cancellation, sends one request, and moves through cancelling to cancelled", async () => {
+  let resolveCancel: (value: boolean) => void = () => undefined;
+  mocks.cancelRender.mockReturnValue(new Promise((resolve) => {
+    resolveCancel = resolve;
+  }));
+  mocks.jobPhase = "composing";
+  renderClient("p_demo", "r-active");
+
+  fireEvent.click(screen.getByRole("button", { name: /cancel render/i }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText(/partial output/i)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: /cancel render/i }));
+
+  expect(mocks.cancelRender).toHaveBeenCalledTimes(1);
+  expect(screen.getByText("Cancelling render")).toBeInTheDocument();
+
+  await act(async () => {
+    resolveCancel(true);
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(screen.getByText("Render cancelled")).toBeInTheDocument());
+});
+
+it("restores active state and surfaces cancel errors when cancellation is rejected", async () => {
+  mocks.cancelRender.mockRejectedValueOnce(new Error("cancel rejected"));
+  mocks.jobPhase = "composing";
+  renderClient("p_demo", "r-rejected");
+
+  fireEvent.click(screen.getByRole("button", { name: /cancel render/i }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /cancel render/i }));
+
+  expect(await screen.findByText("Error: cancel rejected")).toBeInTheDocument();
+  expect(screen.getByText("Composing 1080p MP4")).toBeInTheDocument();
+});
+
+it("does not offer cancellation for completed renders", () => {
+  mocks.jobPhase = "done";
+  renderClient("p_demo", "r-done");
+
+  expect(screen.queryByRole("button", { name: /cancel render/i })).not.toBeInTheDocument();
 });
 
 function renderJob(id: string, phase: string) {

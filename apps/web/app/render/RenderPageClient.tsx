@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ProjectConfigLoadResponse } from "@vc/shared-schemas";
@@ -27,15 +27,28 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
   const t = useTranslations("pages.render");
   const router = useRouter();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [optimisticCancelPhase, setOptimisticCancelPhase] = useState<"cancelling" | "cancelled" | null>(null);
+  const cancelRequestRef = useRef<string | null>(null);
   const validRoute = isValidRenderProjectId(projectId) && isValidRenderId(renderId);
   const activeProjectId = validRoute ? projectId : "";
   const activeRenderId = validRoute ? renderId : null;
+  const lastRenderIdRef = useRef<string | null>(activeRenderId);
   const [projectName, setProjectName] = useState(projectId || "Render");
   const { entries, purgeAll, refresh, remove } = useRenderHistory(activeProjectId, activeRenderId ?? "");
-  const { error, job, startRender } = useRenderJob(activeProjectId, activeRenderId);
+  const { error, job, loadJob, startRender } = useRenderJob(activeProjectId, activeRenderId);
   const cancelRender = useRenderCancel(activeProjectId);
   const reveal = useSystemReveal();
-  const revealEnabled = job?.capabilities?.reveal_in_explorer_supported ?? false;
+  const displayJob = useMemo(() => {
+    if (!job || !optimisticCancelPhase) return job;
+    return {
+      ...job,
+      outputExists: optimisticCancelPhase === "cancelled" ? false : job.outputExists,
+      phase: optimisticCancelPhase,
+      status: optimisticCancelPhase,
+    };
+  }, [job, optimisticCancelPhase]);
+  const revealEnabled = displayJob?.capabilities?.reveal_in_explorer_supported ?? false;
 
   useEffect(() => {
     if (!activeProjectId) return;
@@ -51,6 +64,15 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
       cancelled = true;
     };
   }, [activeProjectId]);
+
+  useEffect(() => {
+    if (lastRenderIdRef.current === activeRenderId) return;
+    lastRenderIdRef.current = activeRenderId;
+    setCancelError("");
+    setConfirmCancel(false);
+    setOptimisticCancelPhase(null);
+    cancelRequestRef.current = null;
+  }, [activeRenderId]);
 
   const goEditor = useCallback(() => {
     const target = activeProjectId ? `/editor?projectId=${encodeURIComponent(activeProjectId)}` : "/editor";
@@ -73,6 +95,35 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
     window.open(url, "_blank", "noopener,noreferrer");
   }, [activeProjectId, job?.id, job?.outputExists, job?.phase]);
 
+  const confirmCancelRender = useCallback(async () => {
+    if (!job || cancelRequestRef.current === job.id) return;
+    cancelRequestRef.current = job.id;
+    setCancelError("");
+    setOptimisticCancelPhase("cancelling");
+    try {
+      await cancelRender(job.id);
+      setOptimisticCancelPhase("cancelled");
+      await Promise.all([
+        Promise.resolve(refresh()).catch(() => undefined),
+        Promise.resolve(loadJob(job.id)).catch(() => undefined),
+      ]);
+    } catch (cause) {
+      setOptimisticCancelPhase(null);
+      setCancelError(String(cause));
+    } finally {
+      cancelRequestRef.current = null;
+    }
+  }, [cancelRender, job, loadJob, refresh]);
+
+  const requestCancel = useCallback(() => {
+    if (!job) return;
+    if (job.phase === "queued") {
+      void confirmCancelRender();
+      return;
+    }
+    setConfirmCancel(true);
+  }, [confirmCancelRender, job]);
+
   const startFinal = useCallback(async () => {
     const id = await startRender("final");
     if (id) {
@@ -88,9 +139,9 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
   }, [job?.phase, refresh]);
 
   useRenderHotkeys({
-    job,
+    job: displayJob,
     onBack: goEditor,
-    onCancel: () => setConfirmCancel(true),
+    onCancel: requestCancel,
     onPlay: playOutput,
     onReveal: () => revealOutput(),
   });
@@ -107,20 +158,20 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
   return (
     <PageChrome className="grid h-[calc(100vh-44px-40px)] grid-cols-1 grid-rows-[auto_auto_auto_auto] gap-[18px] overflow-y-auto p-[28px] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[auto_1fr_auto]" variant="workbench">
       <RenderHead
-        job={job}
+        job={displayJob}
         projectName={projectName}
         onBack={goEditor}
-        onCancel={() => setConfirmCancel(true)}
+        onCancel={requestCancel}
         onRetry={() => void startFinal()}
         onReveal={() => revealOutput()}
         revealEnabled={revealEnabled}
       />
-      <RenderCard job={job} />
-      <LogCard job={job} />
+      <RenderCard job={displayJob} />
+      <LogCard job={displayJob} />
       <RenderAside
         activeId={activeRenderId}
         entries={entries}
-        job={job}
+        job={displayJob}
         onDeleteHistory={(id) => {
           void remove(id).then(refresh);
         }}
@@ -133,14 +184,14 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
         onReveal={revealOutput}
         onSelectHistory={(id) => router.replace(renderRoute(activeProjectId, id) as Parameters<typeof router.replace>[0])}
       />
-      {error ? <p className="col-start-1 rounded border border-(--red-line) bg-(--red-bg) px-3 py-2 text-sm text-(--text)">{error}</p> : null}
+      {error || cancelError ? <p className="col-start-1 rounded border border-(--red-line) bg-(--red-bg) px-3 py-2 text-sm text-(--text)">{error || cancelError}</p> : null}
       <ConfirmDialog
         body={t("cancelConfirm.body")}
         cancelLabel={t("cancelConfirm.keep")}
         confirmLabel={t("cancelConfirm.confirm")}
         destructive
         onConfirm={() => {
-          if (job) void cancelRender(job.id).then(refresh);
+          void confirmCancelRender();
         }}
         onOpenChange={setConfirmCancel}
         open={confirmCancel}

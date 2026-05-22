@@ -66,5 +66,5 @@ export function RenderHead({ job, projectName, onBack, onCancel, onReveal, revea
 }
 
 function running(phase: string): boolean {
-  return ["queued", "verifying", "prerender", "subtitles", "composing", "muxing", "loggingHistory", "cancelling"].includes(phase);
+  return ["queued", "verifying", "prerender", "subtitles", "composing", "muxing", "loggingHistory"].includes(phase);
 }
