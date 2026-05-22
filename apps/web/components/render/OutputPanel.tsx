@@ -1,35 +1,37 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import {
-  formatAudioChain,
+  formatBitrate,
   formatBytes,
   formatColor,
   formatDimensions,
   formatFps,
-  formatVideoChain,
+  formatRenderResolutionValue,
   truncateFilename,
 } from "@/lib/format/render";
 import type { RenderJob } from "@/lib/render/types";
 
-export function OutputPanel({ job }: { job: RenderJob | null }) {
+export function OutputPanel({ job, projectName }: { job: RenderJob | null; projectName: string }) {
   const t = useTranslations("pages.render.out");
   const manifest = job?.manifest;
-  const rows = manifest
+  const sizeValue = job && manifest ? outputSizeValue(job, manifest.estimatedBytes, t) : "--";
+  const sizeLabel = job ? outputSizeLabel(job, t) : t("estSize");
+  const rows = job && manifest
     ? [
+        [t("project"), projectName],
         [t("file"), truncateFilename(job.filename, 18)],
-        [t("resolution"), formatDimensions(manifest.width, manifest.height)],
+        [t("resolution"), `${formatRenderResolutionValue(job.resolution, job.preset)} (${formatDimensions(manifest.width, manifest.height)})`],
         [t("framerate"), formatFps(manifest.fps)],
-        [t("video"), formatVideoChain(manifest.codec, manifest.crf, manifest.preset)],
-        [t("audio"), formatAudioChain(manifest.audioCodec, manifest.audioBitrate)],
+        [t("videoCodec"), manifest.codec],
+        [t("crf"), `CRF ${manifest.crf}`],
+        [t("preset"), manifest.preset],
+        [t("audioCodec"), manifest.audioCodec],
+        [t("bitrate"), formatBitrate(manifest.audioBitrate)],
+        [t("sampleRate"), "48 kHz"],
         [t("color"), formatColor(manifest.colorMatrix, manifest.pixfmt)],
-        [
-          job.phase === "done" ? t("size") : t("estSize"),
-          job.phase === "done" && !job.outputExists
-            ? "missing output"
-            : formatBytes(job.phase === "done" ? job.bytes : manifest.estimatedBytes, { approx: job.phase !== "done" }),
-        ],
+        [sizeLabel, sizeValue],
       ]
-    : [[t("file"), "--"]];
+    : [[t("project"), projectName], [t("file"), "--"]];
 
   return (
     <section className="flex flex-col overflow-hidden rounded-[10px] border border-(--line) bg-(--bg-2)">
@@ -44,6 +46,24 @@ export function OutputPanel({ job }: { job: RenderJob | null }) {
       </div>
     </section>
   );
+}
+
+function outputSizeValue(job: RenderJob, estimatedBytes: number, t: ReturnType<typeof useTranslations>): string {
+  if (job.outputExists && job.bytes != null) return formatBytes(job.bytes);
+  if (job.phase === "done" || job.phase === "outputMissing") return t("missingOutput");
+  if (job.phase === "partialExcluded") return t("partialExcluded");
+  if (job.phase === "failed" || job.phase === "ffmpegFatalError") return t("unavailable");
+  return formatBytes(estimatedBytes, { approx: true });
+}
+
+function outputSizeLabel(job: RenderJob, t: ReturnType<typeof useTranslations>): string {
+  const terminalWithoutOutput =
+    job.phase === "done" ||
+    job.phase === "outputMissing" ||
+    job.phase === "partialExcluded" ||
+    job.phase === "failed" ||
+    job.phase === "ffmpegFatalError";
+  return job.outputExists || terminalWithoutOutput ? t("size") : t("estSize");
 }
 
 export function PanelHead({ action, title }: { action?: ReactNode; title: string }) {

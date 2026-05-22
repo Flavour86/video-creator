@@ -143,6 +143,17 @@ it("retries failed renders and replaces with the dynamic render route", async ()
   expect(mocks.replace).toHaveBeenCalledWith("/render/p_demo/r-started");
 });
 
+it("plays completed output through the project-scoped render file route", () => {
+  const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+  mocks.jobPhase = "done";
+  renderClient("p_demo", "r-done");
+
+  fireEvent.click(screen.getByRole("button", { name: /play locally/i }));
+
+  expect(openSpy).toHaveBeenCalledWith("/api/server/projects/p_demo/render/r-done", "_blank", "noopener,noreferrer");
+  openSpy.mockRestore();
+});
+
 function renderJob(id: string, phase: string) {
   return {
     artifacts: [],

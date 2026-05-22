@@ -16,7 +16,7 @@ import { useRenderHistory } from "@/lib/render/useRenderHistory";
 import { useRenderHotkeys } from "@/lib/render/useRenderHotkeys";
 import { useRenderJob } from "@/lib/render/useRenderJob";
 import { isValidRenderId, isValidRenderProjectId, renderRoute } from "@/lib/render/routes";
-import { useSystemOpen, useSystemReveal } from "@/lib/render/useSystemActions";
+import { useSystemReveal } from "@/lib/render/useSystemActions";
 
 type RenderPageClientProps = {
   projectId: string;
@@ -35,7 +35,6 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
   const { error, job, startRender } = useRenderJob(activeProjectId, activeRenderId);
   const cancelRender = useRenderCancel(activeProjectId);
   const reveal = useSystemReveal();
-  const open = useSystemOpen();
   const revealEnabled = job?.capabilities?.reveal_in_explorer_supported ?? false;
 
   useEffect(() => {
@@ -69,8 +68,10 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
   }, [job?.outputExists, job?.outputPath, reveal, revealEnabled]);
 
   const playOutput = useCallback(() => {
-    if (job?.outputPath && job.outputExists) void open(job.outputPath);
-  }, [job?.outputExists, job?.outputPath, open]);
+    if (!activeProjectId || job?.phase !== "done" || !job.outputExists) return;
+    const url = `/api/server/projects/${encodeURIComponent(activeProjectId)}/render/${encodeURIComponent(job.id)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [activeProjectId, job?.id, job?.outputExists, job?.phase]);
 
   const startFinal = useCallback(async () => {
     const id = await startRender("final");
@@ -127,6 +128,7 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
         onPurgeHistory={() => {
           void purgeAll().then(refresh);
         }}
+        projectName={projectName}
         revealEnabled={revealEnabled}
         onReveal={revealOutput}
         onSelectHistory={(id) => router.replace(renderRoute(activeProjectId, id) as Parameters<typeof router.replace>[0])}

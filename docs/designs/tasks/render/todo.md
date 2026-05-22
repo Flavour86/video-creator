@@ -36,7 +36,7 @@
 - [x] Task 8: Build the live Render progress page
   - Acceptance: header, progress card, stats, stages, status visuals, and ffmpeg log match `SPEC_RENDER.md` and update live.
   - Verify: `rtk pnpm -F @vc/web test -- render/page.test.tsx`, `rtk pnpm -F @vc/web test -- RenderCard`, `rtk pnpm -F @vc/web test -- LogCard`
-- [ ] Task 9: Complete history, output panel, and after-render actions
+- [x] Task 9: Complete history, output panel, and after-render actions
   - Acceptance: current-project history only; output panel uses actual disk metadata; `Play locally` is present; `Reveal in Explorer` is capability-gated; non-spec upload action is removed.
   - Verify: `rtk pnpm -F @vc/web test -- render/page.test.tsx`, `rtk pnpm -F @vc/web test -- HistoryPanel`, `rtk pnpm -F @vc/web test -- OutputPanel`, `rtk pnpm -F @vc/web test -- AfterRenderPanel`
 - [ ] Task 10: Wire cancel UX end to end

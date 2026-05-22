@@ -32,9 +32,9 @@ describe("render format helpers", () => {
   });
 
   test("formats history and truncates long filenames", () => {
-    expect(formatHistoryMeta({ bytes: 187 * 1024 * 1024, durationSec: 1182, outputExists: true, preset: "final", status: "done" })).toBe("1080p · 19:42 · 187 MB");
-    expect(formatHistoryMeta({ bytes: 0, durationSec: null, outputExists: false, preset: "draft", status: "done" })).toBe("720p · missing output");
-    expect(formatHistoryMeta({ bytes: 0, durationSec: null, outputExists: true, preset: "draft", status: "cancelled" })).toBe("cancelled · excluded");
+    expect(formatHistoryMeta({ bytes: 187 * 1024 * 1024, durationSec: 1182, outputExists: true, preset: "final", resolution: "1920x1080", status: "done" })).toBe("1080p · 19:42 · done · 187 MB");
+    expect(formatHistoryMeta({ bytes: 0, durationSec: null, outputExists: false, preset: "draft", resolution: "1280x720", status: "done" })).toBe("720p · missing output");
+    expect(formatHistoryMeta({ bytes: 0, durationSec: null, outputExists: true, preset: "draft", resolution: "1080x1920", status: "partial_excluded" })).toBe("9:16 · partial output excluded · excluded");
     expect(truncateFilename("final-2026-05-06-1530.mp4", 18)).toBe("final-20...530.mp4");
   });
 });

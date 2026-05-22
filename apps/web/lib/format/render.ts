@@ -153,14 +153,33 @@ export function formatRenderSpecs(manifest: RenderManifest): string {
   ].join(" · ");
 }
 
-export function formatHistoryMeta(entry: { bytes: number | null; durationSec: number | null; outputExists: boolean; preset: RenderPreset; status: string }): string {
-  if (entry.status !== "done") {
-    return `${entry.status} · excluded`;
+export function formatHistoryMeta(entry: {
+  bytes: number | null;
+  durationSec: number | null;
+  outputExists: boolean;
+  preset: RenderPreset;
+  resolution?: string | null;
+  status: string;
+}): string {
+  const resolution = formatRenderResolutionValue(entry.resolution, entry.preset);
+  const status = formatHistoryStatus(entry.status, entry.outputExists);
+  if (entry.status === "done" && entry.outputExists) {
+    return [resolution, formatDuration(entry.durationSec), status, formatBytes(entry.bytes)].join(" · ");
   }
-  if (!entry.outputExists) {
-    return `${formatRenderResolution(entry.preset)} · missing output`;
+  if (entry.status === "done" && !entry.outputExists) {
+    return [resolution, status].join(" · ");
   }
-  return [formatRenderResolution(entry.preset), formatDuration(entry.durationSec), formatBytes(entry.bytes)].join(" · ");
+  return [resolution, status, "excluded"].join(" · ");
+}
+
+export function formatHistoryStatus(status: string, outputExists: boolean): string {
+  const normalized = status.toLowerCase();
+  if (normalized === "done" && !outputExists) return "missing output";
+  if (normalized === "output_missing") return "missing output";
+  if (normalized === "partial" || normalized === "partial_excluded" || normalized === "partial_output_excluded") return "partial output excluded";
+  if (normalized === "ffmpeg_warning") return "ffmpeg warning";
+  if (normalized === "ffmpeg_fatal_error") return "ffmpeg fatal error";
+  return normalized.replaceAll("_", " ");
 }
 
 export function truncateFilename(name: string, max = 18): string {

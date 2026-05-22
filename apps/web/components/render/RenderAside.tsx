@@ -10,6 +10,7 @@ type RenderAsideProps = {
   onDeleteHistory: (id: string) => void;
   onPlay: () => void;
   onPurgeHistory: () => void;
+  projectName: string;
   revealEnabled: boolean;
   onReveal: (path?: string) => void;
   onSelectHistory: (id: string) => void;
@@ -22,13 +23,14 @@ export function RenderAside({
   onDeleteHistory,
   onPlay,
   onPurgeHistory,
+  projectName,
   revealEnabled,
   onReveal,
   onSelectHistory,
 }: RenderAsideProps) {
   return (
     <aside className="col-start-1 row-start-4 flex flex-col gap-[14px] lg:col-start-2 lg:row-span-2 lg:row-start-2">
-      <OutputPanel job={job} />
+      <OutputPanel job={job} projectName={projectName} />
       <HistoryPanel
         activeId={activeId}
         entries={entries}

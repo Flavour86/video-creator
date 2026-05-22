@@ -493,14 +493,22 @@
       },
       "out": {
         "head": "Output",
+        "project": "project",
         "file": "file",
         "resolution": "resolution",
         "framerate": "framerate",
-        "video": "video",
-        "audio": "audio",
+        "videoCodec": "video codec",
+        "crf": "CRF",
+        "preset": "preset",
+        "audioCodec": "audio codec",
+        "bitrate": "bitrate",
+        "sampleRate": "sample rate",
         "color": "color",
         "estSize": "est. size",
-        "size": "size"
+        "size": "size",
+        "missingOutput": "missing output",
+        "partialExcluded": "partial output excluded",
+        "unavailable": "unavailable"
       },
       "history": {
         "head": "Render history",
@@ -524,7 +532,6 @@
         "head": "After render",
         "reveal": "Reveal in Explorer",
         "playLocally": "Play locally",
-        "uploadYouTube": "Upload to YouTube",
         "hint": "Available when render completes."
       },
       "cancelConfirm": {
