@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 const routeFiles = [
   "page.tsx",
   "setup/page.tsx",
-  "render/page.tsx",
+  "render/RenderPageClient.tsx",
   "projects/new/page.tsx",
   "tokens/page.tsx",
   "editor/page.tsx",

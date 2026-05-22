@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { isValidRenderId, isValidRenderProjectId } from "@/lib/render/routes";
+import { RenderPageClient } from "../../RenderPageClient";
 
 type RenderPathPageProps = {
   params: Promise<{
@@ -8,6 +10,9 @@ type RenderPathPageProps = {
 };
 
 export default async function RenderPathPage({ params }: RenderPathPageProps) {
-  const resolvedParams = await params;
-  redirect(`/render?projectId=${encodeURIComponent(resolvedParams.projectId)}&job=${encodeURIComponent(resolvedParams.renderId)}`);
+  const { projectId, renderId } = await params;
+  if (!isValidRenderProjectId(projectId) || !isValidRenderId(renderId)) {
+    redirect("/");
+  }
+  return <RenderPageClient projectId={projectId} renderId={renderId} />;
 }

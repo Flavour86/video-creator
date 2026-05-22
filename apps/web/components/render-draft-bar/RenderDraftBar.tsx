@@ -2,14 +2,15 @@ import { ExternalLink, X } from "lucide-react";
 import Link from "next/link";
 
 import type { RenderProgressState } from "@/lib/hooks/useRenderProgress";
+import { renderRoute } from "@/lib/render/routes";
 
 type Props = {
-  projectPath: string;
+  projectId: string;
   state: RenderProgressState;
   onCancel: () => void;
 };
 
-export function RenderDraftBar({ projectPath, state, onCancel }: Props) {
+export function RenderDraftBar({ projectId, state, onCancel }: Props) {
   if (state.status === "idle") return null;
 
   const percent =
@@ -45,7 +46,7 @@ export function RenderDraftBar({ projectPath, state, onCancel }: Props) {
         {isDone && (
           <Link
             className="inline-flex items-center gap-1 rounded border border-emerald-300 px-2 py-0.5 font-medium hover:bg-emerald-100"
-            href={`/render?project=${encodeURIComponent(projectPath)}&renderId=${encodeURIComponent(state.renderId)}`}
+            href={renderRoute(projectId, state.renderId)}
           >
             <ExternalLink size={13} />
             Open

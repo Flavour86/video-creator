@@ -36,6 +36,7 @@ import {
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
 import { deleteVisualItem, hasSentenceOverlap, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+import { renderRoute } from "@/lib/render/routes";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
 
 type BgLayer = Extract<Layer, { kind: "bg" }>;
@@ -500,12 +501,11 @@ function EditorContent() {
         { method: "POST" },
       );
       setLatestConfigHash(savedConfigHash);
-      router.push(`/render/${encodeURIComponent(projectId)}/${encodeURIComponent(result.render_id)}` as Parameters<typeof router.push>[0]);
+      router.push(renderRoute(projectId, result.render_id) as Parameters<typeof router.push>[0]);
       return;
     } catch {
-      // Render screen shows final status.
+      setRenderJob({ phase: "failed", progress: 0, running: false, status: "failed", message: "Final render failed to start." });
     }
-    router.push(`/render?projectId=${encodeURIComponent(projectId)}` as Parameters<typeof router.push>[0]);
   }, [project, projectId, renderDisabled, resolution, router, saveNow]);
 
   const matches = useMemo(() => {

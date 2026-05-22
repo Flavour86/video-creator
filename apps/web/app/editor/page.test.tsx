@@ -1380,7 +1380,7 @@ it("keeps draft render progress in the editor and can cancel it", async () => {
   expect(await screen.findByText("Rendering draft : cancelled")).toBeInTheDocument();
 });
 
-it("enables render for aligned projects even without visual clips", async () => {
+it("lets aligned projects reach Render even without visual clips", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({
     hasUnrenderedChanges: true,
@@ -1392,6 +1392,8 @@ it("enables render for aligned projects even without visual clips", async () => 
 
   expect(screen.getByRole("button", { name: /render draft/i })).toBeEnabled();
   expect(screen.getByRole("button", { name: /render final/i })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: /render final/i }));
+  await waitFor(() => expect(_routerPush).toHaveBeenCalledWith(`/render/${TEST_PROJECT_ID}/r-test01`));
 });
 
 it("disables render when working hash matches latest successful rendered hash", async () => {
@@ -1403,6 +1405,17 @@ it("disables render when working hash matches latest successful rendered hash", 
 
   expect(screen.getByRole("button", { name: /render draft/i })).toBeDisabled();
   expect(screen.getByRole("button", { name: /render final/i })).toBeDisabled();
+});
+
+it("enables render when current config hash differs from latest successful rendered hash", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: false, lastRenderedConfigHash: "h0" });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(screen.getByRole("button", { name: /render draft/i })).toBeEnabled();
+  expect(screen.getByRole("button", { name: /render final/i })).toBeEnabled();
 });
 
 it("Render Draft saves then queues draft with selected resolution", async () => {

@@ -8,7 +8,7 @@ it("renders running progress and cancel action", () => {
   render(
     <RenderDraftBar
       onCancel={onCancel}
-      projectPath="E:/project"
+      projectId="p_project"
       state={{
         status: "running",
         renderId: "r-1",
@@ -30,7 +30,7 @@ it("renders open link when draft is done", () => {
   render(
     <RenderDraftBar
       onCancel={vi.fn()}
-      projectPath="E:/project"
+      projectId="p_project"
       state={{
         status: "done",
         renderId: "r-1",
@@ -42,5 +42,5 @@ it("renders open link when draft is done", () => {
   );
 
   const link = screen.getByRole("link", { name: /open/i });
-  expect(link).toHaveAttribute("href", "/render?project=E%3A%2Fproject&renderId=r-1");
+  expect(link).toHaveAttribute("href", "/render/p_project/r-1");
 });
