@@ -201,6 +201,12 @@ Never:
 
 ## open questions logs
 
+- [X] 2026-05-22: Render Task 12 visual parity now exercises `render-dark.png` and `render-light.png`, but the embedded screenshots and the written `SPEC_RENDER.md` requirements still diverge beyond the already-confirmed slash title. The screenshots show the render card filename as `Tokyo Essay` without `.mp4`, omit the queued stage from the stage list, collapse output specs into `video`/`audio` rows, and place `Render history` before `Output`; the written spec requires output filename with `.mp4`, seven stages including queued, separate output fields for video codec/CRF/preset/audio codec/bitrate/sample rate, and current implementation currently places `Output` before `Render history`. For Task 12, should visual parity follow the screenshots exactly, follow the written spec text even if screenshots drift, or update/regenerate the screenshots to match the written spec and implementation?
+User: Follow the written `SPEC_RENDER.md` text. Screenshot drift is acceptable for these stale details; Render visual tests should keep covering the embedded screenshots and assert the written spec behavior.
+
+- [X] 2026-05-22: Render Task 12 requires parity tests for embedded `SPEC_RENDER.md` screenshots, but `render-dark.png` and `render-light.png` show the header title as `Tokyo Essay / 1080p final render` while the same spec text says the title should be `Tokyo Essay - 1080p final render` and the current implementation follows the dash form. Should Render visual parity update the UI/reference expectation to slash, keep the dash text as canonical and accept screenshot drift, or regenerate/update the screenshots to match the dash title?
+User: Use slash. `Tokyo Essay / 1080p final render` is canonical for Render visual parity and UI title text.
+
 - [X] 2026-05-17: Editor Task 9 acceptance says "Editor entry always selects background by default when available," but Task 2 acceptance and Editor success criteria also require restoring prior selection from browser recovery on reopen. Which rule has precedence when both apply?
 User: Recovered selection is canonical on reopen and wins when valid. Default background selection applies only when there is no valid recovered selection. Rendering without a background layer remains allowed.
 

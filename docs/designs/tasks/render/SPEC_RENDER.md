@@ -21,7 +21,7 @@ Purpose: show only the current project's render queue, active render progress, f
 Header:
 
 - Eyebrow `Render`.
-- Title: project title plus resolution, for example `Tokyo Essay - 1080p final render`.
+- Title: project title plus resolution, for example `Tokyo Essay / 1080p final render`.
 - `Back to editor`.
 - `Cancel render`: cancels a queued task or directly cancels the active rendering process.
 
@@ -129,7 +129,7 @@ Render:
 
 Render page:
 
-- Header renders the `Render` eyebrow, title with resolution (for example `Tokyo Essay - 1080p final render`), `Back to editor`, and `Cancel render`.
+- Header renders the `Render` eyebrow, title with resolution (for example `Tokyo Essay / 1080p final render`), `Back to editor`, and `Cancel render`.
 - `Cancel render` covers queued/running renders, active-render confirmation, one cancel request, cancelling/cancelled UI states, `.partial` output handling, and render-history recording.
 - Render progress card updates live: output filename (`.mp4`), specs string, status tag, big progress bar, percent complete, encode speed, ETA, and frames written.
 - Stage label cycles through documented stages: queued -> verify alignment cache -> pre-render cached clips -> build `subtitles.srt` -> compose filtergraph -> mux MP4 with `+faststart` -> append render history to `app.db`.
@@ -211,7 +211,7 @@ Phase 1 Render work is accepted when all items below hold.
 - Output for an empty visual configuration is voice + subtitles + optional watermark over the black fallback.
 - An already-rendered project cannot be re-rendered until the current config hash differs from the last successful render config hash.
 - The Render button reflects the hash-diff render-gating state.
-- The Render page renders eyebrow + title (`<Project> - <Resolution> <preset> render`), `Back to editor`, `Cancel render`, live render card, and current-project render history.
+- The Render page renders eyebrow + title (`<Project> / <Resolution> <preset> render`), `Back to editor`, `Cancel render`, live render card, and current-project render history.
 - Live render card shows output filename `.mp4`, specs string, status tag, big progress bar, percent, encode speed, ETA, and frames written.
 - Stages execute and surface in the UI in order: queued -> verify alignment cache -> pre-render cached clips -> build `subtitles.srt` -> compose filtergraph -> mux MP4 with `+faststart` -> append `render_history`.
 - `Cancel render` cancels both queued and running renders cleanly: active renders ask for confirmation before preserving/removing partial output, one cancel request is sent, UI moves through cancelling/cancelled, partial files are removed, and the row is recorded as `cancelled`.

@@ -50,7 +50,7 @@
 - [x] Task 11: Add backend render edge-case and performance coverage
   - Acceptance: all render edge cases and performance targets from `SPEC_RENDER.md` are covered; long-running checks are isolated behind explicit commands.
   - Verify: `rtk pnpm -F @vc/server test`, `rtk pnpm -F @vc/server lint`
-- [ ] Task 12: Add Render visual parity coverage
+- [x] Task 12: Add Render visual parity coverage
   - Acceptance: every Render screenshot and required state has exactly one dark/light parity owner.
   - Verify: `rtk pnpm -F @vc/web test:visual -- render`, `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`, `rtk pnpm -F @vc/web lint`
 - [ ] Task 13: Add frame-level render correctness E2E

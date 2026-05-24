@@ -45,6 +45,6 @@ export const visualManifest: VisualManifestEntry[] = [
   { screenshot: "docs/designs/visuals/change-background-light.png", owner: "editor", status: "implemented" },
   { screenshot: "docs/designs/visuals/SubtitleModal.png", owner: "editor", status: "implemented" },
 
-  { screenshot: "docs/designs/visuals/render-dark.png", owner: "render", status: "pending" },
-  { screenshot: "docs/designs/visuals/render-light.png", owner: "render", status: "pending" },
+  { screenshot: "docs/designs/visuals/render-dark.png", owner: "render", status: "implemented" },
+  { screenshot: "docs/designs/visuals/render-light.png", owner: "render", status: "implemented" },
 ];

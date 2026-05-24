@@ -18,8 +18,8 @@ export function RenderHead({ job, projectName, onBack, onCancel, onReveal, revea
   const t = useTranslations("pages.render");
   const phase = job?.phase ?? "idle";
   const title = job
-    ? `${projectName} - ${formatRenderResolutionValue(job.resolution, job.preset)} ${job.preset} render`
-    : `${projectName} - render`;
+    ? `${projectName} / ${formatRenderResolutionValue(job.resolution, job.preset)} ${job.preset} render`
+    : `${projectName} / render`;
 
   return (
     <header className="col-span-2 mb-[6px] flex items-end justify-between gap-4 max-lg:col-span-1">

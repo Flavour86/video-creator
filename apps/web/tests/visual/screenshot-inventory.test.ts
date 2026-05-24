@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { EDITOR_VISUAL_SCREENSHOTS } from "./editor-visual-cases";
+import { RENDER_STATE_CASES, RENDER_VISUAL_SCREENSHOTS, type RenderVisualState } from "./render-visual-cases";
 import { visualManifest, type VisualOwner } from "./visual-manifest";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -166,6 +167,85 @@ describe("split-spec screenshot ownership inventory", () => {
         `Missing visual parity tests: ${missing.length ? missing.join(", ") : "(none)"}`,
         `Extra visual parity tests: ${extra.length ? extra.join(", ") : "(none)"}`,
         `Duplicate visual parity tests: ${duplicates.length ? duplicates.join(", ") : "(none)"}`,
+      ].join("\n"),
+    ).toEqual({ duplicates: [], extra: [], missing: [] });
+  });
+
+  it("keeps render parity screenshots implemented under render ownership", () => {
+    const renderRefs = collectScreenshotRefs("docs/designs/tasks/render/SPEC_RENDER.md");
+    const problems: string[] = [];
+
+    for (const screenshot of renderRefs) {
+      const entries = visualManifest.filter((entry) => entry.screenshot === screenshot);
+      if (entries.length !== 1) {
+        problems.push(`${screenshot} expected exactly one manifest entry, got ${entries.length}`);
+        continue;
+      }
+      const [entry] = entries;
+      if (entry && (entry.owner !== "render" || entry.status !== "implemented")) {
+        problems.push(
+          `${screenshot} expected owner=render/status=implemented actual owner=${entry.owner}/status=${entry.status}`,
+        );
+      }
+    }
+
+    expect(problems, `Render visual parity ownership mismatches:\n${problems.join("\n")}`).toEqual([]);
+  });
+
+  it("maps every render screenshot reference to exactly one visual parity case", () => {
+    const renderRefs = new Set(collectScreenshotRefs("docs/designs/tasks/render/SPEC_RENDER.md"));
+    const visualCaseRefs = [...RENDER_VISUAL_SCREENSHOTS];
+    const uniqueVisualCaseRefs = [...new Set(visualCaseRefs)].sort();
+
+    const missing = [...renderRefs].filter((screenshot) => !uniqueVisualCaseRefs.includes(screenshot));
+    const extra = uniqueVisualCaseRefs.filter((screenshot) => !renderRefs.has(screenshot));
+    const duplicates = findDuplicates(visualCaseRefs);
+
+    expect(
+      { duplicates, extra, missing },
+      [
+        "Render visual test mapping mismatch.",
+        `Missing visual parity tests: ${missing.length ? missing.join(", ") : "(none)"}`,
+        `Extra visual parity tests: ${extra.length ? extra.join(", ") : "(none)"}`,
+        `Duplicate visual parity tests: ${duplicates.length ? duplicates.join(", ") : "(none)"}`,
+      ].join("\n"),
+    ).toEqual({ duplicates: [], extra: [], missing: [] });
+  });
+
+  it("covers the required render fixture states", () => {
+    const requiredStates: RenderVisualState[] = [
+      "idle",
+      "queued",
+      "verifying",
+      "prerender",
+      "subtitles",
+      "composing",
+      "muxing",
+      "loggingHistory",
+      "done",
+      "cancelling",
+      "cancelled",
+      "failed",
+      "outputMissing",
+      "partialExcluded",
+      "ffmpegWarning",
+      "ffmpegFatalError",
+      "historyEmpty",
+      "afterRenderActions",
+    ];
+    const covered = RENDER_STATE_CASES.map((stateCase) => stateCase.state);
+
+    const missing = requiredStates.filter((state) => !covered.includes(state));
+    const extra = covered.filter((state) => !requiredStates.includes(state));
+    const duplicates = findDuplicates(covered);
+
+    expect(
+      { duplicates, extra, missing },
+      [
+        "Render visual state coverage mismatch.",
+        `Missing states: ${missing.length ? missing.join(", ") : "(none)"}`,
+        `Extra states: ${extra.length ? extra.join(", ") : "(none)"}`,
+        `Duplicate states: ${duplicates.length ? duplicates.join(", ") : "(none)"}`,
       ].join("\n"),
     ).toEqual({ duplicates: [], extra: [], missing: [] });
   });

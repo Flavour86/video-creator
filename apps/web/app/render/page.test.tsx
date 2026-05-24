@@ -127,7 +127,7 @@ it("redirects invalid dynamic render route segments to Launcher", async () => {
 it("renders the spec header and existing render from the dynamic route params", async () => {
   renderClient();
 
-  expect(await screen.findByRole("heading", { name: "Tokyo Essay - 1080p final render" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Tokyo Essay / 1080p final render" })).toBeInTheDocument();
   expect(screen.getByText("Render")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /back to editor/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /cancel render/i })).toBeInTheDocument();
