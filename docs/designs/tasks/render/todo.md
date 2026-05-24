@@ -53,7 +53,7 @@
 - [x] Task 12: Add Render visual parity coverage
   - Acceptance: every Render screenshot and required state has exactly one dark/light parity owner.
   - Verify: `rtk pnpm -F @vc/web test:visual -- render`, `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`, `rtk pnpm -F @vc/web lint`
-- [ ] Task 13: Add frame-level render correctness E2E
+- [x] Task 13: Add frame-level render correctness E2E
   - Acceptance: `test01` draft output is probed with ffprobe; subtitles, foreground, PiP, background transitions, watermark, screenshots, routing guards, and gating are checked.
   - Verify: `rtk pnpm -F @vc/web test:e2e -- render-correctness`, `rtk pnpm -F @vc/server test -- test_setup_test01_fixture.py`, `rtk pnpm -F @vc/server test -- test_render_endpoint.py`
 - [ ] Task 14: Run the Render acceptance gate
