@@ -56,10 +56,10 @@
 - [x] Task 13: Add frame-level render correctness E2E
   - Acceptance: `test01` draft output is probed with ffprobe; subtitles, foreground, PiP, background transitions, watermark, screenshots, routing guards, and gating are checked.
   - Verify: `rtk pnpm -F @vc/web test:e2e -- render-correctness`, `rtk pnpm -F @vc/server test -- test_setup_test01_fixture.py`, `rtk pnpm -F @vc/server test -- test_render_endpoint.py`
-- [ ] Task 14: Run the Render acceptance gate
+- [x] Task 14: Run the Render acceptance gate
   - Acceptance: all `SPEC_RENDER.md` functional, recoverability, visual, E2E, and verification requirements pass or have explicit integration prerequisites.
   - Verify: `rtk pnpm test`, `rtk pnpm lint`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`
-- [ ] Checkpoint: Complete
+- [x] Checkpoint: Complete
   - Acceptance: Render implementation is ready for human review and `SPEC_RENDER.md` conflicts have been removed or overridden.
 
 ## Coordination Notes
