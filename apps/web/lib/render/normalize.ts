@@ -17,6 +17,7 @@ export type RenderHistoryResponse = {
   created_at?: string | null;
   duration?: number | null;
   duration_s: number | null;
+  frame_count?: number | null;
   events?: RenderEvent[];
   file_size: number | null;
   finished_at: string | null;
@@ -45,6 +46,7 @@ export function normalizeJob(row: RenderHistoryResponse, progress?: Partial<Rend
   const startedAt = row.started_at ?? row.created_at ?? "";
   const finishedAt = row.finished_at ?? row.completed_at ?? null;
   const resolution = normalizeResolution(row.resolution, preset);
+  const persistedFrameCount = row.frame_count ?? finalFrameCountFromEvents(row.events);
 
   return {
     artifacts: row.artifacts ?? [],
@@ -55,7 +57,7 @@ export function normalizeJob(row: RenderHistoryResponse, progress?: Partial<Rend
     events: row.events ?? [],
     filename: filenameFromPath(outputPath) || formatRenderFilename(preset, startedAt),
     finishedAt,
-    framesWritten: progress?.current_frame ?? 0,
+    framesWritten: progress?.current_frame ?? persistedFrameCount ?? 0,
     id: row.render_id ?? row.id,
     manifest: manifestForRender(preset, resolution),
     outputExists: row.output_exists ?? (row.file_size ?? 0) > 0,
@@ -68,6 +70,29 @@ export function normalizeJob(row: RenderHistoryResponse, progress?: Partial<Rend
     startedAt,
     status: statusForPhase(phase),
   };
+}
+
+function finalFrameCountFromEvents(events: RenderEvent[] | undefined): number | null {
+  if (!events || events.length === 0) return null;
+  let maxFrame: number | null = null;
+  for (const event of events) {
+    const parsed = parseCurrentFrame(event.detail_json);
+    if (parsed === null) continue;
+    maxFrame = maxFrame === null ? parsed : Math.max(maxFrame, parsed);
+  }
+  return maxFrame;
+}
+
+function parseCurrentFrame(detailJson: string | null | undefined): number | null {
+  if (!detailJson) return null;
+  try {
+    const parsed = JSON.parse(detailJson) as { current_frame?: unknown };
+    const frame = parsed.current_frame;
+    if (typeof frame !== "number" || !Number.isFinite(frame) || frame < 0) return null;
+    return Math.trunc(frame);
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeHistory(row: RenderHistoryResponse): RenderHistoryEntry {

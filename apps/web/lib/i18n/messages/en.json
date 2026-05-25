@@ -133,11 +133,20 @@
       "voice": "voice",
       "sentences": "sentences",
       "media": "media",
+      "lastRender": "rendered",
       "opened": "opened",
       "status": {
         "aligned": "aligned",
         "pending": "pending",
         "missing": "missing"
+      },
+      "renderStatus": {
+        "unrendered": "unrendered",
+        "queued": "queued",
+        "rendering": "rendering",
+        "rendered": "rendered",
+        "failed": "failed",
+        "cancelled": "cancelled"
       },
       "runtime": {
         "title": "Local runtime",
@@ -304,6 +313,7 @@
       "changeBg": "Change BG",
       "changeBgAria": "Add or change background asset",
       "save": "Save",
+      "pending": "Pending",
       "saving": "Saving",
       "saved": "Saved",
       "saveFailed": "Failed",

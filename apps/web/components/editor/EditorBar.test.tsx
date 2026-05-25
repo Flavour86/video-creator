@@ -51,6 +51,11 @@ describe("EditorBar", () => {
     expect(screen.getByText("cache warm 2/3")).toBeVisible();
   });
 
+  it("shows Pending save label when unsaved edits exist", () => {
+    renderBar({ saveStatus: "pending" });
+    expect(screen.getByRole("button", { name: /save project config \(pending\)/i })).toHaveTextContent("Pending");
+  });
+
   it("disables render actions when config has no unrendered changes", () => {
     renderBar({ renderDisabled: true });
 

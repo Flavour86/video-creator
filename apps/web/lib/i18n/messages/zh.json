@@ -140,14 +140,23 @@
         "rerecord": "???????????????",
         "phase2": "? 2 ???? Fal / Modal ?? AI ???"
       },
-      "openFolder": "??????",
-      "newProject": "????",
-      "createAnother": "???????",
-      "recentUnavailable": "Recent projects unavailable",
+      "openFolder": "打开文件夹",
+      "newProject": "新建项目",
+      "createAnother": "再建一个项目",
+      "lastRender": "渲染于",
+      "recentUnavailable": "最近项目不可用",
       "status": {
-        "aligned": "???",
-        "pending": "???",
-        "missing": "??"
+        "aligned": "已对齐",
+        "pending": "待处理",
+        "missing": "缺失"
+      },
+      "renderStatus": {
+        "unrendered": "未渲染",
+        "queued": "排队中",
+        "rendering": "渲染中",
+        "rendered": "已渲染",
+        "failed": "失败",
+        "cancelled": "已取消"
       },
       "runtime": {
         "title": "?????",
@@ -304,6 +313,7 @@
       "changeBg": "Change BG",
       "changeBgAria": "Add or change background asset",
       "save": "Save",
+      "pending": "待保存",
       "saving": "Saving",
       "saved": "Saved",
       "saveFailed": "Failed",

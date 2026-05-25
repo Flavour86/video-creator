@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from server.db.project_configs import latest_config_for_project_path
 from server.db.renders import (
     add_render_artifact,
     get_render,
@@ -188,7 +189,7 @@ def _create_job(
     preset: RenderPreset,
     resolution: str | None = None,
 ) -> RenderJob:
-    project = load_project(project_dir)
+    project = _load_render_project(project_dir)
     preset_config = PRESETS[preset]
     resolved_resolution = _resolve_render_resolution(project, preset, resolution)
     width, height = _resolution_dimensions(resolved_resolution)
@@ -217,6 +218,16 @@ def _create_job(
         output_path=output_path,
         started_at=started_at,
     )
+
+
+def _load_render_project(project_dir: Path) -> Project:
+    snapshot = latest_config_for_project_path(project_dir)
+    if snapshot is not None:
+        return Project.model_validate(snapshot)
+    try:
+        return load_project(project_dir)
+    except FileNotFoundError as exc:
+        raise RenderError(404, "PROJECT_NOT_FOUND", "Project not found.") from exc
 
 
 async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:

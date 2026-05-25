@@ -19,12 +19,18 @@ from schemas import (  # type: ignore[import-not-found]
     PaginationMeta,
 )
 
-from server.db.project_configs import latest_config_for_project_path, save_config_snapshot
+from server.db.project_configs import (
+    has_valid_config_for_project_id,
+    latest_config_for_project_path,
+    save_config_snapshot,
+)
 from server.db.projects import (
     get_project_by_path,
     list_recent,
     project_id_for_path,
     project_path_for_id,
+    remove_project,
+    remove_project_and_config,
     remove_recent,
     set_project_thumbnail,
     touch_recent,
@@ -144,8 +150,13 @@ def _project_status(project_dir: Path, project: Project | None) -> ProjectStatus
 
 
 def _is_valid_recent_row(row: dict[str, object]) -> bool:
+    project_id = _optional_str(row.get("project_id"))
+    if not project_id:
+        return False
     project_dir = Path(str(row["path"]))
     if not project_dir.is_dir():
+        return False
+    if not has_valid_config_for_project_id(project_id):
         return False
     return _load_recent_card_project(project_dir) is not None
 
@@ -157,7 +168,12 @@ def _valid_project_rows() -> list[dict[str, object]]:
         if _is_valid_recent_row(row):
             valid_rows.append(row)
         else:
-            remove_recent(Path(str(row["path"])))
+            project_id = _optional_str(row.get("project_id"))
+            if project_id:
+                # BUG-018: hard-delete invalid project rows from both projects and configs.
+                remove_project_and_config(project_id)
+            else:
+                remove_recent(Path(str(row["path"])))
     return valid_rows
 
 
@@ -962,7 +978,7 @@ async def delete_project(project_id: str) -> dict[str, bool] | JSONResponse:
             "Project not found.",
             {"project_id": project_id},
         )
-    remove_recent(project_dir)
+    remove_project(project_id)
     return {"ok": True}
 
 

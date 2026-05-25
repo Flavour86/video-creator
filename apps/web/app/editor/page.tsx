@@ -17,7 +17,6 @@ import { RenderStrip } from "@/components/editor/RenderStrip";
 import { Timeline } from "@/components/editor/Timeline";
 import { TranscriptPane } from "@/components/editor/TranscriptPane";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
-import { Button } from "@/components/ui";
 import { request, ServerRequestError } from "@/lib/api/server";
 import {
   appendOperation,
@@ -125,6 +124,10 @@ function EditorContent() {
   const appliedAlignmentSignatureRef = useRef("");
 
   const alignmentSentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
+  const normalizedAlignmentSentences = useMemo(
+    () => normalizeAlignedSentences(alignmentSentences),
+    [alignmentSentences],
+  );
   const [sentences, setSentences] = useState<AlignedSentence[]>([]);
   const duration = sentences.at(-1)?.end_s ?? 0;
   const timelineDuration = duration;
@@ -262,6 +265,11 @@ function EditorContent() {
   }, []);
 
   useEffect(() => {
+    if (projectId) return;
+    router.replace("/");
+  }, [projectId, router]);
+
+  useEffect(() => {
     if (!projectId) return;
     void loadProject(projectId);
   }, [loadProject, projectId]);
@@ -272,17 +280,21 @@ function EditorContent() {
 
   useEffect(() => {
     const transcriptSentences = sanitizeTranscriptSentences(project?.transcript);
-    setSentences(transcriptSentences.length > 0 ? transcriptSentences : alignmentSentences);
+    setSentences(
+      transcriptSentences.length > 0
+        ? transcriptSentences
+        : normalizedAlignmentSentences,
+    );
     if (pendingSelectedRangeRef.current) {
       setSelectedSentenceRange(pendingSelectedRangeRef.current);
       pendingSelectedRangeRef.current = null;
     }
-  }, [alignmentSentences, project?.transcript]);
+  }, [normalizedAlignmentSentences, project?.transcript]);
 
   useEffect(() => {
     if (!project || !loadedProjectRef.current) return;
     const transcriptSentences = sanitizeTranscriptSentences(project.transcript);
-    if (transcriptSentences.length > 0 || alignmentSentences.length === 0) return;
+    if (transcriptSentences.length > 0 || normalizedAlignmentSentences.length === 0) return;
     const signature = alignmentSignature(alignmentSentences);
     if (appliedAlignmentSignatureRef.current === signature) return;
     appliedAlignmentSignatureRef.current = signature;
@@ -294,7 +306,7 @@ function EditorContent() {
     setLocalCacheInvalidation(deriveClipCacheSummaryFromLayers(remapped.layers).state === "invalid" ? "clip" : "none");
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
-  }, [alignmentSentences, layers, project]);
+  }, [alignmentSentences, layers, normalizedAlignmentSentences, project]);
 
   useEffect(() => {
     const container = transcriptScrollRef.current;
@@ -322,6 +334,13 @@ function EditorContent() {
     const audio = audioRef.current;
     if (!audio) return;
     if (playing) {
+      if (audio.readyState < 2) {
+        try {
+          audio.load();
+        } catch {
+          // JSDOM does not implement HTMLMediaElement.load().
+        }
+      }
       void audio.play().catch(() => setPlaying(false));
       return;
     }
@@ -435,7 +454,11 @@ function EditorContent() {
         watermark: result.state.watermark,
       });
       const transcriptSentences = sanitizeTranscriptSentences(result.state.transcript);
-      setSentences(transcriptSentences.length > 0 ? transcriptSentences : alignmentSentences);
+      setSentences(
+        transcriptSentences.length > 0
+          ? transcriptSentences
+          : normalizedAlignmentSentences,
+      );
       setResolution(normalizeResolutionPreset(result.state.output?.resolution, resolution));
       const hasInvalidLayers = deriveClipCacheSummaryFromLayers(result.state.layers).state === "invalid";
       const previousResolution = normalizeResolutionPreset(project.output?.resolution, resolution);
@@ -446,7 +469,7 @@ function EditorContent() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [alignmentSentences, layers, project, projectId, resolution]);
+  }, [layers, normalizedAlignmentSentences, project, projectId, resolution]);
 
   const renderDraft = useCallback(async () => {
     if (!projectId || !project || renderDisabled) return;
@@ -845,12 +868,7 @@ function EditorContent() {
   }, [project]);
 
   if (!projectId) {
-    return (
-      <PageChrome variant="empty">
-        <p className="vc-type-body text-(--text-2)">{t("noProject")}</p>
-        <Button onClick={() => router.push("/")} variant="primary">{t("goLauncher")}</Button>
-      </PageChrome>
-    );
+    return null;
   }
 
   return (
@@ -989,7 +1007,14 @@ function EditorContent() {
           editLayerId={assignEdit?.layerId}
           fromSentence={assignRange[0]}
           layers={layers}
-          media={visualMedia.map((entry) => ({ filename: entry.filename, kind: entry.kind, thumb_url: entry.thumb_url }))}
+          media={visualMedia.map((entry) => ({
+            filename: entry.filename,
+            kind: entry.kind,
+            thumb_url: entry.thumb_url,
+            importing: entry.importing,
+            import_progress: entry.import_progress,
+            import_error: entry.import_error,
+          }))}
           onClose={() => setModal(null)}
           onImport={importMedia}
           onConfirm={applyAssignedLayers}
@@ -1253,6 +1278,38 @@ function sanitizeTranscriptSentences(transcript: Project["transcript"] | null | 
       start_s: sentence.start_s,
       text: sentence.text.trim(),
     }));
+  return normalizeAlignedSentences(normalized);
+}
+
+function normalizeAlignedSentences(sentences: AlignedSentence[]): AlignedSentence[] {
+  if (sentences.length === 0) return [];
+  const MIN_SENTENCE_DURATION_SECONDS = 0.2;
+  const normalized = sentences
+    .map((sentence, index): AlignedSentence => ({
+      confidence_avg: sentence.confidence_avg,
+      end_s: sentence.end_s,
+      index: index + 1,
+      start_s: Math.max(0, sentence.start_s),
+      text: sentence.text.trim(),
+    }))
+    .sort((left, right) => left.index - right.index);
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const current = normalized[index];
+    if (!current) continue;
+    const nextStart = normalized[index + 1]?.start_s;
+    let end = current.end_s;
+    if (typeof nextStart === "number" && end < nextStart) {
+      end = nextStart;
+    }
+    if (end <= current.start_s) {
+      end = typeof nextStart === "number" && nextStart > current.start_s
+        ? nextStart
+        : current.start_s + MIN_SENTENCE_DURATION_SECONDS;
+    }
+    normalized[index] = { ...current, end_s: end };
+  }
+
   return normalized;
 }
 

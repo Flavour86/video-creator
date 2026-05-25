@@ -105,7 +105,7 @@ describe("LauncherPage", () => {
     expect(screen.queryByRole("button", { name: "Create another project" })).not.toBeInTheDocument();
   });
 
-  it("shows project-id cards from the sidecar without raw paths", async () => {
+  it("shows project-id cards from the sidecar without raw paths or alignment tags", async () => {
     mockServer({
       recent: [
         {
@@ -118,6 +118,7 @@ describe("LauncherPage", () => {
           alignment_state: "pending",
           status: "ready",
           has_unrendered_changes: true,
+          render_status_tag: "unrendered",
         },
       ],
     });
@@ -128,10 +129,11 @@ describe("LauncherPage", () => {
     expect(card).toHaveTextContent("3 media");
     expect(card).not.toHaveTextContent("p_demo");
     expect(card).not.toHaveTextContent("E:\\projects\\demo");
-    expect(screen.getByText("pending")).toBeInTheDocument();
+    expect(screen.getByText("unrendered")).toBeInTheDocument();
+    expect(screen.queryByText(/^pending$/i)).not.toBeInTheDocument();
   });
 
-  it("hides opened metadata when last render time is null", async () => {
+  it("hides last-render metadata when last render time is null", async () => {
     mockServer({
       recent: [
         {
@@ -151,6 +153,7 @@ describe("LauncherPage", () => {
     await waitFor(() => expect(screen.getByText("No Time")).toBeInTheDocument());
     const card = screen.getByText("No Time").closest("article");
     expect(card).not.toHaveTextContent("opened");
+    expect(card).not.toHaveTextContent("rendered");
   });
 
   it("opens the latest successful render in the preview modal", async () => {

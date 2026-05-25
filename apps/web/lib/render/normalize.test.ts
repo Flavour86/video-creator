@@ -94,6 +94,44 @@ describe("render normalize contract", () => {
     expect(job.progress).toBe(100);
   });
 
+  test("keeps final frame_count when completed row has no live progress event", () => {
+    const job = normalizeJob({
+      duration_s: null,
+      file_size: 12,
+      finished_at: "2026-05-08T12:01:00Z",
+      frame_count: 9009,
+      id: "r-rendered",
+      message: null,
+      output_path: "E:/project/renders/final.mp4",
+      preset: "final",
+      status: "rendered",
+    });
+
+    expect(job.phase).toBe("done");
+    expect(job.framesWritten).toBe(9009);
+  });
+
+  test("falls back to max event current_frame when frame_count is unavailable", () => {
+    const job = normalizeJob({
+      duration_s: null,
+      events: [
+        { detail_json: "{\"current_frame\":1311}" },
+        { detail_json: "{\"current_frame\":9009}" },
+        { detail_json: "{\"current_frame\":null}" },
+      ],
+      file_size: 12,
+      finished_at: "2026-05-08T12:01:00Z",
+      id: "r-rendered",
+      message: null,
+      output_path: "E:/project/renders/final.mp4",
+      preset: "final",
+      status: "rendered",
+    });
+
+    expect(job.phase).toBe("done");
+    expect(job.framesWritten).toBe(9009);
+  });
+
   test("preserves snake_case render event states from backend contract", () => {
     const entry = normalizeHistory({
       duration_s: null,

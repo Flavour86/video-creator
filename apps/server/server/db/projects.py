@@ -279,3 +279,15 @@ def remove_recent(path: Path) -> None:
     normalized_path = str(path.resolve())
     with connection() as conn:
         conn.execute("DELETE FROM projects WHERE project_path = ?", (normalized_path,))
+
+
+def remove_project(project_id: str) -> None:
+    with connection() as conn:
+        conn.execute("DELETE FROM projects WHERE project_id = ?", (project_id,))
+
+
+def remove_project_and_config(project_id: str) -> None:
+    """Delete project rows from both canonical tables in one transaction."""
+    with connection() as conn:
+        conn.execute("DELETE FROM project_configs WHERE project_id = ?", (project_id,))
+        conn.execute("DELETE FROM projects WHERE project_id = ?", (project_id,))

@@ -93,6 +93,7 @@ class RenderHistoryResponse(BaseModel):
     started_at: str
     finished_at: str | None
     duration_s: float | None
+    frame_count: int | None
     status: str
     message: str | None
     file_size: int | None
@@ -139,7 +140,7 @@ async def render_project(
     resolution: RenderResolution | None = Query(default=None),  # noqa: B008
 ) -> RenderResponse | JSONResponse:
     project_dir = Path(project)
-    if not (project_dir / "project.json").exists():
+    if not project_dir.is_dir():
         return _error(404, "PROJECT_NOT_FOUND", "Project not found.", {"project": project})
 
     resolved_preset = preset or (payload.preset if payload is not None else None)
@@ -499,6 +500,7 @@ def _render_history_response(row: Mapping[str, object]) -> RenderHistoryResponse
         started_at=str(row["started_at"]),
         finished_at=str(row["finished_at"]) if row["finished_at"] is not None else None,
         duration_s=float(duration) if isinstance(duration, int | float | str) else None,
+        frame_count=int(row["frame_count"]) if row["frame_count"] is not None else None,
         status=str(row["status"]),
         message=str(row["message"]) if row["message"] is not None else None,
         file_size=output_path.stat().st_size if output_exists else None,

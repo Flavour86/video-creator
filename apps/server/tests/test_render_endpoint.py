@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from server.db.project_configs import save_config_snapshot
 from server.db.projects import project_id_for_path, touch_recent
 from server.db.renders import (
     add_render_event,
@@ -81,6 +82,57 @@ async def test_render_endpoint_returns_render_result(monkeypatch, tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_project_id_render_accepts_snapshot_backed_project_without_project_json(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    snapshot_project_dir = tmp_path / "snapshot-only"
+    snapshot_project_dir.mkdir()
+    touch_recent(snapshot_project_dir, "Render")
+    save_config_snapshot(
+        snapshot_project_dir,
+        {
+            "version": 1,
+            "name": "snapshot-only",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [],
+            "subtitles": None,
+            "watermark": None,
+        },
+    )
+    project_id = project_id_for_path(snapshot_project_dir)
+
+    async def fake_start_render_project(
+        *,
+        project_dir: Path,
+        preset: str,
+        resolution: str | None = None,
+    ) -> RenderResult:
+        assert project_dir == snapshot_project_dir
+        assert preset == "draft"
+        assert resolution is None
+        return RenderResult(
+            render_id="r-snapshot",
+            output_path=snapshot_project_dir / ".vc" / "drafts" / "snapshot.mp4",
+        )
+
+    monkeypatch.setattr(render_pipeline, "start_render_project", fake_start_render_project)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/projects/{project_id}/render",
+            json={"preset": "draft"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["render_id"] == "r-snapshot"
+
+
+@pytest.mark.asyncio
 async def test_project_id_render_routes(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
     _write_project(tmp_path)
@@ -116,6 +168,41 @@ async def test_project_id_render_routes(monkeypatch, tmp_path: Path) -> None:
     assert file.status_code == 200
     assert file.headers["content-type"] == "video/mp4"
     assert delete.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_project_history_includes_final_frame_count(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    _write_project(tmp_path)
+    touch_recent(tmp_path, "Render")
+    project_id = project_id_for_path(tmp_path)
+    output_path = tmp_path / "renders" / "final.mp4"
+    output_path.parent.mkdir()
+    output_path.write_bytes(b"mp4")
+    insert_render(
+        render_id="r-frames",
+        project_path=tmp_path,
+        output_path=output_path,
+        preset="final",
+        started_at=datetime_now(),
+        resolution="1920x1080",
+        width=1920,
+        height=1080,
+    )
+    mark_render_finished(
+        render_id="r-frames",
+        finished_at=datetime_now(),
+        duration_s=1.5,
+        frame_count=9009,
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        rows = await client.get(f"/projects/{project_id}/history")
+
+    assert rows.status_code == 200
+    assert rows.json()[0]["id"] == "r-frames"
+    assert rows.json()[0]["frame_count"] == 9009
 
 
 @pytest.mark.asyncio

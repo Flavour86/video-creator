@@ -7,7 +7,14 @@ import { buildFgItem, hasSentenceOverlap, nextZIndex } from "@/lib/layers";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
-type MediaItem = { filename: string; kind: "image" | "video"; thumb_url: string };
+type MediaItem = {
+  filename: string;
+  kind: "image" | "video";
+  thumb_url: string;
+  importing?: boolean;
+  import_progress?: number | null;
+  import_error?: string | null;
+};
 
 type Props = {
   open: boolean;
@@ -495,8 +502,11 @@ export function AssignModal({
                     className={`overflow-hidden rounded-md border p-1 text-left transition-colors ${
                       selectedMedia === item.filename
                         ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                        : item.import_error
+                          ? "border-(--red) bg-(--bg-2)"
                         : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
                     }`}
+                    disabled={item.importing || !!item.import_error}
                     key={item.filename}
                     onClick={() => setSelectedMedia(item.filename)}
                     type="button"
@@ -518,6 +528,16 @@ export function AssignModal({
                       </span>
                     </div>
                     <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
+                    {item.importing ? (
+                      <div className="truncate font-mono text-[10px] text-(--blue)">
+                        Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%
+                      </div>
+                    ) : null}
+                    {item.import_error ? (
+                      <div className="truncate font-mono text-[10px] text-(--red)">
+                        Import failed: {item.import_error}
+                      </div>
+                    ) : null}
                   </button>
                 ))}
               </div>

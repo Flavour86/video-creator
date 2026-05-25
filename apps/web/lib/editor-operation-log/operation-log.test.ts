@@ -6,6 +6,7 @@ import {
   appendOperation,
   clearOperationLog,
   editorOperationStorageKey,
+  loadOperationLog,
   recoverWorkingState,
   redoLast,
   saveOperationLog,
@@ -44,6 +45,67 @@ describe("editor operation log", () => {
     const raw = window.localStorage.getItem(editorOperationStorageKey("p_demo"));
     expect(raw).toContain("\"type\":\"add\"");
     expect(raw).not.toContain("\"version\":1,\"name\"");
+  });
+
+  it("coalesces rapid replace_layers edits on the same field into one undo step", () => {
+    const before: Layer[] = [
+      {
+        ...BG_LAYER,
+        items: [
+          {
+            id: "bg-1",
+            mediaId: "bg.jpg",
+            sentences: [1, 1] as [number, number],
+            start: 0,
+            end: 5,
+            motion: { kind: "ken_burns", easing: "linear" },
+            transitions: { in: "cut", out: "cut" },
+            crossfade: 0.6,
+          },
+        ],
+      },
+    ];
+    const mid: Layer[] = [
+      {
+        ...BG_LAYER,
+        items: [
+          {
+            id: "bg-1",
+            mediaId: "bg.jpg",
+            sentences: [1, 1] as [number, number],
+            start: 0,
+            end: 5,
+            motion: { kind: "ken_burns", easing: "linear" },
+            transitions: { in: "cut", out: "cut" },
+            crossfade: 0,
+          },
+        ],
+      },
+    ];
+    const after: Layer[] = [
+      {
+        ...BG_LAYER,
+        items: [
+          {
+            id: "bg-1",
+            mediaId: "bg.jpg",
+            sentences: [1, 1] as [number, number],
+            start: 0,
+            end: 5,
+            motion: { kind: "ken_burns", easing: "linear" },
+            transitions: { in: "cut", out: "cut" },
+            crossfade: 0.9,
+          },
+        ],
+      },
+    ];
+    appendOperation("p_demo", { type: "replace_layers", before, after: mid });
+    appendOperation("p_demo", { type: "replace_layers", before: mid, after });
+
+    const log = loadOperationLog("p_demo");
+    expect(log.undo).toHaveLength(1);
+    const recovered = recoverWorkingState("p_demo", { ...BASE_STATE, layers: before });
+    expect((recovered.layers[0]?.items[0] as { crossfade: number }).crossfade).toBe(0.9);
   });
 
   it("uses the editor-owned browser storage key namespace", () => {

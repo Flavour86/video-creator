@@ -1,13 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { ImgHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
 import { EditorModal } from "./EditorModal";
-
-vi.mock("next/image", () => ({
-  default: (props: ImgHTMLAttributes<HTMLImageElement>) => <img {...props} alt={props.alt ?? ""} />,
-}));
 
 const MEDIA = [
   {
@@ -131,5 +126,8 @@ describe("EditorModal", () => {
     const preview = screen.getByTestId("subtitles-live-preview");
     expect(preview.className).toContain("aspect-[9/16]");
     expect(preview.className).not.toContain("aspect-video");
+    fireEvent.click(screen.getByRole("switch", { name: "Show subtitles" }));
+    expect(screen.getByText(/subtitle preview follows your style/i)).toBeInTheDocument();
+    expect(screen.queryByText(/drop an image onto a sentence/i)).not.toBeInTheDocument();
   });
 });

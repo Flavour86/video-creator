@@ -333,7 +333,7 @@ export function Inspector({
         </Section>
       ) : null}
 
-      <Section title={isBackground ? t("motion") : "Motion & transitions"}>
+      <Section title={t("motion")}>
         <GridRow htmlFor={isBackground ? "editor-motion-kind" : undefined} label={isBackground ? t("backgroundMotion") : "Motion"}>
           <Select
             aria-label={isBackground ? t("backgroundMotion") : layer.kind === "pip" ? t("pipMotion") : t("foregroundMotion")}
@@ -369,35 +369,55 @@ export function Inspector({
             </Select>
           </GridRow>
         ) : null}
-        {!isBackground ? (
-          <>
-            <GridRow htmlFor="editor-transition-in" label="In">
-              <Select
-                aria-label={t("transitionIn")}
-                className={inspectorControlClass}
-                id="editor-transition-in"
-                name="editor-transition-in"
-                onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { in: event.target.value } })}
-                value={item.transitions.in}
-              >
-                {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </Select>
-            </GridRow>
-            <GridRow htmlFor="editor-transition-out" label="Out">
-              <Select
-                aria-label={t("transitionOut")}
-                className={inspectorControlClass}
-                id="editor-transition-out"
-                name="editor-transition-out"
-                onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { out: event.target.value } })}
-                value={item.transitions.out}
-              >
-                {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </Select>
-            </GridRow>
-          </>
-        ) : null}
       </Section>
+
+      {!isBackground ? (
+        <Section title={t("easing")}>
+          <GridRow htmlFor="editor-motion-easing" label={t("easing")}>
+            <Select
+              aria-label={t("easing")}
+              className={inspectorControlClass}
+              id="editor-motion-easing"
+              name="editor-motion-easing"
+              onChange={(event) => {
+                onPatchItem(layer.id, item.id, { motion: { easing: event.target.value } });
+              }}
+              value={item.motion.easing}
+            >
+              {easingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </Select>
+          </GridRow>
+        </Section>
+      ) : null}
+
+      {!isBackground ? (
+        <Section title={t("transitions")}>
+          <GridRow htmlFor="editor-transition-in" label="In">
+            <Select
+              aria-label={t("transitionIn")}
+              className={inspectorControlClass}
+              id="editor-transition-in"
+              name="editor-transition-in"
+              onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { in: event.target.value } })}
+              value={item.transitions.in}
+            >
+              {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </Select>
+          </GridRow>
+          <GridRow htmlFor="editor-transition-out" label="Out">
+            <Select
+              aria-label={t("transitionOut")}
+              className={inspectorControlClass}
+              id="editor-transition-out"
+              name="editor-transition-out"
+              onChange={(event) => onPatchItem(layer.id, item.id, { transitions: { out: event.target.value } })}
+              value={item.transitions.out}
+            >
+              {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </Select>
+          </GridRow>
+        </Section>
+      ) : null}
 
       {isBackground ? (
         <Section title={t("backgroundCycle")}>

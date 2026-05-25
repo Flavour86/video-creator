@@ -331,6 +331,132 @@ async def test_projects_list_represents_missing_and_corrupt_projects(
 
 
 @pytest.mark.asyncio
+async def test_projects_list_deletes_corrupt_rows_and_cascades_project_configs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_dir = tmp_path / "cleanup-source"
+    _write_project(project_dir, "First sentence.")
+    touch_recent(project_dir, "Cleanup Source")
+    project_id = ""
+    with connection() as conn:
+        row = conn.execute("SELECT project_id FROM projects LIMIT 1").fetchone()
+        assert row is not None
+        project_id = str(row["project_id"])
+        conn.execute(
+            "UPDATE projects SET project_path = ?, project_name = ? WHERE project_id = ?",
+            ("relative-missing-project-path", "Corrupt DB Row", project_id),
+        )
+        conn.execute(
+            """
+            INSERT INTO project_configs (
+                project_id,
+                schema_version,
+                config_json,
+                config_hash,
+                saved_at,
+                updated_at
+            )
+            VALUES (?, 1, ?, ?, ?, ?)
+            ON CONFLICT(project_id) DO UPDATE SET
+                schema_version = 1,
+                config_json = excluded.config_json,
+                config_hash = excluded.config_hash,
+                saved_at = excluded.saved_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                project_id,
+                "{not json",
+                "sha256:corrupt",
+                "2026-05-24T00:00:00+00:00",
+                "2026-05-24T00:00:00+00:00",
+            ),
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    with connection() as conn:
+        project_row = conn.execute("SELECT COUNT(*) AS c FROM projects WHERE project_id = ?", (project_id,)).fetchone()
+        config_row = conn.execute("SELECT COUNT(*) AS c FROM project_configs WHERE project_id = ?", (project_id,)).fetchone()
+    assert project_row is not None
+    assert config_row is not None
+    assert int(project_row["c"]) == 0
+    assert int(config_row["c"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_projects_list_deletes_missing_path_and_corrupt_config_rows(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "app.db")
+    project_id = "p_corrupt_verify_bug18"
+    with connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO projects (
+                project_id,
+                project_path,
+                project_name,
+                created_at,
+                last_render_at,
+                has_unrendered_changes,
+                palette_seed
+            )
+            VALUES (?, ?, ?, ?, ?, 0, ?)
+            """,
+            (
+                project_id,
+                r"C:\nonexistent\path\xyz",
+                "Corrupt Verify Bug18",
+                "2026-05-25T00:00:00+00:00",
+                "2026-05-25T00:00:00+00:00",
+                project_id,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO project_configs (
+                project_id,
+                schema_version,
+                config_json,
+                config_hash,
+                saved_at,
+                updated_at
+            )
+            VALUES (?, 1, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                "{BAD JSON",
+                "sha256:badjson",
+                "2026-05-25T00:00:00+00:00",
+                "2026-05-25T00:00:00+00:00",
+            ),
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    with connection() as conn:
+        project_row = conn.execute("SELECT COUNT(*) AS c FROM projects WHERE project_id = ?", (project_id,)).fetchone()
+        config_row = conn.execute("SELECT COUNT(*) AS c FROM project_configs WHERE project_id = ?", (project_id,)).fetchone()
+    assert project_row is not None
+    assert config_row is not None
+    assert int(project_row["c"]) == 0
+    assert int(config_row["c"]) == 0
+
+
+@pytest.mark.asyncio
 async def test_projects_list_paginates_and_sorts_by_last_render_time(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

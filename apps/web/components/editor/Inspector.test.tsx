@@ -170,4 +170,15 @@ describe("Inspector", () => {
     fireEvent.change(screen.getByLabelText("Background motion"), { target: { value: "ken_burns_subtle" } });
     expect(onPatchBackground).toHaveBeenCalledWith("bg-main", { motion: { kind: "ken_burns" } });
   });
+
+  it("shows separate motion, easing, and transitions sections for foreground clips", () => {
+    const { onPatchItem } = renderInspector();
+    expect(screen.queryByText(/Motion & transitions/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Motion" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Easing" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Transitions" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Easing"), { target: { value: "ease_out" } });
+    expect(onPatchItem).toHaveBeenCalledWith("fg-z1", "fg-1", { motion: { easing: "ease_out" } });
+  });
 });

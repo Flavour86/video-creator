@@ -31,6 +31,7 @@ export type EditorOperation =
 export type StoredEditorOperation = {
   id: string;
   at: string;
+  coalesceKey?: string;
   op: EditorOperation;
 };
 
@@ -127,9 +128,36 @@ export function clearRecoveryState(projectId: string, storage = browserStorage()
 
 export function appendOperation(projectId: string, op: EditorOperation, storage = browserStorage()): StoredOperationLog {
   const log = loadOperationLog(projectId, storage);
+  const nowIso = new Date().toISOString();
+  const previous = log.undo.at(-1);
+  const coalesceKey = coalesceOperationKey(op);
+  if (
+    coalesceKey &&
+    previous?.coalesceKey === coalesceKey &&
+    previous.op.type === "replace_layers" &&
+    op.type === "replace_layers" &&
+    _can_coalesce_replace_layers(previous.at, previous.op.after, op.before)
+  ) {
+    const merged: StoredEditorOperation = {
+      ...previous,
+      at: nowIso,
+      op: {
+        type: "replace_layers",
+        before: previous.op.before,
+        after: op.after,
+      },
+    };
+    const next: StoredOperationLog = {
+      redo: [],
+      undo: [...log.undo.slice(0, -1), merged],
+      version: 1,
+    };
+    saveOperationLog(projectId, next, storage);
+    return next;
+  }
   const next: StoredOperationLog = {
     redo: [],
-    undo: [...log.undo, { at: new Date().toISOString(), id: cryptoId(), op }],
+    undo: [...log.undo, { at: nowIso, coalesceKey, id: cryptoId(), op }],
     version: 1,
   };
   saveOperationLog(projectId, next, storage);
@@ -290,4 +318,66 @@ function isResolutionPreset(value: unknown): value is EditorResolutionPreset {
 
 function cryptoId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `op_${Date.now()}`;
+}
+
+function _can_coalesce_replace_layers(
+  previousAt: string,
+  previousAfter: Layer[],
+  nextBefore: Layer[],
+): boolean {
+  const previousAtMs = Date.parse(previousAt);
+  if (!Number.isFinite(previousAtMs)) return false;
+  if (Date.now() - previousAtMs > 1500) return false;
+  return JSON.stringify(previousAfter) === JSON.stringify(nextBefore);
+}
+
+function coalesceOperationKey(op: EditorOperation): string | null {
+  if (op.type !== "replace_layers") return null;
+  const path = singleDiffPath(op.before, op.after);
+  return path ? `replace_layers:${path}` : null;
+}
+
+function singleDiffPath(left: Layer[], right: Layer[]): string | null {
+  const paths: string[] = [];
+  collectDiffPaths(left, right, "layers", paths, 2);
+  return paths.length === 1 ? paths[0] : null;
+}
+
+function collectDiffPaths(left: unknown, right: unknown, path: string, paths: string[], maxPaths: number): void {
+  if (paths.length >= maxPaths) return;
+  if (Object.is(left, right)) return;
+  if (isPrimitive(left) || isPrimitive(right)) {
+    paths.push(path);
+    return;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) {
+      paths.push(path);
+      return;
+    }
+    if (left.length !== right.length) {
+      paths.push(`${path}.length`);
+      return;
+    }
+    for (let index = 0; index < left.length; index += 1) {
+      collectDiffPaths(left[index], right[index], `${path}[${index}]`, paths, maxPaths);
+      if (paths.length >= maxPaths) return;
+    }
+    return;
+  }
+  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
+    paths.push(path);
+    return;
+  }
+  const leftObj = left as Record<string, unknown>;
+  const rightObj = right as Record<string, unknown>;
+  const keys = new Set([...Object.keys(leftObj), ...Object.keys(rightObj)]);
+  for (const key of keys) {
+    collectDiffPaths(leftObj[key], rightObj[key], `${path}.${key}`, paths, maxPaths);
+    if (paths.length >= maxPaths) return;
+  }
+}
+
+function isPrimitive(value: unknown): boolean {
+  return value === null || (typeof value !== "object" && typeof value !== "function");
 }

@@ -75,7 +75,7 @@ export function RenderPageClient({ projectId, renderId }: RenderPageClientProps)
   }, [activeRenderId]);
 
   const goEditor = useCallback(() => {
-    const target = activeProjectId ? `/editor?projectId=${encodeURIComponent(activeProjectId)}` : "/editor";
+    const target = activeProjectId ? `/editor/${encodeURIComponent(activeProjectId)}` : "/editor";
     if (document.referrer.includes("/editor")) {
       router.back();
     } else {

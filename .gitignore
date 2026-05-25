@@ -47,6 +47,7 @@ apps/web/tests/visual/artifacts/
 .graphify*
 *.tsbuildinfo
 .downloads/
+.playwright-mcp/
 
 # project
 projects/

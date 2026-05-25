@@ -37,6 +37,7 @@ function renderCard(project: RecentProjectCard = PROJECT) {
 
 it("renders server thumbnail and opens preview from thumbnail play control", () => {
   const handlers = renderCard();
+  expect(screen.queryByText("aligned")).not.toBeInTheDocument();
   expect(screen.getByRole("img", { name: "Rendered thumbnail" })).toHaveAttribute(
     "src",
     "/api/server/projects/p_rendered/thumbnail/render-r_done.jpg",
@@ -49,11 +50,14 @@ it("renders server thumbnail and opens preview from thumbnail play control", () 
 it("uses deterministic fallback art when no thumbnail path exists", () => {
   renderCard({
     ...PROJECT,
+    last_render_at: null,
     thumbnail_path: null,
     latest_render_id: null,
     latest_render_status: null,
     render_status_tag: "unrendered",
   });
+  expect(screen.getByText("unrendered")).toBeInTheDocument();
+  expect(screen.queryByText(/last week/i)).not.toBeInTheDocument();
   expect(screen.getByTestId("project-thumb-fallback")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Preview Rendered" })).not.toBeInTheDocument();
 });

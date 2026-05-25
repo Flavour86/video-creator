@@ -140,8 +140,8 @@ Buttons:
 ### Preview Surface
 
 #### Visual Truth
-![dark](docs/designs/../../visuals/editor-preview-dark.png)
-![light](docs/designs/../../visuals/editor-preview-light.png)
+![dark](../../visuals/editor-preview-dark.png)
+![light](../../visuals/editor-preview-light.png)
 
 #### Layout:
 
@@ -223,8 +223,8 @@ Interactions:
 ### Timeline
 
 #### Visual Truth
-![dark](docs/designs/../../visuals/editor-timeline-dark.png)
-![light](docs/designs/../../visuals/editor-timeline-light.png)
+![dark](../../visuals/editor-timeline-dark.png)
+![light](../../visuals/editor-timeline-light.png)
 
 #### Layout:
 

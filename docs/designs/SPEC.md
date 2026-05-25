@@ -196,9 +196,6 @@ Never:
 - Modify generated schema outputs by hand.
 - Add co-author or external attribution lines to commits.
 
-## pre-existing issues
-
-
 ## open questions logs
 
 - [X] 2026-05-22: Render Task 12 visual parity now exercises `render-dark.png` and `render-light.png`, but the embedded screenshots and the written `SPEC_RENDER.md` requirements still diverge beyond the already-confirmed slash title. The screenshots show the render card filename as `Tokyo Essay` without `.mp4`, omit the queued stage from the stage list, collapse output specs into `video`/`audio` rows, and place `Render history` before `Output`; the written spec requires output filename with `.mp4`, seven stages including queued, separate output fields for video codec/CRF/preset/audio codec/bitrate/sample rate, and current implementation currently places `Output` before `Render history`. For Task 12, should visual parity follow the screenshots exactly, follow the written spec text even if screenshots drift, or update/regenerate the screenshots to match the written spec and implementation?

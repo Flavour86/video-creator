@@ -31,7 +31,15 @@ export function EditorBar({
   saving,
 }: EditorBarProps) {
   const t = useTranslations("pages.editor");
-  const saveLabel = saveStatus === "saving" ? t("saving") : saveStatus === "saved" ? t("saved") : saveStatus === "failed" ? t("saveFailed") : t("save");
+  const saveLabel = saveStatus === "pending"
+    ? t("pending")
+    : saveStatus === "saving"
+      ? t("saving")
+      : saveStatus === "saved"
+        ? t("saved")
+        : saveStatus === "failed"
+          ? t("saveFailed")
+          : t("save");
   const renderStateLabel = renderJob.running ? "queued/running" : renderDisabled ? "disabled" : "ready";
   const draftLabel = renderJob.running ? t("drafting", { progress: renderJob.progress }) : t("renderDraft");
 

@@ -101,7 +101,7 @@ def test_cue_numbers_are_one_based_and_contiguous() -> None:
 def test_timestamps_use_srt_format() -> None:
     srt = generate_srt(_alignment())
 
-    assert re.search(r"00:00:00,000 --> 00:00:01,200", srt)
+    assert re.search(r"00:00:00,000 --> 00:00:\d{2},\d{3}", srt)
     assert re.search(r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}", srt)
 
 
@@ -126,6 +126,78 @@ def test_generate_srt_respects_custom_max_chars_per_line() -> None:
     for block in blocks:
         assert all(len(line) <= 30 for line in block[2:])
         assert len(block[2:]) <= 2
+
+
+def test_generate_srt_gap_fills_and_avoids_zero_duration_cues() -> None:
+    alignment = AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text="First sentence.",
+                start_s=0.0,
+                end_s=3.0,
+                confidence_avg=0.95,
+            ),
+            AlignedSentence(
+                index=2,
+                text="Second sentence.",
+                start_s=9.0,
+                end_s=9.0,
+                confidence_avg=0.9,
+            ),
+            AlignedSentence(
+                index=3,
+                text="Third sentence.",
+                start_s=12.0,
+                end_s=12.8,
+                confidence_avg=0.92,
+            ),
+        ],
+        words=[
+            AlignedWord(sentence_index=1, text="First", start_s=0.0, end_s=1.2, confidence=0.9),
+            AlignedWord(
+                sentence_index=1,
+                text="sentence.",
+                start_s=1.2,
+                end_s=3.0,
+                confidence=0.9,
+            ),
+            AlignedWord(
+                sentence_index=2,
+                text="Second",
+                start_s=9.0,
+                end_s=9.0,
+                confidence=0.9,
+            ),
+            AlignedWord(
+                sentence_index=2,
+                text="sentence.",
+                start_s=9.0,
+                end_s=9.0,
+                confidence=0.9,
+            ),
+            AlignedWord(
+                sentence_index=3,
+                text="Third",
+                start_s=12.0,
+                end_s=12.4,
+                confidence=0.9,
+            ),
+            AlignedWord(
+                sentence_index=3,
+                text="sentence.",
+                start_s=12.4,
+                end_s=12.8,
+                confidence=0.9,
+            ),
+        ],
+    )
+
+    blocks = _blocks(generate_srt(alignment))
+    ranges = [block[1].split(" --> ") for block in blocks]
+
+    assert ranges[0][1] == ranges[1][0]
+    assert _seconds(ranges[1][1]) > _seconds(ranges[1][0])
 
 
 def _seconds(timestamp: str) -> float:

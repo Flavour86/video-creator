@@ -28,9 +28,10 @@ const testCanvasContext = {
 let _projectIdParam: string | null = null;
 let _pathname = "/editor";
 const _routerPush = vi.fn();
+const _routerReplace = vi.fn();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: _routerPush }),
+  useRouter: () => ({ push: _routerPush, replace: _routerReplace }),
   useSearchParams: () => ({ get: (k: string) => (k === "projectId" ? _projectIdParam : null) }),
   usePathname: () => _pathname,
 }));
@@ -39,6 +40,7 @@ beforeEach(() => {
   _projectIdParam = null;
   _pathname = "/editor";
   _routerPush.mockReset();
+  _routerReplace.mockReset();
   window.localStorage.clear();
   global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
   Element.prototype.scrollIntoView = vi.fn();
@@ -63,15 +65,15 @@ function renderEditor() {
   );
 }
 
-it("shows no-project message when project id param is absent", () => {
+it("redirects to launcher when project id param is absent", async () => {
   renderEditor();
-  expect(screen.getByText(/No project open/i)).toBeInTheDocument();
+  await waitFor(() => expect(_routerReplace).toHaveBeenCalledWith("/"));
 });
 
-it("shows launcher recovery when project id param is malformed", () => {
+it("redirects to launcher when project id param is malformed", async () => {
   _projectIdParam = "E:/projects/demo";
   renderEditor();
-  expect(screen.getByText(/No project open/i)).toBeInTheDocument();
+  await waitFor(() => expect(_routerReplace).toHaveBeenCalledWith("/"));
 });
 
 it("shows project id in toolbar when project id param is present", () => {
@@ -88,11 +90,11 @@ it("reads project id from the dynamic editor path", () => {
   expect(screen.getByText("projectId: p_path_demo")).toBeInTheDocument();
 });
 
-it("shows launcher recovery for invalid dynamic editor path segment", () => {
+it("redirects to launcher for invalid dynamic editor path segment", async () => {
   _projectIdParam = null;
   _pathname = "/editor/E:/projects/demo";
   renderEditor();
-  expect(screen.getByText(/No project open/i)).toBeInTheDocument();
+  await waitFor(() => expect(_routerReplace).toHaveBeenCalledWith("/"));
 });
 
 const TEST_PROJECT_ID = "p_test01";
@@ -295,6 +297,7 @@ function mockTest01Fetch(options: {
   renderCacheSequence?: Array<{ cached_count: number; state: "warm" | "cold" | "partial" | "invalid"; total_count: number } | null>;
   saveHasUnrenderedChanges?: boolean;
   uploadsResult?: Array<{ mediaId: string; media: Record<string, unknown> }>;
+  uploadsError?: { status: number; body: Record<string, unknown> };
 } = {}) {
   const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
   const lastRenderedConfigHash = options.lastRenderedConfigHash ?? null;
@@ -313,6 +316,7 @@ function mockTest01Fetch(options: {
   let renderCacheCallCount = 0;
   const saveHasUnrenderedChanges = options.saveHasUnrenderedChanges ?? true;
   const uploadsResult = options.uploadsResult ?? [];
+  const uploadsError = options.uploadsError ?? null;
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/inspect`) && init?.method === "POST") {
@@ -343,7 +347,16 @@ function mockTest01Fetch(options: {
       return { ok: false, status: 503, json: async () => ({}) } as Response;
     }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/media`)) return ok(TEST_MEDIA);
-    if (url.endsWith("/uploads") && init?.method === "POST") return ok(uploadsResult);
+    if (url.endsWith("/uploads") && init?.method === "POST") {
+      if (uploadsError) {
+        return {
+          ok: false,
+          status: uploadsError.status,
+          json: async () => uploadsError.body,
+        } as Response;
+      }
+      return ok(uploadsResult);
+    }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render/r-test01`)) return ok({ ok: true });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render`)) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
     return { ok: false, json: async () => ({}) } as Response;
@@ -387,6 +400,27 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("PiP opacity")).toHaveValue("100");
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("normalizes malformed alignment sentence timing gaps for transcript rendering", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    alignment: {
+      sentences: [
+        { index: 1, text: "First sentence.", start_s: 0, end_s: 3, confidence_avg: 0.95 },
+        { index: 2, text: "Second sentence.", start_s: 9, end_s: 9, confidence_avg: 0.92 },
+        { index: 3, text: "Third sentence.", start_s: 12, end_s: 13, confidence_avg: 0.93 },
+      ],
+      words: [],
+      cache_hit: true,
+    },
+  });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  expect(await screen.findByText(/Transcript .* 3 aligned/i)).toBeInTheDocument();
+  expect(screen.queryByText("orphan")).not.toBeInTheDocument();
 });
 
 it("restores the subtitles timeline layer for aligned projects whose saved config is missing it", async () => {
@@ -1189,6 +1223,7 @@ it("toggles play and pause with Space outside typing targets", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
   const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
+  const loadSpy = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
   const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
 
   renderEditor();
@@ -1203,9 +1238,32 @@ it("toggles play and pause with Space outside typing targets", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument());
 
   expect(playSpy).toHaveBeenCalled();
+  expect(loadSpy).toHaveBeenCalled();
   expect(pauseSpy).toHaveBeenCalled();
   playSpy.mockRestore();
+  loadSpy.mockRestore();
   pauseSpy.mockRestore();
+});
+
+it("reloads audio before play when playback is requested while readyState is empty", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+  const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
+  const loadSpy = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  Object.defineProperty(audio, "readyState", {
+    configurable: true,
+    get: () => 0,
+  });
+
+  fireEvent.keyDown(window, { key: " ", code: "Space" });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument());
+  expect(loadSpy).toHaveBeenCalled();
+  expect(playSpy).toHaveBeenCalled();
 });
 
 it("ignores Space play/pause shortcut when typing in editable targets", async () => {
@@ -1314,6 +1372,37 @@ it("imports media through POST /uploads and shows the imported asset in modal", 
     expect(calls.some(([input, init]) => String(input).endsWith("/uploads") && init?.method === "POST")).toBe(true);
   });
   expect((await screen.findAllByText("new-upload.jpg")).length).toBeGreaterThan(0);
+});
+
+it("shows a failed upload error state in assign modal when image is smaller than 5x5", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    uploadsError: {
+      status: 400,
+      body: {
+        error: {
+          code: "IMAGE_TOO_SMALL",
+          message: "Image dimensions are too small.",
+        },
+      },
+    },
+  });
+
+  renderEditor();
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
+
+  const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+  expect(fileInput).not.toBeNull();
+  fireEvent.change(fileInput!, {
+    target: { files: [new File([new Uint8Array([1, 2])], "tiny4x4.png", { type: "image/png" })] },
+  });
+
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some(([input, init]) => String(input).endsWith("/uploads") && init?.method === "POST")).toBe(true);
+  });
+  expect((await screen.findAllByText("tiny4x4.png")).length).toBeGreaterThan(0);
+  expect(await screen.findByText(/Import failed: image is smaller than 5x5/i)).toBeInTheDocument();
 });
 
 it("creates a foreground clip from assign modal and appends one replace_layers operation", async () => {

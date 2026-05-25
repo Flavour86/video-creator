@@ -2,7 +2,7 @@
 
 import { ChevronRight, Play, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { AlignmentState, LauncherRenderStatusTag, RecentProjectCard } from "@vc/shared-schemas";
+import type { LauncherRenderStatusTag, RecentProjectCard } from "@vc/shared-schemas";
 import { StatusTag, type StatusTagVariant } from "@/components/ui";
 import { formatRelativeTime } from "@/lib/format";
 import { ProjectThumb } from "./ProjectThumb";
@@ -17,7 +17,7 @@ type ProjectCardProps = {
 export function ProjectCard({ onClick, onDelete, onPreview, project }: ProjectCardProps) {
   const t = useTranslations("pages.launcher");
   const canPlay = project.latest_render_status === "done" && Boolean(project.latest_render_id);
-  const openedAt = project.last_render_at ? formatRelativeTime(project.last_render_at) : null;
+  const renderedAt = project.last_render_at ? formatRelativeTime(project.last_render_at) : null;
 
   return (
     <article
@@ -57,17 +57,16 @@ export function ProjectCard({ onClick, onDelete, onPreview, project }: ProjectCa
             <Meta label={t("voice")} value={project.voice_duration || "--"} />
             <Meta label={t("sentences")} value={project.sentence_count} />
             <Meta label={t("media")} value={project.media_count} />
-            {openedAt ? <Meta label={t("opened")} value={openedAt} /> : null}
+            {renderedAt ? <Meta label={t("lastRender")} value={renderedAt} /> : null}
           </span>
         </span>
       </button>
       <span className="flex items-center gap-(--space-3)">
         {project.render_status_tag ? (
           <StatusTag variant={launcherRenderVariant(project.render_status_tag)}>
-            {project.render_status_tag}
+            {renderStatusLabel(project.render_status_tag, t)}
           </StatusTag>
         ) : null}
-        <StatusTag variant={statusVariant(project.alignment_state)}>{t(`status.${project.alignment_state}`)}</StatusTag>
         <button
           aria-label={`Delete ${project.name}`}
           className="grid h-(--space-9) w-(--space-9) place-items-center rounded-(--r-pill) text-(--text-3) hover:bg-(--bg-3) hover:text-(--red) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
@@ -97,13 +96,6 @@ function Meta({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function statusVariant(state: AlignmentState): StatusTagVariant {
-  if (state === "aligned") {
-    return "aligned";
-  }
-  return state === "pending" ? "warning" : "missing-asset";
-}
-
 function launcherRenderVariant(status: LauncherRenderStatusTag): StatusTagVariant {
   if (status === "rendered") {
     return "ready";
@@ -115,4 +107,11 @@ function launcherRenderVariant(status: LauncherRenderStatusTag): StatusTagVarian
     return "error";
   }
   return "warning";
+}
+
+function renderStatusLabel(
+  status: LauncherRenderStatusTag,
+  t: (key: string) => string,
+): string {
+  return t(`renderStatus.${status}`);
 }

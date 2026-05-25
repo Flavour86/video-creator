@@ -137,6 +137,14 @@ it("renders the spec header and existing render from the dynamic route params", 
   expect(mocks.startRender).not.toHaveBeenCalled();
 });
 
+it("navigates Back to editor using /editor/:projectId path form", async () => {
+  renderClient("p_demo", "r-existing");
+
+  fireEvent.click(await screen.findByRole("button", { name: /back to editor/i }));
+
+  expect(mocks.push).toHaveBeenCalledWith("/editor/p_demo");
+});
+
 it("retries failed renders and replaces with the dynamic render route", async () => {
   mocks.jobPhase = "failed";
   renderClient("p_demo", "r-failed");

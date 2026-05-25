@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Field, NumberInput, Select } from "@/components/ui";
 import type { SubtitlesSettings } from "@/lib/hooks/useProject";
 import type { EditorMediaItem, EditorModal as EditorModalKind } from "./types";
-import Image from "next/image";
 
 type EditorModalProps = {
   assignRange: [number, number];
@@ -19,7 +18,7 @@ type EditorModalProps = {
   subtitles: SubtitlesSettings | null;
 };
 
-const SUBTITLE_PREVIEW_TEXT = "Drop an image onto a sentence and the editor knows when it should appear.";
+const SUBTITLE_PREVIEW_TEXT = "This subtitle preview follows your style and stays inside the safe zone.";
 
 export function EditorModal({
   assignRange,
@@ -263,7 +262,11 @@ function MediaFields({
                 type="button"
               >
                 {src ? (
-                  <Image alt={item.filename} className="aspect-video w-full rounded-sm bg-(--bg-3) object-cover" src={src} />
+                  <img
+                    alt={item.filename}
+                    className="aspect-video w-full rounded-sm bg-(--bg-3) object-cover"
+                    src={src}
+                  />
                 ) : (
                   <div aria-hidden="true" className="aspect-video w-full rounded-sm bg-(--bg-3)" />
                 )}

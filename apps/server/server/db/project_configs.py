@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from server.db.app_db import connection
 from server.db.projects import get_project_by_path, project_id_for_path
 from server.domain.project import Project
@@ -103,3 +105,29 @@ def latest_config_for_project_path(project_dir: Path) -> dict[str, Any] | None:
     if not isinstance(loaded, dict):
         return None
     return cast(dict[str, Any], loaded)
+
+
+def has_valid_config_for_project_id(project_id: str) -> bool:
+    with connection() as conn:
+        row = conn.execute(
+            """
+            SELECT config_json
+            FROM project_configs
+            WHERE project_id = ?
+            LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
+    if row is None:
+        return False
+    try:
+        loaded = json.loads(str(row["config_json"]))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return False
+    if not isinstance(loaded, dict):
+        return False
+    try:
+        Project.model_validate(loaded)
+    except ValidationError:
+        return False
+    return True

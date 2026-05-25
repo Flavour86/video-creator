@@ -10,6 +10,7 @@ from server.domain.timing import AlignedWord, AlignmentResult
 MAX_LINE_CHARS = 42
 MAX_CUE_LINES = 2
 MAX_CUE_SECONDS = 7.0
+MIN_CUE_SECONDS = 0.2
 
 SENTENCE_PUNCTUATION = (".", "!", "?")
 CLAUSE_PUNCTUATION = (",", ";", ":")
@@ -35,18 +36,19 @@ class SubtitleAlignmentUpdate:
 def generate_srt(alignment: AlignmentResult, *, max_line_chars: int = MAX_LINE_CHARS) -> str:
     safe_max_line_chars = _normalize_max_line_chars(max_line_chars)
     cues = _build_cues(alignment, max_line_chars=safe_max_line_chars)
+    cue_spans = _normalized_cue_spans(cues)
     blocks = [
         "\r\n".join(
             [
                 str(index),
                 (
-                    f"{_format_timestamp(cue.words[0].start_s)} "
-                    f"--> {_format_timestamp(cue.words[-1].end_s)}"
+                    f"{_format_timestamp(span[0])} "
+                    f"--> {_format_timestamp(span[1])}"
                 ),
                 *_wrap_text(_words_text(cue.words), max_line_chars=safe_max_line_chars),
             ]
         )
-        for index, cue in enumerate(cues, start=1)
+        for index, (cue, span) in enumerate(zip(cues, cue_spans, strict=True), start=1)
     ]
     return "\r\n\r\n".join(blocks) + ("\r\n" if blocks else "")
 
@@ -104,10 +106,10 @@ def subtitle_stats(
 ) -> SubtitleStats:
     safe_max_line_chars = _normalize_max_line_chars(max_line_chars)
     cues = _build_cues(alignment, max_line_chars=safe_max_line_chars)
+    cue_spans = _normalized_cue_spans(cues)
     total_duration_s = sum(
-        max(0.0, cue.words[-1].end_s - cue.words[0].start_s)
-        for cue in cues
-        if cue.words
+        max(0.0, end_s - start_s)
+        for start_s, end_s in cue_spans
     )
     return SubtitleStats(cue_count=len(cues), total_duration_s=round(total_duration_s, 3))
 
@@ -126,6 +128,23 @@ def _build_cues(alignment: AlignmentResult, *, max_line_chars: int) -> list[_Cue
             cues.append(_Cue(words=words[start:end]))
             start = end
     return cues
+
+
+def _normalized_cue_spans(cues: list[_Cue]) -> list[tuple[float, float]]:
+    spans = [(cue.words[0].start_s, cue.words[-1].end_s) for cue in cues if cue.words]
+    normalized: list[tuple[float, float]] = []
+    for index, (start_s, end_s) in enumerate(spans):
+        next_start = spans[index + 1][0] if index + 1 < len(spans) else None
+        next_end = end_s
+        if next_start is not None and next_end < next_start:
+            next_end = next_start
+        if next_end <= start_s:
+            if next_start is not None and next_start > start_s:
+                next_end = next_start
+            else:
+                next_end = start_s + MIN_CUE_SECONDS
+        normalized.append((start_s, next_end))
+    return normalized
 
 
 def _best_chunk_end(words: list[AlignedWord], start: int, *, max_line_chars: int) -> int:
