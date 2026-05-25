@@ -132,7 +132,7 @@ export function PreviewSurface({
     const resolvedDisplay = resolveDisplay(layers, sentences, clockTime);
     const hasActiveForeground = resolvedDisplay.fg.length > 0;
     const background = hasActiveForeground ? undefined : resolvedDisplay.bg;
-    const subtitleText = resolvedDisplay.subtitle ? compactSubtitleText(resolvedDisplay.subtitle.text) : "";
+    const subtitleText = resolvedDisplay.subtitle ? normalizeSubtitleText(resolvedDisplay.subtitle.text) : "";
     const subtitleVisible = subtitlesEnabled && subtitleText.length > 0;
     setSubtitleLiveText((previous) => {
       const next = subtitleVisible ? subtitleText : "";
@@ -455,21 +455,34 @@ function drawSubtitle(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
-  const lines = text.split("\n").filter(Boolean);
-  if (lines.length === 0) return;
-  const fontSize = clamp(Math.round(style.size * 0.58), 16, 24);
-  const lineHeight = Math.round(fontSize * 1.22);
+  const normalizedMaxChars = clamp(Math.round(style.max_chars_per_line), 12, 80);
+  const fontSize = clamp(Math.round(style.size * 0.58), 16, 42);
+  const lineHeight = Math.round(fontSize * 1.24);
+  const maxTextWidth = canvasWidth * 0.84;
   const centerX = canvasWidth / 2;
-  const anchorY = style.position === "top" ? canvasHeight * 0.14 : style.position === "bottom_low" ? canvasHeight * 0.94 : canvasHeight * 0.88;
-  const startY = anchorY - ((lines.length - 1) * lineHeight) / 2;
   context.save();
   context.font = `650 ${fontSize}px ${style.font}, Inter, Arial, sans-serif`;
   context.textAlign = "center";
   context.textBaseline = "middle";
-
+  const lines = limitSubtitleLines(wrapSubtitleLines(text, context, { maxCharsPerLine: normalizedMaxChars, maxWidth: maxTextWidth }), 4);
+  if (lines.length === 0) {
+    context.restore();
+    return;
+  }
+  const anchorY = style.position === "top" ? canvasHeight * 0.16 : style.position === "bottom_low" ? canvasHeight * 0.91 : canvasHeight * 0.86;
+  let startY = anchorY - ((lines.length - 1) * lineHeight) / 2;
+  if (style.position !== "top") {
+    const minStart = canvasHeight * 0.56;
+    startY = Math.max(startY, minStart);
+    const bottomY = startY + (lines.length - 1) * lineHeight;
+    const maxBottom = canvasHeight * 0.95;
+    if (bottomY > maxBottom) {
+      startY -= bottomY - maxBottom;
+    }
+  }
   if (style.bg_style === "pill" || style.bg_style === "block") {
-    const paddingX = style.bg_style === "pill" ? 20 : 16;
-    const paddingY = 8;
+    const paddingX = style.bg_style === "pill" ? 22 : 18;
+    const paddingY = 10;
     const widest = lines.reduce((value, line) => Math.max(value, context.measureText(line).width), 0);
     const blockWidth = widest + paddingX * 2;
     const blockHeight = lines.length * lineHeight + paddingY * 2;
@@ -492,6 +505,11 @@ function drawSubtitle(
       context.shadowColor = "rgba(0, 0, 0, 0.75)";
       context.shadowBlur = Math.max(6, Math.round(fontSize * 0.25));
       context.shadowOffsetY = Math.max(2, Math.round(fontSize * 0.08));
+    }
+    context.strokeStyle = "rgba(0, 0, 0, 0.75)";
+    context.lineWidth = Math.max(1.5, Math.round(fontSize * 0.09));
+    if (typeof context.strokeText === "function") {
+      context.strokeText(line, centerX, y);
     }
     context.fillStyle = "#ffffff";
     context.fillText(line, centerX, y);
@@ -574,6 +592,89 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function compactSubtitleText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+function normalizeSubtitleText(text: string): string {
+  return text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function wrapSubtitleLines(
+  text: string,
+  context: CanvasRenderingContext2D,
+  options: { maxCharsPerLine: number; maxWidth: number },
+): string[] {
+  const sourceLines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  const wrapped: string[] = [];
+  for (const source of sourceLines) {
+    wrapped.push(...wrapSubtitleLine(source, context, options));
+  }
+  return wrapped;
+}
+
+function limitSubtitleLines(lines: string[], maxLines: number): string[] {
+  if (lines.length <= maxLines) return lines;
+  const visible = lines.slice(0, maxLines);
+  const last = visible[maxLines - 1] ?? "";
+  visible[maxLines - 1] = last.endsWith("…") ? last : `${last.replace(/[。！？.!?;；:：]+$/, "")}…`;
+  return visible;
+}
+
+function wrapSubtitleLine(
+  source: string,
+  context: CanvasRenderingContext2D,
+  options: { maxCharsPerLine: number; maxWidth: number },
+): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const symbol of [...source]) {
+    const candidate = `${line}${symbol}`;
+    const tooManyChars = visibleLength(candidate) > options.maxCharsPerLine;
+    const tooWide = context.measureText(candidate).width > options.maxWidth;
+    if (!tooManyChars && !tooWide) {
+      line = candidate;
+      continue;
+    }
+    if (!line) {
+      lines.push(symbol.trim() || symbol);
+      continue;
+    }
+    const breakIndex = findNaturalBreakIndex(line);
+    if (breakIndex > 0) {
+      const head = line.slice(0, breakIndex).trim();
+      if (head) {
+        lines.push(head);
+      }
+      line = `${line.slice(breakIndex).trim()}${symbol}`;
+      continue;
+    }
+    lines.push(line.trim());
+    line = symbol.trim() || symbol;
+  }
+  const tail = line.trim();
+  if (tail) {
+    lines.push(tail);
+  }
+  return lines;
+}
+
+function findNaturalBreakIndex(line: string): number {
+  for (let index = line.length - 1; index > 0; index -= 1) {
+    const char = line[index];
+    if (!char) continue;
+    if (/\s/.test(char) || /[，。！？；：、,.!?;:]/.test(char)) {
+      return index + 1;
+    }
+  }
+  return 0;
+}
+
+function visibleLength(value: string): number {
+  return [...value].reduce((total, char) => total + (isWideCharacter(char) ? 2 : 1), 0);
+}
+
+function isWideCharacter(char: string): boolean {
+  return /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7AF\uF900-\uFAFF\uFE10-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(char);
 }

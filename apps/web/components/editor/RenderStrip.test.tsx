@@ -41,7 +41,7 @@ describe("RenderStrip", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps completed drafts visible without cancel", () => {
+  it("hides the draft strip once completed", () => {
     renderStrip({
       job: {
         phase: "ready",
@@ -52,9 +52,8 @@ describe("RenderStrip", () => {
       },
     });
 
-    expect(screen.getByText("Rendering draft : done")).toBeInTheDocument();
-    expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Rendering draft : done")).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar", { name: "Draft render progress" })).not.toBeInTheDocument();
   });
 
   it("maps subtitles and compose stage messages to canonical labels", () => {

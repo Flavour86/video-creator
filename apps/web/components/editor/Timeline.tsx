@@ -15,7 +15,6 @@ type TimelineProps = {
   onDeleteItem: (selection: { layerId: string; itemId: string }) => void;
   onSeek: (time: number) => void;
   onSelect: (selection: EditorSelection) => void;
-  onUpdateSubtitleCueTiming: (input: { sentenceIndex: number; start: number; end: number }) => void;
   onUpdateClipTiming: (input: { layerId: string; itemId: string; start: number; end: number }) => void;
   selected: EditorSelection;
   sentences: AlignedSentence[];
@@ -74,7 +73,6 @@ export function Timeline({
   onDeleteItem,
   onSeek,
   onSelect,
-  onUpdateSubtitleCueTiming,
   onUpdateClipTiming,
   selected,
   sentences,
@@ -104,20 +102,12 @@ export function Timeline({
       if (!drag) return;
       const clientX = Number.isFinite(event.clientX) && event.clientX !== 0 ? event.clientX : drag.lastClientX;
       const patch = computeDragPatch(drag, clientX, duration);
-      if (drag.clip.kind === "sub" && typeof drag.clip.sentenceIndex === "number") {
-        onUpdateSubtitleCueTiming({
-          sentenceIndex: drag.clip.sentenceIndex,
-          start: patch.start,
-          end: patch.end,
-        });
-      } else {
-        onUpdateClipTiming({
-          layerId: drag.clip.layerId,
-          itemId: drag.clip.id,
-          start: patch.start,
-          end: patch.end,
-        });
-      }
+      onUpdateClipTiming({
+        layerId: drag.clip.layerId,
+        itemId: drag.clip.id,
+        start: patch.start,
+        end: patch.end,
+      });
       onSeek(patch.start);
       dragStateRef.current = null;
     }
@@ -128,10 +118,10 @@ export function Timeline({
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [duration, onSeek, onUpdateClipTiming, onUpdateSubtitleCueTiming]);
+  }, [duration, onSeek, onUpdateClipTiming]);
 
   return (
-    <section className="relative flex shrink-0 flex-col border-t border-(--line) bg-(--bg-1)">
+    <section className="relative flex shrink-0 flex-col overflow-x-hidden border-t border-(--line) bg-(--bg-1)">
       <div className="flex items-center justify-between border-b border-(--line-soft) px-4 py-2 font-mono text-[10.5px] text-(--text-3)">
         <h3 className="text-[11px] font-semibold">{t("timeline.head")}</h3>
         <span>{fps} fps&nbsp;&nbsp; {clipCount} clips&nbsp;&nbsp; {cacheLabelText}</span>
@@ -177,7 +167,7 @@ export function Timeline({
         </div>
       </button>
 
-      <div className="relative max-h-[221px] overflow-y-auto">
+      <div className="relative max-h-[221px] overflow-x-hidden overflow-y-auto">
         {rows.map((row) => (
           <TrackRow
             duration={duration}
@@ -215,21 +205,24 @@ function useTimelineRows(layers: Layer[], duration: number, sentences: AlignedSe
     const rawItems = layer.items as unknown[];
     const timelineItems: TimelineSourceItem[] = rawItems.filter((item): item is TimelineSourceItem => isTimelineItem(item));
     const clips = timelineItems
-      .map((item) => ({
-        id: item.id,
-        layerId: layer.id,
-        kind: layer.kind,
-        mediaId: resolveMediaLabel(item) || "subtitle",
-        mediaIds: item.mediaIds,
-        sentences: item.sentences,
-        start: item.start,
-        end: item.end,
-        orphaned: item.orphaned,
-      }));
+      .map((item) => {
+        const bounded = clampClipToDuration(item.start, item.end, duration);
+        return {
+          id: item.id,
+          layerId: layer.id,
+          kind: layer.kind,
+          mediaId: resolveMediaLabel(item) || "subtitle",
+          mediaIds: item.mediaIds,
+          sentences: item.sentences,
+          start: bounded.start,
+          end: bounded.end,
+          orphaned: item.orphaned,
+        };
+      });
 
     if (layer.kind === "sub") {
       const subtitleClips = sentences.length > 0
-        ? clipsFromSentences(layer.id, sentences)
+        ? clipsFromSentences(layer.id, sentences, duration)
         : clips.length > 0
           ? clips
           : synthesizeSubtitleClips(layer.id, duration, deriveSubtitleCueCount(rawItems));
@@ -283,10 +276,14 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
         <span className="shrink-0 text-(--text-4)">{row.count}</span>
         <span className="sr-only">{`${row.label} · ${row.count}`}</span>
       </div>
-      <div className="relative h-full bg-[repeating-linear-gradient(90deg,transparent_0_calc(10%_-_1px),var(--line-soft)_calc(10%_-_1px)_10%)]" data-timeline-track="1" onClick={() => onSelect(null)}>
+      <div className="relative h-full overflow-x-hidden bg-[repeating-linear-gradient(90deg,transparent_0_calc(10%_-_1px),var(--line-soft)_calc(10%_-_1px)_10%)]" data-timeline-track="1" onClick={() => onSelect(null)}>
         {row.clips.map((clip) => {
-          const left = `${(clip.start / Math.max(duration, 1)) * 100}%`;
-          const width = `${Math.max(1, ((clip.end - clip.start) / Math.max(duration, 1)) * 100)}%`;
+          const safeDuration = Math.max(duration, 1);
+          const leftPercent = (clip.start / safeDuration) * 100;
+          const rawWidthPercent = ((clip.end - clip.start) / safeDuration) * 100;
+          const widthPercent = Math.min(Math.max(rawWidthPercent, 0.12), Math.max(0, 100 - leftPercent));
+          const left = `${leftPercent}%`;
+          const width = `${widthPercent}%`;
           if (row.kind === "sub" && clip.synthetic === true) {
             return (
               <div
@@ -313,6 +310,7 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
                   onSelect({ layerId: clip.layerId, itemId: clip.id });
                 }}
                 onMouseDown={(event) => {
+                  if (clip.kind === "sub") return;
                   event.stopPropagation();
                   onStartDrag(makeDragState(event, clip, "move"));
                 }}
@@ -321,24 +319,28 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
                 <span className="absolute left-2 top-1/2 max-w-[calc(100%-16px)] -translate-y-1/2 truncate">{label}</span>
               </button>
 
-              <button
-                aria-label={`Resize start ${label}`}
-                className="absolute bottom-0 left-0 top-0 w-2 cursor-ew-resize rounded-l-sm"
-                onMouseDown={(event) => {
-                  event.stopPropagation();
-                  onStartDrag(makeDragState(event, clip, "resize-start"));
-                }}
-                type="button"
-              />
-              <button
-                aria-label={`Resize end ${label}`}
-                className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-sm"
-                onMouseDown={(event) => {
-                  event.stopPropagation();
-                  onStartDrag(makeDragState(event, clip, "resize-end"));
-                }}
-                type="button"
-              />
+              {clip.kind !== "sub" ? (
+                <>
+                  <button
+                    aria-label={`Resize start ${label}`}
+                    className="absolute bottom-0 left-0 top-0 w-2 cursor-ew-resize rounded-l-sm"
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                      onStartDrag(makeDragState(event, clip, "resize-start"));
+                    }}
+                    type="button"
+                  />
+                  <button
+                    aria-label={`Resize end ${label}`}
+                    className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-sm"
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                      onStartDrag(makeDragState(event, clip, "resize-end"));
+                    }}
+                    type="button"
+                  />
+                </>
+              ) : null}
 
               {canDelete ? (
                 <button
@@ -488,7 +490,7 @@ function synthesizeSubtitleClips(layerId: string, duration: number, cueCount: nu
   const slice = Math.max(duration / safeCount, MIN_DURATION_SECONDS);
   return Array.from({ length: safeCount }, (_, index) => {
     const start = index * slice;
-    const end = start + slice * 0.92;
+    const end = Math.min(duration, start + slice * 0.92);
     return {
       end,
       id: `${layerId}-sub-${index + 1}`,
@@ -501,17 +503,20 @@ function synthesizeSubtitleClips(layerId: string, duration: number, cueCount: nu
   });
 }
 
-function clipsFromSentences(layerId: string, sentences: AlignedSentence[]): TimelineClip[] {
-  return sentences.map((sentence) => ({
-    end: sentence.end_s,
-    id: `${layerId}-s${sentence.index}`,
-    kind: "sub",
-    layerId,
-    mediaId: `s${sentence.index}`,
-    sentenceIndex: sentence.index,
-    sentences: [sentence.index, sentence.index],
-    start: sentence.start_s,
-  }));
+function clipsFromSentences(layerId: string, sentences: AlignedSentence[], duration: number): TimelineClip[] {
+  return sentences.map((sentence) => {
+    const bounded = clampClipToDuration(sentence.start_s, sentence.end_s, duration);
+    return {
+      end: bounded.end,
+      id: `${layerId}-s${sentence.index}`,
+      kind: "sub",
+      layerId,
+      mediaId: `s${sentence.index}`,
+      sentenceIndex: sentence.index,
+      sentences: [sentence.index, sentence.index],
+      start: bounded.start,
+    };
+  });
 }
 
 function resolveMediaLabel(item: { mediaId?: string; mediaIds?: string[] }): string {
@@ -538,5 +543,12 @@ function isTimelineItem(item: unknown): item is TimelineSourceItem {
     start?: unknown;
   };
   return typeof candidate.id === "string" && typeof candidate.start === "number" && typeof candidate.end === "number";
+}
+
+function clampClipToDuration(start: number, end: number, duration: number): { start: number; end: number } {
+  const safeDuration = Math.max(0, duration);
+  const boundedStart = clamp(start, 0, safeDuration);
+  const boundedEnd = clamp(end, boundedStart, safeDuration);
+  return { start: boundedStart, end: boundedEnd };
 }
 

@@ -7,14 +7,14 @@ import { EditorBar } from "./EditorBar";
 
 function renderBar(overrides: Partial<ComponentProps<typeof EditorBar>> = {}) {
   const props: ComponentProps<typeof EditorBar> = {
-    cacheLabel: "cache warm 2/3",
     onHome: vi.fn(),
     onRenderDraft: vi.fn(),
     onRenderFinal: vi.fn(),
     onSave: vi.fn(),
     projectId: "p_demo",
     projectName: "Demo",
-    renderDisabled: false,
+    renderDraftDisabled: false,
+    renderFinalDisabled: false,
     renderJob: { phase: "", progress: 0, running: false, status: "idle" },
     saveStatus: "pending",
     saving: false,
@@ -46,23 +46,25 @@ describe("EditorBar", () => {
     expect(screen.queryByRole("button", { name: /change bg/i })).not.toBeInTheDocument();
   });
 
-  it("shows cache state in the toolbar", () => {
-    renderBar();
-    expect(screen.getByText("cache warm 2/3")).toBeVisible();
-  });
-
   it("shows Pending save label when unsaved edits exist", () => {
     renderBar({ saveStatus: "pending" });
     expect(screen.getByRole("button", { name: /save project config \(pending\)/i })).toHaveTextContent("Pending");
   });
 
   it("disables render actions when config has no unrendered changes", () => {
-    renderBar({ renderDisabled: true });
+    renderBar({ renderDraftDisabled: true, renderFinalDisabled: true });
 
     expect(screen.getByRole("button", { name: /render draft/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /render final/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /render draft \(disabled\)/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render final \(disabled\)/i })).toBeInTheDocument();
+  });
+
+  it("renders draft progress with integer percentage only", () => {
+    renderBar({
+      renderJob: { phase: "compose", progress: 32.97451065147766, running: true, status: "running" },
+    });
+    expect(screen.getByRole("button", { name: /render draft \(queued\/running\)/i })).toHaveTextContent("Drafting · 32%");
   });
 
   it("calls home action from the home icon", () => {

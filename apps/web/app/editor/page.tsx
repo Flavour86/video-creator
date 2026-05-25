@@ -3,7 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse, TranscriptSentenceCue } from "@vc/shared-schemas";
+import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { BgModal } from "@/components/bg-modal/BgModal";
@@ -16,6 +16,7 @@ import { PreviewSurface } from "@/components/editor/PreviewSurface";
 import { RenderStrip } from "@/components/editor/RenderStrip";
 import { Timeline } from "@/components/editor/Timeline";
 import { TranscriptPane } from "@/components/editor/TranscriptPane";
+import { WatermarkModal } from "@/components/editor/WatermarkModal";
 import type { EditorMediaItem, EditorModal as EditorModalKind, EditorRenderJob, EditorSelection } from "@/components/editor/types";
 import { request, ServerRequestError } from "@/lib/api/server";
 import {
@@ -147,7 +148,8 @@ function EditorContent() {
     if (!latestConfigHash) return false;
     return latestConfigHash !== lastRenderedConfigHash;
   }, [hasUnrenderedChanges, lastRenderedConfigHash, latestConfigHash]);
-  const renderDisabled = saving || renderJob.running || !project || !renderHashDiffers;
+  const renderDraftDisabled = saving || renderJob.running || !project;
+  const renderFinalDisabled = saving || renderJob.running || !project || !renderHashDiffers;
   const visualMedia = useMemo(
     () =>
       media.filter(
@@ -472,7 +474,7 @@ function EditorContent() {
   }, [layers, normalizedAlignmentSentences, project, projectId, resolution]);
 
   const renderDraft = useCallback(async () => {
-    if (!projectId || !project || renderDisabled) return;
+    if (!projectId || !project || renderDraftDisabled) return;
     const savedConfigHash = await saveNow();
     if (!savedConfigHash) return;
     renderSocketRef.current?.close();
@@ -500,7 +502,7 @@ function EditorContent() {
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false, status: "failed", message: "Render failed to start." });
     }
-  }, [layers, project, projectId, refreshRenderCacheSummary, renderDisabled, resolution, saveNow]);
+  }, [layers, project, projectId, refreshRenderCacheSummary, renderDraftDisabled, resolution, saveNow]);
 
   const cancelDraft = useCallback(async () => {
     if (!renderJob.renderId || (renderJob.status !== "queued" && renderJob.status !== "running")) return;
@@ -515,7 +517,7 @@ function EditorContent() {
   }, [projectId, renderJob.renderId, renderJob.status]);
 
   const renderFinal = useCallback(async () => {
-    if (!projectId || !project || renderDisabled) return;
+    if (!projectId || !project || renderFinalDisabled) return;
     const savedConfigHash = await saveNow();
     if (!savedConfigHash) return;
     try {
@@ -529,7 +531,7 @@ function EditorContent() {
     } catch {
       setRenderJob({ phase: "failed", progress: 0, running: false, status: "failed", message: "Final render failed to start." });
     }
-  }, [project, projectId, renderDisabled, resolution, router, saveNow]);
+  }, [project, projectId, renderFinalDisabled, resolution, router, saveNow]);
 
   const matches = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -678,36 +680,6 @@ function EditorContent() {
     setSelectedSentenceRange(nextRange);
     seekTo(boundedStart);
   }, [applyLayerMutation, layers, seekTo, sentences, timelineDuration]);
-
-  const updateSubtitleCueTiming = useCallback((input: { sentenceIndex: number; start: number; end: number }) => {
-    if (!project) return;
-    const target = sentences.find((sentence) => sentence.index === input.sentenceIndex);
-    if (!target) return;
-    const boundedStart = clamp(input.start, 0, Math.max(0, timelineDuration - MIN_CLIP_DURATION_SECONDS));
-    const boundedEnd = clamp(input.end, boundedStart + MIN_CLIP_DURATION_SECONDS, Math.max(timelineDuration, boundedStart + MIN_CLIP_DURATION_SECONDS));
-    const nextSentences = sentences.map((sentence) => (
-      sentence.index === input.sentenceIndex
-        ? { ...sentence, start_s: boundedStart, end_s: boundedEnd }
-        : sentence
-    ));
-    const nextTranscript: Project["transcript"] = {
-      ...project.transcript,
-      sentences: toTranscriptSentenceCues(nextSentences),
-    };
-    setSentences(nextSentences);
-    setProject({ ...project, transcript: nextTranscript });
-    if (projectId) {
-      appendOperation(projectId, {
-        type: "transcript_timing_update",
-        before: project.transcript,
-        after: nextTranscript,
-      });
-    }
-    setSelectedSentenceRange([input.sentenceIndex, input.sentenceIndex]);
-    setHasUnrenderedChanges(true);
-    setSaveStatus("pending");
-    seekTo(boundedStart);
-  }, [project, projectId, seekTo, sentences, timelineDuration]);
 
   const deleteInspectorItem = useCallback((layerId: string, itemId: string) => {
     const updatedLayers = deleteVisualItem(layers, layerId, itemId);
@@ -874,7 +846,6 @@ function EditorContent() {
   return (
     <PageChrome className="grid min-h-0 grid-rows-[48px_auto_minmax(0,1fr)] overflow-y-auto lg:overflow-hidden" variant="workbench">
       <EditorBar
-        cacheLabel={cacheLabel}
         onHome={() => router.push("/")}
         onRenderDraft={renderDraft}
         onRenderFinal={renderFinal}
@@ -882,7 +853,8 @@ function EditorContent() {
         projectName={projectName}
         projectId={projectId}
         renderJob={renderJob}
-        renderDisabled={renderDisabled}
+        renderDraftDisabled={renderDraftDisabled}
+        renderFinalDisabled={renderFinalDisabled}
         saveStatus={saveStatus}
         saving={saving}
       />
@@ -967,7 +939,6 @@ function EditorContent() {
             onDeleteItem={({ layerId, itemId }) => deleteInspectorItem(layerId, itemId)}
             onSeek={seekTo}
             onSelect={setSelected}
-            onUpdateSubtitleCueTiming={updateSubtitleCueTiming}
             onUpdateClipTiming={updateTimelineClipTiming}
             selected={selected}
             sentences={sentences}
@@ -980,11 +951,11 @@ function EditorContent() {
           onOpenAssignEdit={openAssignEdit}
           onOpenBackground={() => setModal("background")}
           onOpenSubtitles={() => setModal("subtitles")}
+          onOpenWatermark={() => setModal("watermark")}
           onPatchBackground={patchInspectorBackground}
           onPatchItem={patchInspectorItem}
           onRemoveBackground={removeBackgroundLayer}
           onUpdateRange={patchInspectorRange}
-          onWatermarkChange={applyWatermarkSettings}
           projectPath={projectPath}
           selected={selected}
           subtitles={project?.subtitles ?? null}
@@ -1040,6 +1011,16 @@ function EditorContent() {
           onSave={applyBackgroundLayer}
           open
           totalSentences={sentences.length}
+        />
+      ) : modal === "watermark" ? (
+        <WatermarkModal
+          media={media}
+          onChange={applyWatermarkSettings}
+          onClose={() => setModal(null)}
+          onImport={importMedia}
+          open
+          projectPath={projectPath}
+          value={project?.watermark ?? null}
         />
       ) : (
         <EditorModal
@@ -1311,17 +1292,6 @@ function normalizeAlignedSentences(sentences: AlignedSentence[]): AlignedSentenc
   }
 
   return normalized;
-}
-
-function toTranscriptSentenceCues(sentences: AlignedSentence[]): [TranscriptSentenceCue, ...TranscriptSentenceCue[]] | undefined {
-  if (sentences.length === 0) return undefined;
-  return sentences.map((sentence): TranscriptSentenceCue => ({
-    confidence_avg: sentence.confidence_avg,
-    end_s: sentence.end_s,
-    index: sentence.index,
-    start_s: sentence.start_s,
-    text: sentence.text,
-  })) as [TranscriptSentenceCue, ...TranscriptSentenceCue[]];
 }
 
 function alignmentSignature(sentences: AlignedSentence[]): string {

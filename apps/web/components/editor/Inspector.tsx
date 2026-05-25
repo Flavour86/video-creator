@@ -3,7 +3,6 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Project } from "@vc/shared-schemas";
 import { Button, NumberInput, Select } from "@/components/ui";
-import { WatermarkPanel } from "@/components/watermark-panel/WatermarkPanel";
 import { formatImageMeta, formatTimecode } from "@/lib/format";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { EditorMediaItem, EditorSelection } from "./types";
@@ -15,6 +14,7 @@ type InspectorProps = {
   onOpenAssignEdit: (layerId: string, itemId: string, range: [number, number]) => void;
   onOpenBackground: () => void;
   onOpenSubtitles: () => void;
+  onOpenWatermark: () => void;
   onPatchBackground: (
     layerId: string,
     patch: {
@@ -34,7 +34,6 @@ type InspectorProps = {
   ) => void;
   onRemoveBackground: (layerId: string) => void;
   onUpdateRange: (layerId: string, itemId: string, range: [number, number]) => void;
-  onWatermarkChange: (watermark: Project["watermark"]) => void;
   projectPath: string;
   selected: EditorSelection;
   subtitles: Project["subtitles"];
@@ -108,11 +107,11 @@ export function Inspector({
   onOpenAssignEdit,
   onOpenBackground,
   onOpenSubtitles,
+  onOpenWatermark,
   onPatchBackground,
   onPatchItem,
   onRemoveBackground,
   onUpdateRange,
-  onWatermarkChange,
   projectPath,
   selected,
   subtitles,
@@ -134,10 +133,9 @@ export function Inspector({
         <Header label={t("title")} />
         <GlobalControls
           hasBackground={hasBackground}
-          media={media}
           onOpenBackground={onOpenBackground}
           onOpenSubtitles={onOpenSubtitles}
-          onWatermarkChange={onWatermarkChange}
+          onOpenWatermark={onOpenWatermark}
           subtitles={subtitles}
           watermark={watermark}
         />
@@ -164,10 +162,9 @@ export function Inspector({
       <Header label={t("title")} />
       <GlobalControls
         hasBackground={hasBackground}
-        media={media}
         onOpenBackground={onOpenBackground}
         onOpenSubtitles={onOpenSubtitles}
-        onWatermarkChange={onWatermarkChange}
+        onOpenWatermark={onOpenWatermark}
         subtitles={subtitles}
         watermark={watermark}
       />
@@ -587,64 +584,31 @@ function GridRow({ children, htmlFor, label }: { children: ReactNode; htmlFor?: 
 
 function GlobalControls({
   hasBackground,
-  media,
   onOpenBackground,
   onOpenSubtitles,
-  onWatermarkChange,
+  onOpenWatermark,
   subtitles,
   watermark,
 }: {
   hasBackground: boolean;
-  media: EditorMediaItem[];
   onOpenBackground: () => void;
   onOpenSubtitles: () => void;
-  onWatermarkChange: (watermark: Project["watermark"]) => void;
+  onOpenWatermark: () => void;
   subtitles: Project["subtitles"];
   watermark: Project["watermark"];
 }) {
   const t = useTranslations("pages.editor.inspector");
-  const watermarkMedia = media
-    .filter(
-      (
-        item,
-      ): item is EditorMediaItem & { kind: "image" | "video" | "watermark_image" | "watermark_video" } =>
-        item.kind === "image" ||
-        item.kind === "video" ||
-        item.kind === "watermark_image" ||
-        item.kind === "watermark_video",
-    )
-    .map((item) => ({
-      mediaId: item.mediaId || item.filename,
-      filename: item.filename,
-      kind: item.kind,
-      thumb_url: item.thumb_url,
-    }));
   const watermarkLabel = watermark?.mediaId ?? "Choose";
-  const firstWatermarkAsset = watermarkMedia[0];
   return (
     <section className="border-b border-(--line-soft) px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-2)">Global video config</span>
-        <span className="rounded-full border border-(--blue) px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-(--blue)">SQLite</span>
       </div>
       <div className="grid gap-2">
         <button
           aria-label="Watermark"
           className="flex w-full items-center justify-between gap-[10px] rounded border border-(--amber)/35 bg-(--amber)/10 px-[10px] py-2 text-[12px]"
-          onClick={() => {
-            if (watermark) {
-              onWatermarkChange(null);
-              return;
-            }
-            if (!firstWatermarkAsset) return;
-            onWatermarkChange({
-              mediaId: firstWatermarkAsset.mediaId,
-              opacity: 85,
-              posX: 9,
-              posY: 11,
-              scale: 0.08,
-            });
-          }}
+          onClick={onOpenWatermark}
           type="button"
         >
           <span className="inline-flex items-center gap-[7px] text-(--text-2)"><ImageIcon aria-hidden="true" className="h-3.5 w-3.5" />Watermark</span>
@@ -668,9 +632,6 @@ function GlobalControls({
           <span className="inline-flex items-center gap-[7px] text-(--text-2)"><PlusCircle aria-hidden="true" className="h-3.5 w-3.5" />{hasBackground ? t("changeBackground") : t("addBackground")}</span>
           <span className="font-mono text-[10.5px] text-(--text-4)">Choose</span>
         </button>
-      </div>
-      <div className="sr-only">
-        <WatermarkPanel media={watermarkMedia} onChange={onWatermarkChange} value={watermark ?? null} />
       </div>
     </section>
   );

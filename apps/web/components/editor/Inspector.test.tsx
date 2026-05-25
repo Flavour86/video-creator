@@ -86,11 +86,11 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
   const onOpenAssignEdit = vi.fn();
   const onOpenBackground = vi.fn();
   const onOpenSubtitles = vi.fn();
+  const onOpenWatermark = vi.fn();
   const onPatchBackground = vi.fn();
   const onPatchItem = vi.fn();
   const onRemoveBackground = vi.fn();
   const onUpdateRange = vi.fn();
-  const onWatermarkChange = vi.fn();
 
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -101,11 +101,11 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
         onOpenAssignEdit={onOpenAssignEdit}
         onOpenBackground={onOpenBackground}
         onOpenSubtitles={onOpenSubtitles}
+        onOpenWatermark={onOpenWatermark}
         onPatchBackground={onPatchBackground}
         onPatchItem={onPatchItem}
         onRemoveBackground={onRemoveBackground}
         onUpdateRange={onUpdateRange}
-        onWatermarkChange={onWatermarkChange}
         projectPath="E:/projects/test01"
         selected={{ layerId: "fg-z1", itemId: "fg-1" }}
         subtitles={null}
@@ -115,7 +115,7 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
     </NextIntlClientProvider>,
   );
 
-  return { onDeleteItem, onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onPatchBackground, onPatchItem, onRemoveBackground, onUpdateRange, onWatermarkChange };
+  return { onDeleteItem, onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onOpenWatermark, onPatchBackground, onPatchItem, onRemoveBackground, onUpdateRange };
 }
 
 describe("Inspector", () => {
@@ -138,6 +138,13 @@ describe("Inspector", () => {
     const { onOpenBackground } = renderInspector();
     fireEvent.click(screen.getByRole("button", { name: /Change Background/i }));
     expect(onOpenBackground).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens watermark dialog from global config control and omits sqlite badge", () => {
+    const { onOpenWatermark } = renderInspector();
+    fireEvent.click(screen.getByRole("button", { name: "Watermark" }));
+    expect(onOpenWatermark).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("SQLite")).not.toBeInTheDocument();
   });
 
   it("opens assign edit for non-background asset card", () => {

@@ -38,7 +38,7 @@ export type EditorRenderJob = {
   renderId?: string;
 };
 
-export type EditorModal = "subtitles" | "background" | "upload" | null;
+export type EditorModal = "subtitles" | "background" | "upload" | "watermark" | null;
 
 export type EditorStateProps = {
   activeRange: [number, number];

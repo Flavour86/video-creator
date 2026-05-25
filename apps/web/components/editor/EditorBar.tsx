@@ -4,7 +4,6 @@ import { Button, IconButton } from "@/components/ui";
 import type { EditorRenderJob } from "./types";
 
 type EditorBarProps = {
-  cacheLabel: string;
   onHome: () => void;
   onRenderDraft: () => void;
   onRenderFinal: () => void;
@@ -12,13 +11,13 @@ type EditorBarProps = {
   projectName: string;
   projectId: string;
   renderJob: EditorRenderJob;
-  renderDisabled: boolean;
+  renderDraftDisabled: boolean;
+  renderFinalDisabled: boolean;
   saveStatus: "pending" | "saving" | "saved" | "failed";
   saving: boolean;
 };
 
 export function EditorBar({
-  cacheLabel,
   onHome,
   onRenderDraft,
   onRenderFinal,
@@ -26,7 +25,8 @@ export function EditorBar({
   projectName,
   projectId,
   renderJob,
-  renderDisabled,
+  renderDraftDisabled,
+  renderFinalDisabled,
   saveStatus,
   saving,
 }: EditorBarProps) {
@@ -40,8 +40,10 @@ export function EditorBar({
         : saveStatus === "failed"
           ? t("saveFailed")
           : t("save");
-  const renderStateLabel = renderJob.running ? "queued/running" : renderDisabled ? "disabled" : "ready";
-  const draftLabel = renderJob.running ? t("drafting", { progress: renderJob.progress }) : t("renderDraft");
+  const renderDraftStateLabel = renderJob.running ? "queued/running" : renderDraftDisabled ? "disabled" : "ready";
+  const renderFinalStateLabel = renderJob.running ? "queued/running" : renderFinalDisabled ? "disabled" : "ready";
+  const draftProgress = Math.max(0, Math.min(100, Math.trunc(renderJob.progress)));
+  const draftLabel = renderJob.running ? t("drafting", { progress: draftProgress }) : t("renderDraft");
 
   return (
     <div className="grid h-12 grid-cols-[minmax(280px,_1fr)_auto] items-center gap-[14px] border-b border-(--line) bg-(--bg-1) px-[14px]">
@@ -52,7 +54,6 @@ export function EditorBar({
             {displayProjectName(projectName)}
           </h2>
           <p className="sr-only">projectId: {projectId.slice(0, 11)}</p>
-          <p className="text-[11px] text-(--text-3)">{cacheLabel}</p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-2">
@@ -60,10 +61,22 @@ export function EditorBar({
           <Save aria-hidden="true" className="h-4 w-4" />
           {saveLabel}
         </Button>
-        <Button aria-label={`Render draft (${renderStateLabel})`} disabled={renderJob.running || renderDisabled} onClick={onRenderDraft} size="extra-small" variant="default">
+        <Button
+          aria-label={`Render draft (${renderDraftStateLabel})`}
+          disabled={renderJob.running || renderDraftDisabled}
+          onClick={onRenderDraft}
+          size="extra-small"
+          variant="default"
+        >
           {draftLabel}
         </Button>
-        <Button aria-label={`Render final (${renderStateLabel})`} disabled={renderJob.running || renderDisabled} onClick={onRenderFinal} size="extra-small" variant="render">
+        <Button
+          aria-label={`Render final (${renderFinalStateLabel})`}
+          disabled={renderJob.running || renderFinalDisabled}
+          onClick={onRenderFinal}
+          size="extra-small"
+          variant="render"
+        >
           <Film aria-hidden="true" className="h-4 w-4" />
           {t("renderFinal")}
         </Button>

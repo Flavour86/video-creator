@@ -108,7 +108,6 @@ function renderTimeline(overrides: Partial<ComponentProps<typeof Timeline>> = {}
   const onDeleteItem = vi.fn();
   const onSeek = vi.fn();
   const onSelect = vi.fn();
-  const onUpdateSubtitleCueTiming = vi.fn();
   const onUpdateClipTiming = vi.fn();
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -121,7 +120,6 @@ function renderTimeline(overrides: Partial<ComponentProps<typeof Timeline>> = {}
         onDeleteItem={onDeleteItem}
         onSeek={onSeek}
         onSelect={onSelect}
-        onUpdateSubtitleCueTiming={onUpdateSubtitleCueTiming}
         onUpdateClipTiming={onUpdateClipTiming}
         selected={{ layerId: "fg-z1", itemId: "fg-1" }}
         sentences={SENTENCES}
@@ -129,7 +127,7 @@ function renderTimeline(overrides: Partial<ComponentProps<typeof Timeline>> = {}
       />
     </NextIntlClientProvider>,
   );
-  return { onDeleteItem, onSeek, onSelect, onUpdateClipTiming, onUpdateSubtitleCueTiming };
+  return { onDeleteItem, onSeek, onSelect, onUpdateClipTiming };
 }
 
 describe("Timeline", () => {
@@ -145,6 +143,12 @@ describe("Timeline", () => {
     renderTimeline();
     expect(screen.getAllByTestId("timeline-row-pip")).toHaveLength(2);
     expect(screen.getAllByTestId("timeline-row-fg")).toHaveLength(1);
+  });
+
+  it("shows a dedicated background row when a background layer exists", () => {
+    renderTimeline();
+    expect(screen.getByTestId("timeline-row-bg")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^bg-a\.png over s1-s4$/i })).toBeInTheDocument();
   });
 
   it("supports body drag and grip resize with timeline constraints", () => {
@@ -179,23 +183,19 @@ describe("Timeline", () => {
     expect(startPatch.end).toBeCloseTo(7, 4);
   });
 
-  it("renders aligned subtitle cues as top-row timeline clips and resizes them through transcript timing", () => {
-    const { onUpdateClipTiming, onUpdateSubtitleCueTiming } = renderTimeline({
+  it("renders aligned subtitle cues but does not allow drag/resize edits", () => {
+    const { onUpdateClipTiming } = renderTimeline({
       layers: [LAYERS[0] as Layer],
       selected: { layerId: "subtitles", itemId: "subtitles-s1" },
     });
     const clip = screen.getByRole("button", { name: "s1 over s1" });
 
-    fireEvent.mouseDown(screen.getByRole("button", { name: /Resize end s1 over s1/i }), { clientX: 0 });
+    expect(screen.queryByRole("button", { name: /Resize start s1 over s1/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Resize end s1 over s1/i })).not.toBeInTheDocument();
+    fireEvent.mouseDown(clip, { clientX: 0 });
     fireEvent.mouseMove(window, { clientX: 25 });
     fireEvent.mouseUp(window, { clientX: 25 });
-
     expect(onUpdateClipTiming).not.toHaveBeenCalled();
-    expect(onUpdateSubtitleCueTiming).toHaveBeenCalledWith(expect.objectContaining({
-      sentenceIndex: 1,
-      start: 0,
-      end: 9,
-    }));
     expect(clip).toBeInTheDocument();
   });
 

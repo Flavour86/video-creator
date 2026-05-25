@@ -9,7 +9,7 @@ type RenderStripProps = {
 
 export function RenderStrip({ job, onCancel }: RenderStripProps) {
   const t = useTranslations("pages.editor");
-  if (job.status === "idle") return null;
+  if (job.status === "idle" || job.status === "ready") return null;
 
   const percent = Math.max(0, Math.min(100, Math.round(job.progress)));
   const cancellable = (job.status === "queued" || job.status === "running") && Boolean(job.renderId);
