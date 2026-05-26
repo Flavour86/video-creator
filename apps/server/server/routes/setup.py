@@ -29,7 +29,11 @@ from schemas import (  # type: ignore[import-not-found]
 from server.db.projects import project_path_for_id, touch_recent
 from server.domain.project import DetectedInputs, Project, ensure_project_layout
 from server.domain.timing import AlignmentResult
-from server.pipeline.cache import compute_alignment_hash
+from server.pipeline.cache import (
+    alignment_device_for_language,
+    alignment_language_for_text,
+    compute_alignment_hash,
+)
 from server.pipeline.chunker import segment
 from server.pipeline.srt import subtitle_stats, write_aligned_srt_file, write_srt_file
 from server.settings import app_root, settings
@@ -926,7 +930,14 @@ async def run_setup_alignment(
 
     voice = _detect_voice(voice_path)
     audio_duration = voice.duration if voice is not None else 0.0
-    current_hash = compute_alignment_hash(voice_path, transcript_text)
+    alignment_language = alignment_language_for_text(transcript_text)
+    preferred_device = alignment_device_for_language(alignment_language)
+    device_label = "cpu fp32" if preferred_device == "cpu" else "cuda fp16"
+    current_hash = compute_alignment_hash(
+        voice_path,
+        transcript_text,
+        language=alignment_language,
+    )
     draft_dir = _setup_draft_dir(record.setup_id)
     alignment_hash_path = draft_dir / "alignment.hash"
     alignment_path = _setup_artifacts_dir(record.setup_id) / "alignment.json"
@@ -940,7 +951,7 @@ async def run_setup_alignment(
         record.alignment = SetupAlignment(
             status="aligned",
             hash=current_hash,
-            device="cuda fp16",
+            device=device_label,
             model="large-v3",
             audio_duration=audio_duration,
             cache_hit=True,
@@ -961,7 +972,7 @@ async def run_setup_alignment(
             record.alignment = SetupAlignment(
                 status="failed",
                 hash=current_hash,
-                device="cuda fp16",
+                device=device_label,
                 model="large-v3",
                 audio_duration=audio_duration,
                 cache_hit=False,
@@ -977,7 +988,7 @@ async def run_setup_alignment(
         record.alignment = SetupAlignment(
             status="running",
             hash=current_hash,
-            device="cuda fp16",
+            device=device_label,
             model="large-v3",
             audio_duration=audio_duration,
             cache_hit=False,
@@ -985,11 +996,21 @@ async def run_setup_alignment(
         _save_setup_draft_record(record)
         fallback_to_cpu = False
         try:
-            result = await align(voice_path, sentences)
+            result = await align(
+                voice_path,
+                sentences,
+                language=alignment_language,
+                device=preferred_device,
+            )
         except Exception as exc:
-            if _is_cuda_related_error(exc):
+            if preferred_device is None and _is_cuda_related_error(exc):
                 fallback_to_cpu = True
-                result = await align(voice_path, sentences, device="cpu")
+                result = await align(
+                    voice_path,
+                    sentences,
+                    language=alignment_language,
+                    device="cpu",
+                )
             else:
                 raise
 
@@ -1003,7 +1024,7 @@ async def run_setup_alignment(
         record.alignment = SetupAlignment(
             status="aligned",
             hash=current_hash,
-            device="cpu fp32" if fallback_to_cpu else "cuda fp16",
+            device="cpu fp32" if fallback_to_cpu or preferred_device == "cpu" else "cuda fp16",
             model="large-v3",
             audio_duration=audio_duration,
             cache_hit=False,
@@ -1019,7 +1040,7 @@ async def run_setup_alignment(
         record.alignment = SetupAlignment(
             status="failed",
             hash=current_hash,
-            device="cuda fp16",
+            device=device_label,
             model="large-v3",
             audio_duration=audio_duration,
             cache_hit=False,
@@ -1505,21 +1526,21 @@ def _detect_voice(path: Path) -> DetectedVoice | None:
             codec="unknown",
             state="copying",
         )
+    probed = _ffprobe_audio(path)
+    if probed is not None:
+        return DetectedVoice(
+            path=str(path),
+            duration=probed["duration"],
+            sample_rate=int(probed["sample_rate"]),
+            channels=int(probed["channels"]),
+            codec=probed["codec"],
+            state="copied",
+        )
     try:
         import soundfile  # type: ignore[import-untyped]
 
         info = soundfile.info(str(path))
     except Exception:
-        probed = _ffprobe_audio(path)
-        if probed is not None:
-            return DetectedVoice(
-                path=str(path),
-                duration=probed["duration"],
-                sample_rate=int(probed["sample_rate"]),
-                channels=int(probed["channels"]),
-                codec=probed["codec"],
-                state="copied",
-            )
         return DetectedVoice(
             path=str(path),
             duration=0,

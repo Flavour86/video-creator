@@ -1,4 +1,5 @@
 import { useTranslations } from "next-intl";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import type { EditorRenderJob } from "./types";
 
@@ -7,9 +8,25 @@ type RenderStripProps = {
   onCancel?: () => void;
 };
 
+const TERMINAL_LINGER_MS = 2_000;
+
 export function RenderStrip({ job, onCancel }: RenderStripProps) {
   const t = useTranslations("pages.editor");
-  if (job.status === "idle" || job.status === "ready") return null;
+  const terminalKey = job.status === "ready" || job.status === "failed" || job.status === "cancelled"
+    ? `${job.renderId ?? ""}:${job.status}`
+    : null;
+  const [hiddenTerminalKey, setHiddenTerminalKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!terminalKey) {
+      setHiddenTerminalKey(null);
+      return;
+    }
+    const timeoutId = window.setTimeout(() => setHiddenTerminalKey(terminalKey), TERMINAL_LINGER_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [terminalKey]);
+
+  if (job.status === "idle" || (terminalKey && hiddenTerminalKey === terminalKey)) return null;
 
   const percent = Math.max(0, Math.min(100, Math.round(job.progress)));
   const cancellable = (job.status === "queued" || job.status === "running") && Boolean(job.renderId);

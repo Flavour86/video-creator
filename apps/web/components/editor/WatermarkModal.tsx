@@ -27,9 +27,18 @@ export function WatermarkModal({
   value,
 }: WatermarkModalProps) {
   const uploadRef = useRef<HTMLInputElement | null>(null);
-  const selectable = media.filter(isWatermarkMedia);
   const enabled = value !== null;
   const selectedId = value?.mediaId ?? "";
+  const libraryAssets = media.filter((item): item is WatermarkMedia => item.kind === "image" || item.kind === "video");
+  const selectedFromMedia = media.find((item): item is WatermarkMedia =>
+    (item.mediaId === selectedId || item.filename === selectedId) && isWatermarkMedia(item),
+  ) ?? null;
+  const selectedIsUploadedWatermark = selectedFromMedia?.kind === "watermark_image" || selectedFromMedia?.kind === "watermark_video";
+  const selectable = !value
+    ? []
+    : selectedIsUploadedWatermark
+      ? [selectedFromMedia]
+      : libraryAssets;
   const selected = selectable.find((item) => item.mediaId === selectedId || item.filename === selectedId) ?? null;
 
   function toggleEnabled(nextEnabled: boolean) {
@@ -59,11 +68,11 @@ export function WatermarkModal({
     <Dialog.Root onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }} open={open}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-(--bg-0)/70 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex w-[min(820px,calc(100vw-32px))] max-w-full -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-(--line) bg-(--bg-1) shadow-(--shadow-2)">
-          <header className="flex items-start justify-between gap-4 border-b border-(--line) px-6 py-4">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[min(560px,calc(100vw-48px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-(--r-lg) border border-(--line) bg-(--bg-1) shadow-(--shadow-2)">
+          <header className="flex items-start justify-between gap-3 border-b border-(--line-soft) px-5 py-[15px]">
             <div>
-              <Dialog.Title className="text-3xl font-semibold tracking-[-0.01em] text-(--text)">Watermark asset</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-(--text-3)">
+              <Dialog.Title className="text-base font-semibold text-(--text)">Watermark asset</Dialog.Title>
+              <Dialog.Description className="mt-[3px] text-xs text-(--text-3)">
                 Pick an image or video watermark. Video watermarks loop over the render.
               </Dialog.Description>
             </div>
@@ -72,78 +81,83 @@ export function WatermarkModal({
             </button>
           </header>
 
-          <div className="space-y-4 px-6 py-5">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 overflow-y-auto px-[19px] pb-[30px] pt-4">
+            <div className="flex items-center gap-2.5 py-1.5">
               <button
                 aria-checked={enabled}
                 aria-label="Watermark enabled"
-                className={`inline-flex h-8 w-14 items-center rounded-full border transition-colors ${
+                className={`inline-flex h-5 w-9 items-center rounded-full border transition-colors ${
                   enabled ? "border-(--amber) bg-(--amber)" : "border-(--line) bg-(--bg-3)"
                 }`}
                 onClick={() => toggleEnabled(!enabled)}
                 role="switch"
                 type="button"
               >
-                <span className={`h-6 w-6 rounded-full bg-white transition-transform ${enabled ? "translate-x-7" : "translate-x-1"}`} />
+                <span className={`h-4 w-4 rounded-full transition-transform ${enabled ? "translate-x-[17px] bg-(--bg-0)" : "translate-x-px bg-white"}`} />
               </button>
-              <span className="text-lg text-(--text-2)">Watermark enabled</span>
+              <span className="text-xs text-(--text-2)">Watermark enabled</span>
             </div>
 
             <input
               accept=".png,.jpg,.jpeg,.mp4,image/png,image/jpeg,video/mp4"
               className="hidden"
-              multiple
               onChange={(event) => void onImport(event.currentTarget.files)}
               ref={uploadRef}
               type="file"
             />
             <button
-              className="flex w-full items-center justify-between gap-3 rounded-md border border-dashed border-(--line) bg-(--bg-2) px-4 py-4 text-left text-(--text-2) hover:border-(--amber)/50"
+              className="flex w-full items-center justify-between gap-3 rounded-(--r-sm) border border-dashed border-(--line) bg-(--bg-2) px-3 py-[10px] text-left text-(--text-2) hover:border-(--amber)/50"
               onClick={() => uploadRef.current?.click()}
               type="button"
             >
-              <span className="inline-flex items-center gap-2 text-lg">
+              <span className="inline-flex items-center gap-2 text-xs text-(--text)">
                 <Upload className="h-4 w-4" />
                 Upload image or video watermark...
               </span>
-              <span className="font-mono text-sm text-(--text-4)">PNG / JPG / MP4</span>
+              <span className="font-mono text-[11px] text-(--text-4)">PNG / JPG / MP4</span>
             </button>
 
-            <div className="grid max-h-[360px] grid-cols-2 gap-3 overflow-y-auto pr-1 md:grid-cols-4">
-              {selectable.map((item) => {
-                const active = selectedId === item.mediaId || selectedId === item.filename;
-                const src = watermarkThumbSrc(projectPath, item);
-                const mediaId = item.mediaId || item.filename;
-                return (
-                  <button
-                    className={`overflow-hidden rounded-md border text-left transition ${
-                      active
-                        ? "border-(--amber) bg-(--amber)/10 shadow-[0_0_0_1px_var(--amber)]"
-                        : "border-(--line) bg-(--bg-2) hover:border-(--amber)/45"
-                    }`}
-                    key={mediaId}
-                    onClick={() => selectAsset(mediaId)}
-                    type="button"
-                  >
-                    <div className="relative aspect-video w-full bg-(--bg-3)">
-                      {src ? <img alt="" className="h-full w-full object-cover" src={src} /> : null}
-                      <span className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[10px] uppercase text-white">
-                        {item.kind.includes("video") ? "MP4" : "IMG"}
-                      </span>
-                    </div>
-                    <div className="truncate px-2 py-2 font-mono text-[12px] text-(--text-2)">{item.filename}</div>
-                  </button>
-                );
-              })}
-            </div>
+            {selectable.length > 0 ? (
+              <div className="grid max-h-[360px] grid-cols-2 gap-2 overflow-y-auto md:grid-cols-4">
+                {selectable.map((item) => {
+                  const active = selectedId === item.mediaId || selectedId === item.filename;
+                  const src = watermarkThumbSrc(projectPath, item);
+                  const mediaId = item.mediaId || item.filename;
+                  return (
+                    <button
+                      className={`flex flex-col gap-1.5 overflow-hidden rounded-(--r-sm) border p-1.5 text-left transition ${
+                        active
+                          ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                          : "border-(--line) bg-(--bg-2) hover:border-(--amber)/45"
+                      }`}
+                      key={mediaId}
+                      onClick={() => selectAsset(mediaId)}
+                      type="button"
+                    >
+                      <div className="relative aspect-video w-full overflow-hidden rounded-(--r-xs) bg-(--bg-3)">
+                        {src ? <img alt="" className="h-full w-full object-cover" src={src} /> : null}
+                        <span className="absolute left-1 top-1 rounded-[3px] bg-black/60 px-[5px] py-px font-mono text-[9px] uppercase tracking-[0.04em] text-white">
+                          {item.kind.includes("video") ? "MP4" : "IMG"}
+                        </span>
+                      </div>
+                      <div className="truncate text-[11px] text-(--text)">{item.filename}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded border border-dashed border-(--line) bg-(--bg-2) px-3 py-4 font-mono text-xs text-(--text-3)">
+                No watermark assets selected yet.
+              </div>
+            )}
 
-            <p className="font-mono text-sm text-(--text-3)">
+            <p className="mt-[14px] text-xs text-(--text-2)">
               Current watermark: {selected ? `${selected.filename} / ${selected.kind.includes("video") ? "video overlay" : "image overlay"}.` : "none"}
             </p>
           </div>
 
-          <footer className="flex justify-end border-t border-(--line) px-6 py-4">
-            <Button onClick={onClose} variant="primary">Done</Button>
+          <footer className="flex justify-end border-t border-(--line-soft) bg-(--bg-2) px-5 py-[14px]">
+            <Button className="h-[31px] bg-(--text) px-4 text-xs font-medium text-(--bg-0) hover:bg-(--text)" onClick={onClose} size="small" variant="primary">Done</Button>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>

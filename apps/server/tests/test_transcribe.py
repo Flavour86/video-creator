@@ -54,7 +54,8 @@ def _make_wx_mock() -> MagicMock:
 def _make_transcribe_wx_mock() -> tuple[MagicMock, MagicMock]:
     mock_wx = MagicMock()
     model = MagicMock()
-    model.transcribe.return_value = {
+    transcribed = {
+        "language": "en",
         "segments": [
             {
                 "text": "Hello world.",
@@ -67,6 +68,9 @@ def _make_transcribe_wx_mock() -> tuple[MagicMock, MagicMock]:
             }
         ]
     }
+    model.transcribe.return_value = transcribed
+    mock_wx.load_align_model.return_value = (MagicMock(), MagicMock())
+    mock_wx.align.return_value = transcribed
     mock_wx.load_audio.return_value = [0.0] * 16000
     mock_wx.load_model.return_value = model
     return mock_wx, model
@@ -77,6 +81,7 @@ def _reset_cache() -> None:
     transcribe._align_model = None
     transcribe._align_metadata = None
     transcribe._align_device = None
+    transcribe._align_language = None
     transcribe._transcribe_model = None
     transcribe._transcribe_model_name = None
     transcribe._transcribe_device = None
@@ -257,6 +262,46 @@ async def test_transcribe_audio_returns_alignment_result(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
+async def test_transcribe_audio_force_aligns_detected_chinese_segments(tmp_path: Path) -> None:
+    mock_wx, model = _make_transcribe_wx_mock()
+    text = "劳动者没有议价能力"
+    model.transcribe.return_value = {
+        "language": "zh",
+        "segments": [{"text": text, "start": 0.0, "end": 8.0}],
+    }
+    mock_wx.align.return_value = {
+        "segments": [
+            {
+                "text": text,
+                "start": 0.0,
+                "end": 8.0,
+                "words": [
+                    {"word": "劳动者", "start": 0.0, "end": 2.4, "score": 0.9},
+                    {"word": "没有", "start": 2.4, "end": 4.2, "score": 0.9},
+                    {"word": "议价能力", "start": 4.2, "end": 8.0, "score": 0.9},
+                ],
+            }
+        ]
+    }
+
+    async def _inline(fn, *args, **kwargs):  # type: ignore[override]
+        return fn(*args, **kwargs)
+
+    with (
+        patch.dict(sys.modules, {"whisperx": mock_wx}),
+        patch.object(transcribe, "_device", return_value="cuda"),
+        patch.object(transcribe, "_load_audio_array", return_value=[0.0] * 16000),
+        patch.object(asyncio, "to_thread", side_effect=_inline),
+    ):
+        result = await transcribe.transcribe_audio(tmp_path / "voice.wav")
+
+    assert [word.text for word in result.words] == ["劳动者", "没有", "议价能力"]
+    mock_wx.load_model.assert_called_once_with("large-v3", device="cuda")
+    mock_wx.load_align_model.assert_called_once_with(language_code="zh", device="cpu")
+    mock_wx.align.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_transcribe_audio_reuses_loaded_model(tmp_path: Path) -> None:
     mock_wx, _model = _make_transcribe_wx_mock()
 
@@ -278,9 +323,11 @@ async def test_transcribe_audio_reuses_loaded_model(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_transcribe_audio_synthesizes_word_timings_when_missing(tmp_path: Path) -> None:
     mock_wx, model = _make_transcribe_wx_mock()
-    model.transcribe.return_value = {
+    missing_word_timing_result = {
         "segments": [{"text": "Synthetic words", "start": 0.0, "end": 2.0}]
     }
+    model.transcribe.return_value = missing_word_timing_result
+    mock_wx.align.return_value = missing_word_timing_result
 
     async def _inline(fn, *args, **kwargs):  # type: ignore[override]
         return fn(*args, **kwargs)

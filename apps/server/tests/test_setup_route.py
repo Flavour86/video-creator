@@ -2,6 +2,7 @@ import json
 import struct
 import wave
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -22,6 +23,43 @@ def _write_wav(path: Path) -> None:
         wav.setsampwidth(2)
         wav.setframerate(sample_rate)
         wav.writeframes(struct.pack(f"<{sample_count * 2}h", *([0] * sample_count * 2)))
+
+
+def test_detect_voice_prefers_ffprobe_duration_for_mp3(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    voice = tmp_path / "voice.mp3"
+    voice.write_bytes(b"staged-mp3")
+
+    import soundfile
+
+    monkeypatch.setattr(
+        soundfile,
+        "info",
+        lambda _path: SimpleNamespace(
+            duration=301.0375963718821,
+            samplerate=44100,
+            channels=2,
+            subtype="mpeg",
+        ),
+    )
+    monkeypatch.setattr(
+        setup_route,
+        "_ffprobe_audio",
+        lambda _path: {
+            "duration": 300.303625,
+            "sample_rate": 44100,
+            "channels": 2,
+            "codec": "mp3",
+        },
+    )
+
+    detected = setup_route._detect_voice(voice)
+
+    assert detected is not None
+    assert detected.duration == pytest.approx(300.303625)
+    assert detected.codec == "mp3"
 
 
 def _subtitle_alignment() -> AlignmentResult:
@@ -637,7 +675,13 @@ async def test_setup_draft_stage_same_file_is_noop(tmp_path: Path) -> None:
         )
         assert create_response.status_code == 200
         setup_id = create_response.json()["setup_id"]
-        staged_voice = settings.app_db_path.parent / "setup-cache" / setup_id / "artifacts" / "voice.wav"
+        staged_voice = (
+            settings.app_db_path.parent
+            / "setup-cache"
+            / setup_id
+            / "artifacts"
+            / "voice.wav"
+        )
         _write_wav(staged_voice)
 
         response = await client.patch(
@@ -797,7 +841,11 @@ async def test_setup_alignment_uses_staged_voice_transcript_and_updates_status(
     async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
         return _subtitle_alignment()
 
-    async def fake_align(_audio_path: Path, _sentences: list[object], **_kwargs: object) -> AlignmentResult:
+    async def fake_align(
+        _audio_path: Path,
+        _sentences: list[object],
+        **_kwargs: object,
+    ) -> AlignmentResult:
         return _subtitle_alignment()
 
     monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)

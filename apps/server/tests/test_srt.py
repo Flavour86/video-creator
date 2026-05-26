@@ -92,6 +92,74 @@ def test_no_cue_exceeds_line_or_duration_limits() -> None:
         assert len(block[2:]) <= 2
 
 
+def test_long_cjk_token_is_split_into_readable_timed_cues() -> None:
+    text = (
+        "我相信每一个在中国读过书的人都知道这样一句话我们是社会主义国家"
+        "社会主义是比资本主义更加先进的制度资本主义制造剥削制造不平等"
+        "最终一定会走向灭亡这句话说了几十年"
+    )
+    alignment = AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text=text,
+                start_s=0.031,
+                end_s=19.640,
+                confidence_avg=0.5,
+            )
+        ],
+        words=[
+            AlignedWord(
+                sentence_index=1,
+                text=text,
+                start_s=0.031,
+                end_s=19.640,
+                confidence=0.5,
+            )
+        ],
+    )
+
+    blocks = _blocks(generate_srt(alignment))
+
+    assert len(blocks) > 1
+    assert "".join("".join(block[2:]) for block in blocks) == text
+    for block in blocks:
+        start, end = block[1].split(" --> ")
+        assert _seconds(end) - _seconds(start) <= 7.0
+        assert all(len(line) <= 42 for line in block[2:])
+        assert len(block[2:]) <= 2
+
+
+def test_aligned_cjk_characters_render_without_inserted_spaces() -> None:
+    text = "劳动者没有议价能力"
+    alignment = AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text=text,
+                start_s=0.0,
+                end_s=4.5,
+                confidence_avg=0.9,
+            )
+        ],
+        words=[
+            AlignedWord(
+                sentence_index=1,
+                text=character,
+                start_s=index * 0.5,
+                end_s=(index + 1) * 0.5,
+                confidence=0.9,
+            )
+            for index, character in enumerate(text)
+        ],
+    )
+
+    rendered_text = "".join("".join(block[2:]) for block in _blocks(generate_srt(alignment)))
+
+    assert rendered_text == text
+    assert " " not in rendered_text
+
+
 def test_cue_numbers_are_one_based_and_contiguous() -> None:
     blocks = _blocks(generate_srt(_alignment()))
 

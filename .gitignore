@@ -53,6 +53,6 @@ apps/web/tests/visual/artifacts/
 projects/
 docs/designs/audits
 docs/designs/visuals
-docs/designs/bugs
+docs/designs/bugs*/
 uploads/
 setup-cache/

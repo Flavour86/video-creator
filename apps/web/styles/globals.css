@@ -197,6 +197,18 @@ body {
     font-weight: 400;
     letter-spacing: 0;
   }
+
+  .editor-timeline-subtitle-clip {
+    border-color: oklch(0.55 0.1 250);
+    background: oklch(0.45 0.06 250);
+    color: oklch(0.95 0.04 250);
+  }
+
+  :root[data-theme="light"] .editor-timeline-subtitle-clip {
+    border-color: var(--blue-2);
+    background: var(--blue);
+    color: var(--bg-1);
+  }
 }
 
 @layer utilities {

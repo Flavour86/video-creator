@@ -204,6 +204,18 @@ export async function cropActualToReference(actualPath: string, referencePath: s
   await fs.writeFile(actualPath, PNG.sync.write(cropped));
 }
 
+export async function cropReferenceRegion(
+  referencePath: string,
+  outputPath: string,
+  clip: { height: number; width: number; x: number; y: number },
+): Promise<string> {
+  const source = PNG.sync.read(await fs.readFile(referencePath));
+  const cropped = new PNG({ width: clip.width, height: clip.height });
+  PNG.bitblt(source, cropped, clip.x, clip.y, clip.width, clip.height, 0, 0);
+  await fs.writeFile(outputPath, PNG.sync.write(cropped));
+  return outputPath;
+}
+
 async function writeDiffImage(referenceBuffer: Buffer, actualBuffer: Buffer, actualPath: string): Promise<string> {
   const reference = PNG.sync.read(referenceBuffer);
   const actual = PNG.sync.read(actualBuffer);

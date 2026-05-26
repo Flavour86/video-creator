@@ -1,10 +1,12 @@
 import { Buffer } from "node:buffer";
+import path from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
   compareScreenshots,
   cropActualToReference,
+  cropReferenceRegion,
   visualActualPath,
   visualReferencePath,
 } from "./visual-test-utils";
@@ -30,7 +32,29 @@ test.describe("editor visual parity", () => {
   test.describe.configure({ mode: "serial" });
   test.use({ deviceScaleFactor: EDITOR_DEVICE_SCALE_FACTOR, viewport: EDITOR_VIEWPORT });
 
-  for (const visualCase of EDITOR_VISUAL_CASES) {
+  for (const visualCase of EDITOR_VISUAL_CASES.filter((entry) => !entry.strict)) {
+    test(`${visualCase.reference} parity`, async ({ page }) => {
+      await compareEditorVisualCase(page, visualCase);
+    });
+  }
+});
+
+test.describe("editor strict timeline bug visual parity", () => {
+  test.describe.configure({ mode: "serial" });
+  test.use({ deviceScaleFactor: EDITOR_DEVICE_SCALE_FACTOR, viewport: { width: 1841, height: 1016 } });
+
+  for (const visualCase of EDITOR_VISUAL_CASES.filter((entry) => entry.reference.includes("bug-27-1"))) {
+    test(`${visualCase.reference} parity`, async ({ page }) => {
+      await compareEditorVisualCase(page, visualCase);
+    });
+  }
+});
+
+test.describe("editor strict modal bug visual parity", () => {
+  test.describe.configure({ mode: "serial" });
+  test.use({ deviceScaleFactor: EDITOR_DEVICE_SCALE_FACTOR, viewport: { width: 1841, height: 1016 } });
+
+  for (const visualCase of EDITOR_VISUAL_CASES.filter((entry) => entry.reference.includes("bug-28-1"))) {
     test(`${visualCase.reference} parity`, async ({ page }) => {
       await compareEditorVisualCase(page, visualCase);
     });
@@ -39,7 +63,7 @@ test.describe("editor visual parity", () => {
 
 async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase): Promise<void> {
   await prepareVisualPage(page, visualCase.theme);
-  await routeEditorApi(page);
+  await routeEditorApi(page, visualCase);
   await page.goto(`/editor/${TEST_PROJECT_ID}`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
   await settleChrome(page);
@@ -47,8 +71,15 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
 
   await runEditorVisualAction(page, visualCase.action);
   await page.waitForTimeout(100);
-  const referencePath = await visualReferencePath(visualCase.reference);
-  const actualPath = await visualActualPath(visualCase.reference.replace(".png", ".actual.png"));
+  const actualPath = await visualActualPath(path.basename(visualCase.reference).replace(".png", ".actual.png"));
+  const sourceReferencePath = await visualReferencePath(visualCase.reference);
+  const referencePath = visualCase.referenceClip
+    ? await cropReferenceRegion(
+        sourceReferencePath,
+        actualPath.replace(".actual.png", ".reference-crop.png"),
+        visualCase.referenceClip,
+      )
+    : sourceReferencePath;
   const captureTarget = screenshotForCapture(page, visualCase.capture);
   if (isLocator(captureTarget)) {
     await captureTarget.waitFor({ state: "visible" });
@@ -57,33 +88,35 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
   await captureTarget.screenshot(screenshotOptions);
   await cropActualToReference(actualPath, referencePath);
   const ignoreRegions: IgnoreRegion[] = [];
-  let blurRadius = 0;
-  if (visualCase.capture === "page") {
-    const previewRegion = await locatePreviewCanvasRegion(page);
-    if (previewRegion) ignoreRegions.push(previewRegion);
-    blurRadius = 4;
-  } else if (visualCase.capture === "timeline") {
-    ignoreRegions.push({ x: 0, y: 0, width: 200, height: 501 });
-    ignoreRegions.push({ x: 150, y: 60, width: 1314, height: 110 });
-    blurRadius = 16;
-  } else if (visualCase.capture === "inspector") {
-    ignoreRegions.push({ x: 150, y: 120, width: 330, height: 1240 });
-    blurRadius = 12;
-  } else if (visualCase.capture === "dialog") {
-    ignoreRegions.push({ x: 250, y: 80, width: 2000, height: 1520 });
-    blurRadius = 16;
-  }
-  if (visualCase.reference === "editor-transcript-1.png") {
-    ignoreRegions.push({ x: 180, y: 0, width: 390, height: 1236 });
-    blurRadius = 12;
-  }
-  if (visualCase.reference === "editor-transcript-2.png") {
-    ignoreRegions.push({ x: 220, y: 0, width: 602, height: 449 });
-    blurRadius = 12;
-  }
-  if (visualCase.reference === "editor-transcript-3.png") {
-    ignoreRegions.push({ x: 220, y: 0, width: 690, height: 806 });
-    blurRadius = 14;
+  let blurRadius = visualCase.blurRadius ?? 0;
+  if (!visualCase.strict) {
+    if (visualCase.capture === "page") {
+      const previewRegion = await locatePreviewCanvasRegion(page);
+      if (previewRegion) ignoreRegions.push(previewRegion);
+      blurRadius = 4;
+    } else if (visualCase.capture === "timeline") {
+      ignoreRegions.push({ x: 0, y: 0, width: 200, height: 501 });
+      ignoreRegions.push({ x: 150, y: 60, width: 1314, height: 110 });
+      blurRadius = 16;
+    } else if (visualCase.capture === "inspector") {
+      ignoreRegions.push({ x: 150, y: 120, width: 330, height: 1240 });
+      blurRadius = 12;
+    } else if (visualCase.capture === "dialog") {
+      ignoreRegions.push({ x: 250, y: 80, width: 2000, height: 1520 });
+      blurRadius = 16;
+    }
+    if (visualCase.reference === "editor-transcript-1.png") {
+      ignoreRegions.push({ x: 180, y: 0, width: 390, height: 1236 });
+      blurRadius = 12;
+    }
+    if (visualCase.reference === "editor-transcript-2.png") {
+      ignoreRegions.push({ x: 220, y: 0, width: 602, height: 449 });
+      blurRadius = 12;
+    }
+    if (visualCase.reference === "editor-transcript-3.png") {
+      ignoreRegions.push({ x: 220, y: 0, width: 690, height: 806 });
+      blurRadius = 14;
+    }
   }
   await compareScreenshots({
     actualPath,
@@ -180,6 +213,10 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
       await page.getByRole("button", { name: /^Subtitles$/i }).click();
       await page.getByRole("heading", { name: /^Subtitles$/i }).waitFor();
       return;
+    case "watermark-modal":
+      await page.getByRole("button", { name: /^Watermark$/i }).click();
+      await page.getByRole("heading", { name: /^Watermark asset$/i }).waitFor();
+      return;
     default: {
       const _exhaustive: never = action;
       return _exhaustive;
@@ -241,7 +278,10 @@ async function prepareVisualPage(page: Page, theme: Theme): Promise<void> {
   );
 }
 
-async function routeEditorApi(page: Page): Promise<void> {
+async function routeEditorApi(page: Page, visualCase: EditorVisualCase): Promise<void> {
+  const usesPackedTimelineFixture = visualCase.reference.includes("bug-27-1")
+    || visualCase.reference.startsWith("editor-timeline-");
+
   await page.route("**/api/server/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -252,13 +292,13 @@ async function routeEditorApi(page: Page): Promise<void> {
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/alignment` && method === "GET") {
-      await route.fulfill({ json: TEST_ALIGNMENT });
+      await route.fulfill({ json: usesPackedTimelineFixture ? BUG_27_ALIGNMENT : TEST_ALIGNMENT });
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/config` && method === "GET") {
       await route.fulfill({
         json: {
-          config: TEST_PROJECT,
+          config: usesPackedTimelineFixture ? BUG_27_PROJECT : TEST_PROJECT,
           config_hash: "h-visual",
           has_unrendered_changes: true,
           last_rendered_config_hash: null,
@@ -280,6 +320,10 @@ async function routeEditorApi(page: Page): Promise<void> {
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/render` && method === "POST") {
       await route.fulfill({ json: { output_path: "renders/r-visual.mp4", render_id: "r-visual" } });
+      return;
+    }
+    if (pathname.includes(`/api/server/projects/${TEST_PROJECT_ID}/render-cache`) && method === "GET" && usesPackedTimelineFixture) {
+      await route.fulfill({ json: { cached_count: 24, state: "warm", total_count: 24 } });
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/render/r-visual` && method === "DELETE") {
@@ -337,6 +381,9 @@ function screenshotForCapture(page: Page, capture: CaptureTarget): Page | Locato
   }
   if (capture === "dialog") {
     return page;
+  }
+  if (capture === "watermark-dialog") {
+    return page.getByRole("dialog");
   }
   return page;
 }
@@ -448,6 +495,15 @@ const TEST_ALIGNMENT = {
     { confidence_avg: 0.95, end_s: 942, index: 21, start_s: 936, text: "Phase three productizes once the workflow earns its keep." },
   ],
   words: [],
+};
+
+const BUG_27_ALIGNMENT = {
+  ...TEST_ALIGNMENT,
+  sentences: TEST_ALIGNMENT.sentences.map((sentence, index) => ({
+    ...sentence,
+    start_s: index * 45,
+    end_s: index === TEST_ALIGNMENT.sentences.length - 1 ? 942 : (index * 45) + 40,
+  })),
 };
 
 const TEST_PROJECT = {
@@ -693,6 +749,15 @@ const TEST_PROJECT = {
     posY: 11,
     scale: 0.08,
   },
+};
+
+const BUG_27_PROJECT = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => (
+    layer.kind === "pip" || layer.kind === "fg"
+      ? { ...layer, items: layer.items.map((item) => ({ ...item, anchor: "time" as const })) }
+      : layer
+  )),
 };
 
 async function setReferencePlayback(page: Page): Promise<void> {

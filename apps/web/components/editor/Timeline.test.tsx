@@ -134,7 +134,7 @@ describe("Timeline", () => {
   it("shows 30 fps, clip count/cache metadata, and full-width waveform", () => {
     renderTimeline();
     expect(screen.getByText(/30 fps/i)).toBeInTheDocument();
-    expect(screen.getByText(/clips/i)).toBeInTheDocument();
+    expect(screen.getByText(/5 clips/i)).toBeInTheDocument();
     expect(screen.getByText(/cache 4\/4/i)).toBeInTheDocument();
     expect(screen.getByTestId("timeline-waveform")).toHaveClass("inset-x-0");
   });
@@ -199,6 +199,15 @@ describe("Timeline", () => {
     expect(clip).toBeInTheDocument();
   });
 
+  it("does not select subtitle clips on click", () => {
+    const { onSelect } = renderTimeline({
+      layers: [LAYERS[0] as Layer],
+      selected: null,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "s1 over s1" }));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it("shows clip x delete for non-background clips only", () => {
     const { onDeleteItem } = renderTimeline();
     fireEvent.click(screen.getByRole("button", { name: /Delete pip-a.png over s1-s2/i }));
@@ -236,5 +245,25 @@ describe("Timeline", () => {
 
     expect(elapsedMs).toBeLessThan(16);
     expect(onUpdateClipTiming).toHaveBeenCalledWith(expect.objectContaining({ itemId: "fg-50", layerId: "fg-z1" }));
+  });
+
+  it("keeps a background row visible for mediaIds-only playlist items", () => {
+    const backgroundPlaylistOnly: Layer[] = [{
+      id: "bg-main",
+      kind: "bg",
+      name: "Background",
+      items: [{
+        id: "bg-playlist",
+        mediaIds: ["bg0.png", "bg1.png", "bg2.png"],
+      }],
+    } as unknown as Layer];
+    renderTimeline({
+      duration: 60,
+      layers: backgroundPlaylistOnly,
+      selected: { layerId: "bg-main", itemId: "bg-playlist" },
+      sentences: [],
+    });
+    expect(screen.getByTestId("timeline-row-bg")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "auto / 3 assets" })).toBeInTheDocument();
   });
 });

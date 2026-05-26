@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { Suspense, type ImgHTMLAttributes } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -388,7 +388,7 @@ it("renders the test01 editor from project, alignment, and media data", async ()
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
   expect(screen.getByText(`projectId: ${TEST_PROJECT_ID}`)).toBeInTheDocument();
-  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  expect(await screen.findByText(/cache 3\/3/i)).toBeInTheDocument();
   expect(await screen.findByText("Transcript · 5 aligned")).toBeInTheDocument();
   expect(await screen.findByText("Subtitles · 5")).toBeInTheDocument();
   expect(screen.getAllByText("PiP · z3").length).toBeGreaterThanOrEqual(1);
@@ -400,6 +400,21 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("PiP opacity")).toHaveValue("100");
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("uses the loaded voice duration for the timeline when subtitles end early", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  Object.defineProperty(audio, "duration", { configurable: true, value: 300 });
+  fireEvent.loadedMetadata(audio);
+
+  expect(await screen.findByText("05:00.000")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
 });
 
 it("normalizes malformed alignment sentence timing gaps for transcript rendering", async () => {
@@ -477,7 +492,7 @@ it("remaps clip timestamps on alignment rerun and keeps unmappable anchors orpha
   renderEditor();
   expect(await screen.findByText("test01")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "orphan.png over s5" })).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByText("cache invalid 3/4")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/cache invalid 3\/4/i)).toBeInTheDocument());
 
   fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
@@ -504,12 +519,12 @@ it("remaps clip timestamps on alignment rerun and keeps unmappable anchors orpha
 
 it("reflects backend render-cache state/count when response is available", async () => {
   _projectIdParam = TEST_PROJECT_ID;
-  mockTest01Fetch({ renderCache: { state: "partial", cached_count: 1, total_count: 3 } });
+  mockTest01Fetch({ renderCache: { state: "partial", cached_count: 12, total_count: 24 } });
 
   renderEditor();
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
-  expect(screen.getByText("cache partial 1/3")).toBeInTheDocument();
+  expect(await screen.findByText(/cache partial 12\/24/i)).toBeInTheDocument();
 });
 
 it("clears stale persisted invalid cache status when backend render-cache is warm", async () => {
@@ -522,7 +537,7 @@ it("clears stale persisted invalid cache status when backend render-cache is war
   renderEditor();
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
-  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  expect(await screen.findByText(/cache 3\/3/i)).toBeInTheDocument();
 });
 
 it("shows local invalid cache state immediately after clip edit even when backend cache was warm on load", async () => {
@@ -532,11 +547,11 @@ it("shows local invalid cache state immediately after clip edit even when backen
   renderEditor();
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
-  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  expect(await screen.findByText(/cache 3\/3/i)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
   fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "zoom_in" } });
 
-  expect(screen.getByText("cache invalid 2/3")).toBeInTheDocument();
+  expect(screen.getByText(/cache invalid 2\/3/i)).toBeInTheDocument();
 });
 
 it("shows local cache invalidation after output resolution changes from a warm backend cache", async () => {
@@ -546,10 +561,10 @@ it("shows local cache invalidation after output resolution changes from a warm b
   renderEditor();
 
   expect(await screen.findByText("test01")).toBeInTheDocument();
-  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  expect(await screen.findByText(/cache 3\/3/i)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("radio", { name: "720p" }));
 
-  expect(screen.getByText("cache invalid 0/3")).toBeInTheDocument();
+  expect(screen.getByText(/cache invalid 0\/3/i)).toBeInTheDocument();
 });
 
 it("tracks render-cache fetch failures as observable state without breaking editor load", async () => {
@@ -769,7 +784,7 @@ it("edits background inspector controls and invalidates only background cache en
 
   renderEditor();
   await screen.findByText("test01");
-  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  expect(await screen.findByText(/cache 3\/3/i)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
 
   fireEvent.change(screen.getByLabelText("Background crossfade"), { target: { value: "1.2" } });
@@ -777,7 +792,7 @@ it("edits background inspector controls and invalidates only background cache en
   fireEvent.change(screen.getByLabelText("Background easing"), { target: { value: "ease_out" } });
 
   expect(readUndo()).toHaveLength(3);
-  expect(screen.getByText("cache invalid 2/3")).toBeInTheDocument();
+  expect(screen.getByText(/cache invalid 2\/3/i)).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
@@ -1146,19 +1161,41 @@ it("Cancel in subtitles modal closes without mutation", async () => {
 
 it("updates watermark config, shows preview watermark, and persists watermark operations", async () => {
   _projectIdParam = TEST_PROJECT_ID;
-  mockTest01Fetch();
+  mockTest01Fetch({
+    uploadsResult: [{
+      mediaId: "logo.png",
+      media: {
+        id: "logo.png",
+        name: "logo.png",
+        kind: "image",
+        path: "uploads/logo.png",
+        thumb_path: "uploads/.thumbs/logo.jpg",
+        dimensions: { width: 1280, height: 720 },
+        duration: null,
+        size: 456789,
+        hash: "logo",
+        import_mode: "copy",
+        imported_at: "2026-05-26T00:00:00Z",
+        created_at: null,
+      },
+    }],
+  });
 
   renderEditor();
   await screen.findByText("test01");
 
-  fireEvent.click(screen.getByRole("switch", { name: /watermark enabled/i }));
-  fireEvent.change(screen.getByRole("combobox", { name: "Watermark asset" }), { target: { value: "bg0.png" } });
+  fireEvent.click(screen.getByRole("button", { name: "Watermark" }));
+  const dialog = await screen.findByRole("dialog");
+  const fileInput = dialog.querySelector("input[type='file']") as HTMLInputElement;
+  fireEvent.change(fileInput, {
+    target: { files: [new File([new Uint8Array([1, 2])], "logo.png", { type: "image/png" })] },
+  });
 
   await waitFor(() => {
     expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "true");
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "Remove watermark" }));
+  fireEvent.click(within(dialog).getByRole("switch", { name: /watermark enabled/i }));
   await waitFor(() => {
     expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "false");
   });
@@ -1168,8 +1205,49 @@ it("updates watermark config, shows preview watermark, and persists watermark op
   const parsed = JSON.parse(raw ?? "{}");
   const wmOps = (parsed.undo ?? []).filter((entry: { op?: { type?: string } }) => entry.op?.type === "watermark_update");
   expect(wmOps.length).toBeGreaterThanOrEqual(2);
-  expect(wmOps.some((entry: { op?: { after?: { mediaId?: string } } }) => entry.op?.after?.mediaId === "bg0.png")).toBe(true);
+  expect(wmOps.some((entry: { op?: { after?: { mediaId?: string } } }) => entry.op?.after?.mediaId === "logo.png")).toBe(true);
   expect(wmOps.at(-1)?.op?.after).toBeNull();
+});
+
+it("replaces the previous watermark asset when a new watermark is uploaded", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    project: {
+      ...TEST_PROJECT,
+      watermark: { mediaId: "bg0.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
+    } as unknown as typeof TEST_PROJECT,
+    uploadsResult: [{
+      mediaId: "logo-new.png",
+      media: {
+        id: "logo-new.png",
+        name: "logo-new.png",
+        kind: "image",
+        path: "uploads/logo-new.png",
+        thumb_path: "uploads/.thumbs/logo-new.jpg",
+        dimensions: { width: 1280, height: 720 },
+        duration: null,
+        size: 456789,
+        hash: "logo-new",
+        import_mode: "copy",
+        imported_at: "2026-05-26T00:00:00Z",
+        created_at: null,
+      },
+    }],
+  });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Watermark" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByRole("button", { name: /bg0\.png/i })).toBeInTheDocument();
+
+  const fileInput = dialog.querySelector("input[type='file']") as HTMLInputElement;
+  fireEvent.change(fileInput, {
+    target: { files: [new File([new Uint8Array([1, 2])], "logo-new.png", { type: "image/png" })] },
+  });
+
+  expect(await within(dialog).findByText(/Current watermark: logo-new\.png \/ image overlay\./i)).toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: /bg0\.png/i })).not.toBeInTheDocument();
 });
 
 it("highlights search matches, scrolls to the first match, and advances with Enter", async () => {
@@ -1574,6 +1652,57 @@ it("disables render actions after draft completes with the latest saved hash", a
   });
 });
 
+it("keeps completed draft progress visible for two seconds after the websocket done event", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ hasUnrenderedChanges: true, saveHasUnrenderedChanges: true });
+  const sockets: MockWebSocket[] = [];
+  class MockWebSocket {
+    onerror: (() => void) | null = null;
+    onmessage: ((message: { data: string }) => void) | null = null;
+    url: string;
+
+    constructor(url: string) {
+      this.url = url;
+      sockets.push(this);
+    }
+
+    close = vi.fn();
+  }
+  vi.stubGlobal("WebSocket", MockWebSocket);
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: /render draft/i }));
+  await screen.findByText("Rendering draft : queued");
+
+  vi.useFakeTimers();
+  try {
+    act(() => {
+      sockets[0]?.onmessage?.({
+        data: JSON.stringify({
+          type: "progress",
+          render_id: "r-test01",
+          stage: "done",
+          percent: 100,
+          message: "done",
+          output_path: "renders/r-test01.mp4",
+        }),
+      });
+    });
+
+    expect(screen.getByText("Rendering draft : done")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Draft render progress" })).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(1_999));
+    expect(screen.getByText("Rendering draft : done")).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole("progressbar", { name: "Draft render progress" })).not.toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("reconciles cache summary from invalid back to warm after successful draft render completion", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({
@@ -1601,11 +1730,11 @@ it("reconciles cache summary from invalid back to warm after successful draft re
 
   renderEditor();
   await screen.findByText("test01");
-  expect(screen.getByText("cache warm 3/3")).toBeInTheDocument();
+  expect(await screen.findByText(/cache 3\/3/i)).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
   fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "zoom_in" } });
-  expect(screen.getByText("cache invalid 2/3")).toBeInTheDocument();
+  expect(screen.getByText(/cache invalid 2\/3/i)).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: /render draft/i }));
   await screen.findByText("Rendering draft : queued");
@@ -1620,7 +1749,7 @@ it("reconciles cache summary from invalid back to warm after successful draft re
     }),
   });
 
-  await waitFor(() => expect(screen.getByText("cache warm 3/3")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/cache 3\/3/i)).toBeInTheDocument());
   const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(([input]) =>
     String(input).includes(`/projects/${TEST_PROJECT_ID}/render-cache`),
   );

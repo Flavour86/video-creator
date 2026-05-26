@@ -57,7 +57,7 @@ type DragState = {
 
 const MIN_DURATION_SECONDS = 0.5;
 const ROW_ORDER_TOP_TO_BOTTOM: LayerKind[] = ["sub", "pip", "fg", "bg"];
-const LABEL_COLUMN_WIDTH_PX = 100;
+const LABEL_COLUMN_WIDTH_PX = 95;
 const TRACK_RIGHT_PADDING_PX = 10;
 const WAVEFORM_BARS = Array.from(
   { length: 200 },
@@ -80,12 +80,9 @@ export function Timeline({
   const t = useTranslations("pages.editor");
   const dragStateRef = useRef<DragState | null>(null);
   const rows = useTimelineRows(layers, duration, sentences);
-  const clipCount = rows.reduce((total, row) => total + row.clips.length, 0);
-  const subtitleCueCount = rows.find((row) => row.kind === "sub")?.clips.length ?? 0;
-  const cacheCount = clipCount + Math.max(0, subtitleCueCount - 4);
-  const inferredCacheLabel = `cache ${cacheCount}/${cacheCount}`;
-  const defaultCacheLabel = `cache ${clipCount}/${clipCount}`;
-  const cacheLabelText = cacheLabel === defaultCacheLabel ? inferredCacheLabel : cacheLabel;
+  const clipCount = rows
+    .filter((row) => row.kind !== "sub")
+    .reduce((total, row) => total + row.clips.length, 0);
   const playheadPercent = Math.min(100, Math.max(0, (currentTime / Math.max(duration, 1)) * 100));
 
   useEffect(() => {
@@ -121,10 +118,10 @@ export function Timeline({
   }, [duration, onSeek, onUpdateClipTiming]);
 
   return (
-    <section className="relative flex shrink-0 flex-col overflow-x-hidden border-t border-(--line) bg-(--bg-1)">
-      <div className="flex items-center justify-between border-b border-(--line-soft) px-4 py-2 font-mono text-[10.5px] text-(--text-3)">
-        <h3 className="text-[11px] font-semibold">{t("timeline.head")}</h3>
-        <span>{fps} fps&nbsp;&nbsp; {clipCount} clips&nbsp;&nbsp; {cacheLabelText}</span>
+    <section className="relative flex shrink-0 flex-col overflow-x-hidden border-t border-(--line) bg-(--bg-1) pb-[29px]">
+      <div className="flex items-center justify-between border-b border-(--line-soft) px-[14px] py-[5px] font-mono text-[10.5px] text-(--text-3)">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-2)">{t("timeline.head")}</h3>
+        <span>{fps} fps&nbsp;&nbsp; {clipCount} clips&nbsp;&nbsp; {cacheLabel}</span>
       </div>
 
       <button
@@ -145,7 +142,7 @@ export function Timeline({
       </button>
 
       <button
-        className="relative mx-[10px] h-[60px] overflow-hidden border-b border-l border-(--line-soft)"
+        className="relative mx-[10px] h-[55px] overflow-hidden border-b border-l border-(--line-soft)"
         onClick={(event) => onSeek(timeFromEvent(event, duration))}
         style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${TRACK_RIGHT_PADDING_PX}px` }}
         type="button"
@@ -167,7 +164,7 @@ export function Timeline({
         </div>
       </button>
 
-      <div className="relative max-h-[221px] overflow-x-hidden overflow-y-auto">
+      <div className="relative max-h-[221px] overflow-x-hidden overflow-y-auto pr-[10px]">
         {rows.map((row) => (
           <TrackRow
             duration={duration}
@@ -184,7 +181,7 @@ export function Timeline({
       </div>
 
       <div
-        className="pointer-events-none absolute bottom-0 top-[33px] w-px bg-(--amber)"
+        className="pointer-events-none absolute bottom-0 top-[33px] z-40 w-px bg-(--amber)"
         style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${TRACK_RIGHT_PADDING_PX}px) * ${playheadPercent} / 100)` }}
       >
         <span className="absolute -top-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[7px] border-x-transparent border-t-(--amber)" />
@@ -237,6 +234,21 @@ function useTimelineRows(layers: Layer[], duration: number, sentences: AlignedSe
       continue;
     }
 
+    if (layer.kind === "bg") {
+      const backgroundClips = clips.length > 0
+        ? clips
+        : synthesizeBackgroundClip(layer.id, rawItems, duration);
+      if (backgroundClips.length === 0) continue;
+      rows.push({
+        count: backgroundClips.length,
+        kind: "bg",
+        label: labelFor("bg", layer.name, backgroundClips.length),
+        rowId: `${layer.id}-0`,
+        clips: backgroundClips,
+      });
+      continue;
+    }
+
     if (clips.length === 0) continue;
     if (layer.kind === "fg" || layer.kind === "pip") {
       const packed = packRowsByTime(clips);
@@ -246,13 +258,6 @@ function useTimelineRows(layers: Layer[], duration: number, sentences: AlignedSe
       });
       continue;
     }
-    rows.push({
-      count: clips.length,
-      kind: "bg",
-      label: labelFor("bg", layer.name, clips.length),
-      rowId: `${layer.id}-0`,
-      clips,
-    });
   }
 
   return rows;
@@ -284,15 +289,6 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
           const widthPercent = Math.min(Math.max(rawWidthPercent, 0.12), Math.max(0, 100 - leftPercent));
           const left = `${leftPercent}%`;
           const width = `${widthPercent}%`;
-          if (row.kind === "sub" && clip.synthetic === true) {
-            return (
-              <div
-                className="absolute inset-y-0 rounded-sm border border-[oklch(0.55_0.10_250_/_0.5)] bg-[oklch(0.55_0.10_250_/_0.7)]"
-                key={clip.id}
-                style={{ left, width }}
-              />
-            );
-          }
           const isSelected = selected?.layerId === clip.layerId && selected.itemId === clip.id;
           const label = clipLabel(clip);
           const canDelete = clip.kind !== "bg" && clip.kind !== "sub";
@@ -306,6 +302,10 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
                 aria-label={label}
                 className="absolute inset-0 rounded-sm pr-8 text-left"
                 onClick={(event) => {
+                  if (clip.kind === "sub") {
+                    event.stopPropagation();
+                    return;
+                  }
                   event.stopPropagation();
                   onSelect({ layerId: clip.layerId, itemId: clip.id });
                 }}
@@ -418,7 +418,7 @@ function dotClass(kind: LayerKind): string {
 
 function clipClass(kind: LayerKind, orphaned = false): string {
   if (orphaned) return "border-(--red) bg-(--red)/20";
-  if (kind === "sub") return "border-[oklch(0.55_0.10_250)] bg-[oklch(0.45_0.06_250)] text-[oklch(0.95_0.04_250)]";
+  if (kind === "sub") return "editor-timeline-subtitle-clip";
   if (kind === "pip") {
     return "border-[oklch(0.55_0.13_305)] bg-[linear-gradient(180deg,oklch(0.45_0.10_305),oklch(0.36_0.10_305))] text-[oklch(0.95_0.06_305)]";
   }
@@ -435,10 +435,11 @@ function clipLabel(clip: Pick<TimelineClip, "kind" | "mediaId" | "mediaIds" | "s
       return `auto / ${playlistCount} assets`;
     }
   }
-  if (!clip.sentences) return clip.mediaId;
+  const mediaLabel = clip.mediaId || (clip.kind === "sub" ? "subtitle" : "media");
+  if (!clip.sentences) return mediaLabel;
   const [from, to] = clip.sentences;
   const range = from === to ? `s${from}` : `s${from}-s${to}`;
-  return `${clip.mediaId} over ${range}`;
+  return `${mediaLabel} over ${range}`;
 }
 
 function timeFromEvent(event: ReactMouseEvent<HTMLElement>, duration: number): number {
@@ -496,11 +497,35 @@ function synthesizeSubtitleClips(layerId: string, duration: number, cueCount: nu
       id: `${layerId}-sub-${index + 1}`,
       kind: "sub",
       layerId,
-      mediaId: "",
+      mediaId: "subtitle",
       start,
       synthetic: true,
     };
   });
+}
+
+function synthesizeBackgroundClip(layerId: string, rawItems: unknown[], duration: number): TimelineClip[] {
+  for (const item of rawItems) {
+    if (typeof item !== "object" || item === null) continue;
+    const candidate = item as { id?: unknown; mediaId?: unknown; mediaIds?: unknown };
+    const mediaIds = Array.isArray(candidate.mediaIds)
+      ? candidate.mediaIds.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+      : [];
+    const mediaId = typeof candidate.mediaId === "string" && candidate.mediaId.length > 0
+      ? candidate.mediaId
+      : mediaIds[0] ?? "";
+    if (!mediaId) continue;
+    return [{
+      end: Math.max(duration, MIN_DURATION_SECONDS),
+      id: typeof candidate.id === "string" && candidate.id.length > 0 ? candidate.id : `${layerId}-bg-auto`,
+      kind: "bg",
+      layerId,
+      mediaId,
+      mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+      start: 0,
+    }];
+  }
+  return [];
 }
 
 function clipsFromSentences(layerId: string, sentences: AlignedSentence[], duration: number): TimelineClip[] {

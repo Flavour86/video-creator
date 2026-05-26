@@ -18,6 +18,7 @@ from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult, 
 _align_model: Any = None
 _align_metadata: Any = None
 _align_device: str | None = None
+_align_language: str | None = None
 _transcribe_model: Any = None
 _transcribe_model_name: str | None = None
 _transcribe_device: str | None = None
@@ -34,13 +35,22 @@ def _device() -> str:
 
 
 def _load_model(device: str, language: str = "en") -> tuple[Any, Any]:
-    global _align_model, _align_metadata, _align_device
-    if _align_model is not None and _align_device == device:
+    global _align_model, _align_metadata, _align_device, _align_language
+    if (
+        _align_model is not None
+        and _align_device == device
+        and _align_language == language
+    ):
         return _align_model, _align_metadata
     import whisperx  # type: ignore[import-untyped]
 
     model, metadata = whisperx.load_align_model(language_code=language, device=device)
-    _align_model, _align_metadata, _align_device = model, metadata, device
+    _align_model, _align_metadata, _align_device, _align_language = (
+        model,
+        metadata,
+        device,
+        language,
+    )
     return model, metadata
 
 
@@ -67,8 +77,6 @@ def _run_align(
     device: str,
     language: str = "en",
 ) -> AlignmentResult:
-    import whisperx
-
     audio = _load_audio_array(audio_path)
     duration = len(audio) / 16000.0
     step = duration / max(len(sentences), 1)
@@ -78,28 +86,7 @@ def _run_align(
         for i, s in enumerate(sentences)
     ]
 
-    try:
-        model, metadata = _load_model(device, language)
-        result = whisperx.align(
-            input_segments,
-            model,
-            metadata,
-            audio,
-            device,
-            return_char_alignments=False,
-        )
-    except RuntimeError as exc:
-        if "CUDA out of memory" not in str(exc) or device == "cpu":
-            raise
-        model, metadata = _load_model("cpu", language)
-        result = whisperx.align(
-            input_segments,
-            model,
-            metadata,
-            audio,
-            "cpu",
-            return_char_alignments=False,
-        )
+    result = _align_segments(input_segments, audio, device, language)
 
     aligned_sentences: list[AlignedSentence] = []
     aligned_words: list[AlignedWord] = []
@@ -133,6 +120,44 @@ def _run_align(
     return AlignmentResult(sentences=aligned_sentences, words=aligned_words)
 
 
+def _align_segments(
+    input_segments: list[dict[str, Any]],
+    audio: FloatArray,
+    device: str,
+    language: str,
+) -> dict[str, Any]:
+    import whisperx
+
+    try:
+        model, metadata = _load_model(device, language)
+        return cast(
+            dict[str, Any],
+            whisperx.align(
+                input_segments,
+                model,
+                metadata,
+                audio,
+                device,
+                return_char_alignments=False,
+            ),
+        )
+    except RuntimeError as exc:
+        if "CUDA out of memory" not in str(exc) or device == "cpu":
+            raise
+        model, metadata = _load_model("cpu", language)
+        return cast(
+            dict[str, Any],
+            whisperx.align(
+                input_segments,
+                model,
+                metadata,
+                audio,
+                "cpu",
+                return_char_alignments=False,
+            ),
+        )
+
+
 def _run_transcribe(
     audio_path: Path,
     device: str,
@@ -142,7 +167,14 @@ def _run_transcribe(
     audio = _load_audio_array(audio_path)
     model = _load_transcribe_model(model_name, device)
     result = model.transcribe(audio, batch_size=batch_size)
-    return _segments_to_alignment_result(result.get("segments", []))
+    segments = result.get("segments", [])
+    if not segments:
+        return AlignmentResult(sentences=[], words=[])
+    language = str(result.get("language") or "en")
+    # Keep the large ASR model on CUDA; a second alignment model can exhaust GPU memory.
+    alignment_device = "cpu" if device == "cuda" else device
+    aligned = _align_segments(segments, audio, alignment_device, language)
+    return _segments_to_alignment_result(aligned.get("segments", segments))
 
 
 def _load_audio_array(audio_path: Path, sample_rate: int = 16000) -> FloatArray:

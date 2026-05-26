@@ -157,7 +157,7 @@ export function appendOperation(projectId: string, op: EditorOperation, storage 
   }
   const next: StoredOperationLog = {
     redo: [],
-    undo: [...log.undo, { at: nowIso, coalesceKey, id: cryptoId(), op }],
+    undo: [...log.undo, { at: nowIso, coalesceKey: coalesceKey ?? undefined, id: cryptoId(), op }],
     version: 1,
   };
   saveOperationLog(projectId, next, storage);
@@ -340,7 +340,7 @@ function coalesceOperationKey(op: EditorOperation): string | null {
 function singleDiffPath(left: Layer[], right: Layer[]): string | null {
   const paths: string[] = [];
   collectDiffPaths(left, right, "layers", paths, 2);
-  return paths.length === 1 ? paths[0] : null;
+  return paths.length === 1 ? (paths[0] ?? null) : null;
 }
 
 function collectDiffPaths(left: unknown, right: unknown, path: string, paths: string[], maxPaths: number): void {

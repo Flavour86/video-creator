@@ -2,7 +2,14 @@ export const PAGE_SSIM_THRESHOLD = 0.45;
 export const PREVIEW_SSIM_THRESHOLD = 0.6;
 
 export type EditorVisualTheme = "dark" | "light";
-export type EditorVisualCaptureTarget = "page" | "preview" | "timeline" | "inspector" | "transcript" | "dialog";
+export type EditorVisualCaptureTarget =
+  | "page"
+  | "preview"
+  | "timeline"
+  | "inspector"
+  | "transcript"
+  | "dialog"
+  | "watermark-dialog";
 export type EditorVisualAction =
   | "none"
   | "render-draft"
@@ -19,16 +26,21 @@ export type EditorVisualAction =
   | "assign-modal-edit-scrolled"
   | "assign-modal-scrolled"
   | "background-modal"
-  | "subtitles-modal";
+  | "subtitles-modal"
+  | "watermark-modal";
 
 export type EditorVisualCase = {
   action: EditorVisualAction;
+  blurRadius?: number;
   capture: EditorVisualCaptureTarget;
   clip?: { height: number; width: number; x: number; y: number };
+  referenceClip?: { height: number; width: number; x: number; y: number };
   name: string;
   reference: string;
+  strict?: boolean;
   threshold?: number;
   theme: EditorVisualTheme;
+  inventory?: boolean;
 };
 
 export const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
@@ -75,8 +87,31 @@ export const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
   { action: "assign-modal-edit-scrolled", name: "assign modal light scrolled", reference: "AssignModal-light-1.png", theme: "light", capture: "dialog" },
   { action: "background-modal", name: "background modal light", reference: "change-background-light.png", theme: "light", capture: "dialog" },
   { action: "subtitles-modal", name: "subtitles modal dark", reference: "SubtitleModal.png", theme: "dark", capture: "dialog" },
+  {
+    action: "none",
+    capture: "timeline",
+    inventory: false,
+    name: "bug 27 multiple overlay timeline rows",
+    reference: "../bugs/vp_live/bug-27-1.png",
+    blurRadius: 16,
+    strict: true,
+    threshold: 0.9,
+    theme: "dark",
+  },
+  {
+    action: "watermark-modal",
+    blurRadius: 4,
+    capture: "watermark-dialog",
+    inventory: false,
+    name: "bug 28 watermark modal",
+    reference: "../bugs/vp_live/bug-28-1.png",
+    referenceClip: { x: 961, y: 365, width: 841, height: 794 },
+    strict: true,
+    threshold: 0.9,
+    theme: "dark",
+  },
 ];
 
-export const EDITOR_VISUAL_SCREENSHOTS = EDITOR_VISUAL_CASES.map(
+export const EDITOR_VISUAL_SCREENSHOTS = EDITOR_VISUAL_CASES.filter((visualCase) => visualCase.inventory !== false).map(
   (visualCase) => `docs/designs/visuals/${visualCase.reference}`,
 );

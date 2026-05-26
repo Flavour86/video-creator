@@ -7,7 +7,7 @@ const MEDIA = [
   {
     mediaId: "callout-map.png",
     filename: "callout-map.png",
-    kind: "image" as const,
+    kind: "watermark_image" as const,
     path: "uploads/callout-map.png",
     thumb_path: "uploads/.thumbs/callout-map.jpg",
     thumb_url: "/uploads/thumb?filename=callout-map.jpg",
@@ -23,7 +23,7 @@ const MEDIA = [
   {
     mediaId: "station-intro.mp4",
     filename: "station-intro.mp4",
-    kind: "video" as const,
+    kind: "watermark_video" as const,
     path: "uploads/station-intro.mp4",
     thumb_path: "uploads/.thumbs/station-intro.jpg",
     thumb_url: "/uploads/thumb?filename=station-intro.jpg",
@@ -58,16 +58,13 @@ function renderModal(overrides: Partial<ComponentProps<typeof WatermarkModal>> =
 }
 
 describe("WatermarkModal", () => {
-  it("selects a watermark asset from the dialog grid", () => {
-    const { onChange } = renderModal();
-    fireEvent.click(screen.getByRole("button", { name: /callout-map\.png/i }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-      mediaId: "callout-map.png",
-      opacity: 85,
-      posX: 9,
-      posY: 11,
-      scale: 0.08,
-    }));
+  it("shows only the current watermark asset and accepts a single replacement upload", () => {
+    renderModal({
+      value: { mediaId: "callout-map.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
+    });
+    expect(screen.getByRole("button", { name: /callout-map\.png/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /station-intro\.mp4/i })).not.toBeInTheDocument();
+    expect(document.querySelector("input[type='file']")).not.toHaveAttribute("multiple");
   });
 
   it("supports media import from upload action", () => {
@@ -77,5 +74,12 @@ describe("WatermarkModal", () => {
     const file = new File(["abc"], "logo.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [file] } });
     expect(onImport).toHaveBeenCalled();
+  });
+
+  it("shows no asset until a watermark is configured", () => {
+    renderModal({ value: null });
+    expect(screen.queryByRole("button", { name: /callout-map\.png/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /station-intro\.mp4/i })).not.toBeInTheDocument();
+    expect(screen.getByText("No watermark assets selected yet.")).toBeInTheDocument();
   });
 });

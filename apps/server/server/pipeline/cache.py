@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TypeAlias, cast
@@ -14,16 +15,45 @@ JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dic
 JsonObject: TypeAlias = dict[str, JsonValue]
 
 CLIP_CACHE_FORMAT_VERSION = 3
+_HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_KANA_RE = re.compile(r"[\u3040-\u30ff]")
+_HANGUL_RE = re.compile(r"[\uac00-\ud7af]")
+_CPU_ALIGNMENT_LANGUAGES = frozenset({"zh", "ja", "ko"})
 
 
-def compute_alignment_hash(audio_path: Path, transcript_text: str) -> str:
-    """Return hex sha256 of audio bytes + separator + transcript bytes."""
+def alignment_language_for_text(transcript_text: str) -> str:
+    """Return the WhisperX alignment language implied by transcript text."""
+    if _HANGUL_RE.search(transcript_text):
+        return "ko"
+    if _KANA_RE.search(transcript_text):
+        return "ja"
+    if _HAN_RE.search(transcript_text):
+        return "zh"
+    return "en"
+
+
+def alignment_device_for_language(language: str) -> str | None:
+    """Return a preferred forced-alignment device for heavier language models."""
+    return "cpu" if language.lower() in _CPU_ALIGNMENT_LANGUAGES else None
+
+
+def compute_alignment_hash(
+    audio_path: Path,
+    transcript_text: str,
+    *,
+    language: str | None = None,
+) -> str:
+    """Return hex sha256 of audio bytes, transcript bytes, and non-English align language."""
+    alignment_language = (language or alignment_language_for_text(transcript_text)).lower()
     h = hashlib.sha256()
     with audio_path.open("rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     h.update(b"\n---\n")
     h.update(transcript_text.encode("utf-8"))
+    if alignment_language != "en":
+        h.update(b"\n---alignment-language---\n")
+        h.update(alignment_language.encode("utf-8"))
     return h.hexdigest()
 
 

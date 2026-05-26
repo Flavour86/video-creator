@@ -35,7 +35,11 @@ from server.db.renders import (
 )
 from server.domain.project import Project, load_project
 from server.domain.timing import AlignmentResult
-from server.pipeline.cache import compute_alignment_hash
+from server.pipeline.cache import (
+    alignment_device_for_language,
+    alignment_language_for_text,
+    compute_alignment_hash,
+)
 from server.pipeline.chunker import segment
 from server.pipeline.clip_render import render_clip_to_cache
 from server.pipeline.filtergraph import (
@@ -401,7 +405,13 @@ async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentRes
         raise RenderError(404, "TRANSCRIPT_NOT_FOUND", "Transcript file not found.")
 
     transcript_text = transcript_path.read_text(encoding="utf-8")
-    current_hash = compute_alignment_hash(audio_path, transcript_text)
+    alignment_language = alignment_language_for_text(transcript_text)
+    preferred_device = alignment_device_for_language(alignment_language)
+    current_hash = compute_alignment_hash(
+        audio_path,
+        transcript_text,
+        language=alignment_language,
+    )
     vc_dir = project_dir / ".vc"
     alignment_file = vc_dir / "alignment.json"
     hash_file = vc_dir / "alignment.hash"
@@ -415,7 +425,12 @@ async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentRes
 
     from server.pipeline.transcribe import align  # lazy import keeps unit tests light
 
-    result = await align(audio_path, segment(transcript_text))
+    result = await align(
+        audio_path,
+        segment(transcript_text),
+        language=alignment_language,
+        device=preferred_device,
+    )
     vc_dir.mkdir(parents=True, exist_ok=True)
     alignment_file.write_text(result.model_dump_json(), encoding="utf-8")
     write_srt(project_dir, result, max_line_chars=_subtitle_max_line_chars(project))

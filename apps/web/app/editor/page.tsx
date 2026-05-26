@@ -3,7 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse } from "@vc/shared-schemas";
+import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse, TranscriptSentenceCue } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { BgModal } from "@/components/bg-modal/BgModal";
@@ -100,6 +100,7 @@ function EditorContent() {
   const [selected, setSelected] = useState<EditorSelection>(null);
   const [selectedSentenceRange, setSelectedSentenceRange] = useState<[number, number] | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resolution, setResolution] = useState<"1080p" | "720p" | "9:16">("1080p");
@@ -130,14 +131,16 @@ function EditorContent() {
     [alignmentSentences],
   );
   const [sentences, setSentences] = useState<AlignedSentence[]>([]);
-  const duration = sentences.at(-1)?.end_s ?? 0;
+  const duration = Math.max(audioDuration, sentences.at(-1)?.end_s ?? 0);
   const timelineDuration = duration;
   const localCacheSummary = useMemo(() => deriveClipCacheSummaryFromLayers(layers), [layers]);
   const effectiveCacheSummary = useMemo(
     () => resolveClipCacheSummary(localCacheSummary, serverCacheSummary, localCacheInvalidation),
     [localCacheInvalidation, localCacheSummary, serverCacheSummary],
   );
-  const cacheLabel = `cache ${effectiveCacheSummary.state} ${effectiveCacheSummary.cachedCount}/${effectiveCacheSummary.totalCount}`;
+  const cacheLabel = effectiveCacheSummary.state === "warm"
+    ? `cache ${effectiveCacheSummary.cachedCount}/${effectiveCacheSummary.totalCount}`
+    : `cache ${effectiveCacheSummary.state} ${effectiveCacheSummary.cachedCount}/${effectiveCacheSummary.totalCount}`;
   const activeRange = useMemo<[number, number]>(() => {
     const active = sentences.find((sentence) => currentTime >= sentence.start_s && currentTime < sentence.end_s);
     return active ? [active.index, active.index] : [sentences[0]?.index ?? 1, sentences[0]?.index ?? 1];
@@ -148,7 +151,7 @@ function EditorContent() {
     if (!latestConfigHash) return false;
     return latestConfigHash !== lastRenderedConfigHash;
   }, [hasUnrenderedChanges, lastRenderedConfigHash, latestConfigHash]);
-  const renderDraftDisabled = saving || renderJob.running || !project;
+  const renderDraftDisabled = saving || renderJob.running || !project || !renderHashDiffers;
   const renderFinalDisabled = saving || renderJob.running || !project || !renderHashDiffers;
   const visualMedia = useMemo(
     () =>
@@ -178,6 +181,7 @@ function EditorContent() {
 
   const loadProject = useCallback(async (id: string) => {
     try {
+      setAudioDuration(0);
       setServerCacheSummary(null);
       setLocalCacheInvalidation("none");
       setCacheSummaryError(null);
@@ -718,7 +722,9 @@ function EditorContent() {
   const applyWatermarkSettings = useCallback((nextWatermark: Project["watermark"]) => {
     if (!project) return;
     const previousWatermark = project.watermark;
-    setProject({ ...project, watermark: nextWatermark });
+    const nextConfigMedia = promoteWatermarkSelection(project.media ?? [], nextWatermark);
+    setProject({ ...project, media: nextConfigMedia, watermark: nextWatermark });
+    setMedia((previous) => promoteWatermarkSelectionInEditorMedia(previous, nextWatermark));
     if (projectId) {
       appendOperation(projectId, {
         type: "watermark_update",
@@ -793,9 +799,9 @@ function EditorContent() {
     });
   }, [project, projectId, resolution, selected, selectedSentenceRange]);
 
-  const importMedia = useCallback(async (files: FileList | null) => {
+  const importMedia = useCallback(async (files: FileList | null, options?: { watermarkOnly?: boolean }) => {
     if (!files || files.length === 0 || !project) return;
-    const incoming = Array.from(files);
+    const incoming = options?.watermarkOnly ? Array.from(files).slice(0, 1) : Array.from(files);
     const uploaded: MediaAsset[] = [];
     const pendingIds = new Map<string, string>();
     setMedia((previous) => {
@@ -831,13 +837,33 @@ function EditorContent() {
       }
     }
     if (uploaded.length === 0) return;
-    const nextConfigMedia = mergeConfigMedia(project.media ?? [], uploaded);
+    const normalizedUploaded = options?.watermarkOnly
+      ? uploaded.map(promoteUploadedWatermarkAsset)
+      : uploaded;
+    const replacementWatermark = options?.watermarkOnly ? normalizedUploaded[0] : undefined;
+    const nextConfigMedia = replacementWatermark
+      ? replaceWatermarkAssets(project.media ?? [], replacementWatermark)
+      : mergeConfigMedia(project.media ?? [], normalizedUploaded);
+    const nextWatermark = replacementWatermark
+      ? watermarkForReplacement(project.watermark, replacementWatermark.id)
+      : project.watermark;
     const nextEditorMedia = toEditorMediaItemsFromConfig(nextConfigMedia);
-    setProject({ ...project, media: nextConfigMedia });
+    setProject({ ...project, media: nextConfigMedia, watermark: nextWatermark });
     setMedia((previous) => mergeImportedMediaWithPending(nextEditorMedia, previous));
+    if (replacementWatermark && projectId) {
+      appendOperation(projectId, {
+        type: "watermark_update",
+        before: project.watermark,
+        after: nextWatermark,
+      });
+    }
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
-  }, [project]);
+  }, [project, projectId]);
+
+  const importWatermarkMedia = useCallback(async (files: FileList | null) => {
+    await importMedia(files, { watermarkOnly: true });
+  }, [importMedia]);
 
   if (!projectId) {
     return null;
@@ -966,6 +992,12 @@ function EditorContent() {
         <audio
           data-testid="editor-audio"
           onEnded={() => setPlaying(false)}
+          onLoadedMetadata={(event) => {
+            const nextDuration = event.currentTarget.duration;
+            if (Number.isFinite(nextDuration) && nextDuration > 0) {
+              setAudioDuration(nextDuration);
+            }
+          }}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           preload="metadata"
           ref={audioRef}
@@ -1017,7 +1049,7 @@ function EditorContent() {
           media={media}
           onChange={applyWatermarkSettings}
           onClose={() => setModal(null)}
-          onImport={importMedia}
+          onImport={importWatermarkMedia}
           open
           projectPath={projectPath}
           value={project?.watermark ?? null}
@@ -1136,12 +1168,11 @@ function deriveClipCacheSummaryFromLayers(layers: Layer[]): ClipCacheSummary {
 
 function resolveClipCacheSummary(local: ClipCacheSummary, remote: ClipCacheSummary | null, localInvalidation: LocalCacheInvalidation): ClipCacheSummary {
   if (!remote) return local;
-  if (remote.totalCount !== local.totalCount) return local;
+  if (localInvalidation === "none") return remote;
   if (localInvalidation === "output") {
-    return { state: local.totalCount > 0 ? "invalid" : "cold", cachedCount: 0, totalCount: local.totalCount };
+    return { state: remote.totalCount > 0 ? "invalid" : "cold", cachedCount: 0, totalCount: remote.totalCount };
   }
-  if (localInvalidation === "clip") return local;
-  return remote;
+  return local;
 }
 
 function normalizeRenderCacheSummary(response: RenderCacheResponse, fallback: ClipCacheSummary): ClipCacheSummary {
@@ -1388,6 +1419,62 @@ function remapSentenceAnchoredItem<T extends SentenceAnchoredItem>(
     orphan_reason: nextOrphanReason,
     cache_status: nextCacheStatus,
   };
+}
+
+function promoteUploadedWatermarkAsset(entry: MediaAsset): MediaAsset {
+  const nextKind = watermarkAssetKind(entry.kind);
+  if (nextKind === entry.kind) return entry;
+  return { ...entry, kind: nextKind };
+}
+
+function replaceWatermarkAssets(media: MediaAsset[], replacement: MediaAsset): MediaAsset[] {
+  return [
+    ...media.filter((entry) => entry.kind !== "watermark_image" && entry.kind !== "watermark_video"),
+    replacement,
+  ];
+}
+
+function watermarkForReplacement(
+  watermark: Project["watermark"],
+  mediaId: string,
+): NonNullable<Project["watermark"]> {
+  return watermark
+    ? { ...watermark, mediaId }
+    : { mediaId, opacity: 85, posX: 9, posY: 11, scale: 0.08 };
+}
+
+function promoteWatermarkSelection(media: MediaAsset[], watermark: Project["watermark"]): MediaAsset[] {
+  const mediaId = watermark?.mediaId;
+  if (!mediaId) return media;
+  return media.map((entry) => {
+    if (entry.id !== mediaId) return entry;
+    const nextKind = watermarkAssetKind(entry.kind);
+    if (nextKind === entry.kind) return entry;
+    return { ...entry, kind: nextKind };
+  });
+}
+
+function promoteWatermarkSelectionInEditorMedia(media: EditorMediaItem[], watermark: Project["watermark"]): EditorMediaItem[] {
+  const mediaId = watermark?.mediaId;
+  if (!mediaId) return media;
+  return media.map((entry) => {
+    if (entry.mediaId !== mediaId) return entry;
+    const nextKind = watermarkEditorKind(entry.kind);
+    if (nextKind === entry.kind) return entry;
+    return { ...entry, kind: nextKind };
+  });
+}
+
+function watermarkAssetKind(kind: MediaAsset["kind"]): MediaAsset["kind"] {
+  if (kind === "image") return "watermark_image";
+  if (kind === "video") return "watermark_video";
+  return kind;
+}
+
+function watermarkEditorKind(kind: EditorMediaItem["kind"]): EditorMediaItem["kind"] {
+  if (kind === "image") return "watermark_image";
+  if (kind === "video") return "watermark_video";
+  return kind;
 }
 
 function mergeConfigMedia(existing: MediaAsset[], incoming: MediaAsset[]): MediaAsset[] {

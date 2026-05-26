@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,8 +13,11 @@ MAX_CUE_LINES = 2
 MAX_CUE_SECONDS = 7.0
 MIN_CUE_SECONDS = 0.2
 
-SENTENCE_PUNCTUATION = (".", "!", "?")
-CLAUSE_PUNCTUATION = (",", ";", ":")
+SENTENCE_PUNCTUATION = (".", "!", "?", "\u3002", "\uff01", "\uff1f")
+CLAUSE_PUNCTUATION = (",", ";", ":", "\uff0c", "\uff1b", "\uff1a", "\u3001")
+BREAK_PUNCTUATION = SENTENCE_PUNCTUATION + CLAUSE_PUNCTUATION
+CLOSING_PUNCTUATION = ".,!?;:\uff0c\u3002\uff01\uff1f\uff1b\uff1a\u3001)]}\u3011\u300b"
+OPENING_PUNCTUATION = "([{\u3010\u300a"
 
 
 @dataclass(frozen=True)
@@ -118,9 +122,13 @@ def _build_cues(alignment: AlignmentResult, *, max_line_chars: int) -> list[_Cue
     cues: list[_Cue] = []
     for sentence in alignment.sentences:
         words = [
-            word
+            readable_word
             for word in alignment.words
             if word.sentence_index == sentence.index and word.text.strip()
+            for readable_word in _split_oversized_word(
+                word,
+                max_line_chars=max_line_chars,
+            )
         ]
         start = 0
         while start < len(words):
@@ -128,6 +136,63 @@ def _build_cues(alignment: AlignmentResult, *, max_line_chars: int) -> list[_Cue
             cues.append(_Cue(words=words[start:end]))
             start = end
     return cues
+
+
+def _split_oversized_word(word: AlignedWord, *, max_line_chars: int) -> list[AlignedWord]:
+    if _fits_cue([word], max_line_chars=max_line_chars) and (
+        word.end_s - word.start_s <= MAX_CUE_SECONDS
+    ):
+        return [word]
+
+    text = word.text.strip()
+    if not text:
+        return []
+    duration_s = max(0.0, word.end_s - word.start_s)
+    max_cue_chars = max_line_chars * MAX_CUE_LINES
+    if duration_s > 0:
+        duration_chars = max(
+            1,
+            math.floor(len(text) * (MAX_CUE_SECONDS - 0.001) / duration_s),
+        )
+        chunk_limit = min(max_cue_chars, duration_chars)
+    else:
+        chunk_limit = max_cue_chars
+    fragments = _split_text_chunks(text, chunk_limit)
+    if len(fragments) == 1:
+        return [word]
+
+    split_words: list[AlignedWord] = []
+    offset = 0
+    for fragment in fragments:
+        start_ratio = offset / len(text)
+        offset += len(fragment)
+        end_ratio = offset / len(text)
+        split_words.append(
+            AlignedWord(
+                sentence_index=word.sentence_index,
+                text=fragment,
+                start_s=word.start_s + duration_s * start_ratio,
+                end_s=word.start_s + duration_s * end_ratio,
+                confidence=word.confidence,
+            )
+        )
+    return split_words
+
+
+def _split_text_chunks(text: str, chunk_limit: int) -> list[str]:
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = min(len(text), start + chunk_limit)
+        if end < len(text):
+            earliest_break = start + max(1, chunk_limit // 2)
+            for candidate in range(end, earliest_break - 1, -1):
+                if text[candidate - 1] in BREAK_PUNCTUATION:
+                    end = candidate
+                    break
+        chunks.append(text[start:end])
+        start = end
+    return chunks
 
 
 def _normalized_cue_spans(cues: list[_Cue]) -> list[tuple[float, float]]:
@@ -177,7 +242,11 @@ def _fits_cue(words: list[AlignedWord], *, max_line_chars: int) -> bool:
 
 
 def _wrap_text(text: str, *, max_line_chars: int) -> list[str]:
-    words = text.split()
+    words = [
+        part
+        for word in text.split()
+        for part in _split_text_chunks(word, max_line_chars)
+    ]
     if not words:
         return [""]
 
@@ -204,7 +273,33 @@ def _normalize_max_line_chars(value: int) -> int:
 
 
 def _words_text(words: list[AlignedWord]) -> str:
-    return " ".join(word.text.strip() for word in words if word.text.strip())
+    tokens = [word.text.strip() for word in words if word.text.strip()]
+    if not tokens:
+        return ""
+    text = tokens[0]
+    for token in tokens[1:]:
+        if _needs_space(text[-1], token[0]):
+            text += " "
+        text += token
+    return text
+
+
+def _needs_space(previous: str, current: str) -> bool:
+    return not (
+        _is_cjk(previous)
+        or _is_cjk(current)
+        or current in CLOSING_PUNCTUATION
+        or previous in OPENING_PUNCTUATION
+    )
+
+
+def _is_cjk(character: str) -> bool:
+    codepoint = ord(character)
+    return (
+        0x3400 <= codepoint <= 0x4DBF
+        or 0x4E00 <= codepoint <= 0x9FFF
+        or 0xF900 <= codepoint <= 0xFAFF
+    )
 
 
 def _format_timestamp(seconds: float) -> str:

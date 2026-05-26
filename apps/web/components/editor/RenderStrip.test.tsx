@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { describe, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
@@ -41,19 +41,70 @@ describe("RenderStrip", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("hides the draft strip once completed", () => {
-    renderStrip({
-      job: {
-        phase: "ready",
-        progress: 100,
-        renderId: "r-draft",
-        running: false,
-        status: "ready",
-      },
-    });
+  it("keeps completed draft progress visible for two seconds before hiding", () => {
+    vi.useFakeTimers();
+    try {
+      renderStrip({
+        job: {
+          phase: "ready",
+          progress: 100,
+          renderId: "r-draft",
+          running: false,
+          status: "ready",
+        },
+      });
 
-    expect(screen.queryByText("Rendering draft : done")).not.toBeInTheDocument();
-    expect(screen.queryByRole("progressbar", { name: "Draft render progress" })).not.toBeInTheDocument();
+      expect(screen.getByText("Rendering draft : done")).toBeInTheDocument();
+      expect(screen.getByRole("progressbar", { name: "Draft render progress" })).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1_999));
+      expect(screen.getByText("Rendering draft : done")).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.queryByRole("progressbar", { name: "Draft render progress" })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps cancelled and failed draft progress visible until their linger elapses", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <RenderStrip
+            job={{
+              phase: "cancelled",
+              progress: 0,
+              renderId: "r-cancelled",
+              running: false,
+              status: "cancelled",
+            }}
+          />
+        </NextIntlClientProvider>,
+      );
+      expect(screen.getByText("Rendering draft : cancelled")).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(screen.queryByRole("progressbar", { name: "Draft render progress" })).not.toBeInTheDocument();
+
+      rerender(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <RenderStrip
+            job={{
+              phase: "failed",
+              progress: 12,
+              renderId: "r-failed",
+              running: false,
+              status: "failed",
+            }}
+          />
+        </NextIntlClientProvider>,
+      );
+      expect(screen.getByText("Rendering draft : failed")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("maps subtitles and compose stage messages to canonical labels", () => {
