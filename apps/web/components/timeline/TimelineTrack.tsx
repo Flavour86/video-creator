@@ -57,8 +57,11 @@ function BgBlock({
       {layer.items.map((item) => {
         const left = (item.start / duration) * 100;
         const width = ((item.end - item.start) / duration) * 100;
+        const mediaLabel = item.mediaId ?? (item.mediaIds && item.mediaIds.length > 1 ? `auto / ${item.mediaIds.length} assets` : item.mediaIds?.[0] ?? "background");
+        const thumbMediaId = item.mediaId ?? item.mediaIds?.[0];
         const thumbUrl = projectPath
-          ? `/api/server/projects/thumb?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(item.mediaId.replace(/\.[^.]+$/, ".jpg"))}`
+          && thumbMediaId
+          ? `/api/server/projects/thumb?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(thumbMediaId.replace(/\.[^.]+$/, ".jpg"))}`
           : undefined;
         return (
           <div
@@ -70,7 +73,7 @@ function BgBlock({
               <Image alt="" className="h-full w-full object-cover opacity-60" fill sizes="120px" src={thumbUrl} />
             )}
             <span className="absolute inset-0 flex truncate px-2 text-[10px] font-medium opacity-70">
-              {item.mediaId}
+              {mediaLabel}
             </span>
           </div>
         );
@@ -90,13 +93,14 @@ function FgBlocks({
   selectedItemId?: string | null;
   onSelectItem?: (layerId: string, itemId: string) => void;
 }) {
-  type VisualItem = { id: string; mediaId: string; start: number; end: number; motion: { kind: string } };
+  type VisualItem = { id: string; mediaId?: string; mediaIds?: string[]; start: number; end: number; motion: { kind: string } };
   return (
     <div className="relative h-7 w-full overflow-hidden">
       {(layer.items as VisualItem[]).map((item) => {
         const left = (item.start / duration) * 100;
         const width = ((item.end - item.start) / duration) * 100;
         const isSelected = item.id === selectedItemId;
+        const mediaLabel = item.mediaId ?? item.mediaIds?.[0] ?? "media";
         return (
           <button
             className={`absolute top-1 flex h-5 cursor-pointer items-center overflow-hidden rounded-sm px-1 text-left transition-colors ${
@@ -107,10 +111,10 @@ function FgBlocks({
             key={item.id}
             onClick={() => onSelectItem?.(layer.id, item.id)}
             style={{ left: `${left}%`, width: `${Math.max(width, 0.8)}%` }}
-            title={`${item.mediaId} · ${item.motion.kind}`}
+            title={`${mediaLabel} · ${item.motion.kind}`}
             type="button"
           >
-            <span className="truncate text-[9px] font-medium">{item.mediaId}</span>
+            <span className="truncate text-[9px] font-medium">{mediaLabel}</span>
           </button>
         );
       })}

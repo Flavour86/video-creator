@@ -404,6 +404,7 @@ export interface SubtitleStyle {
  * via the `definition` "Watermark".
  */
 export interface Watermark {
+  enabled?: boolean;
   mediaId: string;
   posX: number;
   posY: number;

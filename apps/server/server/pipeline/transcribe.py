@@ -23,6 +23,8 @@ _transcribe_model: Any = None
 _transcribe_model_name: str | None = None
 _transcribe_device: str | None = None
 FloatArray = npt.NDArray[np.float32]
+_ALIGNMENT_WINDOW_TEXT_CHARS = 120
+_ALIGNMENT_WINDOW_PADDING_S = 6.0
 
 
 def _device() -> str:
@@ -79,12 +81,7 @@ def _run_align(
 ) -> AlignmentResult:
     audio = _load_audio_array(audio_path)
     duration = len(audio) / 16000.0
-    step = duration / max(len(sentences), 1)
-
-    input_segments = [
-        {"text": s.text, "start": i * step, "end": (i + 1) * step}
-        for i, s in enumerate(sentences)
-    ]
+    input_segments = _windowed_reference_segments(sentences, duration)
 
     result = _align_segments(input_segments, audio, device, language)
 
@@ -118,6 +115,53 @@ def _run_align(
             )
 
     return AlignmentResult(sentences=aligned_sentences, words=aligned_words)
+
+
+def _windowed_reference_segments(
+    sentences: list[Sentence],
+    duration: float,
+) -> list[dict[str, Any]]:
+    if not sentences:
+        return []
+
+    groups: list[tuple[list[Sentence], int]] = []
+    current_group: list[Sentence] = []
+    current_chars = 0
+    for sentence in sentences:
+        sentence_chars = max(len(sentence.text.strip()), 1)
+        if (
+            current_group
+            and current_chars + sentence_chars > _ALIGNMENT_WINDOW_TEXT_CHARS
+        ):
+            groups.append((current_group, current_chars))
+            current_group = []
+            current_chars = 0
+        current_group.append(sentence)
+        current_chars += sentence_chars
+    groups.append((current_group, current_chars))
+
+    total_chars = max(sum(group_chars for _, group_chars in groups), 1)
+    consumed_chars = 0
+    segments: list[dict[str, Any]] = []
+    for index, (group, group_chars) in enumerate(groups):
+        estimated_start = duration * consumed_chars / total_chars
+        estimated_end = duration * (consumed_chars + group_chars) / total_chars
+        start = (
+            0.0
+            if index == 0
+            else max(0.0, estimated_start - _ALIGNMENT_WINDOW_PADDING_S)
+        )
+        end = (
+            duration
+            if index == len(groups) - 1
+            else min(duration, estimated_end + _ALIGNMENT_WINDOW_PADDING_S)
+        )
+        segments.extend(
+            {"text": sentence.text, "start": start, "end": end}
+            for sentence in group
+        )
+        consumed_chars += group_chars
+    return segments
 
 
 def _align_segments(
@@ -170,11 +214,9 @@ def _run_transcribe(
     segments = result.get("segments", [])
     if not segments:
         return AlignmentResult(sentences=[], words=[])
-    language = str(result.get("language") or "en")
-    # Keep the large ASR model on CUDA; a second alignment model can exhaust GPU memory.
-    alignment_device = "cpu" if device == "cuda" else device
-    aligned = _align_segments(segments, audio, alignment_device, language)
-    return _segments_to_alignment_result(aligned.get("segments", segments))
+    # Subtitle generation is voice-only ASR. Forced alignment belongs to the
+    # later transcript-alignment step and must not block initial SRT output.
+    return _segments_to_alignment_result(segments)
 
 
 def _load_audio_array(audio_path: Path, sample_rate: int = 16000) -> FloatArray:

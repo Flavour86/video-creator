@@ -120,6 +120,29 @@ async def test_align_sentence_count_matches(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_align_submits_nearby_sentences_in_a_shared_audio_window(
+    tmp_path: Path,
+) -> None:
+    mock_wx = _make_wx_mock()
+
+    async def _inline(fn, *args, **kwargs):  # type: ignore[override]
+        return fn(*args, **kwargs)
+
+    with (
+        patch.dict(sys.modules, {"whisperx": mock_wx}),
+        patch.object(transcribe, "_load_audio_array", return_value=[0.0] * 32000),
+        patch.object(asyncio, "to_thread", side_effect=_inline),
+    ):
+        await transcribe.align(tmp_path / "v.wav", _SENTENCES, device="cpu")
+
+    input_segments = mock_wx.align.call_args.args[0]
+    assert input_segments == [
+        {"text": "Hello world.", "start": 0.0, "end": 2.0},
+        {"text": "Goodbye.", "start": 0.0, "end": 2.0},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_align_sentence_timestamps(tmp_path: Path) -> None:
     result = await _align(tmp_path / "v.wav", _SENTENCES)
     assert result.sentences[0].start_s == pytest.approx(0.0)
@@ -262,27 +285,16 @@ async def test_transcribe_audio_returns_alignment_result(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_transcribe_audio_force_aligns_detected_chinese_segments(tmp_path: Path) -> None:
+async def test_transcribe_audio_generates_chinese_subtitles_without_forced_alignment_dependency(
+    tmp_path: Path,
+) -> None:
     mock_wx, model = _make_transcribe_wx_mock()
     text = "劳动者没有议价能力"
     model.transcribe.return_value = {
         "language": "zh",
         "segments": [{"text": text, "start": 0.0, "end": 8.0}],
     }
-    mock_wx.align.return_value = {
-        "segments": [
-            {
-                "text": text,
-                "start": 0.0,
-                "end": 8.0,
-                "words": [
-                    {"word": "劳动者", "start": 0.0, "end": 2.4, "score": 0.9},
-                    {"word": "没有", "start": 2.4, "end": 4.2, "score": 0.9},
-                    {"word": "议价能力", "start": 4.2, "end": 8.0, "score": 0.9},
-                ],
-            }
-        ]
-    }
+    mock_wx.load_align_model.side_effect = RuntimeError("alignment model unavailable")
 
     async def _inline(fn, *args, **kwargs):  # type: ignore[override]
         return fn(*args, **kwargs)
@@ -295,10 +307,12 @@ async def test_transcribe_audio_force_aligns_detected_chinese_segments(tmp_path:
     ):
         result = await transcribe.transcribe_audio(tmp_path / "voice.wav")
 
-    assert [word.text for word in result.words] == ["劳动者", "没有", "议价能力"]
+    assert result.sentences[0].text == text
+    assert result.sentences[0].start_s == pytest.approx(0.0)
+    assert result.sentences[0].end_s == pytest.approx(8.0)
     mock_wx.load_model.assert_called_once_with("large-v3", device="cuda")
-    mock_wx.load_align_model.assert_called_once_with(language_code="zh", device="cpu")
-    mock_wx.align.assert_called_once()
+    mock_wx.load_align_model.assert_not_called()
+    mock_wx.align.assert_not_called()
 
 
 @pytest.mark.asyncio

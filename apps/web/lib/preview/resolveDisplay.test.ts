@@ -71,6 +71,29 @@ describe("resolveDisplay", () => {
     expect(resolveDisplay([layer], [], 7).bg?.mediaId).toBe("two.jpg");
   });
 
+  it("rotates a single mediaIds background playlist without splitting timeline items", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [
+        {
+          id: base.id,
+          mediaIds: ["one.jpg", "two.jpg", "three.jpg"],
+          sentences: base.sentences,
+          start: 0,
+          end: 30,
+          motion: base.motion,
+          transitions: base.transitions,
+          crossfade: base.crossfade,
+        },
+      ],
+    };
+
+    expect(resolveDisplay([layer], [], 2).bg?.mediaId).toBe("one.jpg");
+    expect(resolveDisplay([layer], [], 12).bg?.mediaId).toBe("two.jpg");
+    expect(resolveDisplay([layer], [], 22).bg?.mediaId).toBe("three.jpg");
+  });
+
   it("includes fg item when currentTime is within its range", () => {
     const spec = resolveDisplay([BG_LAYER, FG_LAYER], [], 10);
     expect(spec.fg).toHaveLength(1);

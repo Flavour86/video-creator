@@ -208,6 +208,56 @@ describe("Timeline", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("selects visual clips for inspector editing without seeking the playhead", () => {
+    const { onSeek, onSelect, onUpdateClipTiming } = renderTimeline();
+    const clip = screen.getByRole("button", { name: "pip-a.png over s1-s2" });
+
+    fireEvent.mouseDown(clip, { clientX: 10 });
+    fireEvent.mouseUp(window, { clientX: 10 });
+    fireEvent.click(clip);
+
+    expect(onSelect).toHaveBeenCalledWith({ layerId: "pip-z1", itemId: "pip-1" });
+    expect(onUpdateClipTiming).not.toHaveBeenCalled();
+    expect(onSeek).not.toHaveBeenCalled();
+  });
+
+  it("seeks on empty timeline tracks and allows direct playhead dragging", () => {
+    const { onSeek } = renderTimeline({ currentTime: 5, duration: 20 });
+    const emptyTrack = screen.getByTestId("timeline-row-bg").querySelector("[data-timeline-track='1']") as HTMLElement;
+    vi.spyOn(emptyTrack, "getBoundingClientRect").mockReturnValue({
+      bottom: 44,
+      height: 44,
+      left: 0,
+      right: 200,
+      toJSON: () => ({}),
+      top: 0,
+      width: 200,
+      x: 0,
+      y: 0,
+    });
+
+    fireEvent.click(emptyTrack, { clientX: 100 });
+    expect(onSeek).toHaveBeenLastCalledWith(10);
+
+    const waveformButton = screen.getByTestId("timeline-waveform").closest("button") as HTMLButtonElement;
+    vi.spyOn(waveformButton, "getBoundingClientRect").mockReturnValue({
+      bottom: 100,
+      height: 55,
+      left: 0,
+      right: 200,
+      toJSON: () => ({}),
+      top: 45,
+      width: 200,
+      x: 0,
+      y: 45,
+    });
+    const playhead = screen.getByRole("slider", { name: /playhead/i });
+    fireEvent.mouseDown(playhead, { clientX: 50 });
+    fireEvent.mouseMove(window, { clientX: 150 });
+    fireEvent.mouseUp(window, { clientX: 150 });
+    expect(onSeek).toHaveBeenLastCalledWith(15);
+  });
+
   it("shows clip x delete for non-background clips only", () => {
     const { onDeleteItem } = renderTimeline();
     fireEvent.click(screen.getByRole("button", { name: /Delete pip-a.png over s1-s2/i }));

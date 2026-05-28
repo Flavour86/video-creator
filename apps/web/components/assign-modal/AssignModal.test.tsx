@@ -74,6 +74,49 @@ describe("AssignModal", () => {
     expect(confirmBtn).toBeDisabled();
   });
 
+  it("shows an explicit empty selection state before an asset is chosen", async () => {
+    render(<AssignModal {...BASE_PROPS} />);
+    await waitFor(() => screen.getByRole("dialog"));
+
+    expect(screen.getByText("No asset chosen")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /img\.jpg/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /clip\.mp4/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("marks the currently edited asset as selected in the asset grid", async () => {
+    const existingLayer = {
+      id: "L-fg-1",
+      kind: "fg" as const,
+      name: "Foreground · z1",
+      items: [
+        {
+          id: "item-1",
+          mediaId: "img.jpg",
+          sentences: [1, 2] as [number, number],
+          start: 0,
+          end: 10,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          cache_status: "warm" as const,
+        },
+      ],
+    };
+
+    render(
+      <AssignModal
+        {...BASE_PROPS}
+        editItemId="item-1"
+        editLayerId="L-fg-1"
+        layers={[existingLayer]}
+      />,
+    );
+    await waitFor(() => screen.getByRole("dialog"));
+
+    expect(screen.getByRole("button", { name: /img\.jpg selected/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /clip\.mp4/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("calls onConfirm with a new FG layer when asset selected and Confirm clicked", async () => {
     const onConfirm = vi.fn();
     render(<AssignModal {...BASE_PROPS} onConfirm={onConfirm} />);
@@ -254,6 +297,33 @@ describe("AssignModal", () => {
       id: "item-1",
       mediaId: "img.jpg",
       cache_status: "invalid",
+    });
+  });
+
+  it("lets PiP grid and POSX/POSY controls set precise placement", async () => {
+    const onConfirm = vi.fn();
+    render(<AssignModal {...BASE_PROPS} onConfirm={onConfirm} />);
+    await waitFor(() => screen.getByRole("dialog"));
+
+    fireEvent.click(screen.getByAltText("img.jpg").closest("button")!);
+    fireEvent.click(screen.getByRole("button", { name: /picture-in-picture/i }));
+
+    expect(screen.getByLabelText("PiP POSX")).toHaveValue(96);
+    expect(screen.getByLabelText("PiP POSY")).toHaveValue(96);
+
+    fireEvent.click(screen.getByRole("button", { name: "Top-right" }));
+    expect(screen.getByLabelText("PiP POSX")).toHaveValue(96);
+    expect(screen.getByLabelText("PiP POSY")).toHaveValue(4);
+
+    fireEvent.change(screen.getByLabelText("PiP POSX"), { target: { value: "42" } });
+    fireEvent.change(screen.getByLabelText("PiP POSY"), { target: { value: "18" } });
+    fireEvent.click(screen.getByRole("button", { name: /add to project/i }));
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledOnce());
+    const [updatedLayers] = onConfirm.mock.calls[0] as [Array<{ kind: string; items: Array<Record<string, unknown>> }>, string, string];
+    const pipLayer = updatedLayers.find((layer) => layer.kind === "pip");
+    expect(pipLayer?.items[0]).toMatchObject({
+      pip: { posX: 42, posY: 18 },
     });
   });
 });

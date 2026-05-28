@@ -34,7 +34,7 @@ import {
   type EditorRecoverySelection,
 } from "@/lib/editor-operation-log/operation-log";
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
-import { deleteVisualItem, hasSentenceOverlap, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
+import { deleteVisualItem, hasSentenceOverlap, normalizeBackgroundPlaylists, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { renderRoute } from "@/lib/render/routes";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
@@ -66,17 +66,7 @@ function projectIdFromPathname(pathname: string): string {
 }
 
 function isSpaceShortcutInteractiveTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  if (isTextEditingTarget(target)) {
-    return true;
-  }
-  return Boolean(
-    target.closest(
-      "button, a[href], summary, [role='button'], [role='link'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [contenteditable]:not([contenteditable='false'])",
-    ),
-  );
+  return isTextEditingTarget(target);
 }
 
 function EditorContent() {
@@ -197,7 +187,8 @@ function EditorContent() {
         subtitles: config.subtitles,
         watermark: config.watermark,
       });
-      const workingLayers = ensureSubtitleLayer(working.layers);
+      const normalizedBackgrounds = normalizeBackgroundPlaylists(ensureSubtitleLayer(working.layers));
+      const workingLayers = normalizedBackgrounds.layers;
       const workingConfig = {
         ...config,
         layers: workingLayers as Project["layers"],
@@ -230,7 +221,7 @@ function EditorContent() {
       setProjectName(workingConfig.name ?? id);
       setProjectPath(resolvedProjectPath);
       setAudioFile(workingConfig.audio ?? "");
-      const dirty = response.has_unrendered_changes || operationLog.undo.length > 0 || workingLayers !== working.layers;
+      const dirty = response.has_unrendered_changes || operationLog.undo.length > 0 || workingLayers !== working.layers || normalizedBackgrounds.changed;
       setHasUnrenderedChanges(dirty);
       setLatestConfigHash(response.config_hash);
       setLastRenderedConfigHash(response.last_rendered_config_hash ?? null);
@@ -239,6 +230,7 @@ function EditorContent() {
       const configMedia = toEditorMediaItemsFromConfig(workingConfig.media ?? []);
       setMedia(normalizeEditorMediaItems(configMedia));
       setServerCacheSummary(loadedCacheSummary);
+      setLocalCacheInvalidation(normalizedBackgrounds.changed ? "clip" : "none");
       setSelected(selected);
       setResolution(normalizeResolutionPreset(recoveryState?.resolution, working.output?.resolution));
     } catch {
@@ -328,13 +320,6 @@ function EditorContent() {
       renderSocketRef.current?.close();
     };
   }, []);
-
-  useEffect(() => {
-    const firstSentence = sentences[0];
-    if (firstSentence && currentTime === 0) {
-      seekTo(firstSentence.start_s);
-    }
-  }, [currentTime, seekTo, sentences]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -631,6 +616,7 @@ function EditorContent() {
     itemId: string,
     patch: {
       mediaId?: string;
+      mediaIds?: string[];
       motion?: Partial<{ easing: string; kind: string }>;
       pip?: Partial<{ opacity: number; posX: number; posY: number; radius: number; size: number }>;
       transitions?: Partial<{ in: string; out: string }>;
@@ -681,7 +667,6 @@ function EditorContent() {
       sentences: nextRange,
     });
     applyLayerMutation(updatedLayers);
-    setSelectedSentenceRange(nextRange);
     seekTo(boundedStart);
   }, [applyLayerMutation, layers, seekTo, sentences, timelineDuration]);
 
@@ -799,8 +784,8 @@ function EditorContent() {
     });
   }, [project, projectId, resolution, selected, selectedSentenceRange]);
 
-  const importMedia = useCallback(async (files: FileList | null, options?: { watermarkOnly?: boolean }) => {
-    if (!files || files.length === 0 || !project) return;
+  const uploadEditorMedia = useCallback(async (files: FileList | null, options?: { watermarkOnly?: boolean }): Promise<MediaAsset[]> => {
+    if (!files || files.length === 0) return [];
     const incoming = options?.watermarkOnly ? Array.from(files).slice(0, 1) : Array.from(files);
     const uploaded: MediaAsset[] = [];
     const pendingIds = new Map<string, string>();
@@ -836,10 +821,16 @@ function EditorContent() {
         );
       }
     }
-    if (uploaded.length === 0) return;
-    const normalizedUploaded = options?.watermarkOnly
+    if (uploaded.length === 0) return [];
+    return options?.watermarkOnly
       ? uploaded.map(promoteUploadedWatermarkAsset)
       : uploaded;
+  }, []);
+
+  const importMedia = useCallback(async (files: FileList | null, options?: { watermarkOnly?: boolean }) => {
+    if (!project) return [];
+    const normalizedUploaded = await uploadEditorMedia(files, options);
+    if (normalizedUploaded.length === 0) return [];
     const replacementWatermark = options?.watermarkOnly ? normalizedUploaded[0] : undefined;
     const nextConfigMedia = replacementWatermark
       ? replaceWatermarkAssets(project.media ?? [], replacementWatermark)
@@ -859,7 +850,51 @@ function EditorContent() {
     }
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
-  }, [project, projectId]);
+    return normalizedUploaded;
+  }, [project, projectId, uploadEditorMedia]);
+
+  const replaceInspectorItemMedia = useCallback(async (layerId: string, itemId: string, files: FileList | null, mediaIndex?: number) => {
+    if (!project) return;
+    const uploaded = await uploadEditorMedia(files);
+    const visualUploaded = uploaded.filter((entry) => entry.kind === "image" || entry.kind === "video");
+    if (visualUploaded.length === 0) return;
+    const mediaIds = visualUploaded.map((entry) => entry.id);
+    const layer = layers.find((entry) => entry.id === layerId);
+    if (!layer || layer.kind === "sub") return;
+    const firstMediaId = mediaIds[0];
+    if (layer.kind !== "bg" && !firstMediaId) return;
+    const targetItem = layer.items.find((entry) => hasVisualItemId(entry) && entry.id === itemId);
+    const currentBackgroundMediaIds = targetItem && "mediaIds" in targetItem && Array.isArray(targetItem.mediaIds)
+      ? targetItem.mediaIds.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+      : targetItem && "mediaId" in targetItem && typeof targetItem.mediaId === "string"
+        ? [targetItem.mediaId]
+        : [];
+    const nextBackgroundMediaIds = layer.kind === "bg" && mediaIndex !== undefined && firstMediaId
+      ? currentBackgroundMediaIds.map((entry, index) => (index === mediaIndex ? firstMediaId : entry))
+      : mediaIds;
+    const previousLayers = layers;
+    const updatedLayers = patchVisualItem(
+      layers,
+      layerId,
+      itemId,
+      layer.kind === "bg" ? { mediaIds: nextBackgroundMediaIds } : { mediaId: firstMediaId },
+    );
+    const nextConfigMedia = mergeConfigMedia(project.media ?? [], visualUploaded);
+    setLayers(updatedLayers);
+    setProject({ ...project, media: nextConfigMedia, layers: updatedLayers as Project["layers"] });
+    setMedia((previous) => mergeImportedMediaWithPending(toEditorMediaItemsFromConfig(nextConfigMedia), previous));
+    setSelected({ layerId, itemId });
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "replace_layers",
+        before: previousLayers,
+        after: updatedLayers,
+      });
+    }
+    setLocalCacheInvalidation("clip");
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [layers, project, projectId, uploadEditorMedia]);
 
   const importWatermarkMedia = useCallback(async (files: FileList | null) => {
     await importMedia(files, { watermarkOnly: true });
@@ -921,6 +956,7 @@ function EditorContent() {
               currentTime={currentTime}
               duration={duration}
               layers={layers}
+              media={media}
               onNext={() => seekSentence(1)}
               onPrevious={() => seekSentence(-1)}
               onTogglePlay={() => setPlaying((value) => !value)}
@@ -981,6 +1017,7 @@ function EditorContent() {
           onPatchBackground={patchInspectorBackground}
           onPatchItem={patchInspectorItem}
           onRemoveBackground={removeBackgroundLayer}
+          onReplaceItemMedia={replaceInspectorItemMedia}
           onUpdateRange={patchInspectorRange}
           projectPath={projectPath}
           selected={selected}
@@ -1440,7 +1477,7 @@ function watermarkForReplacement(
 ): NonNullable<Project["watermark"]> {
   return watermark
     ? { ...watermark, mediaId }
-    : { mediaId, opacity: 85, posX: 9, posY: 11, scale: 0.08 };
+    : { enabled: true, mediaId, opacity: 85, posX: 9, posY: 11, scale: 0.08 };
 }
 
 function promoteWatermarkSelection(media: MediaAsset[], watermark: Project["watermark"]): MediaAsset[] {

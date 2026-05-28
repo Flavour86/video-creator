@@ -12,12 +12,19 @@ from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
 from server.main import app
 from server.pipeline import transcribe
 from server.pipeline.cache import alignment_language_for_text, compute_alignment_hash
+from server.pipeline.srt import write_transcript_corrected_srt_file
+from server.settings import settings
 
 
 def _write_project(project_dir: Path) -> None:
     project_dir.mkdir(exist_ok=True)
     (project_dir / "voice.wav").write_bytes(b"wav")
-    (project_dir / "transcript.txt").write_text("Hello world.", encoding="utf-8")
+    (project_dir / "transcript.txt").write_text("Hello world!", encoding="utf-8")
+    (project_dir / "subtitles.srt").write_text(
+        _native_srt("Hell0 wurld"),
+        encoding="utf-8",
+        newline="",
+    )
     (project_dir / "project.json").write_text(
         json.dumps(
             {
@@ -49,80 +56,112 @@ def _write_wav(path: Path, *, duration_s: float = 1.0, sample_rate: int = 16_000
         wav.writeframes(bytes(pcm))
 
 
-def _alignment() -> AlignmentResult:
+def _native_srt(text: str) -> str:
+    return f"1\r\n00:00:00,031 --> 00:00:06,819\r\n{text}\r\n"
+
+
+def _native_alignment(text: str = "Hell0 wurld") -> AlignmentResult:
     return AlignmentResult(
         sentences=[
             AlignedSentence(
                 index=1,
-                text="Hello world.",
-                start_s=0.0,
-                end_s=1.2,
+                text=text,
+                start_s=0.031,
+                end_s=6.819,
                 confidence_avg=0.95,
             )
         ],
         words=[
-            AlignedWord(sentence_index=1, text="Hello", start_s=0.0, end_s=0.5, confidence=0.9),
-            AlignedWord(sentence_index=1, text="world.", start_s=0.5, end_s=1.2, confidence=0.9),
+            AlignedWord(
+                sentence_index=1,
+                text=text,
+                start_s=0.031,
+                end_s=6.819,
+                confidence=0.9,
+            )
         ],
     )
 
 
-@pytest.mark.asyncio
-async def test_alignment_endpoint_writes_subtitles(monkeypatch, tmp_path: Path) -> None:
-    _write_project(tmp_path)
+def _timing_lines(srt: str) -> list[str]:
+    return [
+        block.splitlines()[1]
+        for block in srt.replace("\r\n", "\n").strip().split("\n\n")
+        if block.strip()
+    ]
 
-    async def fake_align(*args, **kwargs) -> AlignmentResult:
-        return _alignment()
 
-    monkeypatch.setattr(transcribe, "align", fake_align)
+def test_transcript_correction_preserves_native_srt_timing_and_count(tmp_path: Path) -> None:
+    srt_path = tmp_path / "subtitles.srt"
+    original = (
+        "1\r\n00:00:00,031 --> 00:00:06,819\r\nHell0 wurld\r\n\r\n"
+        "2\r\n00:00:06,819 --> 00:00:13,606\r\nExtra ASR only\r\n"
+    )
+    srt_path.write_text(original, encoding="utf-8", newline="")
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/projects/align", params={"project": str(tmp_path)})
-
-    assert response.status_code == 200
-    assert (tmp_path / "subtitles.srt").read_bytes() == (
-        b"1\r\n00:00:00,000 --> 00:00:01,200\r\nHello world.\r\n"
+    result = write_transcript_corrected_srt_file(
+        srt_path,
+        "Hello world! This transcript sentence is not allowed to be inserted.",
     )
 
+    corrected = srt_path.read_text(encoding="utf-8")
+    assert _timing_lines(corrected) == _timing_lines(original)
+    assert result.update.cue_count == 2
+    assert "Hello world" in corrected
+    assert "!" not in corrected
+    assert "This transcript sentence" not in corrected
+    assert "Extra ASR only" in corrected
 
-@pytest.mark.asyncio
-async def test_alignment_endpoint_uses_chinese_language_and_cpu(
-    monkeypatch,
+
+def test_transcript_correction_keeps_native_text_when_change_is_not_low_risk(
     tmp_path: Path,
 ) -> None:
-    _write_project(tmp_path)
-    (tmp_path / "transcript.txt").write_text(
-        "\u52b3\u52a8\u8005\u6ca1\u6709\u8bae\u4ef7\u80fd\u529b\u3002",
+    srt_path = tmp_path / "subtitles.srt"
+    srt_path.write_text(
+        _native_srt("prefix QQQQ suffix"),
         encoding="utf-8",
+        newline="",
     )
-    calls: list[dict[str, object]] = []
 
-    async def fake_align(*_args: object, **kwargs: object) -> AlignmentResult:
-        calls.append(kwargs)
-        return _alignment()
+    write_transcript_corrected_srt_file(
+        srt_path,
+        "prefix ZZZZ suffix",
+    )
 
-    monkeypatch.setattr(transcribe, "align", fake_align)
+    corrected = srt_path.read_text(encoding="utf-8")
+    assert "prefix QQQQ suffix" in corrected
+    assert "ZZZZ" not in corrected
+
+
+@pytest.mark.asyncio
+async def test_alignment_endpoint_corrects_existing_subtitles_without_retiming(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_project(tmp_path)
+    original = (tmp_path / "subtitles.srt").read_text(encoding="utf-8")
+
+    async def forbidden_align(*_args, **_kwargs) -> AlignmentResult:
+        raise AssertionError("Alignment must not run forced audio retiming")
+
+    monkeypatch.setattr(transcribe, "align", forbidden_align)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/projects/align", params={"project": str(tmp_path)})
 
     assert response.status_code == 200
-    assert calls == [{"language": "zh", "device": "cpu"}]
+    corrected = (tmp_path / "subtitles.srt").read_text(encoding="utf-8")
+    assert _timing_lines(corrected) == _timing_lines(original)
+    assert "Hello world" in corrected
+    assert "!" not in corrected
+    assert response.json()["sentences"][0]["start_s"] == pytest.approx(0.031)
+    assert response.json()["sentences"][0]["end_s"] == pytest.approx(6.819)
 
 
 @pytest.mark.asyncio
-async def test_alignment_cache_hit_regenerates_missing_subtitles(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
+async def test_alignment_cache_hit_requires_existing_native_subtitles(tmp_path: Path) -> None:
     _write_project(tmp_path)
-
-    async def fake_align(*args, **kwargs) -> AlignmentResult:
-        return _alignment()
-
-    monkeypatch.setattr(transcribe, "align", fake_align)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -132,49 +171,30 @@ async def test_alignment_cache_hit_regenerates_missing_subtitles(
 
         second = await client.post("/projects/align", params={"project": str(tmp_path)})
 
-    assert second.status_code == 200
-    assert second.json()["cache_hit"] is True
-    assert (tmp_path / "subtitles.srt").is_file()
+    assert second.status_code == 404
+    assert second.json()["error"]["code"] == "SUBTITLES_NOT_FOUND"
 
 
 @pytest.mark.asyncio
-async def test_setup_subtitle_alignment_reports_corrections(monkeypatch, tmp_path: Path) -> None:
+async def test_setup_subtitle_alignment_corrects_native_srt_without_retiming(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     projects_root = tmp_path / "projects"
     projects_root.mkdir()
     voice_source = tmp_path / "voice.wav"
     transcript_source = tmp_path / "transcript.txt"
-    _write_wav(voice_source, duration_s=1.5)
-    transcript_source.write_text("Hello world.", encoding="utf-8")
+    _write_wav(voice_source, duration_s=7.0)
+    transcript_source.write_text("Hello world!", encoding="utf-8")
 
     async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
+        return _native_alignment()
 
-    async def fake_align(*_args, **_kwargs) -> AlignmentResult:
-        return AlignmentResult(
-            sentences=[
-                AlignedSentence(
-                    index=1,
-                    text="Hello brave world.",
-                    start_s=0.0,
-                    end_s=1.4,
-                    confidence_avg=0.9,
-                )
-            ],
-            words=[
-                AlignedWord(sentence_index=1, text="Hello", start_s=0.0, end_s=0.3, confidence=0.9),
-                AlignedWord(sentence_index=1, text="brave", start_s=0.3, end_s=0.7, confidence=0.9),
-                AlignedWord(
-                    sentence_index=1,
-                    text="world.",
-                    start_s=0.7,
-                    end_s=1.4,
-                    confidence=0.9,
-                ),
-            ],
-        )
+    async def forbidden_align(*_args, **_kwargs) -> AlignmentResult:
+        raise AssertionError("Setup alignment must not run forced audio retiming")
 
     monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
+    monkeypatch.setattr(transcribe, "align", forbidden_align)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -202,144 +222,19 @@ async def test_setup_subtitle_alignment_reports_corrections(monkeypatch, tmp_pat
 
         subtitle = await client.post("/subtitle", json={"setup_id": setup_id})
         assert subtitle.status_code == 200
+        setup_dir = settings.app_db_path.parent / "setup-cache" / setup_id / "artifacts"
+        original = (setup_dir / "subtitles.srt").read_text(encoding="utf-8")
         align = await client.post("/subtitle/alignment", json={"setup_id": setup_id})
 
     assert align.status_code == 200
     payload = align.json()
+    corrected = (setup_dir / "subtitles.srt").read_text(encoding="utf-8")
     assert payload["status"] == "succeeded"
     assert payload["alignment"]["status"] == "aligned"
     assert payload["corrections_applied"] >= 1
-
-
-@pytest.mark.asyncio
-async def test_setup_subtitle_alignment_uses_chinese_language_and_cpu(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    projects_root = tmp_path / "projects"
-    projects_root.mkdir()
-    voice_source = tmp_path / "voice.wav"
-    transcript_source = tmp_path / "transcript.txt"
-    _write_wav(voice_source, duration_s=1.0)
-    transcript_source.write_text(
-        "\u52b3\u52a8\u8005\u6ca1\u6709\u8bae\u4ef7\u80fd\u529b\u3002",
-        encoding="utf-8",
-    )
-    calls: list[dict[str, object]] = []
-
-    async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
-
-    async def fake_align(*_args: object, **kwargs: object) -> AlignmentResult:
-        calls.append(kwargs)
-        return _alignment()
-
-    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        create = await client.post(
-            "/setup/drafts",
-            json={
-                "path": str(projects_root / "alignment-chinese"),
-                "name": "Alignment Chinese",
-                "output_preset": "draft",
-            },
-        )
-        setup_id = create.json()["setup_id"]
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/voice",
-            files={"file": ("voice.wav", voice_source.read_bytes(), "audio/wav")},
-        )
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/transcript",
-            files={"file": ("transcript.txt", transcript_source.read_bytes(), "text/plain")},
-        )
-        await client.post("/subtitle", json={"setup_id": setup_id})
-        response = await client.post("/subtitle/alignment", json={"setup_id": setup_id})
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "succeeded"
-    assert response.json()["alignment"]["device"] == "cpu fp32"
-    assert calls == [{"language": "zh", "device": "cpu"}]
-
-
-def test_alignment_language_detects_chinese_text() -> None:
-    assert alignment_language_for_text(
-        "\u52b3\u52a8\u8005\u6ca1\u6709\u8bae\u4ef7\u80fd\u529b\u3002"
-    ) == "zh"
-
-
-def test_alignment_hash_includes_detected_chinese_language(tmp_path: Path) -> None:
-    audio = tmp_path / "voice.wav"
-    audio.write_bytes(b"voice")
-    transcript = "\u52b3\u52a8\u8005\u6ca1\u6709\u8bae\u4ef7\u80fd\u529b\u3002"
-
-    assert compute_alignment_hash(audio, transcript) == compute_alignment_hash(
-        audio,
-        transcript,
-        language="zh",
-    )
-    assert compute_alignment_hash(audio, transcript) != compute_alignment_hash(
-        audio,
-        transcript,
-        language="en",
-    )
-
-
-@pytest.mark.asyncio
-async def test_setup_subtitle_alignment_cuda_oom_falls_back_to_cpu(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    projects_root = tmp_path / "projects"
-    projects_root.mkdir()
-    voice_source = tmp_path / "voice.wav"
-    transcript_source = tmp_path / "transcript.txt"
-    _write_wav(voice_source, duration_s=1.0)
-    transcript_source.write_text("Hello world.", encoding="utf-8")
-
-    async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
-
-    calls: list[str | None] = []
-
-    async def fake_align(*_args, **kwargs) -> AlignmentResult:
-        calls.append(kwargs.get("device"))
-        if len(calls) == 1:
-            raise RuntimeError("CUDA out of memory")
-        return _alignment()
-
-    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        create = await client.post(
-            "/setup/drafts",
-            json={
-                "path": str(projects_root / "alignment-cuda-fallback"),
-                "name": "CUDA Fallback",
-                "output_preset": "draft",
-            },
-        )
-        setup_id = create.json()["setup_id"]
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/voice",
-            files={"file": ("voice.wav", voice_source.read_bytes(), "audio/wav")},
-        )
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/transcript",
-            files={"file": ("transcript.txt", transcript_source.read_bytes(), "text/plain")},
-        )
-        await client.post("/subtitle", json={"setup_id": setup_id})
-        response = await client.post("/subtitle/alignment", json={"setup_id": setup_id})
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "succeeded"
-    assert response.json()["alignment"]["device"] == "cpu fp32"
-    assert calls == [None, "cpu"]
+    assert _timing_lines(corrected) == _timing_lines(original)
+    assert "Hello world" in corrected
+    assert "!" not in corrected
 
 
 @pytest.mark.asyncio
@@ -364,126 +259,6 @@ async def test_setup_subtitle_alignment_reports_ready_when_prereqs_missing(tmp_p
     payload = response.json()
     assert payload["status"] == "ready"
     assert payload["error_code"] == "VOICE_NOT_SELECTED"
-
-
-@pytest.mark.asyncio
-async def test_setup_subtitle_alignment_surfaces_recoverable_mismatch_error(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    projects_root = tmp_path / "projects"
-    projects_root.mkdir()
-    voice_source = tmp_path / "voice.wav"
-    transcript_source = tmp_path / "transcript.txt"
-    _write_wav(voice_source, duration_s=1.0)
-    transcript_source.write_text("Hello world.", encoding="utf-8")
-
-    async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
-
-    async def fake_align(*_args, **_kwargs) -> AlignmentResult:
-        return AlignmentResult(sentences=[], words=[])
-
-    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        create = await client.post(
-            "/setup/drafts",
-            json={
-                "path": str(projects_root / "alignment-mismatch"),
-                "name": "Mismatch",
-                "output_preset": "draft",
-            },
-        )
-        setup_id = create.json()["setup_id"]
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/voice",
-            files={"file": ("voice.wav", voice_source.read_bytes(), "audio/wav")},
-        )
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/transcript",
-            files={"file": ("transcript.txt", transcript_source.read_bytes(), "text/plain")},
-        )
-        await client.post("/subtitle", json={"setup_id": setup_id})
-        response = await client.post("/subtitle/alignment", json={"setup_id": setup_id})
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "failed"
-    assert payload["error_code"] == "LONG_SILENCE"
-    assert payload["alignment"]["status"] == "failed"
-
-
-@pytest.mark.asyncio
-async def test_setup_subtitle_alignment_surfaces_low_confidence_mismatch_error(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    projects_root = tmp_path / "projects"
-    projects_root.mkdir()
-    voice_source = tmp_path / "voice.wav"
-    transcript_source = tmp_path / "transcript.txt"
-    _write_wav(voice_source, duration_s=1.0)
-    transcript_source.write_text("Hello world.", encoding="utf-8")
-
-    async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
-
-    async def fake_align(*_args, **_kwargs) -> AlignmentResult:
-        return AlignmentResult(
-            sentences=[
-                AlignedSentence(
-                    index=1,
-                    text="Hello world.",
-                    start_s=0.0,
-                    end_s=1.0,
-                    confidence_avg=0.1,
-                )
-            ],
-            words=[
-                AlignedWord(sentence_index=1, text="Hello", start_s=0.0, end_s=0.4, confidence=0.2),
-                AlignedWord(
-                    sentence_index=1,
-                    text="world.",
-                    start_s=0.4,
-                    end_s=1.0,
-                    confidence=0.2,
-                ),
-            ],
-        )
-
-    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        create = await client.post(
-            "/setup/drafts",
-            json={
-                "path": str(projects_root / "alignment-low-confidence"),
-                "name": "Low Confidence",
-                "output_preset": "draft",
-            },
-        )
-        setup_id = create.json()["setup_id"]
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/voice",
-            files={"file": ("voice.wav", voice_source.read_bytes(), "audio/wav")},
-        )
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/transcript",
-            files={"file": ("transcript.txt", transcript_source.read_bytes(), "text/plain")},
-        )
-        await client.post("/subtitle", json={"setup_id": setup_id})
-        response = await client.post("/subtitle/alignment", json={"setup_id": setup_id})
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "failed"
-    assert payload["error_code"] == "MISMATCHED_TEXT"
-    assert payload["alignment"]["status"] == "failed"
 
 
 @pytest.mark.asyncio
@@ -531,7 +306,7 @@ async def test_setup_subtitle_alignment_fails_when_transcript_empty(
     transcript_source.write_text(" ", encoding="utf-8")
 
     async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
+        return _native_alignment()
 
     monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
 
@@ -574,22 +349,14 @@ async def test_setup_subtitle_alignment_cache_hit_and_transcript_change_invalida
     voice_source = tmp_path / "voice.wav"
     transcript_source = tmp_path / "transcript.txt"
     transcript_source_changed = tmp_path / "transcript-2.txt"
-    _write_wav(voice_source, duration_s=1.0)
-    transcript_source.write_text("Hello world.", encoding="utf-8")
-    transcript_source_changed.write_text("Hello changed world.", encoding="utf-8")
+    _write_wav(voice_source, duration_s=7.0)
+    transcript_source.write_text("Hello world!", encoding="utf-8")
+    transcript_source_changed.write_text("Hallo warld!", encoding="utf-8")
 
     async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
-
-    align_calls = 0
-
-    async def fake_align(*_args, **_kwargs) -> AlignmentResult:
-        nonlocal align_calls
-        align_calls += 1
-        return _alignment()
+        return _native_alignment()
 
     monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -636,107 +403,26 @@ async def test_setup_subtitle_alignment_cache_hit_and_transcript_change_invalida
     assert third.status_code == 200
     assert third.json()["status"] == "succeeded"
     assert third.json()["alignment"]["cache_hit"] is False
-    assert align_calls == 2
 
 
-@pytest.mark.asyncio
-async def test_setup_subtitle_alignment_surfaces_whisperx_unavailable_error(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    projects_root = tmp_path / "projects"
-    projects_root.mkdir()
-    voice_source = tmp_path / "voice.wav"
-    transcript_source = tmp_path / "transcript.txt"
-    _write_wav(voice_source, duration_s=1.0)
-    transcript_source.write_text("Hello world.", encoding="utf-8")
-
-    async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
-
-    async def fake_align(*_args, **_kwargs) -> AlignmentResult:
-        raise ModuleNotFoundError("whisperx")
-
-    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        create = await client.post(
-            "/setup/drafts",
-            json={
-                "path": str(projects_root / "alignment-whisperx-missing"),
-                "name": "WhisperX Missing",
-                "output_preset": "draft",
-            },
-        )
-        setup_id = create.json()["setup_id"]
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/voice",
-            files={"file": ("voice.wav", voice_source.read_bytes(), "audio/wav")},
-        )
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/transcript",
-            files={"file": ("transcript.txt", transcript_source.read_bytes(), "text/plain")},
-        )
-        await client.post("/subtitle", json={"setup_id": setup_id})
-        response = await client.post("/subtitle/alignment", json={"setup_id": setup_id})
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "failed"
-    assert payload["error_code"] == "WHISPERX_UNAVAILABLE"
+def test_alignment_language_detects_chinese_text() -> None:
+    assert alignment_language_for_text(
+        "\u52b3\u52a8\u8005\u6ca1\u6709\u8bae\u4ef7\u80fd\u529b\u3002"
+    ) == "zh"
 
 
-@pytest.mark.asyncio
-async def test_setup_subtitle_alignment_falls_back_to_cpu_when_cuda_unavailable(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    projects_root = tmp_path / "projects"
-    projects_root.mkdir()
-    voice_source = tmp_path / "voice.wav"
-    transcript_source = tmp_path / "transcript.txt"
-    _write_wav(voice_source, duration_s=1.0)
-    transcript_source.write_text("Hello world.", encoding="utf-8")
+def test_alignment_hash_includes_detected_chinese_language(tmp_path: Path) -> None:
+    audio = tmp_path / "voice.wav"
+    audio.write_bytes(b"voice")
+    transcript = "\u52b3\u52a8\u8005\u6ca1\u6709\u8bae\u4ef7\u80fd\u529b\u3002"
 
-    async def fake_transcribe(_audio_path: Path) -> AlignmentResult:
-        return _alignment()
-
-    calls: list[str | None] = []
-
-    async def fake_align(*_args, **kwargs) -> AlignmentResult:
-        calls.append(kwargs.get("device"))
-        if len(calls) == 1:
-            raise RuntimeError("CUDA unavailable: no device")
-        return _alignment()
-
-    monkeypatch.setattr(transcribe, "transcribe_audio", fake_transcribe)
-    monkeypatch.setattr(transcribe, "align", fake_align)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        create = await client.post(
-            "/setup/drafts",
-            json={
-                "path": str(projects_root / "alignment-cuda-unavailable"),
-                "name": "CUDA Unavailable",
-                "output_preset": "draft",
-            },
-        )
-        setup_id = create.json()["setup_id"]
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/voice",
-            files={"file": ("voice.wav", voice_source.read_bytes(), "audio/wav")},
-        )
-        await client.post(
-            f"/setup/drafts/{setup_id}/artifacts/transcript",
-            files={"file": ("transcript.txt", transcript_source.read_bytes(), "text/plain")},
-        )
-        await client.post("/subtitle", json={"setup_id": setup_id})
-        response = await client.post("/subtitle/alignment", json={"setup_id": setup_id})
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "succeeded"
-    assert response.json()["alignment"]["device"] == "cpu fp32"
-    assert calls == [None, "cpu"]
+    assert compute_alignment_hash(audio, transcript) == compute_alignment_hash(
+        audio,
+        transcript,
+        language="zh",
+    )
+    assert compute_alignment_hash(audio, transcript) != compute_alignment_hash(
+        audio,
+        transcript,
+        language="en",
+    )

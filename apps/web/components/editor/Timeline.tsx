@@ -56,6 +56,7 @@ type DragState = {
 };
 
 const MIN_DURATION_SECONDS = 0.5;
+const DRAG_ACTIVATION_PX = 2;
 const ROW_ORDER_TOP_TO_BOTTOM: LayerKind[] = ["sub", "pip", "fg", "bg"];
 const LABEL_COLUMN_WIDTH_PX = 95;
 const TRACK_RIGHT_PADDING_PX = 10;
@@ -79,6 +80,8 @@ export function Timeline({
 }: TimelineProps) {
   const t = useTranslations("pages.editor");
   const dragStateRef = useRef<DragState | null>(null);
+  const playheadDraggingRef = useRef(false);
+  const waveformRef = useRef<HTMLButtonElement | null>(null);
   const rows = useTimelineRows(layers, duration, sentences);
   const clipCount = rows
     .filter((row) => row.kind !== "sub")
@@ -87,17 +90,34 @@ export function Timeline({
 
   useEffect(() => {
     function onMouseMove(event: MouseEvent) {
+      if (playheadDraggingRef.current) {
+        onSeek(timeFromClientX(event.clientX, waveformRef.current, duration));
+        return;
+      }
       const drag = dragStateRef.current;
       if (!drag) return;
+      if (Math.abs(event.clientX - drag.startClientX) < DRAG_ACTIVATION_PX) return;
       const patch = computeDragPatch(drag, event.clientX, duration);
       drag.lastClientX = event.clientX;
       onSeek(patch.start);
     }
 
     function onMouseUp(event: MouseEvent) {
+      if (playheadDraggingRef.current) {
+        onSeek(timeFromClientX(event.clientX, waveformRef.current, duration));
+        playheadDraggingRef.current = false;
+        return;
+      }
       const drag = dragStateRef.current;
       if (!drag) return;
       const clientX = Number.isFinite(event.clientX) && event.clientX !== 0 ? event.clientX : drag.lastClientX;
+      if (
+        Math.abs(clientX - drag.startClientX) < DRAG_ACTIVATION_PX
+        && Math.abs(drag.lastClientX - drag.startClientX) < DRAG_ACTIVATION_PX
+      ) {
+        dragStateRef.current = null;
+        return;
+      }
       const patch = computeDragPatch(drag, clientX, duration);
       onUpdateClipTiming({
         layerId: drag.clip.layerId,
@@ -144,6 +164,7 @@ export function Timeline({
       <button
         className="relative mx-[10px] h-[55px] overflow-hidden border-b border-l border-(--line-soft)"
         onClick={(event) => onSeek(timeFromEvent(event, duration))}
+        ref={waveformRef}
         style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${TRACK_RIGHT_PADDING_PX}px` }}
         type="button"
       >
@@ -170,6 +191,7 @@ export function Timeline({
             duration={duration}
             key={row.rowId}
             onDeleteItem={onDeleteItem}
+            onSeek={onSeek}
             onSelect={onSelect}
             onStartDrag={(input) => {
               dragStateRef.current = input;
@@ -180,12 +202,23 @@ export function Timeline({
         ))}
       </div>
 
-      <div
-        className="pointer-events-none absolute bottom-0 top-[33px] z-40 w-px bg-(--amber)"
+      <button
+        aria-label="Playhead"
+        aria-valuemax={Math.max(duration, 0)}
+        aria-valuemin={0}
+        aria-valuenow={currentTime}
+        className="absolute bottom-0 top-[33px] z-40 w-px cursor-ew-resize bg-(--amber) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          playheadDraggingRef.current = true;
+          onSeek(timeFromClientX(event.clientX, waveformRef.current, duration));
+        }}
+        role="slider"
         style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${TRACK_RIGHT_PADDING_PX}px) * ${playheadPercent} / 100)` }}
+        type="button"
       >
         <span className="absolute -top-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[7px] border-x-transparent border-t-(--amber)" />
-      </div>
+      </button>
     </section>
   );
 }
@@ -266,13 +299,14 @@ function useTimelineRows(layers: Layer[], duration: number, sentences: AlignedSe
 type TrackRowProps = {
   duration: number;
   onDeleteItem: (selection: { layerId: string; itemId: string }) => void;
+  onSeek: (time: number) => void;
   onSelect: (selection: EditorSelection) => void;
   onStartDrag: (input: DragState) => void;
   row: TimelineRow;
   selected: EditorSelection;
 };
 
-function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected }: TrackRowProps) {
+function TrackRow({ duration, onDeleteItem, onSeek, onSelect, onStartDrag, row, selected }: TrackRowProps) {
   return (
     <div className="grid h-[44px] items-center border-t border-(--line-soft)" data-testid={`timeline-row-${row.kind}`} style={{ gridTemplateColumns: `${LABEL_COLUMN_WIDTH_PX}px minmax(0,1fr)` }}>
       <div className="flex items-center gap-[7px] truncate border-r border-(--line) px-[10px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-(--text-3)">
@@ -281,7 +315,14 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
         <span className="shrink-0 text-(--text-4)">{row.count}</span>
         <span className="sr-only">{`${row.label} · ${row.count}`}</span>
       </div>
-      <div className="relative h-full overflow-x-hidden bg-[repeating-linear-gradient(90deg,transparent_0_calc(10%_-_1px),var(--line-soft)_calc(10%_-_1px)_10%)]" data-timeline-track="1" onClick={() => onSelect(null)}>
+      <div
+        className="relative h-full overflow-x-hidden bg-[repeating-linear-gradient(90deg,transparent_0_calc(10%_-_1px),var(--line-soft)_calc(10%_-_1px)_10%)]"
+        data-timeline-track="1"
+        onClick={(event) => {
+          onSelect(null);
+          onSeek(timeFromEvent(event, duration));
+        }}
+      >
         {row.clips.map((clip) => {
           const safeDuration = Math.max(duration, 1);
           const leftPercent = (clip.start / safeDuration) * 100;
@@ -445,7 +486,14 @@ function clipLabel(clip: Pick<TimelineClip, "kind" | "mediaId" | "mediaIds" | "s
 function timeFromEvent(event: ReactMouseEvent<HTMLElement>, duration: number): number {
   const rect = event.currentTarget.getBoundingClientRect();
   const width = rect.width > 0 ? rect.width : 100;
-  return ((event.clientX - rect.left) / width) * duration;
+  return clamp(((event.clientX - rect.left) / width) * duration, 0, duration);
+}
+
+function timeFromClientX(clientX: number, track: HTMLElement | null, duration: number): number {
+  const rect = track?.getBoundingClientRect();
+  const left = rect?.left ?? 0;
+  const width = rect && rect.width > 0 ? rect.width : 100;
+  return clamp(((clientX - left) / width) * duration, 0, duration);
 }
 
 function clamp(value: number, min: number, max: number): number {

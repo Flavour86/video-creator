@@ -53,4 +53,30 @@ describe("WatermarkPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove watermark" }));
     expect(onChange).toHaveBeenCalledWith(null);
   });
+
+  it("shows POSX and POSY controls for precise watermark placement", () => {
+    const onChange = vi.fn();
+    render(
+      <WatermarkPanel
+        media={MEDIA}
+        onChange={onChange}
+        value={{
+          mediaId: "logo.png",
+          opacity: 75,
+          posX: 50,
+          posY: 0,
+          scale: 0.12,
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText("Watermark POSX")).toHaveValue(50);
+    expect(screen.getByLabelText("Watermark POSY")).toHaveValue(0);
+
+    fireEvent.change(screen.getByLabelText("Watermark POSX"), { target: { value: "25" } });
+    fireEvent.change(screen.getByLabelText("Watermark POSY"), { target: { value: "75" } });
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ posX: 25 }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ posY: 75 }));
+  });
 });

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 
-from server.domain.timing import AlignedWord, AlignmentResult
+from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
 
 MAX_LINE_CHARS = 42
 MAX_CUE_LINES = 2
@@ -35,6 +37,19 @@ class SubtitleStats:
 class SubtitleAlignmentUpdate:
     corrections_applied: int
     cue_count: int
+
+
+@dataclass(frozen=True)
+class TranscriptCorrectionResult:
+    update: SubtitleAlignmentUpdate
+    alignment: AlignmentResult
+
+
+@dataclass(frozen=True)
+class _ParsedSrtCue:
+    index: int
+    timing: str
+    text: str
 
 
 def generate_srt(alignment: AlignmentResult, *, max_line_chars: int = MAX_LINE_CHARS) -> str:
@@ -101,6 +116,64 @@ def write_aligned_srt_file(
         corrections_applied=corrections,
         cue_count=len(_parse_srt_cues(next_content)),
     )
+
+
+def write_transcript_corrected_srt_file(
+    srt_path: Path,
+    transcript_text: str,
+) -> TranscriptCorrectionResult:
+    previous_content = srt_path.read_text(encoding="utf-8")
+    corrected_content = correct_srt_text_from_transcript(previous_content, transcript_text)
+    corrections = _count_cue_level_corrections(previous_content, corrected_content)
+    srt_path.write_text(corrected_content, encoding="utf-8", newline="")
+    return TranscriptCorrectionResult(
+        update=SubtitleAlignmentUpdate(
+            corrections_applied=corrections,
+            cue_count=len(_parse_srt_cues(corrected_content)),
+        ),
+        alignment=_alignment_from_srt(corrected_content),
+    )
+
+
+def correct_srt_text_from_transcript(srt_content: str, transcript_text: str) -> str:
+    cues = _parse_srt_blocks(srt_content)
+    if not cues:
+        return srt_content
+
+    source_chars: list[str] = []
+    source_refs: list[tuple[int, int]] = []
+    cue_texts = [cue.text for cue in cues]
+    for cue_index, cue_text in enumerate(cue_texts):
+        for char_index, character in enumerate(cue_text):
+            if _is_correctable_text_character(character):
+                source_chars.append(character)
+                source_refs.append((cue_index, char_index))
+
+    if not source_chars:
+        return srt_content
+
+    transcript_chars = [
+        character
+        for character in transcript_text
+        if _is_correctable_text_character(character)
+    ]
+    if not transcript_chars:
+        return srt_content
+
+    corrected_chars = _correct_source_chars(source_chars, transcript_chars)
+    corrected_texts = [list(text) for text in cue_texts]
+    for (cue_index, char_index), character in zip(source_refs, corrected_chars, strict=True):
+        corrected_texts[cue_index][char_index] = character
+
+    corrected_cues = [
+        _ParsedSrtCue(
+            index=cue.index,
+            timing=cue.timing,
+            text="".join(corrected_texts[index]),
+        )
+        for index, cue in enumerate(cues)
+    ]
+    return _format_srt_blocks(corrected_cues)
 
 
 def subtitle_stats(
@@ -317,16 +390,121 @@ def _count_cue_level_corrections(previous: str, current: str) -> int:
 
 
 def _parse_srt_cues(content: str) -> list[tuple[str, str]]:
+    return [(cue.timing, cue.text) for cue in _parse_srt_blocks(content)]
+
+
+def _parse_srt_blocks(content: str) -> list[_ParsedSrtCue]:
     blocks = [block for block in content.replace("\r\n", "\n").split("\n\n") if block.strip()]
-    cues: list[tuple[str, str]] = []
-    for block in blocks:
+    cues: list[_ParsedSrtCue] = []
+    for fallback_index, block in enumerate(blocks, start=1):
         lines = [line.strip() for line in block.split("\n") if line.strip()]
         if len(lines) < 2:
             continue
-        timing = lines[1]
-        text = " ".join(lines[2:]).strip()
-        cues.append((timing, text))
+        try:
+            index = int(lines[0])
+            timing = lines[1]
+            text_lines = lines[2:]
+        except ValueError:
+            index = fallback_index
+            timing = lines[0]
+            text_lines = lines[1:]
+        cues.append(_ParsedSrtCue(index=index, timing=timing, text=" ".join(text_lines).strip()))
     return cues
+
+
+def _format_srt_blocks(cues: list[_ParsedSrtCue]) -> str:
+    blocks = [
+        "\r\n".join([str(index), cue.timing, cue.text])
+        for index, cue in enumerate(cues, start=1)
+    ]
+    return "\r\n\r\n".join(blocks) + ("\r\n" if blocks else "")
+
+
+def _correct_source_chars(source: list[str], transcript: list[str]) -> list[str]:
+    corrected = source.copy()
+    matcher = SequenceMatcher(None, source, transcript, autojunk=False)
+    for tag, source_start, source_end, transcript_start, transcript_end in matcher.get_opcodes():
+        if tag in {"equal", "delete"}:
+            continue
+        if tag == "insert":
+            continue
+        source_span = source_end - source_start
+        transcript_span = transcript_end - transcript_start
+        source_slice = source[source_start:source_end]
+        transcript_slice = transcript[transcript_start:transcript_end]
+        if not _should_apply_transcript_replacement(source_slice, transcript_slice):
+            continue
+        replacement_len = min(source_span, transcript_span)
+        for offset in range(replacement_len):
+            corrected[source_start + offset] = transcript[transcript_start + offset]
+    return corrected
+
+
+def _should_apply_transcript_replacement(source: list[str], transcript: list[str]) -> bool:
+    if not source or not transcript:
+        return False
+    if len(source) == len(transcript) == 1:
+        if not (source[0].isascii() and transcript[0].isascii()):
+            return False
+        return True
+
+    span_ratio = min(len(source), len(transcript)) / max(len(source), len(transcript))
+    if span_ratio < 0.5:
+        return False
+
+    similarity = SequenceMatcher(None, source, transcript, autojunk=False).ratio()
+    if max(len(source), len(transcript)) > 8:
+        return similarity >= 0.65
+    return similarity >= 0.35
+
+
+def _alignment_from_srt(content: str) -> AlignmentResult:
+    sentences: list[AlignedSentence] = []
+    words: list[AlignedWord] = []
+    for cue in _parse_srt_blocks(content):
+        start_s, end_s = _parse_timing(cue.timing)
+        sentences.append(
+            AlignedSentence(
+                index=cue.index,
+                text=cue.text,
+                start_s=start_s,
+                end_s=end_s,
+                confidence_avg=1.0,
+            )
+        )
+        if cue.text:
+            words.append(
+                AlignedWord(
+                    sentence_index=cue.index,
+                    text=cue.text,
+                    start_s=start_s,
+                    end_s=end_s,
+                    confidence=1.0,
+                )
+            )
+    return AlignmentResult(sentences=sentences, words=words)
+
+
+def _parse_timing(timing: str) -> tuple[float, float]:
+    left, right = timing.split("-->", maxsplit=1)
+    return _parse_timestamp(left.strip()), _parse_timestamp(right.strip())
+
+
+def _parse_timestamp(timestamp: str) -> float:
+    hours, minutes, rest = timestamp.split(":")
+    seconds, millis = rest.split(",")
+    return (
+        int(hours) * 3600
+        + int(minutes) * 60
+        + int(seconds)
+        + int(millis) / 1000
+    )
+
+
+def _is_correctable_text_character(character: str) -> bool:
+    if character.isspace():
+        return False
+    return re.match(r"[\w\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", character) is not None
 
 
 def _cue_edit_distance(

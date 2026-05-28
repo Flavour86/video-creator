@@ -12,7 +12,7 @@ type EditorModalProps = {
   modal: EditorModalKind;
   onApplySubtitles: (subtitles: SubtitlesSettings) => void;
   onClose: () => void;
-  onImport: (files: FileList | null) => Promise<void> | void;
+  onImport: (files: FileList | null) => Promise<unknown> | unknown;
   previewResolution: "1080p" | "720p" | "9:16";
   projectPath: string;
   subtitles: SubtitlesSettings | null;
@@ -35,6 +35,7 @@ export function EditorModal({
   const open = modal !== null;
   const title = modal === "subtitles" ? t("subtitlesTitle") : modal === "background" ? t("backgroundTitle") : t("uploadTitle");
   const subtitle = modal === "subtitles" ? t("subtitlesSubtitle") : modal === "background" ? t("backgroundSubtitle") : t("uploadSubtitle");
+  const compactSubtitles = modal === "subtitles";
   const [subtitlesDraft, setSubtitlesDraft] = useState<SubtitlesSettings>(normalizeSubtitlesSettings(subtitles));
 
   useEffect(() => {
@@ -54,15 +55,15 @@ export function EditorModal({
     <Dialog.Root onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }} open={open}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-(--bg-0)/70 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-0 z-50 my-[5vh] flex max-h-[90vh] w-[min(900px,calc(100vw-32px))] -translate-x-1/2 flex-col rounded-lg border border-(--line) bg-(--bg-1) shadow-(--shadow-2)">
-          <header className="flex items-start justify-between gap-4 border-b border-(--line) px-6 py-4">
+        <Dialog.Content className={`fixed left-1/2 z-50 flex max-h-[90vh] -translate-x-1/2 flex-col border border-(--line) bg-(--bg-1) shadow-(--shadow-2) ${compactSubtitles ? "top-1/2 w-[min(620px,calc(100vw-32px))] -translate-y-1/2 rounded-(--r-lg)" : "top-0 my-[5vh] w-[min(900px,calc(100vw-32px))] rounded-lg"}`}>
+          <header className={`flex items-start justify-between gap-4 border-b border-(--line) ${compactSubtitles ? "px-5 py-[15px]" : "px-6 py-4"}`}>
             <div>
-              <Dialog.Title className="text-xl font-semibold tracking-normal text-(--text)">{title}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-(--text-3)">{subtitle}</Dialog.Description>
+              <Dialog.Title className={`${compactSubtitles ? "text-base" : "text-xl"} font-semibold tracking-normal text-(--text)`}>{title}</Dialog.Title>
+              <Dialog.Description className={`mt-1 ${compactSubtitles ? "text-xs" : "text-sm"} text-(--text-3)`}>{subtitle}</Dialog.Description>
             </div>
             <button aria-label={t("close")} onClick={onClose} type="button"><X className="h-5 w-5" /></button>
           </header>
-          <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
+          <div className={`flex flex-col overflow-y-auto ${compactSubtitles ? "gap-4 px-5 py-4" : "gap-5 px-6 py-5"}`}>
             {modal === "subtitles" ? (
               <SubtitlesFields
                 previewResolution={previewResolution}
@@ -79,9 +80,9 @@ export function EditorModal({
               />
             )}
           </div>
-          <footer className="flex items-center justify-end gap-2 border-t border-(--line) px-6 py-4">
+          <footer className={`flex items-center justify-end gap-2 border-t border-(--line) ${compactSubtitles ? "bg-(--bg-2) px-5 py-[14px]" : "px-6 py-4"}`}>
             <Button onClick={onClose} variant="ghost">{t("cancel")}</Button>
-            <Button onClick={onPrimaryAction} variant="primary">{modal === "upload" ? t("addToProject") : t("apply")}</Button>
+            <Button onClick={onPrimaryAction} variant={compactSubtitles ? "render" : "primary"}>{modal === "upload" ? t("addToProject") : t("apply")}</Button>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>
@@ -99,7 +100,9 @@ function SubtitlesFields({
   value: SubtitlesSettings;
 }) {
   const t = useTranslations("pages.editor.modals");
-  const aspectClass = previewResolution === "9:16" ? "aspect-[9/16]" : "aspect-video";
+  const aspectClass = previewResolution === "9:16"
+    ? "mx-auto h-[220px] w-auto max-h-[220px] aspect-[9/16]"
+    : "mx-auto w-full max-w-[400px] max-h-[220px] aspect-video";
   const cueLines = wrapCueLine(SUBTITLE_PREVIEW_TEXT, value.style.max_chars_per_line);
   const cuePositionClass = value.style.position === "top" ? "top-4" : value.style.position === "bottom_low" ? "bottom-3" : "bottom-7";
   const cueBackgroundClass =
@@ -113,7 +116,7 @@ function SubtitlesFields({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-2 gap-3">
         <Field htmlFor="editor-sub-bg-style" label={t("background")}>
           <Select
             id="editor-sub-bg-style"
@@ -165,7 +168,7 @@ function SubtitlesFields({
       <Field htmlFor="editor-sub-size" label="Size">
         <div className="flex items-center gap-3">
           <input
-            className="w-full"
+            className="h-2 w-full accent-(--amber)"
             id="editor-sub-size"
             max={72}
             min={28}
@@ -185,13 +188,13 @@ function SubtitlesFields({
           aria-checked={value.burn_in}
           aria-label={t("burnIn")}
           className={`inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
-            value.burn_in ? "border-(--blue) bg-(--blue)" : "border-(--line) bg-(--bg-3)"
+            value.burn_in ? "border-(--amber) bg-(--amber)" : "border-(--line) bg-(--bg-3)"
           }`}
           onClick={() => onChange({ ...value, burn_in: !value.burn_in })}
           role="switch"
           type="button"
         >
-          <span className={`h-4 w-4 rounded-full bg-white transition-transform ${value.burn_in ? "translate-x-5" : "translate-x-1"}`} />
+          <span className={`h-4 w-4 rounded-full transition-transform ${value.burn_in ? "translate-x-5 bg-(--bg-0)" : "translate-x-1 bg-white"}`} />
         </button>
         {t("burnIn")}
       </label>
@@ -226,7 +229,7 @@ function MediaFields({
 }: {
   assignRange: [number, number];
   media: EditorMediaItem[];
-  onImport: (files: FileList | null) => Promise<void> | void;
+  onImport: (files: FileList | null) => Promise<unknown> | unknown;
   projectPath: string;
   upload: boolean;
 }) {

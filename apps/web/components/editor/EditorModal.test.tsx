@@ -130,4 +130,15 @@ describe("EditorModal", () => {
     expect(screen.getByText(/subtitle preview follows your style/i)).toBeInTheDocument();
     expect(screen.queryByText(/drop an image onto a sentence/i)).not.toBeInTheDocument();
   });
+
+  it("uses the compact amber editor dialog treatment for subtitle controls", () => {
+    renderModal({ modal: "subtitles", subtitles: DEFAULT_SUBTITLES });
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("w-[min(620px");
+    expect(screen.getByTestId("subtitles-live-preview").className).toContain("max-h-[220px]");
+    fireEvent.click(screen.getByRole("switch", { name: "Show subtitles" }));
+    expect(screen.getByRole("switch", { name: "Show subtitles" }).className).toContain("bg-(--amber)");
+    expect(screen.getByRole("button", { name: "Apply" }).className).toContain("bg-(--amber)");
+  });
 });

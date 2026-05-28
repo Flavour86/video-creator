@@ -89,7 +89,10 @@ left:
 center: 
   - Project name is the name of project. Output Preset: 720p(Draft quality), 1080p(Final quality), 1080p/vertical(9:16). 
   - Voice：click entire Voice selection card, open the native file system to select `.mp3`, `wav`, `m4a` file, once selected, the card display green border, see the ![img](../../visuals/Setup-dark-srt.png), after generating the `subtitle.srt` successfully, see ![img](../../visuals/Setup-dark-alignment.png)
-  - Subtitle Alignment: `Transcript for alignment` pick the transcript file from disk, `Watermark for video` is similar
+  - Subtitle Alignment: `Transcript for alignment` picks the transcript file from disk, `Watermark for video` is similar. Alignment is a conservative text-correction pass over the generated native `subtitles.srt`; it must preserve the native cue count, cue order, and every timecode exactly.
+    - Only correct wrong characters when the text exists in both the transcript and native SRT context.
+    - Never insert transcript-only text into the SRT, even when the transcript contains additional words.
+    - Never delete native SRT text that is absent from the transcript. If the native SRT has a likely typo that can be inferred from transcript meaning, replace existing characters only. When the correction engine cannot infer the edit confidently, keep the native SRT text unchanged. Do not hard-code article-specific phrase mappings.
   - Create project: only enabled when four steps all checked! check ![img](../../visuals/Setup-dark-alignment-success.png), click it to create a new project, if it's successful, go into `Editor` page
 
 right:
@@ -121,7 +124,7 @@ Launcher:
 Setup:
 
 - `POST /subtitle`: generate a `subtitle.srt` for the `voice` file
-- `POST /subtitle/alignment`: adjust the accuracy of the `subtitle.srt` according to `transcript` file provided by user
+- `POST /subtitle/alignment`: correct typos in the generated native `subtitle.srt` according to the transcript file provided by the user, without changing cue timecodes or inserting transcript-only text
 - `POST /projects`: create a new project, also including generate the fallback thumbnai of the project
 
 ## Edge Cases And Boundary Conditions
@@ -134,10 +137,10 @@ Setup and alignment:
 - Transcript empty.
 - Transcript has one very long paragraph.
 - Transcript segmentation differs from user expectation.
-- WhisperX not installed.
-- CUDA unavailable.
-- CUDA OOM falls back to CPU or fails clearly.
-- Alignment fails due long silence or mismatched text.
+- Generated native `subtitles.srt` is missing.
+- Transcript contains words that do not exist in the native SRT; alignment must not insert them.
+- Native SRT contains words that do not exist in the transcript; alignment must keep them unless a same-length typo correction can be confidently inferred.
+- Alignment cannot confidently infer a typo correction; it keeps the native SRT text unchanged.
 - User edits voice or transcript after assigning clips.
 
 
@@ -185,10 +188,12 @@ Subtitle Generate (voice -> `subtitles.srt`, runs from Setup step 3):
 
 Subtitle Alignment (transcript + voice + `subtitles.srt` -> corrected `subtitles.srt`, runs from Setup step 4):
 
-- WhisperX reference-text mode aligns each sentence within 50 ms of ground truth on the fixture voice.
-- The number of corrections reported by the alignment matches the cue-level diff between generated and aligned `subtitles.srt`.
+- The generated native `subtitles.srt` timing structure is the source of truth. Alignment preserves cue count, cue order, and all timing lines exactly.
+- Transcript-assisted correction changes existing SRT characters only; it never inserts transcript-only text and never deletes SRT-only text.
+- When native SRT text differs from the transcript but a typo can be inferred from context, alignment replaces existing characters only. When confidence is low, the native SRT text remains unchanged. Backend tests assert behavior with synthetic fixtures, not article-specific phrases.
+- The number of corrections reported by alignment matches the cue-level diff between the native and corrected `subtitles.srt`.
 - Changing transcript text or voice file hash invalidates `.vc/alignment.json` and re-runs alignment.
-- WhisperX-missing / CUDA-OOM / CUDA-unavailable surface as recoverable errors and fall back to CPU when possible.
+- Missing generated native `subtitles.srt` and empty transcript surface as recoverable errors.
 
 Launcher/Setup API surface:
 
@@ -295,7 +300,7 @@ Setup:
 - Selected output preset persists into the project config.
 - Step 2 - Voice picker accepts `.mp3 / .wav / .m4a`; the card shows a green border on a valid selection.
 - Step 3 - Subtitle Generate (voice -> `subtitles.srt`) runs on the backend; the panel reports cue count + duration on success; its button is enabled only after steps 1 and 2.
-- Step 4 - Subtitle Alignment (transcript + `subtitles.srt` -> corrected `subtitles.srt`) uses the user-supplied transcript and runs WhisperX reference-text alignment; the panel reports the number of corrections applied; its button is enabled only after steps 1, 2, and 3.
+- Step 4 - Subtitle Alignment (transcript + `subtitles.srt` -> corrected `subtitles.srt`) uses the user-supplied transcript for conservative typo correction while preserving native SRT cue timing; the panel reports the number of corrections applied; its button is enabled only after steps 1, 2, and 3.
 - Watermark is optional and selected from disk.
 - `Create project` is enabled only when all four steps are checked, and on success navigates to `/editor/:projectId`.
 - `Cancel` returns to Launcher without persisting partial state.
@@ -305,10 +310,10 @@ Setup:
 | Surface | Target |
 | --- | --- |
 | Subtitle Generate (voice -> `subtitles.srt`, warm model) | <= 0.5x voice duration end-to-end |
-| Subtitle Alignment (WhisperX reference-text, warm model) | <= 0.4x voice duration end-to-end |
+| Subtitle Alignment (transcript-assisted SRT typo correction) | <= 0.05x voice duration end-to-end |
 
 ### Quality Gates
 
-- Setup/alignment edge cases have matching tests: voice missing, transcript missing, unsupported voice codec, empty transcript, long paragraph transcript, segmentation mismatch, WhisperX missing, CUDA unavailable, CUDA OOM, long silence/mismatched-text alignment failure, and user edits voice/transcript after assigning clips.
+- Setup/alignment edge cases have matching tests: voice missing, transcript missing, unsupported voice codec, empty transcript, long paragraph transcript, transcript-only text, SRT-only text, inferred typo correction, missing generated subtitles, and user edits voice/transcript after assigning clips.
 - User-triggered Setup failures surface non-blocking, recoverable errors with a clear next action.
 - Launcher and Setup visual parity coverage exists for every embedded screenshot and dark/light state.

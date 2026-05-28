@@ -63,6 +63,7 @@ def _project(
     layers: list[dict[str, object]],
     subtitles: dict[str, object] | None = None,
     watermark: dict[str, object] | None = None,
+    media: list[dict[str, object]] | None = None,
 ) -> Project:
     return Project.model_validate(
         {
@@ -71,6 +72,7 @@ def _project(
             "audio": "voice.wav",
             "transcript": {"kind": "plain_text", "path": "transcript.txt"},
             "output": {"preset": "draft"},
+            "media": media or [],
             "layers": layers,
             "subtitles": subtitles,
             "watermark": watermark,
@@ -93,7 +95,13 @@ def _input_paths(command: list[str]) -> list[str]:
     return [command[index + 1] for index, value in enumerate(command) if value == "-i"]
 
 
-def _expected_clip(project_dir: Path, media_path: Path, duration_s: float) -> Path:
+def _expected_clip(
+    project_dir: Path,
+    media_path: Path,
+    duration_s: float,
+    *,
+    crossfade_s: float | None = None,
+) -> Path:
     key = clip_cache_key(
         media_path=media_path,
         duration_s=duration_s,
@@ -103,6 +111,7 @@ def _expected_clip(project_dir: Path, media_path: Path, duration_s: float) -> Pa
         resolution="1280x720",
         fps=30,
         crf=28,
+        crossfade_s=crossfade_s,
     )
     return clip_cache_path(project_dir, key)
 
@@ -369,6 +378,70 @@ def test_watermark_appends_topmost_overlay(tmp_path: Path) -> None:
     assert "[vwm]format=yuv420p[vout]" in filtergraph
 
 
+def test_video_watermark_uses_video_looping_input(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path, "logo.mp4", b"video")
+    project = _project(
+        [],
+        watermark={
+            "mediaId": "logo.mp4",
+            "posX": 90,
+            "posY": 10,
+            "scale": 0.08,
+            "opacity": 80,
+        },
+        media=[{
+            "id": "logo.mp4",
+            "name": "logo.mp4",
+            "kind": "watermark_video",
+            "path": "media/logo.mp4",
+            "import_mode": "copy",
+            "imported_at": "2026-05-27T00:00:00Z",
+        }],
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    watermark_input_path_index = command.index(str(media_path))
+    assert command[watermark_input_path_index - 3:watermark_input_path_index + 1] == [
+        "-stream_loop",
+        "-1",
+        "-i",
+        str(media_path),
+    ]
+
+
+def test_disabled_watermark_preserves_config_but_does_not_render_overlay(tmp_path: Path) -> None:
+    _write_media(tmp_path, "logo.png", b"logo")
+    project = _project(
+        [],
+        watermark={
+            "enabled": False,
+            "mediaId": "logo.png",
+            "posX": 25,
+            "posY": 75,
+            "scale": 0.16,
+            "opacity": 42,
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [str(tmp_path / "voice.wav")]
+    assert "[wm]" not in _filtergraph(command)
+
+
 def test_filter_chain_order_is_black_bg_fg_pip_subtitles_watermark(tmp_path: Path) -> None:
     _write_media(tmp_path, "bg.jpg", b"bg")
     _write_media(tmp_path, "fg.jpg", b"fg")
@@ -425,6 +498,47 @@ def test_filter_chain_order_is_black_bg_fg_pip_subtitles_watermark(tmp_path: Pat
     subtitles_overlay = filtergraph.index("[v3]subtitles='")
     watermark_overlay = filtergraph.index("[vsub][wm]overlay=")
     assert bg_overlay < fg_overlay < pip_overlay < subtitles_overlay < watermark_overlay
+
+
+def test_single_background_playlist_item_expands_for_render_cache(tmp_path: Path) -> None:
+    bg0 = _write_media(tmp_path, "bg0.jpg", b"bg0")
+    bg1 = _write_media(tmp_path, "bg1.jpg", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-playlist",
+                        "mediaIds": ["bg0.jpg", "bg1.jpg"],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 0.0,
+                    }
+                ],
+            ),
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, bg0, 5.0, crossfade_s=0.0)),
+        str(_expected_clip(tmp_path, bg1, 5.0, crossfade_s=0.0)),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "[bg][clip1]overlay=enable='between(t,0,5)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,5,10)':eof_action=pass[v2]" in filtergraph
 
 
 def test_filtergraph_build_for_50_layers_meets_target(tmp_path: Path) -> None:

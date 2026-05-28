@@ -28,6 +28,22 @@ const MEDIA = [
     created_at: null,
   },
   {
+    mediaId: "bg1.png",
+    filename: "bg1.png",
+    kind: "image" as const,
+    path: "uploads/bg1.png",
+    thumb_path: "uploads/.thumbs/bg1.jpg",
+    thumb_url: "/uploads/thumb?filename=bg1.jpg",
+    width: 1920,
+    height: 1080,
+    duration: null,
+    size: 2048,
+    hash: null,
+    import_mode: "copy" as const,
+    imported_at: "2026-05-16T00:00:01Z",
+    created_at: null,
+  },
+  {
     mediaId: "clip.mp4",
     filename: "clip.mp4",
     kind: "video" as const,
@@ -90,9 +106,10 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
   const onPatchBackground = vi.fn();
   const onPatchItem = vi.fn();
   const onRemoveBackground = vi.fn();
+  const onReplaceItemMedia = vi.fn();
   const onUpdateRange = vi.fn();
 
-  render(
+  const rendered = render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <Inspector
         layers={LAYERS}
@@ -105,6 +122,7 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
         onPatchBackground={onPatchBackground}
         onPatchItem={onPatchItem}
         onRemoveBackground={onRemoveBackground}
+        onReplaceItemMedia={onReplaceItemMedia}
         onUpdateRange={onUpdateRange}
         projectPath="E:/projects/test01"
         selected={{ layerId: "fg-z1", itemId: "fg-1" }}
@@ -115,7 +133,19 @@ function renderInspector(overrides: Partial<Parameters<typeof Inspector>[0]> = {
     </NextIntlClientProvider>,
   );
 
-  return { onDeleteItem, onOpenAssignEdit, onOpenBackground, onOpenSubtitles, onOpenWatermark, onPatchBackground, onPatchItem, onRemoveBackground, onUpdateRange };
+  return {
+    ...rendered,
+    onDeleteItem,
+    onOpenAssignEdit,
+    onOpenBackground,
+    onOpenSubtitles,
+    onOpenWatermark,
+    onPatchBackground,
+    onPatchItem,
+    onRemoveBackground,
+    onReplaceItemMedia,
+    onUpdateRange,
+  };
 }
 
 describe("Inspector", () => {
@@ -123,6 +153,21 @@ describe("Inspector", () => {
     renderInspector();
     expect(screen.getByRole("button", { name: /Change Background/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add Background" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Change Background/i })).toHaveTextContent("bg0.png");
+  });
+
+  it("keeps all global config actions neutral until hover", () => {
+    renderInspector();
+
+    for (const button of [
+      screen.getByRole("button", { name: "Watermark" }),
+      screen.getByRole("button", { name: "Subtitles" }),
+      screen.getByRole("button", { name: /Change Background/i }),
+    ]) {
+      expect(button.className).not.toContain("bg-(--amber)/10");
+      expect(button.className).not.toContain("border-(--amber)/35");
+      expect(button.className).toContain("hover:border-(--amber)");
+    }
   });
 
   it("shows global Add Background when background layer is absent", () => {
@@ -132,6 +177,85 @@ describe("Inspector", () => {
     });
     expect(screen.getByRole("button", { name: /Add Background/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Change Background" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add Background/i })).toHaveTextContent("No background");
+  });
+
+  it("renders as an independently scrollable inspector rail", () => {
+    const { container } = renderInspector();
+    const inspector = container.querySelector("[data-testid='editor-inspector']");
+    expect(inspector?.className).toContain("min-h-0");
+    expect(inspector?.className).toContain("overflow-y-auto");
+  });
+
+  it("uses canonical PiP placement anchors instead of carrying a previous edge margin", () => {
+    const { onPatchItem } = renderInspector({
+      layers: [
+        ...LAYERS,
+        {
+          id: "pip-z1",
+          kind: "pip",
+          name: "PiP z1",
+          items: [
+            {
+              id: "pip-1",
+              mediaId: "clip.mp4",
+              sentences: [1, 2],
+              start: 0,
+              end: 6,
+              motion: { kind: "none", easing: "ease_in_out" },
+              transitions: { in: "fade", out: "fade" },
+              pip: { opacity: 96, posX: 82, posY: 72, radius: 13, size: 32 },
+            },
+          ],
+        },
+      ],
+      selected: { layerId: "pip-z1", itemId: "pip-1" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "PiP placement TL" }));
+
+    expect(onPatchItem).toHaveBeenCalledWith("pip-z1", "pip-1", { pip: { posX: 4, posY: 4 } });
+  });
+
+  it("shows editable POSX and POSY controls for PiP placement", () => {
+    const { onPatchItem } = renderInspector({
+      layers: [
+        ...LAYERS,
+        {
+          id: "pip-z1",
+          kind: "pip",
+          name: "PiP z1",
+          items: [
+            {
+              id: "pip-1",
+              mediaId: "clip.mp4",
+              sentences: [1, 2],
+              start: 0,
+              end: 6,
+              motion: { kind: "none", easing: "ease_in_out" },
+              transitions: { in: "fade", out: "fade" },
+              pip: { opacity: 96, posX: 82, posY: 72, radius: 13, size: 32 },
+            },
+          ],
+        },
+      ],
+      selected: { layerId: "pip-z1", itemId: "pip-1" },
+    });
+
+    expect(screen.getByLabelText("PiP POSX")).toHaveValue(82);
+    expect(screen.getByLabelText("PiP POSY")).toHaveValue(72);
+    const coordinates = screen.getByTestId("pip-position-coordinates");
+    expect(coordinates).toHaveClass("grid-cols-2");
+    expect(coordinates).toContainElement(screen.getByLabelText("PiP POSX"));
+    expect(coordinates).toContainElement(screen.getByLabelText("PiP POSY"));
+    expect(screen.getByLabelText("PiP POSX").closest("label")).toHaveClass("flex", "items-center");
+    expect(screen.getByLabelText("PiP POSY").closest("label")).toHaveClass("flex", "items-center");
+
+    fireEvent.change(screen.getByLabelText("PiP POSX"), { target: { value: "96" } });
+    fireEvent.change(screen.getByLabelText("PiP POSY"), { target: { value: "4" } });
+
+    expect(onPatchItem).toHaveBeenCalledWith("pip-z1", "pip-1", { pip: { posX: 96 } });
+    expect(onPatchItem).toHaveBeenCalledWith("pip-z1", "pip-1", { pip: { posY: 4 } });
   });
 
   it("opens background modal from global config control", () => {
@@ -147,19 +271,74 @@ describe("Inspector", () => {
     expect(screen.queryByText("SQLite")).not.toBeInTheDocument();
   });
 
-  it("opens assign edit for non-background asset card", () => {
-    const { onOpenAssignEdit } = renderInspector();
+  it("uses a native file input to replace non-background inspector media", () => {
+    const { onOpenAssignEdit, onReplaceItemMedia } = renderInspector();
     fireEvent.click(screen.getByRole("button", { name: /clip\.mp4/i }));
-    expect(onOpenAssignEdit).toHaveBeenCalledWith("fg-z1", "fg-1", [2, 3]);
+    expect(onOpenAssignEdit).not.toHaveBeenCalled();
+
+    const file = new File([new Uint8Array([1])], "replacement.mp4", { type: "video/mp4" });
+    fireEvent.change(screen.getByLabelText("Replace foreground media"), {
+      target: { files: [file] },
+    });
+    expect(onReplaceItemMedia).toHaveBeenCalledWith("fg-z1", "fg-1", expect.anything());
   });
 
-  it("opens background modal for background asset card", () => {
-    const { onOpenBackground, onOpenAssignEdit } = renderInspector({
+  it("uses a native file input to replace background inspector media", () => {
+    const { onOpenBackground, onOpenAssignEdit, onReplaceItemMedia } = renderInspector({
       selected: { layerId: "bg-main", itemId: "bg-1" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /bg0\.png/i }));
-    expect(onOpenBackground).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change bg0.png" }));
+    expect(onOpenBackground).not.toHaveBeenCalled();
     expect(onOpenAssignEdit).not.toHaveBeenCalled();
+
+    const file = new File([new Uint8Array([1])], "replacement-bg.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Replace background asset bg0.png"), {
+      target: { files: [file] },
+    });
+    expect(onReplaceItemMedia).toHaveBeenCalledWith("bg-main", "bg-1", expect.anything(), 0);
+  });
+
+  it("renders the selected background playlist as one inspector asset list", () => {
+    const { onReplaceItemMedia } = renderInspector({
+      layers: [
+        {
+          id: "bg-main",
+          kind: "bg",
+          name: "Background",
+          items: [
+            {
+              id: "bg-playlist",
+              mediaIds: ["bg0.png", "bg1.png"],
+              sentences: [1, 3],
+              start: 0,
+              end: 9,
+              motion: { kind: "ken_burns", easing: "ease_in_out" },
+              transitions: { in: "cut", out: "cut" },
+              crossfade: 0.4,
+            },
+          ],
+        },
+      ],
+      selected: { layerId: "bg-main", itemId: "bg-playlist" },
+    });
+
+    expect(screen.queryByRole("heading", { name: /background cycle/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Background" })).toBeInTheDocument();
+    expect(screen.getByText("bg0.png")).toBeInTheDocument();
+    expect(screen.getByText("bg1.png")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /bg0\.png \+1.*change/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change bg0.png" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change bg1.png" })).toBeInTheDocument();
+    expect(screen.queryByText("IMG")).not.toBeInTheDocument();
+    expect(screen.queryByText(/images in playlist/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/plays underneath/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change bg1.png" }));
+    const file = new File([new Uint8Array([1])], "replacement-second-bg.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Replace background asset bg1.png"), {
+      target: { files: [file] },
+    });
+    expect(onReplaceItemMedia).toHaveBeenCalledWith("bg-main", "bg-playlist", expect.anything(), 1);
   });
 
   it("removes background from inspector action", () => {

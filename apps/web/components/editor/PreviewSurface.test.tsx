@@ -150,6 +150,10 @@ const WATERMARK_VIDEO_ON: Project["watermark"] = {
   posY: 10,
   scale: 0.08,
 };
+const WATERMARK_VIDEO_OFF = {
+  ...WATERMARK_VIDEO_ON,
+  enabled: false,
+} as Project["watermark"];
 
 const drawImage = vi.fn();
 const fillRect = vi.fn();
@@ -191,6 +195,7 @@ function renderSurface(overrides: Partial<ComponentProps<typeof PreviewSurface>>
     currentTime: 0,
     duration: 20,
     layers: [],
+    media: [],
     onNext: vi.fn(),
     onPrevious: vi.fn(),
     onTogglePlay: vi.fn(),
@@ -273,7 +278,7 @@ describe("PreviewSurface", () => {
     expect(canvas).toHaveAttribute("data-watermark-visible", "false");
   });
 
-  it("draws layers in render order on canvas (fg hides bg, pip above fg, watermark above all)", () => {
+  it("draws layers in render order on canvas (bg remains under fg, pip, subtitles, and watermark)", () => {
     renderSurface({
       currentTime: 5,
       layers: [PIP_VIDEO_LAYER, FG_VIDEO_LAYER, BG_VIDEO_LAYER],
@@ -286,14 +291,15 @@ describe("PreviewSurface", () => {
     const pipIndex = filenames.indexOf("pip0.webm");
     const canvas = screen.getByTestId("preview-canvas");
 
-    expect(filenames).not.toContain("bg0.mp4");
-    expect(fgIndex).toBeGreaterThanOrEqual(0);
+    const bgIndex = filenames.indexOf("bg0.mp4");
+    expect(bgIndex).toBeGreaterThanOrEqual(0);
+    expect(fgIndex).toBeGreaterThan(bgIndex);
     expect(pipIndex).toBeGreaterThan(fgIndex);
     expect(canvas).toHaveAttribute("data-watermark-visible", "true");
     expect(fillText).toHaveBeenCalled();
   });
 
-  it("hides background while fullscreen foreground is active and keeps pip present", () => {
+  it("keeps background beneath fullscreen foreground and keeps pip present", () => {
     renderSurface({
       currentTime: 5,
       layers: [PIP_LAYER, FG_LAYER, BG_LAYER],
@@ -301,9 +307,37 @@ describe("PreviewSurface", () => {
     });
 
     const canvas = screen.getByTestId("preview-canvas");
-    expect(canvas).toHaveAttribute("data-has-background", "false");
+    expect(canvas).toHaveAttribute("data-has-background", "true");
     expect(canvas).toHaveAttribute("data-has-foreground", "true");
     expect(canvas).toHaveAttribute("data-has-pip", "true");
+  });
+
+  it("crops background media to cover the complete preview frame", () => {
+    vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockReturnValue(800);
+    vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(600);
+
+    renderSurface({
+      currentTime: 5,
+      layers: [BG_VIDEO_LAYER],
+      resolution: "1080p",
+    });
+
+    const backgroundDraw = drawImage.mock.calls.find((call) => filenameFromSource(call[0]) === "bg0.mp4");
+    expect(backgroundDraw).toBeDefined();
+    expect(backgroundDraw).toHaveLength(9);
+    const [, , , cropWidth, cropHeight, x, y, width, height] = backgroundDraw as [
+      unknown,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+    ];
+    expect([x, y, width, height]).toEqual([0, 0, 1920, 1080]);
+    expect(cropWidth / cropHeight).toBeCloseTo(16 / 9);
   });
 
   it("renders one or more active pip overlays in state metadata", () => {
@@ -313,6 +347,60 @@ describe("PreviewSurface", () => {
     });
 
     expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-pip-count", "2");
+  });
+
+  it.each([
+    ["1080p", 1920, 1080],
+    ["720p", 1280, 720],
+    ["9:16", 1080, 1920],
+  ])("draws PiP placement anchors inside the correct preview quadrant for %s", (resolution, canvasWidth, canvasHeight) => {
+    const placements = [
+      { label: "TL", posX: 4, posY: 4, quadrantX: 0, quadrantY: 0 },
+      { label: "TC", posX: 50, posY: 4, quadrantX: 1, quadrantY: 0 },
+      { label: "TR", posX: 96, posY: 4, quadrantX: 2, quadrantY: 0 },
+      { label: "ML", posX: 4, posY: 50, quadrantX: 0, quadrantY: 1 },
+      { label: "MC", posX: 50, posY: 50, quadrantX: 1, quadrantY: 1 },
+      { label: "MR", posX: 96, posY: 50, quadrantX: 2, quadrantY: 1 },
+      { label: "BL", posX: 4, posY: 96, quadrantX: 0, quadrantY: 2 },
+      { label: "BC", posX: 50, posY: 96, quadrantX: 1, quadrantY: 2 },
+      { label: "BR", posX: 96, posY: 96, quadrantX: 2, quadrantY: 2 },
+    ];
+
+    for (const placement of placements) {
+      drawImage.mockClear();
+      const pipLayer: Layer = {
+        ...PIP_VIDEO_LAYER,
+        items: [{
+          ...PIP_VIDEO_LAYER.items[0]!,
+          pip: {
+            ...PIP_VIDEO_LAYER.items[0]!.pip,
+            posX: placement.posX,
+            posY: placement.posY,
+            size: 30,
+          },
+        }],
+      };
+
+      const { unmount } = renderSurface({
+        currentTime: 5,
+        layers: [pipLayer],
+        resolution,
+      });
+      const pipDraw = drawImage.mock.calls.find((call) => filenameFromSource(call[0]) === "pip0.webm");
+      unmount();
+
+      expect(pipDraw, placement.label).toBeDefined();
+      const [, x, y, width, height] = pipDraw as [unknown, number, number, number, number];
+      expect(x, placement.label).toBeGreaterThanOrEqual(0);
+      expect(y, placement.label).toBeGreaterThanOrEqual(0);
+      expect(x + width, placement.label).toBeLessThanOrEqual(canvasWidth);
+      expect(y + height, placement.label).toBeLessThanOrEqual(canvasHeight);
+
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+      expect(Math.floor((centerX / canvasWidth) * 3), placement.label).toBe(placement.quadrantX);
+      expect(Math.floor((centerY / canvasHeight) * 3), placement.label).toBe(placement.quadrantY);
+    }
   });
 
   it("creates hidden video decoders for video layers and skips non-video layers", () => {
@@ -364,11 +452,12 @@ describe("PreviewSurface", () => {
     expect(canvas).toHaveAttribute("data-has-foreground", "false");
 
     playbackClock.current.currentTime = 6;
-    frameCallback?.(16);
+    expect(frameCallback).not.toBeNull();
+    (frameCallback as FrameRequestCallback)(16);
 
-    expect(canvas).toHaveAttribute("data-draw-order", "black>fg>subtitle");
+    expect(canvas).toHaveAttribute("data-draw-order", "black>bg>fg>subtitle");
     expect(canvas).toHaveAttribute("data-has-foreground", "true");
-    expect(canvas).toHaveAttribute("data-has-background", "false");
+    expect(canvas).toHaveAttribute("data-has-background", "true");
   });
 
   it("renders subtitles only when burn-in is enabled", () => {
@@ -407,6 +496,83 @@ describe("PreviewSurface", () => {
       </NextIntlClientProvider>,
     );
     expect(canvas).toHaveAttribute("data-watermark-visible", "true");
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PreviewSurface {...props} watermark={WATERMARK_VIDEO_OFF} />
+      </NextIntlClientProvider>,
+    );
+    expect(canvas).toHaveAttribute("data-watermark-visible", "false");
+  });
+
+  it("draws the selected watermark media instead of a placeholder decoration", () => {
+    renderSurface({ layers: [BG_LAYER], watermark: WATERMARK_VIDEO_ON });
+
+    expect(drawnFilenames()).toContain("logo.mov");
+  });
+
+  it("falls back to uploaded image media when a watermark is not in project media", () => {
+    const createdImages: HTMLImageElement[] = [];
+    const imageFactory = vi.fn(function imageFactory() {
+      const image = document.createElement("img");
+      createdImages.push(image);
+      return image;
+    });
+    vi.stubGlobal("Image", imageFactory);
+
+    renderSurface({ watermark: WATERMARK_ON });
+
+    expect(createdImages).toHaveLength(1);
+    expect(createdImages[0].src).toContain("/api/server/projects/media-file");
+    const errorHandler = createdImages[0].onerror;
+    expect(typeof errorHandler).toBe("function");
+    if (typeof errorHandler === "function") {
+      errorHandler.call(createdImages[0], new Event("error"));
+    }
+    expect(createdImages[0].src).toContain("/api/server/uploads/media-file");
+    expect(createdImages[0].src).toContain("filename=logo.png");
+  });
+
+  it("uses the uploaded watermark URL directly when media metadata identifies it", () => {
+    const createdImages: HTMLImageElement[] = [];
+    const imageFactory = vi.fn(function imageFactory() {
+      const image = document.createElement("img");
+      createdImages.push(image);
+      return image;
+    });
+    vi.stubGlobal("Image", imageFactory);
+
+    renderSurface({
+      media: [{
+        filename: "logo.png",
+        import_mode: "copy",
+        imported_at: "2026-05-28T00:00:00.000Z",
+        kind: "watermark_image",
+        mediaId: "logo.png",
+        path: "uploads/logo.png",
+        size: 100,
+        thumb_url: "",
+      }],
+      watermark: WATERMARK_ON,
+    });
+
+    expect(createdImages[0].src).toContain("/api/server/uploads/media-file");
+    expect(createdImages[0].src).not.toContain("/api/server/projects/media-file");
+  });
+
+  it("falls back to uploaded video media for watermark decoders", () => {
+    renderSurface({ watermark: WATERMARK_VIDEO_ON });
+
+    const decoder = screen.getByTestId("preview-video-decoder") as HTMLVideoElement;
+    const load = vi.fn();
+    decoder.load = load;
+    expect(decoder.src).toContain("/api/server/projects/media-file");
+
+    fireEvent.error(decoder);
+
+    expect(decoder.src).toContain("/api/server/uploads/media-file");
+    expect(decoder.src).toContain("filename=logo.mov");
+    expect(load).toHaveBeenCalled();
   });
 
   it("renders transport controls and playing/paused states", () => {
@@ -442,6 +608,21 @@ describe("PreviewSurface", () => {
     );
     expect(frame.className).toContain("w-full");
     expect(frame).toHaveStyle({ aspectRatio: "16 / 9" });
+  });
+
+  it.each([
+    ["1080p", 1920, 1080],
+    ["720p", 1280, 720],
+    ["9:16", 1080, 1920],
+  ] as const)("composites preview content on the %s render canvas", (resolution, width, height) => {
+    renderSurface({ resolution, layers: [BG_LAYER, PIP_LAYER], subtitles: SUBTITLES_ON, watermark: WATERMARK_VIDEO_ON });
+    const canvas = screen.getByTestId("preview-canvas") as HTMLCanvasElement;
+
+    expect(canvas.width).toBe(width);
+    expect(canvas.height).toBe(height);
+    expect(canvas).toHaveAttribute("data-has-pip", "true");
+    expect(canvas).toHaveAttribute("data-subtitle-visible", "true");
+    expect(canvas).toHaveAttribute("data-watermark-visible", "true");
   });
 
   it("draws video frames through canvas drawImage when active video decoders are present", () => {

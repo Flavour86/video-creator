@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFgItem, deleteVisualItem, hasSentenceOverlap, nextZIndex, packRowsByTime, patchBackgroundItems, patchVisualItem } from "./layers";
+import {
+  buildFgItem,
+  deleteVisualItem,
+  hasSentenceOverlap,
+  nextZIndex,
+  normalizeBackgroundPlaylists,
+  packRowsByTime,
+  patchBackgroundItems,
+  patchVisualItem,
+} from "./layers";
 import type { Layer } from "./preview/resolveDisplay";
 
 // ── hasSentenceOverlap ────────────────────────────────────────────────────────
@@ -118,6 +127,97 @@ describe("packRowsByTime", () => {
 });
 
 // ── buildFgItem ───────────────────────────────────────────────────────────────
+
+describe("normalizeBackgroundPlaylists", () => {
+  it("collapses legacy split background strips into one playlist clip", () => {
+    const layers: Layer[] = [{
+      id: "bg-main",
+      kind: "bg",
+      name: "Background",
+      items: [
+        {
+          id: "bg-1",
+          mediaId: "bg0.png",
+          sentences: [1, 10],
+          start: 0,
+          end: 90,
+          motion: { kind: "ken_burns", easing: "ease_in_out" },
+          transitions: { in: "cut", out: "fade" },
+          crossfade: 0.6,
+          cache_status: "warm",
+        },
+        {
+          id: "bg-2",
+          mediaId: "bg1.png",
+          sentences: [11, 22],
+          start: 90,
+          end: 200,
+          motion: { kind: "ken_burns", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "fade" },
+          crossfade: 0.6,
+          cache_status: "warm",
+        },
+        {
+          id: "bg-3",
+          mediaId: "bg2.png",
+          sentences: [23, 33],
+          start: 200,
+          end: 300,
+          motion: { kind: "ken_burns", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "cut" },
+          crossfade: 0.6,
+          cache_status: "warm",
+        },
+      ],
+    }];
+
+    const normalized = normalizeBackgroundPlaylists(layers);
+    const item = normalized.layers[0]?.items[0] as {
+      cache_status?: string;
+      crossfade?: number;
+      end: number;
+      mediaId?: string;
+      mediaIds?: string[];
+      sentences: [number, number];
+      start: number;
+      transitions: { in: string; out: string };
+    };
+
+    expect(normalized.changed).toBe(true);
+    expect(normalized.layers[0]?.items).toHaveLength(1);
+    expect(item.mediaId).toBeUndefined();
+    expect(item.mediaIds).toEqual(["bg0.png", "bg1.png", "bg2.png"]);
+    expect(item.sentences).toEqual([1, 33]);
+    expect(item.start).toBe(0);
+    expect(item.end).toBe(300);
+    expect(item.crossfade).toBe(0.6);
+    expect(item.transitions).toEqual({ in: "cut", out: "cut" });
+    expect(item.cache_status).toBe("invalid");
+  });
+
+  it("leaves an existing single background clip untouched", () => {
+    const layers: Layer[] = [{
+      id: "bg-main",
+      kind: "bg",
+      name: "Background",
+      items: [{
+        id: "bg-1",
+        mediaIds: ["bg0.png", "bg1.png"],
+        sentences: [1, 4],
+        start: 0,
+        end: 20,
+        motion: { kind: "ken_burns", easing: "linear" },
+        transitions: { in: "cut", out: "cut" },
+        cache_status: "warm",
+      }],
+    }];
+
+    const normalized = normalizeBackgroundPlaylists(layers);
+
+    expect(normalized.changed).toBe(false);
+    expect(normalized.layers).toBe(layers);
+  });
+});
 
 describe("buildFgItem", () => {
   it("builds a correctly shaped FG item from params", () => {

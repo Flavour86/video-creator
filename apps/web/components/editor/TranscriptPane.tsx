@@ -15,7 +15,7 @@ type TranscriptPaneProps = {
   onSearchKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onSeek: (time: number) => void;
   onScrollPositionChange?: (scrollTop: number) => void;
-  onSelectRange: (range: [number, number]) => void;
+  onSelectRange: (range: [number, number] | null) => void;
   query: string;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   searchInputRef: RefObject<HTMLInputElement | null>;
@@ -186,11 +186,9 @@ export function TranscriptPane({
         {virtualWindow.paddingTop > 0 ? <div aria-hidden="true" style={{ height: virtualWindow.paddingTop }} /> : null}
         {virtualWindow.sentences.map((sentence, index) => {
           const sentencePosition = virtualWindow.startIndex + index;
-          const active = sentence.index >= activeRange[0] && sentence.index <= activeRange[1];
           const selected = selectedRange ? sentence.index >= selectedRange[0] && sentence.index <= selectedRange[1] : false;
           const currentSearchMatch = query.trim() ? sentencePosition === currentMatch : false;
           const orphan = sentence.end_s <= sentence.start_s;
-          const activeNow = sentence.index === activeRange[0];
           const rowRange: [number, number] = selected && selectedRange ? [selectedRange[0], selectedRange[1]] : [sentence.index, sentence.index];
           return (
             <div
@@ -200,7 +198,7 @@ export function TranscriptPane({
                   : orphan
                     ? "border-l-(--red) text-(--red)"
                     : "border-transparent"
-              } ${activeNow ? "bg-(--bg-3)" : ""} ${currentSearchMatch ? "ring-1 ring-(--amber-line) ring-inset" : ""}`}
+              } ${currentSearchMatch ? "ring-1 ring-(--amber-line) ring-inset" : ""}`}
               key={sentence.index}
               ref={(node) => {
                 if (node) {
@@ -219,14 +217,15 @@ export function TranscriptPane({
                   const range: [number, number] = event.shiftKey
                     ? normalizeRange(selectedRange?.[0] ?? activeRange[0], sentence.index)
                     : [sentence.index, sentence.index];
-                  onSelectRange(range);
-                  if (!event.shiftKey) {
+                  if (event.shiftKey) {
+                    onSelectRange(range);
+                  } else {
+                    onSelectRange(null);
                     onSeek(sentence.start_s);
                   }
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  onSelectRange(rowRange);
                   setMenu({ index: sentence.index, range: rowRange, x: event.clientX, y: event.clientY });
                 }}
                 onKeyDown={(event) => {
@@ -250,7 +249,6 @@ export function TranscriptPane({
                   {orphan ? <span className="ml-2 font-mono text-[10px] uppercase text-(--red)">{t("orphanSentence")}</span> : null}
                 </span>
               </button>
-              {activeNow ? <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-(--text) shadow-[0_0_10px_var(--text)]" /> : null}
             </div>
           );
         })}

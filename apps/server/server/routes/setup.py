@@ -30,12 +30,15 @@ from server.db.projects import project_path_for_id, touch_recent
 from server.domain.project import DetectedInputs, Project, ensure_project_layout
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import (
-    alignment_device_for_language,
     alignment_language_for_text,
     compute_alignment_hash,
 )
 from server.pipeline.chunker import segment
-from server.pipeline.srt import subtitle_stats, write_aligned_srt_file, write_srt_file
+from server.pipeline.srt import (
+    subtitle_stats,
+    write_srt_file,
+    write_transcript_corrected_srt_file,
+)
 from server.settings import app_root, settings
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -931,8 +934,8 @@ async def run_setup_alignment(
     voice = _detect_voice(voice_path)
     audio_duration = voice.duration if voice is not None else 0.0
     alignment_language = alignment_language_for_text(transcript_text)
-    preferred_device = alignment_device_for_language(alignment_language)
-    device_label = "cpu fp32" if preferred_device == "cpu" else "cuda fp16"
+    device_label = "text"
+    model_label = "transcript-correction"
     current_hash = compute_alignment_hash(
         voice_path,
         transcript_text,
@@ -946,13 +949,13 @@ async def run_setup_alignment(
         and alignment_hash_path.is_file()
         and alignment_hash_path.read_text(encoding="utf-8").strip() == current_hash
     ):
-        cached = AlignmentResult.model_validate_json(alignment_path.read_text(encoding="utf-8"))
-        update = write_aligned_srt_file(subtitles_path, cached)
+        correction = write_transcript_corrected_srt_file(subtitles_path, transcript_text)
+        alignment_path.write_text(correction.alignment.model_dump_json(), encoding="utf-8")
         record.alignment = SetupAlignment(
             status="aligned",
             hash=current_hash,
             device=device_label,
-            model="large-v3",
+            model=model_label,
             audio_duration=audio_duration,
             cache_hit=True,
         )
@@ -960,20 +963,18 @@ async def run_setup_alignment(
         _save_setup_draft_record(record)
         return _alignment_response(
             status="succeeded",
-            corrections_applied=update.corrections_applied,
+            corrections_applied=correction.update.corrections_applied,
             alignment=record.alignment,
         )
 
     try:
-        from server.pipeline.transcribe import align
-
         sentences = segment(transcript_text)
         if not sentences:
             record.alignment = SetupAlignment(
                 status="failed",
                 hash=current_hash,
                 device=device_label,
-                model="large-v3",
+                model=model_label,
                 audio_duration=audio_duration,
                 cache_hit=False,
                 error="Transcript file is empty.",
@@ -989,43 +990,20 @@ async def run_setup_alignment(
             status="running",
             hash=current_hash,
             device=device_label,
-            model="large-v3",
+            model=model_label,
             audio_duration=audio_duration,
             cache_hit=False,
         )
         _save_setup_draft_record(record)
-        fallback_to_cpu = False
-        try:
-            result = await align(
-                voice_path,
-                sentences,
-                language=alignment_language,
-                device=preferred_device,
-            )
-        except Exception as exc:
-            if preferred_device is None and _is_cuda_related_error(exc):
-                fallback_to_cpu = True
-                result = await align(
-                    voice_path,
-                    sentences,
-                    language=alignment_language,
-                    device="cpu",
-                )
-            else:
-                raise
 
-        quality_error = _alignment_quality_error(result)
-        if quality_error is not None:
-            raise RecoverableAlignmentError(*quality_error)
-
-        alignment_path.write_text(result.model_dump_json(), encoding="utf-8")
+        correction = write_transcript_corrected_srt_file(subtitles_path, transcript_text)
+        alignment_path.write_text(correction.alignment.model_dump_json(), encoding="utf-8")
         alignment_hash_path.write_text(current_hash, encoding="utf-8")
-        update = write_aligned_srt_file(subtitles_path, result)
         record.alignment = SetupAlignment(
             status="aligned",
             hash=current_hash,
-            device="cpu fp32" if fallback_to_cpu or preferred_device == "cpu" else "cuda fp16",
-            model="large-v3",
+            device=device_label,
+            model=model_label,
             audio_duration=audio_duration,
             cache_hit=False,
         )
@@ -1033,7 +1011,7 @@ async def run_setup_alignment(
         _save_setup_draft_record(record)
         return _alignment_response(
             status="succeeded",
-            corrections_applied=update.corrections_applied,
+            corrections_applied=correction.update.corrections_applied,
             alignment=record.alignment,
         )
     except Exception as exc:
@@ -1041,7 +1019,7 @@ async def run_setup_alignment(
             status="failed",
             hash=current_hash,
             device=device_label,
-            model="large-v3",
+            model=model_label,
             audio_duration=audio_duration,
             cache_hit=False,
             error=str(exc),
@@ -1391,21 +1369,22 @@ def _seed_default_layers(project_dir: Path) -> None:
             }
         )
     if backgrounds:
+        background_item = _visual_item(
+            "bg-1",
+            backgrounds[0],
+            [1, len(ranges) or 1],
+            0.0,
+            duration,
+            background=True,
+        )
+        background_item.pop("mediaId", None)
+        background_item["mediaIds"] = backgrounds
         layers.append(
             {
                 "id": "bg-main",
                 "kind": "bg",
                 "name": "Background",
-                "items": [
-                    _visual_item(
-                        "bg-1",
-                        backgrounds[0],
-                        [1, len(ranges) or 1],
-                        0.0,
-                        duration,
-                        background=True,
-                    )
-                ],
+                "items": [background_item],
             }
         )
 

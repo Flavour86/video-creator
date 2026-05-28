@@ -65,16 +65,24 @@ describe("TranscriptPane", () => {
     expect(screen.getByRole("status")).toHaveTextContent("No transcript matches for \"zzz\".");
   });
 
-  it("click selects and seeks, while shift-click extends a contiguous range", () => {
+  it("seeks without highlighting on ordinary click, while shift-click selects a contiguous range", () => {
     const props = renderPane({ selectedRange: [1, 1] });
 
     fireEvent.click(screen.getByRole("button", { name: /2 00:05-00:10 Low confidence sentence/i }));
-    expect(props.onSelectRange).toHaveBeenLastCalledWith([2, 2]);
+    expect(props.onSelectRange).toHaveBeenLastCalledWith(null);
     expect(props.onSeek).toHaveBeenLastCalledWith(5);
 
     fireEvent.click(screen.getByRole("button", { name: /3 00:10-00:10 Orphan row/i }), { shiftKey: true });
     expect(props.onSelectRange).toHaveBeenLastCalledWith([1, 3]);
     expect(props.onSeek).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not apply playback-position highlighting without a shift selection", () => {
+    renderPane({ activeRange: [1, 1], selectedRange: null });
+
+    const row = screen.getByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i }).parentElement;
+    expect(row).not.toHaveClass("bg-(--bg-3)");
+    expect(row?.querySelector("[aria-hidden='true']")).not.toBeInTheDocument();
   });
 
   it("opens the sentence menu from right-click without seeking", () => {

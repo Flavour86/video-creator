@@ -37,6 +37,46 @@ export function packRowsByTime<T extends { end: number; start: number }>(items: 
   return rows;
 }
 
+export function normalizeBackgroundPlaylists(layers: Layer[]): { changed: boolean; layers: Layer[] } {
+  let changed = false;
+  const nextLayers = layers.map((layer) => {
+    if (layer.kind !== "bg" || layer.items.length <= 1) return layer;
+    if (!layer.items.every(isVisualItem)) return layer;
+
+    const sortedItems = [...layer.items].sort((left, right) => {
+      if (left.start !== right.start) return left.start - right.start;
+      return left.end - right.end;
+    });
+    const mediaIds = sortedItems.flatMap(mediaIdsForItem);
+    if (mediaIds.length === 0) return layer;
+
+    const first = sortedItems[0];
+    const last = sortedItems[sortedItems.length - 1] ?? first;
+    if (!first) return layer;
+
+    const item: VisualItem = {
+      ...first,
+      cache_status: "invalid",
+      crossfade: first.crossfade ?? sortedItems.find((entry) => typeof entry.crossfade === "number")?.crossfade ?? 0,
+      end: Math.max(...sortedItems.map((entry) => entry.end)),
+      mediaIds,
+      sentences: [
+        Math.min(...sortedItems.map((entry) => entry.sentences[0])),
+        Math.max(...sortedItems.map((entry) => entry.sentences[1])),
+      ],
+      start: Math.min(...sortedItems.map((entry) => entry.start)),
+      transitions: {
+        in: first.transitions.in,
+        out: last.transitions.out,
+      },
+    };
+    delete item.mediaId;
+    changed = true;
+    return { ...layer, items: [item] } as VisualLayer;
+  });
+  return { changed, layers: changed ? nextLayers : layers };
+}
+
 export type FgItemParams = {
   id: string;
   mediaId: string;
@@ -77,6 +117,7 @@ export type VisualItemPatch = {
   crossfade?: number;
   end?: number;
   mediaId?: string;
+  mediaIds?: string[];
   motion?: Partial<{ easing: string; kind: string }>;
   pip?: Partial<{ opacity: number; posX: number; posY: number; radius: number; size: number }>;
   sentences?: [number, number];
@@ -166,7 +207,14 @@ function mergeVisualPatch(item: VisualItem, patch: VisualItemPatch): VisualItem 
   if (patch.cache_status !== undefined) next.cache_status = patch.cache_status;
   if (patch.crossfade !== undefined) next.crossfade = patch.crossfade;
   if (patch.end !== undefined) next.end = patch.end;
-  if (patch.mediaId !== undefined) next.mediaId = patch.mediaId;
+  if (patch.mediaId !== undefined) {
+    next.mediaId = patch.mediaId;
+    delete next.mediaIds;
+  }
+  if (patch.mediaIds !== undefined) {
+    next.mediaIds = patch.mediaIds;
+    delete next.mediaId;
+  }
   if (patch.sentences !== undefined) next.sentences = patch.sentences;
   if (patch.start !== undefined) next.start = patch.start;
   const currentMotionKind = normalizeMotionKind(item.motion.kind, "none");
@@ -223,4 +271,11 @@ function hasVisualMediaReference(value: { mediaId?: unknown; mediaIds?: unknown 
   const hasMediaId = typeof value.mediaId === "string" && value.mediaId.length > 0;
   const hasMediaIds = Array.isArray(value.mediaIds) && value.mediaIds.some((entry) => typeof entry === "string" && entry.length > 0);
   return hasMediaId || hasMediaIds;
+}
+
+function mediaIdsForItem(item: VisualItem): string[] {
+  if (Array.isArray(item.mediaIds)) {
+    return item.mediaIds.filter((entry) => typeof entry === "string" && entry.length > 0);
+  }
+  return typeof item.mediaId === "string" && item.mediaId.length > 0 ? [item.mediaId] : [];
 }

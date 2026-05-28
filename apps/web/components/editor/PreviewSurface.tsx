@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { IconButton } from "@/components/ui";
 import { formatTimecode } from "@/lib/format";
 import { resolveDisplay } from "@/lib/preview/resolveDisplay";
-import type { EditorStateProps } from "./types";
+import type { EditorMediaItem, EditorStateProps } from "./types";
 
-type PreviewSurfaceProps = Pick<EditorStateProps, "currentTime" | "duration" | "layers" | "projectPath" | "sentences"> & {
+type PreviewSurfaceProps = Pick<EditorStateProps, "currentTime" | "duration" | "layers" | "media" | "projectPath" | "sentences"> & {
   onNext: () => void;
   onPrevious: () => void;
   onTogglePlay: () => void;
@@ -35,6 +35,7 @@ export function PreviewSurface({
   currentTime,
   duration,
   layers,
+  media,
   onNext,
   onPrevious,
   onTogglePlay,
@@ -61,6 +62,10 @@ export function PreviewSurface({
   const subtitleStyle = subtitles?.style ?? FALLBACK_SUBTITLE_STYLE;
   const subtitlesEnabled = subtitles?.burn_in === true;
   const { height: canvasHeight, width: canvasWidth } = useMemo(() => resolutionDimensions(resolution), [resolution]);
+  const watermarkSourceUrl = useMemo(() => {
+    if (!watermark) return "";
+    return watermarkMediaUrl(projectPath, watermark.mediaId, media);
+  }, [media, projectPath, watermark]);
 
   const activeVideoDecoderIds = useMemo(() => {
     if (!projectPath) return [];
@@ -70,12 +75,14 @@ export function PreviewSurface({
     for (const layer of layers) {
       if (layer.kind === "sub") continue;
       for (const item of layer.items) {
-        if (!isVideoMediaId(item.mediaId)) continue;
+        const mediaIds = item.mediaIds && item.mediaIds.length > 0 ? item.mediaIds : item.mediaId ? [item.mediaId] : [];
         if (item.end < windowStart || item.start > windowEnd) continue;
-        ids.add(item.mediaId);
+        for (const mediaId of mediaIds) {
+          if (isVideoMediaId(mediaId)) ids.add(mediaId);
+        }
       }
     }
-    if (watermark && isVideoMediaId(watermark.mediaId)) {
+    if (watermark && watermark.enabled !== false && isVideoMediaId(watermark.mediaId)) {
       ids.add(watermark.mediaId);
     }
     return [...ids];
@@ -89,17 +96,24 @@ export function PreviewSurface({
     videoDecoderRefs.current.delete(mediaId);
   }, []);
 
-  const ensureImage = useCallback((mediaId: string): HTMLImageElement => {
-    const key = mediaUrl(projectPath, mediaId);
+  const ensureImage = useCallback((mediaId: string, primaryUrl: string, allowUploadFallback = false): HTMLImageElement => {
+    const key = `${primaryUrl}|${allowUploadFallback ? "uploads" : "project"}`;
     const cached = imageCacheRef.current.get(key);
     if (cached) return cached;
     const image = new window.Image();
     image.decoding = "async";
     image.onload = () => redrawRef.current();
-    image.src = key;
+    if (allowUploadFallback) {
+      image.onerror = () => {
+        const fallbackUrl = uploadMediaUrl(mediaId);
+        if (image.src.endsWith(fallbackUrl)) return;
+        image.src = fallbackUrl;
+      };
+    }
+    image.src = primaryUrl;
     imageCacheRef.current.set(key, image);
     return image;
-  }, [projectPath]);
+  }, []);
 
   const readClockTime = useCallback(() => {
     const value = playbackClock?.current?.currentTime;
@@ -109,7 +123,7 @@ export function PreviewSurface({
     return currentTime;
   }, [currentTime, playbackClock]);
 
-  const resolveSource = useCallback((mediaId: string, clockTime: number): HTMLImageElement | HTMLVideoElement | null => {
+  const resolveSource = useCallback((mediaId: string, clockTime: number, primaryUrl?: string, allowUploadFallback = false): HTMLImageElement | HTMLVideoElement | null => {
     if (!projectPath) return null;
     if (isVideoMediaId(mediaId)) {
       const decoder = videoDecoderRefs.current.get(mediaId);
@@ -117,7 +131,7 @@ export function PreviewSurface({
       syncVideoDecoder(decoder, clockTime);
       return decoder;
     }
-    const image = ensureImage(mediaId);
+    const image = ensureImage(mediaId, primaryUrl ?? mediaUrl(projectPath, mediaId), allowUploadFallback);
     if (!image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
       return null;
     }
@@ -130,25 +144,26 @@ export function PreviewSurface({
     if (canvas.width !== canvasWidth) canvas.width = canvasWidth;
     if (canvas.height !== canvasHeight) canvas.height = canvasHeight;
     const resolvedDisplay = resolveDisplay(layers, sentences, clockTime);
-    const hasActiveForeground = resolvedDisplay.fg.length > 0;
-    const background = hasActiveForeground ? undefined : resolvedDisplay.bg;
+    const background = resolvedDisplay.bg;
     const subtitleText = resolvedDisplay.subtitle ? normalizeSubtitleText(resolvedDisplay.subtitle.text) : "";
     const subtitleVisible = subtitlesEnabled && subtitleText.length > 0;
     setSubtitleLiveText((previous) => {
       const next = subtitleVisible ? subtitleText : "";
       return previous === next ? previous : next;
     });
+    const watermarkVisible = Boolean(watermark && watermark.enabled !== false);
     const drawOrder: string[] = ["black"];
     const metadata = {
       drawOrder,
       hasBackground: Boolean(background),
       hasForeground: resolvedDisplay.fg.length > 0,
       hasPip: resolvedDisplay.pip.length > 0,
+      pipBoxes: [] as Array<{ height: number; mediaId: string; width: number; x: number; y: number }>,
       pipCount: resolvedDisplay.pip.length,
       playing,
       subtitlePosition: subtitleStyle.position,
       subtitleVisible,
-      watermarkVisible: Boolean(watermark),
+      watermarkVisible,
     };
     const context = getCanvas2DContext(canvas);
     if (!context) {
@@ -166,11 +181,10 @@ export function PreviewSurface({
     if (background) {
       const source = resolveSource(background.mediaId, clockTime);
       if (source) {
-        drawContain(context, source, {
+        drawCover(context, source, {
           canvasHeight,
           canvasWidth,
           opacity: clamp(background.opacity, 0, 1),
-          translateX: 0,
         });
       }
       drawOrder.push("bg");
@@ -194,7 +208,8 @@ export function PreviewSurface({
       for (const layer of resolvedDisplay.pip) {
         const source = resolveSource(layer.mediaId, clockTime);
         if (!source) continue;
-        drawPip(context, source, layer, canvasWidth, canvasHeight);
+        const pipBox = drawPip(context, source, layer, canvasWidth, canvasHeight);
+        metadata.pipBoxes.push({ mediaId: layer.mediaId, ...pipBox });
       }
       drawOrder.push("pip");
     }
@@ -204,16 +219,16 @@ export function PreviewSurface({
       drawOrder.push("subtitle");
     }
 
-    if (watermark) {
-      const source = resolveSource(watermark.mediaId, clockTime);
+    if (watermarkVisible && watermark) {
+      const source = resolveSource(watermark.mediaId, clockTime, watermarkSourceUrl, true);
       if (source) {
-        drawWatermark(context, watermark, canvasWidth, canvasHeight);
+        drawWatermark(context, source, watermark, canvasWidth, canvasHeight);
       }
       drawOrder.push("watermark");
     }
 
     applyCanvasMetadata(canvas, metadata);
-  }, [canvasHeight, canvasWidth, layers, playing, resolveSource, sentences, subtitleStyle, subtitlesEnabled, watermark]);
+  }, [canvasHeight, canvasWidth, layers, playing, resolveSource, sentences, subtitleStyle, subtitlesEnabled, watermark, watermarkSourceUrl]);
 
   const drawAtClock = useCallback(() => {
     const time = clamp(readClockTime(), 0, Math.max(duration, 0));
@@ -277,10 +292,18 @@ export function PreviewSurface({
                 data-testid="preview-video-decoder"
                 key={mediaId}
                 muted
+                onError={(event) => {
+                  if (watermark?.enabled === false || watermark?.mediaId !== mediaId) return;
+                  const node = event.currentTarget;
+                  if (node.dataset.uploadFallback === "true") return;
+                  node.dataset.uploadFallback = "true";
+                  node.src = uploadMediaUrl(mediaId);
+                  node.load();
+                }}
                 playsInline
                 preload="metadata"
                 ref={(node) => registerVideoDecoder(mediaId, node)}
-                src={mediaUrl(projectPath, mediaId)}
+                src={watermark?.enabled !== false && watermark?.mediaId === mediaId ? watermarkSourceUrl : mediaUrl(projectPath, mediaId)}
               />
             ))}
           </div>
@@ -314,6 +337,18 @@ export function PreviewSurface({
 function mediaUrl(projectPath: string, filename: string): string {
   if (!projectPath) return "";
   return `/api/server/projects/media-file?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(filename)}`;
+}
+
+function uploadMediaUrl(filename: string): string {
+  return `/api/server/uploads/media-file?filename=${encodeURIComponent(filename)}`;
+}
+
+function watermarkMediaUrl(projectPath: string, mediaId: string, media: EditorMediaItem[]): string {
+  const asset = media.find((item) => item.mediaId === mediaId || item.filename === mediaId);
+  if (asset?.path.startsWith("uploads/") && (asset.kind === "watermark_image" || asset.kind === "watermark_video")) {
+    return uploadMediaUrl(asset.mediaId || asset.filename);
+  }
+  return mediaUrl(projectPath, mediaId);
 }
 
 function formatPreviewTimecode(seconds: number): string {
@@ -380,20 +415,59 @@ function drawContain(
   context.restore();
 }
 
+function drawCover(
+  context: CanvasRenderingContext2D,
+  source: HTMLImageElement | HTMLVideoElement,
+  options: { canvasHeight: number; canvasWidth: number; opacity: number },
+): void {
+  const dimensions = sourceDimensions(source, options.canvasWidth, options.canvasHeight);
+  const frameAspect = options.canvasWidth / options.canvasHeight;
+  const sourceAspect = dimensions.width / dimensions.height;
+  let sourceX = 0;
+  let sourceY = 0;
+  let sourceWidth = dimensions.width;
+  let sourceHeight = dimensions.height;
+  if (sourceAspect > frameAspect) {
+    sourceWidth = dimensions.height * frameAspect;
+    sourceX = (dimensions.width - sourceWidth) / 2;
+  } else if (sourceAspect < frameAspect) {
+    sourceHeight = dimensions.width / frameAspect;
+    sourceY = (dimensions.height - sourceHeight) / 2;
+  }
+  context.save();
+  context.globalAlpha = clamp(options.opacity, 0, 1);
+  try {
+    context.drawImage(
+      source,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      options.canvasWidth,
+      options.canvasHeight,
+    );
+  } catch {
+    // Ignore draw errors while image/video resources are still becoming drawable.
+  }
+  context.restore();
+}
+
 function drawPip(
   context: CanvasRenderingContext2D,
   source: HTMLImageElement | HTMLVideoElement,
   layer: { opacity: number; placement: { opacity: number; posX: number; posY: number; radius: number; size: number }; translateX: number },
   canvasWidth: number,
   canvasHeight: number,
-): void {
+): { height: number; width: number; x: number; y: number } {
   const placement = layer.placement;
   const width = (clamp(placement.size, 15, 60) / 100) * canvasWidth;
   const sourceSize = sourceDimensions(source, width, width * (9 / 16));
   const aspect = sourceSize.height / Math.max(sourceSize.width, 1);
   const height = width * aspect;
-  const x = (clamp(placement.posX, 0, 100) / 100) * canvasWidth + (layer.translateX / 100) * canvasWidth;
-  const y = (clamp(placement.posY, 0, 100) / 100) * canvasHeight;
+  const x = ((canvasWidth - width) * clamp(placement.posX, 0, 100)) / 100 + (layer.translateX / 100) * canvasWidth;
+  const y = ((canvasHeight - height) * clamp(placement.posY, 0, 100)) / 100;
   const radius = Math.max(0, placement.radius);
   context.save();
   context.globalAlpha = clamp((layer.opacity * clamp(placement.opacity, 0, 100)) / 100, 0, 1);
@@ -407,44 +481,28 @@ function drawPip(
     // Ignore draw errors while image/video resources are still becoming drawable.
   }
   context.restore();
+  return { height, width, x, y };
 }
 
 function drawWatermark(
   context: CanvasRenderingContext2D,
+  source: HTMLImageElement | HTMLVideoElement,
   watermark: NonNullable<Project["watermark"]>,
   canvasWidth: number,
   canvasHeight: number,
 ): void {
   const width = clamp(watermark.scale ?? 0.08, 0.02, 0.5) * canvasWidth;
-  const height = width * 0.56;
-  const centerX = (clamp(watermark.posX, 0, 100) / 100) * canvasWidth;
-  const centerY = (clamp(watermark.posY, 0, 100) / 100) * canvasHeight;
+  const dimensions = sourceDimensions(source, width, width * (9 / 16));
+  const height = width * (dimensions.height / Math.max(dimensions.width, 1));
+  const x = ((canvasWidth - width) * clamp(watermark.posX, 0, 100)) / 100;
+  const y = ((canvasHeight - height) * clamp(watermark.posY, 0, 100)) / 100;
   context.save();
   context.globalAlpha = clamp(watermark.opacity, 0, 100) / 100;
-  const frameWidth = Math.max(96, width * 0.95);
-  const frameHeight = Math.max(62, height * 0.72);
-  const x = centerX - frameWidth / 2;
-  const y = centerY - frameHeight / 2;
-  drawRoundedRectPath(context, x, y, frameWidth, frameHeight, 8);
-  context.fillStyle = "rgba(79, 74, 126, 0.68)";
-  context.fill();
-  context.strokeStyle = "rgba(255,255,255,0.55)";
-  context.lineWidth = 2;
-  if (typeof context.stroke === "function") {
-    context.stroke();
+  try {
+    context.drawImage(source, x, y, width, height);
+  } catch {
+    // Ignore draw errors while image/video resources are becoming drawable.
   }
-  const badgeWidth = Math.max(68, frameWidth * 0.48);
-  const badgeHeight = Math.max(16, frameHeight * 0.28);
-  const badgeX = centerX - badgeWidth / 2;
-  const badgeY = y + frameHeight - badgeHeight - 5;
-  drawRoundedRectPath(context, badgeX, badgeY, badgeWidth, badgeHeight, 4);
-  context.fillStyle = "rgba(20, 18, 28, 0.66)";
-  context.fill();
-  context.fillStyle = "rgba(255,255,255,0.92)";
-  context.font = "700 11px JetBrains Mono, Inter, Arial, sans-serif";
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillText("WaterMark", centerX, badgeY + badgeHeight / 2 + 0.5);
   context.restore();
 }
 
@@ -554,6 +612,7 @@ function applyCanvasMetadata(
     hasForeground: boolean;
     hasPip: boolean;
     pipCount: number;
+    pipBoxes: Array<{ height: number; mediaId: string; width: number; x: number; y: number }>;
     playing: boolean;
     subtitlePosition: string;
     subtitleVisible: boolean;
@@ -564,6 +623,7 @@ function applyCanvasMetadata(
   canvas.dataset.hasBackground = metadata.hasBackground ? "true" : "false";
   canvas.dataset.hasForeground = metadata.hasForeground ? "true" : "false";
   canvas.dataset.hasPip = metadata.hasPip ? "true" : "false";
+  canvas.dataset.pipBoxes = JSON.stringify(metadata.pipBoxes);
   canvas.dataset.pipCount = String(metadata.pipCount);
   canvas.dataset.subtitleVisible = metadata.subtitleVisible ? "true" : "false";
   canvas.dataset.subtitlePosition = metadata.subtitlePosition;

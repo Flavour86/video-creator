@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, Protocol, cast
 
 from server.domain.project import Project
 from server.domain.timing import AlignmentResult
@@ -16,6 +16,14 @@ from server.settings import uploads_root
 
 RenderPreset = Literal["draft", "final"]
 TRANSITION_SECONDS = 0.4
+
+
+class PlaylistChildSource(Protocol):
+    id: object
+    sentences: object
+    motion: object
+    transitions: object
+    crossfade: object
 
 
 @dataclass(frozen=True)
@@ -89,7 +97,10 @@ def build_compose_command(
     watermark_input_index = None
     if watermark_path is not None:
         watermark_input_index = len(items) + 1
-        cmd.extend(["-loop", "1", "-i", str(watermark_path)])
+        if _watermark_is_video(project, watermark_path):
+            cmd.extend(["-stream_loop", "-1", "-i", str(watermark_path)])
+        else:
+            cmd.extend(["-loop", "1", "-i", str(watermark_path)])
 
     filtergraph = _build_filtergraph(
         duration_s=duration_s,
@@ -141,8 +152,144 @@ def _fullscreen_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
         layer_items = getattr(layer, "items", [])
         if not isinstance(layer_items, list):
             continue
-        items.extend(layer_items)
+        for item in layer_items:
+            if kind == "bg":
+                items.extend(_expand_background_playlist_item(project, item))
+            else:
+                items.append(item)
     return items
+
+
+def _expand_background_playlist_item(
+    project: Project,
+    item: ClipRenderItem,
+) -> list[ClipRenderItem]:
+    media_ids = _item_media_ids(item)
+    if len(media_ids) == 0:
+        return [item]
+    if len(media_ids) == 1:
+        if _item_has_media_id(item):
+            return [item]
+        return [
+            _playlist_child_item(
+                item,
+                media_id=media_ids[0],
+                index=0,
+                start_s=_item_float(item, "start"),
+                end_s=_item_float(item, "end"),
+                transition_in=_transition_value(item, "in") or "cut",
+                transition_out=_transition_value(item, "out") or "cut",
+            )
+        ]
+    media_index = _project_media_index(project)
+    first_kind = _media_kind(media_index.get(media_ids[0]))
+    has_video_duration = any(_media_duration(media_index.get(media_id)) for media_id in media_ids)
+    if first_kind == "video" and has_video_duration:
+        return _expand_video_playlist_item(item, media_ids, media_index)
+    return _expand_even_playlist_item(item, media_ids)
+
+
+def _expand_even_playlist_item(item: ClipRenderItem, media_ids: list[str]) -> list[ClipRenderItem]:
+    start_s = _item_float(item, "start")
+    end_s = _item_float(item, "end")
+    duration_s = max(0.0, end_s - start_s)
+    if duration_s <= 0:
+        return []
+    slot_s = duration_s / len(media_ids)
+    crossfade_s = min(_item_crossfade(item), slot_s / 2)
+    expanded: list[ClipRenderItem] = []
+    for index, media_id in enumerate(media_ids):
+        item_start = start_s + index * slot_s
+        item_end = start_s + (index + 1) * slot_s
+        if crossfade_s > 0:
+            if index > 0:
+                item_start -= crossfade_s
+            if index < len(media_ids) - 1:
+                item_end += crossfade_s
+        expanded.append(
+            _playlist_child_item(
+                item,
+                media_id=media_id,
+                index=index,
+                start_s=max(start_s, item_start),
+                end_s=min(end_s, item_end),
+                transition_in="fade" if index > 0 and crossfade_s > 0 else "cut",
+                transition_out="fade" if index < len(media_ids) - 1 and crossfade_s > 0 else "cut",
+            )
+        )
+    return expanded
+
+
+def _expand_video_playlist_item(
+    item: ClipRenderItem,
+    media_ids: list[str],
+    media_index: Mapping[str, object],
+) -> list[ClipRenderItem]:
+    start_s = _item_float(item, "start")
+    end_s = _item_float(item, "end")
+    crossfade_s = _item_crossfade(item)
+    expanded: list[ClipRenderItem] = []
+    cursor = start_s
+    for index, media_id in enumerate(media_ids):
+        media_duration = _media_duration(media_index.get(media_id))
+        clip_duration = media_duration if media_duration and media_duration > 0 else end_s - cursor
+        item_end = min(end_s, cursor + clip_duration)
+        if item_end <= cursor:
+            break
+        transition_out = (
+            "fade"
+            if index < len(media_ids) - 1 and crossfade_s > 0 and item_end < end_s
+            else "cut"
+        )
+        expanded.append(
+            _playlist_child_item(
+                item,
+                media_id=media_id,
+                index=index,
+                start_s=cursor,
+                end_s=item_end,
+                transition_in="fade" if index > 0 and crossfade_s > 0 else "cut",
+                transition_out=transition_out,
+            )
+        )
+        cursor = item_end
+        if cursor >= end_s:
+            break
+    return expanded
+
+
+def _playlist_child_item(
+    item: ClipRenderItem,
+    *,
+    media_id: str,
+    index: int,
+    start_s: float,
+    end_s: float,
+    transition_in: str,
+    transition_out: str,
+) -> ClipRenderItem:
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        child = dict(raw)
+    elif hasattr(raw, "model_dump"):
+        child = raw.model_dump(mode="json", by_alias=True)
+    else:
+        source = cast(PlaylistChildSource, raw)
+        child = {
+            "id": source.id,
+            "sentences": source.sentences,
+            "motion": source.motion,
+            "transitions": source.transitions,
+            "crossfade": source.crossfade,
+        }
+    child.pop("mediaIds", None)
+    child.pop("media_ids", None)
+    child["mediaId"] = media_id
+    child["id"] = f"{child.get('id', 'bg-playlist')}-{index + 1}"
+    child["start"] = start_s
+    child["end"] = end_s
+    child["transitions"] = {"in": transition_in, "out": transition_out}
+    return child
 
 
 def _pip_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
@@ -359,7 +506,7 @@ def _subtitle_background_style(bg_style: str) -> tuple[int, int, int]:
 
 def _watermark_path(project_dir: Path, project: Project) -> Path | None:
     watermark = getattr(project, "watermark", None)
-    if watermark is None:
+    if watermark is None or getattr(watermark, "enabled", True) is False:
         return None
     media_id = getattr(watermark, "media_id", "")
     safe_name = Path(media_id).name
@@ -369,6 +516,20 @@ def _watermark_path(project_dir: Path, project: Project) -> Path | None:
     if project_path.is_file():
         return project_path
     return uploads_root() / safe_name
+
+
+def _watermark_is_video(project: Project, watermark_path: Path) -> bool:
+    watermark = getattr(project, "watermark", None)
+    media_id = getattr(watermark, "media_id", "") if watermark is not None else ""
+    for media in getattr(project, "media", []) or []:
+        media_kind = str(getattr(media, "kind", "") or "")
+        media_ids = {
+            str(getattr(media, "id", "") or ""),
+            str(getattr(media, "name", "") or ""),
+        }
+        if media_id and media_id in media_ids:
+            return "video" in media_kind
+    return watermark_path.suffix.lower() in {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
 
 
 def _watermark_float(watermark: object, name: str) -> float:
@@ -386,6 +547,75 @@ def _item_float(item: ClipRenderItem, name: str) -> float:
         value = getattr(raw, name)
     if not isinstance(value, int | float):
         raise TypeError(f"Visual item {name} must be numeric.")
+    return float(value)
+
+
+def _item_media_ids(item: ClipRenderItem) -> list[str]:
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        value = raw.get("mediaIds") or raw.get("media_ids")
+    else:
+        value = getattr(raw, "media_ids", None)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise TypeError("Visual item mediaIds must be a list.")
+    return [entry for entry in value if isinstance(entry, str) and entry]
+
+
+def _item_has_media_id(item: ClipRenderItem) -> bool:
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        value = raw.get("mediaId") or raw.get("media_id")
+    else:
+        value = getattr(raw, "media_id", None)
+    return isinstance(value, str) and len(value) > 0
+
+
+def _item_crossfade(item: ClipRenderItem) -> float:
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        value = raw.get("crossfade", 0)
+    else:
+        value = getattr(raw, "crossfade", 0)
+    if not isinstance(value, int | float):
+        return 0.0
+    return max(0.0, float(value))
+
+
+def _project_media_index(project: Project) -> dict[str, object]:
+    media_items = getattr(project, "media", []) or []
+    index: dict[str, object] = {}
+    for item in media_items:
+        raw = _unwrap_root_model(item)
+        media_id = _media_field(raw, "id")
+        name = _media_field(raw, "name")
+        if isinstance(media_id, str) and media_id:
+            index[media_id] = raw
+        if isinstance(name, str) and name:
+            index[name] = raw
+    return index
+
+
+def _media_field(media: object | None, name: str) -> object | None:
+    if media is None:
+        return None
+    if isinstance(media, Mapping):
+        return media.get(name)
+    return getattr(media, name, None)
+
+
+def _media_kind(media: object | None) -> str | None:
+    value = _media_field(media, "kind")
+    if isinstance(value, Enum):
+        return str(value.value)
+    return value if isinstance(value, str) else None
+
+
+def _media_duration(media: object | None) -> float | None:
+    value = _media_field(media, "duration")
+    if not isinstance(value, int | float):
+        return None
     return float(value)
 
 

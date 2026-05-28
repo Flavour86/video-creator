@@ -675,6 +675,7 @@ class Watermark(BaseModel):
         extra='forbid',
         populate_by_name=True,
     )
+    enabled: bool | None = True
     media_id: constr(min_length=1) = Field(..., alias='mediaId')
     pos_x: confloat(ge=0.0, le=100.0) = Field(..., alias='posX')
     pos_y: confloat(ge=0.0, le=100.0) = Field(..., alias='posY')

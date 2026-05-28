@@ -25,7 +25,7 @@ type Props = {
   media: MediaItem[];
   sentences: AlignedSentence[];
   layers: Layer[];
-  onImport?: (files: FileList | null) => Promise<void> | void;
+  onImport?: (files: FileList | null) => Promise<unknown> | unknown;
   onConfirm: (updatedLayers: Layer[], newLayerId: string, newItemId: string) => void;
   onClose: () => void;
 };
@@ -56,15 +56,15 @@ const TRANSITION_OPTIONS = [
 ];
 
 const PIP_POSITION_OPTIONS = [
-  { value: "TL", label: "Top-left", posX: 12, posY: 12 },
-  { value: "TC", label: "Top-center", posX: 50, posY: 12 },
-  { value: "TR", label: "Top-right", posX: 88, posY: 12 },
-  { value: "ML", label: "Middle-left", posX: 12, posY: 50 },
+  { value: "TL", label: "Top-left", posX: 4, posY: 4 },
+  { value: "TC", label: "Top-center", posX: 50, posY: 4 },
+  { value: "TR", label: "Top-right", posX: 96, posY: 4 },
+  { value: "ML", label: "Middle-left", posX: 4, posY: 50 },
   { value: "MC", label: "Middle-center", posX: 50, posY: 50 },
-  { value: "MR", label: "Middle-right", posX: 88, posY: 50 },
-  { value: "BL", label: "Bottom-left", posX: 12, posY: 88 },
-  { value: "BC", label: "Bottom-center", posX: 50, posY: 88 },
-  { value: "BR", label: "Bottom-right", posX: 88, posY: 88 },
+  { value: "MR", label: "Middle-right", posX: 96, posY: 50 },
+  { value: "BL", label: "Bottom-left", posX: 4, posY: 96 },
+  { value: "BC", label: "Bottom-center", posX: 50, posY: 96 },
+  { value: "BR", label: "Bottom-right", posX: 96, posY: 96 },
 ] as const;
 
 type PipPositionValue = (typeof PIP_POSITION_OPTIONS)[number]["value"];
@@ -111,8 +111,13 @@ function pipCoordsFromPreset(value: PipPositionValue): { posX: number; posY: num
 }
 
 function pipPresetFromCoords(posX: number, posY: number): PipPositionValue {
-  const match = PIP_POSITION_OPTIONS.find((entry) => entry.posX === posX && entry.posY === posY);
-  return match?.value ?? "BR";
+  const row = posY < 34 ? "T" : posY >= 66 ? "B" : "M";
+  const col = posX < 34 ? "L" : posX >= 66 ? "R" : "C";
+  return `${row}${col}` as PipPositionValue;
+}
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, value));
 }
 
 function areItemsEquivalent(left: AssignVisualItem, right: AssignVisualItem): boolean {
@@ -221,7 +226,8 @@ export function AssignModal({
   const [easing, setEasing] = useState("ease_in_out");
   const [transIn, setTransIn] = useState("fade");
   const [transOut, setTransOut] = useState("fade");
-  const [pipPosition, setPipPosition] = useState<PipPositionValue>("BR");
+  const [pipPosX, setPipPosX] = useState(96);
+  const [pipPosY, setPipPosY] = useState(96);
   const [pipSize, setPipSize] = useState(22);
   const [pipRadius, setPipRadius] = useState(16);
   const [pipOpacity, setPipOpacity] = useState(90);
@@ -265,12 +271,14 @@ export function AssignModal({
         setCompositing(layer?.kind === "pip" ? "pip" : "fg");
         setLayerId(editLayerId);
         if (layer?.kind === "pip") {
-          setPipPosition(pipPresetFromCoords(item.pip?.posX ?? 88, item.pip?.posY ?? 88));
+          setPipPosX(item.pip?.posX ?? 96);
+          setPipPosY(item.pip?.posY ?? 96);
           setPipSize(item.pip?.size ?? 22);
           setPipRadius(item.pip?.radius ?? 16);
           setPipOpacity(item.pip?.opacity ?? 90);
         } else {
-          setPipPosition("BR");
+          setPipPosX(96);
+          setPipPosY(96);
           setPipSize(22);
           setPipRadius(16);
           setPipOpacity(90);
@@ -286,7 +294,8 @@ export function AssignModal({
       setTransIn("fade");
       setTransOut("fade");
       setCompositing("fg");
-      setPipPosition("BR");
+      setPipPosX(96);
+      setPipPosY(96);
       setPipSize(22);
       setPipRadius(16);
       setPipOpacity(90);
@@ -392,14 +401,13 @@ export function AssignModal({
       transIn,
       transOut,
     });
-    const pipPlacement = pipCoordsFromPreset(pipPosition);
     const newItem =
       compositing === "pip"
         ? {
             ...newItemBase,
             pip: {
-              posX: pipPlacement.posX,
-              posY: pipPlacement.posY,
+              posX: pipPosX,
+              posY: pipPosY,
               size: pipSize,
               radius: pipRadius,
               opacity: pipOpacity,
@@ -470,7 +478,12 @@ export function AssignModal({
           {/* ── Asset picker ── */}
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Asset</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Asset</p>
+                <span className="font-mono text-[11px] text-(--text-3)">
+                  {selectedMedia ? `${selectedMedia} selected` : "No asset chosen"}
+                </span>
+              </div>
               {onImport ? (
                 <>
                   <button
@@ -497,49 +510,59 @@ export function AssignModal({
               <p className="text-sm text-(--text-3)">No media added yet.</p>
             ) : (
               <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto">
-                {media.map((item) => (
-                  <button
-                    className={`overflow-hidden rounded-md border p-1 text-left transition-colors ${
-                      selectedMedia === item.filename
-                        ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
-                        : item.import_error
-                          ? "border-(--red) bg-(--bg-2)"
-                        : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
-                    }`}
-                    disabled={item.importing || !!item.import_error}
-                    key={item.filename}
-                    onClick={() => setSelectedMedia(item.filename)}
-                    type="button"
-                  >
-                    <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
-                      {item.thumb_url ? (
-                        <img
-                          alt={item.filename}
-                          className="h-full w-full object-cover"
-                          src={`/api/server${item.thumb_url}`}
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))] text-xs text-white/60">
+                {media.map((item) => {
+                  const active = selectedMedia === item.filename;
+                  return (
+                    <button
+                      aria-label={`${item.filename}${active ? " selected" : ""}`}
+                      aria-pressed={active}
+                      className={`overflow-hidden rounded-md border p-1 text-left transition-colors ${
+                        active
+                          ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                          : item.import_error
+                            ? "border-(--red) bg-(--bg-2)"
+                          : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
+                      }`}
+                      disabled={item.importing || !!item.import_error}
+                      key={item.filename}
+                      onClick={() => setSelectedMedia(item.filename)}
+                      type="button"
+                    >
+                      <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
+                        {item.thumb_url ? (
+                          <img
+                            alt={item.filename}
+                            className="h-full w-full object-cover"
+                            src={`/api/server${item.thumb_url}`}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))] text-xs text-white/60">
+                            {item.kind === "video" ? "MP4" : "IMG"}
+                          </div>
+                        )}
+                        <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
                           {item.kind === "video" ? "MP4" : "IMG"}
+                        </span>
+                        {active ? (
+                          <span className="absolute right-1.5 top-1.5 rounded bg-(--amber) px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-(--bg-0)">
+                            Selected
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
+                      {item.importing ? (
+                        <div className="truncate font-mono text-[10px] text-(--blue)">
+                          Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%
                         </div>
-                      )}
-                      <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
-                        {item.kind === "video" ? "MP4" : "IMG"}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
-                    {item.importing ? (
-                      <div className="truncate font-mono text-[10px] text-(--blue)">
-                        Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%
-                      </div>
-                    ) : null}
-                    {item.import_error ? (
-                      <div className="truncate font-mono text-[10px] text-(--red)">
-                        Import failed: {item.import_error}
-                      </div>
-                    ) : null}
-                  </button>
-                ))}
+                      ) : null}
+                      {item.import_error ? (
+                        <div className="truncate font-mono text-[10px] text-(--red)">
+                          Import failed: {item.import_error}
+                        </div>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -685,14 +708,18 @@ export function AssignModal({
                   {PIP_POSITION_OPTIONS.map((option) => (
                     <button
                       aria-label={option.label}
-                      aria-pressed={pipPosition === option.value}
+                      aria-pressed={pipPresetFromCoords(pipPosX, pipPosY) === option.value}
                       className={`h-9 rounded text-xs font-semibold ${
-                        pipPosition === option.value
+                        pipPresetFromCoords(pipPosX, pipPosY) === option.value
                           ? "bg-(--amber) text-white"
                           : "bg-(--bg-1) text-(--text-3) hover:text-(--text)"
                       }`}
                       key={option.value}
-                      onClick={() => setPipPosition(option.value)}
+                      onClick={() => {
+                        const next = pipCoordsFromPreset(option.value);
+                        setPipPosX(next.posX);
+                        setPipPosY(next.posY);
+                      }}
                       type="button"
                     >
                       {option.value}
@@ -700,6 +727,32 @@ export function AssignModal({
                   ))}
                 </div>
                 <div className="grid gap-3">
+                  <label className="grid grid-cols-[80px_1fr_48px] items-center gap-3 text-sm">
+                    <span className="text-(--text-3)">POSX</span>
+                    <input
+                      aria-label="PiP POSX"
+                      className={fieldClass}
+                      max={100}
+                      min={0}
+                      onChange={(event) => setPipPosX(clampPercent(Number(event.target.value) || 0))}
+                      type="number"
+                      value={pipPosX}
+                    />
+                    <span className="text-right text-xs text-(--text-3)">%</span>
+                  </label>
+                  <label className="grid grid-cols-[80px_1fr_48px] items-center gap-3 text-sm">
+                    <span className="text-(--text-3)">POSY</span>
+                    <input
+                      aria-label="PiP POSY"
+                      className={fieldClass}
+                      max={100}
+                      min={0}
+                      onChange={(event) => setPipPosY(clampPercent(Number(event.target.value) || 0))}
+                      type="number"
+                      value={pipPosY}
+                    />
+                    <span className="text-right text-xs text-(--text-3)">%</span>
+                  </label>
                   <label className="grid grid-cols-[80px_1fr_48px] items-center gap-3 text-sm">
                     <span className="text-(--text-3)">Size</span>
                     <input

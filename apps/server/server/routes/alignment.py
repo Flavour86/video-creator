@@ -11,12 +11,10 @@ from fastapi.responses import JSONResponse
 from server.domain.project import load_project
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import (
-    alignment_device_for_language,
     alignment_language_for_text,
     compute_alignment_hash,
 )
-from server.pipeline.chunker import segment
-from server.pipeline.srt import write_srt
+from server.pipeline.srt import write_transcript_corrected_srt_file
 
 log = structlog.get_logger()
 router = APIRouter(tags=["alignment"])
@@ -79,7 +77,14 @@ async def run_alignment(
 
     transcript_text = transcript_path.read_text(encoding="utf-8")
     alignment_language = alignment_language_for_text(transcript_text)
-    preferred_device = alignment_device_for_language(alignment_language)
+    subtitles_path = project_dir / "subtitles.srt"
+    if not subtitles_path.exists():
+        return _error(
+            404,
+            "SUBTITLES_NOT_FOUND",
+            "Generated subtitles.srt was not found.",
+            {"path": str(subtitles_path)},
+        )
     vc_dir = project_dir / ".vc"
     alignment_file = vc_dir / "alignment.json"
     hash_file = vc_dir / "alignment.hash"
@@ -91,47 +96,25 @@ async def run_alignment(
             language=alignment_language,
         )
         if hash_file.read_text(encoding="utf-8").strip() == current_hash:
-            cached = AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
-            write_srt(project_dir, cached, max_line_chars=_subtitle_max_line_chars(proj))
+            correction = write_transcript_corrected_srt_file(subtitles_path, transcript_text)
+            alignment_file.write_text(correction.alignment.model_dump_json(), encoding="utf-8")
             return AlignmentResult(
-                sentences=cached.sentences,
-                words=cached.words,
+                sentences=correction.alignment.sentences,
+                words=correction.alignment.words,
                 cache_hit=True,
             )
 
     _in_progress.add(project)
     try:
-        from server.pipeline.transcribe import align
-
-        sentences = segment(transcript_text)
-        result = await align(
-            audio_path,
-            sentences,
-            language=alignment_language,
-            device=preferred_device,
-        )
+        correction = write_transcript_corrected_srt_file(subtitles_path, transcript_text)
+        result = correction.alignment
 
         vc_dir.mkdir(parents=True, exist_ok=True)
         alignment_file.write_text(result.model_dump_json(), encoding="utf-8")
-        write_srt(project_dir, result, max_line_chars=_subtitle_max_line_chars(proj))
         hash_file.write_text(
             compute_alignment_hash(audio_path, transcript_text, language=alignment_language),
             encoding="utf-8",
         )
-
-        if result.sentences:
-            avg_conf = sum(s.confidence_avg for s in result.sentences) / len(result.sentences)
-            if avg_conf < 0.3:
-                log.warning("alignment.low_confidence", confidence=avg_conf, project=project)
-                return _error(
-                    422,
-                    "LOW_CONFIDENCE",
-                    (
-                        f"Alignment confidence is very low ({avg_conf:.2f}). "
-                        "Verify transcript matches audio."
-                    ),
-                    {"confidence": f"{avg_conf:.2f}"},
-                )
     finally:
         _in_progress.discard(project)
 
@@ -150,11 +133,3 @@ async def get_alignment(project: str = Query(...)) -> AlignmentResult | JSONResp
         )
     return AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
 
-
-def _subtitle_max_line_chars(project: object) -> int:
-    subtitles = getattr(project, "subtitles", None)
-    style = getattr(subtitles, "style", None)
-    max_chars = getattr(style, "max_chars_per_line", None)
-    if not isinstance(max_chars, int):
-        return 42
-    return max(20, min(80, max_chars))

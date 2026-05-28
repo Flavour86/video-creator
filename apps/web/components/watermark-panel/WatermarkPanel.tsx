@@ -29,6 +29,10 @@ const POSITIONS = [
   { label: "BR", posX: 100, posY: 100 },
 ];
 
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
 export function WatermarkPanel({ media, value, onChange }: Props) {
   const selectable = media.filter((item) => item.kind === "image" || item.kind === "video" || item.kind === "watermark_image" || item.kind === "watermark_video");
   const enabled = value !== null;
@@ -139,6 +143,7 @@ export function WatermarkPanel({ media, value, onChange }: Props) {
               const active = value.posX === position.posX && value.posY === position.posY;
               return (
                 <button
+                  aria-label={`Watermark placement ${position.label}`}
                   className={`rounded border px-1 py-1 text-[10px] font-semibold ${
                     active
                       ? "border-(--blue) bg-(--blue) text-white"
@@ -152,6 +157,33 @@ export function WatermarkPanel({ media, value, onChange }: Props) {
                 </button>
               );
             })}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="grid gap-1 text-[11px] font-medium opacity-70">
+              POSX
+              <input
+                aria-label="Watermark POSX"
+                className="rounded border border-(--line) bg-(--bg-1) px-2 py-1 text-xs"
+                max={100}
+                min={0}
+                onChange={(event) => patch({ posX: clampPercent(Number(event.target.value) || 0) })}
+                type="number"
+                value={value.posX}
+              />
+            </label>
+            <label className="grid gap-1 text-[11px] font-medium opacity-70">
+              POSY
+              <input
+                aria-label="Watermark POSY"
+                className="rounded border border-(--line) bg-(--bg-1) px-2 py-1 text-xs"
+                max={100}
+                min={0}
+                onChange={(event) => patch({ posY: clampPercent(Number(event.target.value) || 0) })}
+                type="number"
+                value={value.posY}
+              />
+            </label>
           </div>
 
           <label className="grid gap-1 text-[11px] font-medium opacity-70">

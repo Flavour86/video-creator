@@ -715,6 +715,7 @@
       "additionalProperties": false,
       "required": ["mediaId", "posX", "posY", "scale", "opacity"],
       "properties": {
+        "enabled": { "type": "boolean", "default": true },
         "mediaId": { "type": "string", "minLength": 1 },
         "posX": { "type": "number", "minimum": 0, "maximum": 100 },
         "posY": { "type": "number", "minimum": 0, "maximum": 100 },

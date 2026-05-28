@@ -7,7 +7,7 @@ type Transitions = { in: string; out: string };
 
 type BaseItem = {
   id: string;
-  mediaId: string;
+  mediaId?: string;
   mediaIds?: string[];
   anchor?: "sentences" | "time";
   from?: string;
@@ -96,6 +96,20 @@ function activeItem<T extends BaseItem>(items: T[], t: number): T | undefined {
   return items.find((it) => it.start <= t && t < it.end);
 }
 
+function mediaIdAtTime(item: BaseItem, currentTime: number): string | null {
+  const playlist = item.mediaIds?.filter(Boolean) ?? [];
+  if (playlist.length === 0) {
+    return item.mediaId ?? null;
+  }
+  if (playlist.length === 1) {
+    return playlist[0] ?? null;
+  }
+  const duration = Math.max(item.end - item.start, 0.001);
+  const relative = Math.min(Math.max(currentTime - item.start, 0), duration - Number.EPSILON);
+  const index = Math.min(playlist.length - 1, Math.floor((relative / duration) * playlist.length));
+  return playlist[index] ?? null;
+}
+
 // ── Main resolver (pure function) ────────────────────────────────────────────
 
 export function resolveDisplay(
@@ -121,13 +135,17 @@ export function resolveDisplay(
         }
       }
       if (item) {
-        spec.bg = { mediaId: item.mediaId, opacity: transitionOpacity(item, currentTime) };
+        const mediaId = mediaIdAtTime(item, currentTime);
+        if (mediaId) {
+          spec.bg = { mediaId, opacity: transitionOpacity(item, currentTime) };
+        }
       }
     } else if (layer.kind === "fg") {
       const item = activeItem(layer.items, currentTime);
-      if (item) {
+      const mediaId = item ? mediaIdAtTime(item, currentTime) : null;
+      if (item && mediaId) {
         spec.fg.push({
-          mediaId: item.mediaId,
+          mediaId,
           compositing: "fullscreen",
           opacity: transitionOpacity(item, currentTime),
           translateX: transitionTranslateX(item, currentTime),
@@ -135,9 +153,10 @@ export function resolveDisplay(
       }
     } else if (layer.kind === "pip") {
       const item = activeItem(layer.items as PipItem[], currentTime);
-      if (item) {
+      const mediaId = item ? mediaIdAtTime(item, currentTime) : null;
+      if (item && mediaId) {
         spec.pip.push({
-          mediaId: item.mediaId,
+          mediaId,
           placement: {
             posX: item.pip.posX,
             posY: item.pip.posY,

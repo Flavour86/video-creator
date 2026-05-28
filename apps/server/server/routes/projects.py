@@ -501,6 +501,7 @@ def _materialize_project_from_setup_draft(setup_id: str) -> ProjectResponse | JS
                     }
                 )
                 watermark_payload = {
+                    "enabled": True,
                     "mediaId": media_id,
                     "posX": 100,
                     "posY": 100,
@@ -861,6 +862,7 @@ class PutSubtitlesResponse(BaseModel):
 
 
 class PutWatermarkRequest(BaseModel):
+    enabled: bool = True
     media_id: str | None = Field(default=None, alias="mediaId")
     pos_x: float = Field(default=100, alias="posX", ge=0, le=100)
     pos_y: float = Field(default=100, alias="posY", ge=0, le=100)

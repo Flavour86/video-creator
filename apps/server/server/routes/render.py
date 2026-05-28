@@ -487,6 +487,7 @@ def _render_history_response(row: Mapping[str, object]) -> RenderHistoryResponse
     output_path = _resolve_stored_path(str(row["output_path"]))
     output_exists = output_path.is_file()
     duration = row["duration_s"]
+    frame_count = row.get("frame_count")
     render_id = str(row["id"])
     project_id = str(row["project_id"])
     return RenderHistoryResponse(
@@ -500,7 +501,7 @@ def _render_history_response(row: Mapping[str, object]) -> RenderHistoryResponse
         started_at=str(row["started_at"]),
         finished_at=str(row["finished_at"]) if row["finished_at"] is not None else None,
         duration_s=float(duration) if isinstance(duration, int | float | str) else None,
-        frame_count=int(row["frame_count"]) if row["frame_count"] is not None else None,
+        frame_count=int(frame_count) if isinstance(frame_count, int | float | str) else None,
         status=str(row["status"]),
         message=str(row["message"]) if row["message"] is not None else None,
         file_size=output_path.stat().st_size if output_exists else None,

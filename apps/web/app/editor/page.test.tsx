@@ -194,6 +194,51 @@ const TEST_PROJECT = {
   watermark: null,
 };
 
+const TEST_PROJECT_SPLIT_BG = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => {
+    if (layer.kind !== "bg") return layer;
+    return {
+      ...layer,
+      items: [
+        {
+          id: "bg-1",
+          mediaId: "bg0.png",
+          sentences: [1, 1] as [number, number],
+          start: 0,
+          end: 10,
+          motion: { kind: "ken_burns", easing: "ease_in_out" },
+          transitions: { in: "cut", out: "fade" },
+          crossfade: 0.6,
+          cache_status: "warm" as const,
+        },
+        {
+          id: "bg-2",
+          mediaId: "bg1.png",
+          sentences: [2, 3] as [number, number],
+          start: 10,
+          end: 20,
+          motion: { kind: "ken_burns", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "fade" },
+          crossfade: 0.6,
+          cache_status: "warm" as const,
+        },
+        {
+          id: "bg-3",
+          mediaId: "bg2.png",
+          sentences: [4, 5] as [number, number],
+          start: 20,
+          end: 30,
+          motion: { kind: "ken_burns", easing: "ease_in_out" },
+          transitions: { in: "fade", out: "cut" },
+          crossfade: 0.6,
+          cache_status: "warm" as const,
+        },
+      ],
+    };
+  }),
+};
+
 const TEST_PROJECT_NO_BG = {
   ...TEST_PROJECT,
   layers: TEST_PROJECT.layers.filter((layer) => layer.kind !== "bg"),
@@ -400,6 +445,23 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("PiP opacity")).toHaveValue("100");
   fireEvent.click(screen.getByRole("button", { name: "bg0.png over s1" }));
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
+});
+
+it("normalizes legacy split background clips into one playlist on load", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ project: TEST_PROJECT_SPLIT_BG });
+
+  renderEditor();
+
+  expect(await screen.findByText("test01")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "auto / 3 assets" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /bg1\.png over/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /bg2\.png over/i })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Save project config \(pending\)/i })).toBeInTheDocument();
+  expect(screen.queryByText(/Background cycle/i)).not.toBeInTheDocument();
+  expect(screen.getByText("bg0.png")).toBeInTheDocument();
+  expect(screen.getByText("bg1.png")).toBeInTheDocument();
+  expect(screen.getByText("bg2.png")).toBeInTheDocument();
 });
 
 it("uses the loaded voice duration for the timeline when subtitles end early", async () => {
@@ -695,7 +757,7 @@ it("updates only background through Change Background modal and appends one oper
   fireEvent.click(screen.getByRole("button", { name: /bg1\.png/i }));
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
-  expect(await screen.findByRole("button", { name: "bg1.png over s1-s5" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "auto / 2 assets" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "foreground.png over s1" })).toBeInTheDocument();
 
@@ -714,24 +776,23 @@ it("updates only background through Change Background modal and appends one oper
     const bgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "bg");
     const fgLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "fg");
     const pipLayer = payload?.config?.layers?.find((layer: { kind?: string }) => layer.kind === "pip");
+    expect(bgLayer?.items).toHaveLength(1);
+    expect(bgLayer?.items?.[0]?.mediaIds).toEqual(["bg0.png", "bg1.png"]);
+    expect(bgLayer?.items?.[0]?.mediaId).toBeUndefined();
     expect(bgLayer?.items?.[0]?.cache_status).toBe("invalid");
     expect(fgLayer?.items?.[0]?.cache_status).toBe("warm");
     expect(pipLayer?.items?.[0]?.cache_status).toBe("warm");
   });
 });
 
-it("edits foreground via inspector Assign modal and invalidates only the edited foreground item", async () => {
+it("edits foreground directly in inspector and invalidates only the edited foreground item", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
 
   renderEditor();
   await screen.findByText("test01");
   fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
-  fireEvent.click(screen.getByTitle("CHANGE"));
-
-  expect(await screen.findByRole("heading", { name: "Edit media to range" })).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Motion"), { target: { value: "zoom_in" } });
-  fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+  fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "zoom_in" } });
 
   expect(readUndo()).toHaveLength(1);
   expect(readUndo()[0]?.op?.type).toBe("replace_layers");
@@ -964,6 +1025,8 @@ it("dragging a timeline clip body recalculates sentence range from updated span"
   await waitFor(() => expect(screen.getByRole("button", { name: "foreground.png over s2" })).toBeInTheDocument());
   const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
   await waitFor(() => expect(audio.currentTime).toBeGreaterThanOrEqual(5));
+  const transcriptRows = Array.from(screen.getByTestId("transcript-list").querySelectorAll(".group"));
+  expect(transcriptRows.some((row) => row.className.includes("bg-(--amber-bg)"))).toBe(false);
   rectSpy.mockRestore();
 });
 
@@ -1206,7 +1269,7 @@ it("updates watermark config, shows preview watermark, and persists watermark op
   const wmOps = (parsed.undo ?? []).filter((entry: { op?: { type?: string } }) => entry.op?.type === "watermark_update");
   expect(wmOps.length).toBeGreaterThanOrEqual(2);
   expect(wmOps.some((entry: { op?: { after?: { mediaId?: string } } }) => entry.op?.after?.mediaId === "logo.png")).toBe(true);
-  expect(wmOps.at(-1)?.op?.after).toBeNull();
+  expect(wmOps.at(-1)?.op?.after).toEqual(expect.objectContaining({ enabled: false, mediaId: "logo.png" }));
 });
 
 it("replaces the previous watermark asset when a new watermark is uploaded", async () => {
@@ -1247,7 +1310,8 @@ it("replaces the previous watermark asset when a new watermark is uploaded", asy
   });
 
   expect(await within(dialog).findByText(/Current watermark: logo-new\.png \/ image overlay\./i)).toBeInTheDocument();
-  expect(within(dialog).queryByRole("button", { name: /bg0\.png/i })).not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: /bg0\.png/i })).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: /logo-new\.png selected/i })).toHaveAttribute("aria-pressed", "true");
 });
 
 it("highlights search matches, scrolls to the first match, and advances with Enter", async () => {
@@ -1361,7 +1425,7 @@ it("ignores Space play/pause shortcut when typing in editable targets", async ()
   expect(playSpy).not.toHaveBeenCalled();
 });
 
-it("ignores Space play/pause shortcut when focused on an interactive button", async () => {
+it("toggles Space play/pause from a focused non-input control without resetting the playhead", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();
   const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
@@ -1369,15 +1433,72 @@ it("ignores Space play/pause shortcut when focused on an interactive button", as
   renderEditor();
   await screen.findByText("test01");
 
-  const saveButton = screen.getByRole("button", { name: /save project config/i });
-  saveButton.focus();
-  expect(saveButton).toHaveFocus();
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  const waveformButton = screen.getByTestId("timeline-waveform").closest("button") as HTMLButtonElement;
+  Object.defineProperty(audio, "duration", { configurable: true, value: 300 });
+  fireEvent.loadedMetadata(audio);
+  vi.spyOn(waveformButton, "getBoundingClientRect").mockReturnValue({
+    bottom: 55,
+    height: 55,
+    left: 0,
+    right: 100,
+    toJSON: () => ({}),
+    top: 0,
+    width: 100,
+    x: 0,
+    y: 0,
+  });
+  fireEvent.click(waveformButton, { clientX: 50 });
+  await waitFor(() => expect(audio.currentTime).toBeGreaterThan(0));
+  const positionedTime = audio.currentTime;
+  waveformButton.focus();
+  expect(waveformButton).toHaveFocus();
 
-  fireEvent.keyDown(saveButton, { key: " ", code: "Space" });
+  fireEvent.keyDown(waveformButton, { key: " ", code: "Space" });
 
-  expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
-  expect(playSpy).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument());
+  expect(playSpy).toHaveBeenCalled();
+  expect(audio.currentTime).toBe(positionedTime);
+});
+
+it("allows seeking to 00:00 even when the first aligned sentence starts after silence", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    alignment: {
+      ...TEST_ALIGNMENT,
+      sentences: TEST_ALIGNMENT.sentences.map((sentence) => ({
+        ...sentence,
+        start_s: sentence.start_s + 3,
+        end_s: sentence.end_s + 3,
+      })),
+    },
+  });
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  const waveformButton = screen.getByTestId("timeline-waveform").closest("button") as HTMLButtonElement;
+  Object.defineProperty(audio, "duration", { configurable: true, value: 300 });
+  fireEvent.loadedMetadata(audio);
+  vi.spyOn(waveformButton, "getBoundingClientRect").mockReturnValue({
+    bottom: 55,
+    height: 55,
+    left: 0,
+    right: 100,
+    toJSON: () => ({}),
+    top: 0,
+    width: 100,
+    x: 0,
+    y: 0,
+  });
+
+  fireEvent.click(waveformButton, { clientX: 0 });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(audio.currentTime).toBe(0);
 });
 
 it("merges transcript sentences, remaps clip anchors, and appends one operation-log entry", async () => {

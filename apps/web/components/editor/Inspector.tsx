@@ -1,6 +1,6 @@
 import { ImageIcon, PlusCircle, Trash, Type, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import type { Project } from "@vc/shared-schemas";
 import { Button, NumberInput, Select } from "@/components/ui";
 import { formatImageMeta, formatTimecode } from "@/lib/format";
@@ -27,12 +27,14 @@ type InspectorProps = {
     itemId: string,
     patch: {
       mediaId?: string;
+      mediaIds?: string[];
       motion?: Partial<{ easing: string; kind: string }>;
       pip?: Partial<{ opacity: number; posX: number; posY: number; radius: number; size: number }>;
       transitions?: Partial<{ in: string; out: string }>;
     },
   ) => void;
   onRemoveBackground: (layerId: string) => void;
+  onReplaceItemMedia: (layerId: string, itemId: string, files: FileList | null, mediaIndex?: number) => void;
   onUpdateRange: (layerId: string, itemId: string, range: [number, number]) => void;
   projectPath: string;
   selected: EditorSelection;
@@ -43,7 +45,8 @@ type InspectorProps = {
 type VisualItem = {
   id: string;
   end: number;
-  mediaId: string;
+  mediaId?: string;
+  mediaIds?: string[];
   motion: { kind: string; easing: string };
   sentences: [number, number];
   start: number;
@@ -98,19 +101,30 @@ const transitionOptions = [
   { label: "dip_black", value: "dip_black" },
 ];
 const pipPlacements: PipPlacement[] = ["TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR"];
+const pipPlacementPositions: Record<PipPlacement, { posX: number; posY: number }> = {
+  TL: { posX: 4, posY: 4 },
+  TC: { posX: 50, posY: 4 },
+  TR: { posX: 96, posY: 4 },
+  ML: { posX: 4, posY: 50 },
+  MC: { posX: 50, posY: 50 },
+  MR: { posX: 96, posY: 50 },
+  BL: { posX: 4, posY: 96 },
+  BC: { posX: 50, posY: 96 },
+  BR: { posX: 96, posY: 96 },
+};
 const inspectorControlClass = "rounded-none border-0 bg-(--bg-2) hover:bg-(--bg-2) focus:border-transparent focus-visible:outline-offset-0";
 
 export function Inspector({
   layers,
   media,
   onDeleteItem,
-  onOpenAssignEdit,
   onOpenBackground,
   onOpenSubtitles,
   onOpenWatermark,
   onPatchBackground,
   onPatchItem,
   onRemoveBackground,
+  onReplaceItemMedia,
   onUpdateRange,
   projectPath,
   selected,
@@ -118,8 +132,12 @@ export function Inspector({
   watermark,
 }: InspectorProps) {
   const t = useTranslations("pages.editor.inspector");
+  const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const backgroundLayer = layers.find((entry) => entry.kind === "bg");
   const hasBackground = !!backgroundLayer;
+  const backgroundLabel = backgroundLayer?.items[0] && isVisualItem(backgroundLayer.items[0])
+    ? backgroundLabelForItem(backgroundLayer.items[0])
+    : "No background";
   const fallbackSelection = defaultSelection(layers);
   const effectiveSelection = selected ?? fallbackSelection;
   const layer = effectiveSelection ? layers.find((entry) => entry.id === effectiveSelection.layerId) : undefined;
@@ -129,9 +147,10 @@ export function Inspector({
 
   if (!layer || !isVisualItem(item)) {
     return (
-      <aside className="flex flex-col bg-(--bg-1)">
+      <aside className="flex min-h-0 flex-col overflow-y-auto bg-(--bg-1)" data-testid="editor-inspector">
         <Header label={t("title")} />
         <GlobalControls
+          backgroundLabel={backgroundLabel}
           hasBackground={hasBackground}
           onOpenBackground={onOpenBackground}
           onOpenSubtitles={onOpenSubtitles}
@@ -147,20 +166,21 @@ export function Inspector({
     );
   }
 
-  const asset = media.find((entry) => entry.filename === item.mediaId || entry.mediaId === item.mediaId);
   const isBackground = layer.kind === "bg";
   const isPip = layer.kind === "pip" && isPipItem(item);
-  const bgAssets = backgroundAssets(media);
+  const itemMediaIds = mediaIdsForItem(item);
+  const selectedAssets = mediaForIds(media, itemMediaIds);
+  const asset = selectedAssets[0] ?? null;
   const assetSrc = asset ? mediaSrc(projectPath, asset) : null;
   const placement = isPip ? placementFromCoords(item.pip.posX, item.pip.posY) : "MC";
-  const edgeMarginX = isPip ? edgeMarginXFromPlacement(placement, item.pip.posX) : 0;
-  const edgeMarginY = isPip ? edgeMarginYFromPlacement(placement, item.pip.posY) : 0;
   const availableMotionOptions = isBackground ? backgroundMotionOptions : motionOptions;
+  const replaceLabel = `Replace ${layer.kind === "bg" ? "background" : layer.kind === "pip" ? "PiP" : "foreground"} media`;
 
   return (
-    <aside className="flex min-h-0 flex-col bg-(--bg-1)">
+    <aside className="flex min-h-0 flex-col overflow-y-auto bg-(--bg-1)" data-testid="editor-inspector">
       <Header label={t("title")} />
       <GlobalControls
+        backgroundLabel={backgroundLabel}
         hasBackground={hasBackground}
         onOpenBackground={onOpenBackground}
         onOpenSubtitles={onOpenSubtitles}
@@ -172,39 +192,55 @@ export function Inspector({
         <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-2)">
           {layerHeading(layer)}
         </h4>
-        <button
-          className="group flex w-full items-center gap-[10px] rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)"
-          onClick={() => {
-            if (isBackground) {
-              onOpenBackground();
-              return;
-            }
-            onOpenAssignEdit(layer.id, item.id, item.sentences);
-          }}
-          title={t("change")}
-          type="button"
-        >
-          <div className="h-8 w-14 overflow-hidden rounded-sm bg-(--bg-3)">
-            {assetSrc ? (
-              <img
-                alt=""
-                className="h-full w-full object-cover"
-                src={assetSrc}
-              />
-            ) : null}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[12px] font-semibold text-(--text)">{item.mediaId}</div>
-            <div className="truncate font-mono text-[10.5px] text-(--text-3)">
-              {isBackground && asset ? formatImageMeta(asset.width ?? 0, asset.height ?? 0, asset.size) : itemSummary(item)}
-            </div>
-          </div>
-          <span className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-3) group-hover:text-(--text-2)">
-            <Upload aria-hidden="true" className="h-3.5 w-3.5" />
-            {t("change")}
-          </span>
-        </button>
-        {isBackground ? <p className="text-[11px] leading-snug text-(--text-3)">{t("bgHint")}</p> : null}
+        {!isBackground ? (
+          <>
+            <input
+              accept="image/*,video/*"
+              aria-label={replaceLabel}
+              className="hidden"
+              onChange={(event) => {
+                onReplaceItemMedia(layer.id, item.id, event.target.files);
+                event.currentTarget.value = "";
+              }}
+              ref={replaceInputRef}
+              type="file"
+            />
+            <button
+              className="group flex w-full items-center gap-[10px] rounded-md border border-(--line) bg-(--bg-2) p-2 text-left hover:border-(--bg-5)"
+              onClick={() => replaceInputRef.current?.click()}
+              title={t("change")}
+              type="button"
+            >
+              <div className="h-8 w-14 overflow-hidden rounded-sm bg-(--bg-3)">
+                {assetSrc ? (
+                  <img
+                    alt=""
+                    className="h-full w-full object-cover"
+                    src={assetSrc}
+                  />
+                ) : null}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] font-semibold text-(--text)">{assetButtonTitle(item)}</div>
+                <div className="truncate font-mono text-[10.5px] text-(--text-3)">{itemSummary(item)}</div>
+              </div>
+              <span className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-(--text-3) group-hover:text-(--text-2)">
+                <Upload aria-hidden="true" className="h-3.5 w-3.5" />
+                {t("change")}
+              </span>
+            </button>
+          </>
+        ) : null}
+        {isBackground ? (
+          <>
+            <BackgroundAssetList
+              assets={selectedAssets}
+              item={item}
+              onReplaceAsset={(mediaIndex, files) => onReplaceItemMedia(layer.id, item.id, files, mediaIndex)}
+              projectPath={projectPath}
+            />
+          </>
+        ) : null}
       </section>
 
       {isPip ? (
@@ -216,7 +252,7 @@ export function Inspector({
                 className={`h-full rounded-[3px] border font-mono text-[9px] ${placement === value ? "border-(--amber) bg-(--amber) text-(--bg-0) font-semibold" : "border-(--line-soft) bg-(--bg-3) text-(--text-3) hover:bg-(--bg-4) hover:text-(--text-2)"}`}
                 key={value}
                 onClick={() => {
-                  const nextPos = positionFromPlacement(value, edgeMarginX, edgeMarginY);
+                  const nextPos = positionFromPlacement(value);
                   onPatchItem(layer.id, item.id, { pip: { posX: nextPos.posX, posY: nextPos.posY } });
                 }}
                 type="button"
@@ -224,6 +260,44 @@ export function Inspector({
                 {value}
               </button>
             ))}
+          </div>
+          <div className="col-span-2 grid grid-cols-2 gap-2" data-testid="pip-position-coordinates">
+            <label className="flex items-center gap-2" htmlFor="editor-pip-posx">
+              <span className="w-[42px] shrink-0 text-[10.5px] uppercase tracking-[0.06em] text-(--text-3)">POSX</span>
+              <NumberInput
+                aria-label="PiP POSX"
+                className={`${inspectorControlClass} min-w-0 flex-1`}
+                id="editor-pip-posx"
+                max={100}
+                min={0}
+                name="editor-pip-posx"
+                onChange={(event) => {
+                  const next = Number.parseFloat(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  onPatchItem(layer.id, item.id, { pip: { posX: clamp(next, 0, 100) } });
+                }}
+                step={1}
+                value={Math.round(item.pip.posX)}
+              />
+            </label>
+            <label className="flex items-center gap-2" htmlFor="editor-pip-posy">
+              <span className="w-[42px] shrink-0 text-[10.5px] uppercase tracking-[0.06em] text-(--text-3)">POSY</span>
+              <NumberInput
+                aria-label="PiP POSY"
+                className={`${inspectorControlClass} min-w-0 flex-1`}
+                id="editor-pip-posy"
+                max={100}
+                min={0}
+                name="editor-pip-posy"
+                onChange={(event) => {
+                  const next = Number.parseFloat(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  onPatchItem(layer.id, item.id, { pip: { posY: clamp(next, 0, 100) } });
+                }}
+                step={1}
+                value={Math.round(item.pip.posY)}
+              />
+            </label>
           </div>
           <div className="col-span-2 grid grid-cols-[60px_minmax(0,1fr)_48px] items-center gap-2 text-[11px]">
             <span className="text-(--text-3)">Size</span>
@@ -417,23 +491,7 @@ export function Inspector({
       ) : null}
 
       {isBackground ? (
-        <Section title={t("backgroundCycle")}>
-          <div className="col-span-2 grid grid-cols-3 gap-2">
-            {bgAssets.map((entry) => (
-              <div className="min-w-0 overflow-hidden rounded border border-(--line) bg-(--bg-2)" key={entry.filename}>
-                {mediaSrc(projectPath, entry) ? (
-                  <img
-                    alt={entry.filename}
-                    className="aspect-video w-full object-cover"
-                    src={mediaSrc(projectPath, entry) ?? undefined}
-                  />
-                ) : (
-                  <div aria-hidden="true" className="aspect-video w-full bg-(--bg-3)" />
-                )}
-                <div className="truncate px-1.5 py-1 font-mono text-[10px] text-(--text-3)">{entry.filename}</div>
-              </div>
-            ))}
-          </div>
+        <Section title="Crossfade">
           <GridRow htmlFor="editor-bg-crossfade" label={t("backgroundCrossfade")}>
             <NumberInput
               id="editor-bg-crossfade"
@@ -490,23 +548,29 @@ function hasId(item: unknown): item is { id: string } {
 }
 
 function isVisualItem(item: unknown): item is VisualItem {
+  if (typeof item !== "object" || item === null) return false;
+  const candidate = item as {
+    end?: unknown;
+    id?: unknown;
+    mediaId?: unknown;
+    mediaIds?: unknown;
+    motion?: unknown;
+    sentences?: unknown;
+    start?: unknown;
+    transitions?: unknown;
+  };
+  const hasMediaId = typeof candidate.mediaId === "string" && candidate.mediaId.length > 0;
+  const hasMediaIds = Array.isArray(candidate.mediaIds) && candidate.mediaIds.some((entry) => typeof entry === "string" && entry.length > 0);
   return (
-    typeof item === "object" &&
-    item !== null &&
-    "id" in item &&
-    typeof item.id === "string" &&
-    "mediaId" in item &&
-    typeof item.mediaId === "string" &&
-    "start" in item &&
-    typeof item.start === "number" &&
-    "end" in item &&
-    typeof item.end === "number" &&
-    "sentences" in item &&
-    Array.isArray(item.sentences) &&
-    "motion" in item &&
-    typeof item.motion === "object" &&
-    "transitions" in item &&
-    typeof item.transitions === "object"
+    typeof candidate.id === "string" &&
+    (hasMediaId || hasMediaIds) &&
+    typeof candidate.start === "number" &&
+    typeof candidate.end === "number" &&
+    Array.isArray(candidate.sentences) &&
+    typeof candidate.motion === "object" &&
+    candidate.motion !== null &&
+    typeof candidate.transitions === "object" &&
+    candidate.transitions !== null
   );
 }
 
@@ -538,9 +602,113 @@ function itemSummary(item: VisualItem): string {
   return `${range} · ${span}`;
 }
 
-function backgroundAssets(media: EditorMediaItem[]): EditorMediaItem[] {
-  const assets = media.filter((entry) => /^bg\d+\./i.test(entry.filename) || entry.filename.toLowerCase().includes("background"));
-  return assets.length > 0 ? assets : media.filter((entry) => entry.kind === "image");
+function mediaIdsForItem(item: VisualItem): string[] {
+  if (item.mediaIds && item.mediaIds.length > 0) {
+    return item.mediaIds.filter(Boolean);
+  }
+  return item.mediaId ? [item.mediaId] : [];
+}
+
+function mediaForIds(media: EditorMediaItem[], mediaIds: string[]): EditorMediaItem[] {
+  return mediaIds
+    .map((id) => media.find((entry) => entry.filename === id || entry.mediaId === id))
+    .filter((entry): entry is EditorMediaItem => !!entry);
+}
+
+function assetButtonTitle(item: VisualItem): string {
+  const ids = mediaIdsForItem(item);
+  if (ids.length === 0) return "No media";
+  if (ids.length === 1) return ids[0] ?? "No media";
+  return `${ids[0]} +${ids.length - 1}`;
+}
+
+function backgroundLabelForItem(item: VisualItem): string {
+  const ids = mediaIdsForItem(item);
+  if (ids.length === 0) return "No background";
+  if (ids.length === 1) return ids[0] ?? "No background";
+  return `${ids[0]} +${ids.length - 1}`;
+}
+
+function BackgroundAssetList({
+  assets,
+  item,
+  onReplaceAsset,
+  projectPath,
+}: {
+  assets: EditorMediaItem[];
+  item: VisualItem;
+  onReplaceAsset: (mediaIndex: number, files: FileList | null) => void;
+  projectPath: string;
+}) {
+  const ids = mediaIdsForItem(item);
+  if (ids.length === 0) return null;
+  return (
+    <div className="overflow-hidden rounded-md border border-(--line) bg-(--bg-2)">
+      {ids.map((id, mediaIndex) => {
+        const asset = assets.find((entry) => entry.mediaId === id || entry.filename === id);
+        return (
+          <BackgroundAssetCard
+            asset={asset}
+            id={id}
+            key={`${id}-${mediaIndex}`}
+            onReplace={(files) => onReplaceAsset(mediaIndex, files)}
+            projectPath={projectPath}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function BackgroundAssetCard({
+  asset,
+  id,
+  onReplace,
+  projectPath,
+}: {
+  asset: EditorMediaItem | undefined;
+  id: string;
+  onReplace: (files: FileList | null) => void;
+  projectPath: string;
+}) {
+  const t = useTranslations("pages.editor.inspector");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const src = asset ? mediaSrc(projectPath, asset) : null;
+  return (
+    <div className="border-b border-(--line-soft) last:border-b-0">
+      <input
+        accept="image/*,video/*"
+        aria-label={`Replace background asset ${id}`}
+        className="hidden"
+        onChange={(event) => {
+          onReplace(event.target.files);
+          event.currentTarget.value = "";
+        }}
+        ref={inputRef}
+        type="file"
+      />
+      <button
+        aria-label={`Change ${id}`}
+        className="group grid w-full grid-cols-[72px_minmax(0,1fr)_72px] items-center gap-2 p-2 text-left hover:bg-(--bg-3)"
+        onClick={() => inputRef.current?.click()}
+        type="button"
+      >
+        <div className="h-9 overflow-hidden rounded-sm bg-(--bg-3)">
+          {src ? <img alt="" className="h-full w-full object-cover" src={src} /> : null}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-[12px] font-semibold text-(--text)">{asset?.filename ?? id}</div>
+          <div className="truncate font-mono text-[10px] text-(--text-3)">
+            {asset ? formatImageMeta(asset.width ?? 0, asset.height ?? 0, asset.size) : "missing asset"}
+          </div>
+        </div>
+        <span className="flex items-center justify-end gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-(--text-3) group-hover:text-(--text-2)">
+          <Upload aria-hidden="true" className="h-3.5 w-3.5" />
+          {t("change")}
+        </span>
+      </button>
+    </div>
+  );
 }
 
 function mediaSrc(projectPath: string, item: EditorMediaItem): string | null {
@@ -583,6 +751,7 @@ function GridRow({ children, htmlFor, label }: { children: ReactNode; htmlFor?: 
 }
 
 function GlobalControls({
+  backgroundLabel,
   hasBackground,
   onOpenBackground,
   onOpenSubtitles,
@@ -590,6 +759,7 @@ function GlobalControls({
   subtitles,
   watermark,
 }: {
+  backgroundLabel: string;
   hasBackground: boolean;
   onOpenBackground: () => void;
   onOpenSubtitles: () => void;
@@ -599,6 +769,7 @@ function GlobalControls({
 }) {
   const t = useTranslations("pages.editor.inspector");
   const watermarkLabel = watermark?.mediaId ?? "Choose";
+  const globalControlClass = "flex w-full items-center justify-between gap-[10px] rounded border border-(--line) bg-(--bg-2) px-[10px] py-2 text-[12px] transition-colors hover:border-(--amber) hover:bg-(--bg-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--amber)";
   return (
     <section className="border-b border-(--line-soft) px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
@@ -607,7 +778,7 @@ function GlobalControls({
       <div className="grid gap-2">
         <button
           aria-label="Watermark"
-          className="flex w-full items-center justify-between gap-[10px] rounded border border-(--amber)/35 bg-(--amber)/10 px-[10px] py-2 text-[12px]"
+          className={globalControlClass}
           onClick={onOpenWatermark}
           type="button"
         >
@@ -616,7 +787,7 @@ function GlobalControls({
         </button>
         <button
           aria-label={t("subtitles")}
-          className="flex w-full items-center justify-between gap-[10px] rounded border border-(--line) bg-(--bg-2) px-[10px] py-2 text-[12px]"
+          className={globalControlClass}
           onClick={onOpenSubtitles}
           type="button"
         >
@@ -625,12 +796,12 @@ function GlobalControls({
         </button>
         <button
           aria-label={hasBackground ? t("changeBackground") : t("addBackground")}
-          className="flex w-full items-center justify-between gap-[10px] rounded border border-(--line) bg-(--bg-2) px-[10px] py-2 text-[12px]"
+          className={globalControlClass}
           onClick={onOpenBackground}
           type="button"
         >
           <span className="inline-flex items-center gap-[7px] text-(--text-2)"><PlusCircle aria-hidden="true" className="h-3.5 w-3.5" />{hasBackground ? t("changeBackground") : t("addBackground")}</span>
-          <span className="font-mono text-[10.5px] text-(--text-4)">Choose</span>
+          <span className="font-mono text-[10.5px] text-(--text-4)">{backgroundLabel}</span>
         </button>
       </div>
     </section>
@@ -662,20 +833,6 @@ function placementFromCoords(posX: number, posY: number): PipPlacement {
   return `${row}${col}` as PipPlacement;
 }
 
-function edgeMarginXFromPlacement(placement: PipPlacement, posX: number): number {
-  if (placement.endsWith("L")) return Math.round(posX);
-  if (placement.endsWith("R")) return Math.round(100 - posX);
-  return 0;
-}
-
-function edgeMarginYFromPlacement(placement: PipPlacement, posY: number): number {
-  if (placement.startsWith("T")) return Math.round(posY);
-  if (placement.startsWith("B")) return Math.round(100 - posY);
-  return 0;
-}
-
-function positionFromPlacement(placement: PipPlacement, marginX: number, marginY: number): { posX: number; posY: number } {
-  const x = placement.endsWith("L") ? marginX : placement.endsWith("R") ? 100 - marginX : 50;
-  const y = placement.startsWith("T") ? marginY : placement.startsWith("B") ? 100 - marginY : 50;
-  return { posX: clamp(x, 0, 100), posY: clamp(y, 0, 100) };
+function positionFromPlacement(placement: PipPlacement): { posX: number; posY: number } {
+  return pipPlacementPositions[placement];
 }

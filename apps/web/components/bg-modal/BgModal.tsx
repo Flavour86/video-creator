@@ -20,7 +20,7 @@ type BgLayer = {
   name: string;
   items: Array<{
     id: string;
-    mediaId: string;
+    mediaId?: string;
     mediaIds?: string[];
     sentences: [number, number];
     start: number;
@@ -36,7 +36,7 @@ type Props = {
   existing?: BgLayer;
   media: MediaItem[];
   onClose: () => void;
-  onImport: (files: FileList | null) => Promise<void> | void;
+  onImport: (files: FileList | null) => Promise<unknown> | unknown;
   duration: number;
   onSave: (layer: BgLayer) => void;
   open: boolean;
@@ -84,7 +84,7 @@ function sameOrderedList(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((entry, index) => entry === right[index]);
 }
 
-function isMediaIdsOnlyPlaylistUnchanged(
+function isBackgroundPlaylistUnchanged(
   existing: BgLayer | undefined,
   selectedMedia: string[],
   motionKind: string,
@@ -94,14 +94,10 @@ function isMediaIdsOnlyPlaylistUnchanged(
   totalSentences: number,
 ): boolean {
   const existingItem = existing?.items[0];
-  const runtimeItem = existingItem as (typeof existingItem & { mediaId?: string }) | undefined;
   if (
     !existing ||
     existing.items.length !== 1 ||
-    !runtimeItem ||
-    runtimeItem.mediaId ||
-    !runtimeItem.mediaIds ||
-    runtimeItem.mediaIds.length === 0 ||
+    !existingItem ||
     !Number.isFinite(crossfade)
   ) {
     return false;
@@ -109,15 +105,15 @@ function isMediaIdsOnlyPlaylistUnchanged(
   const fullRangeEnd = Math.max(totalSentences, 1);
   return (
     sameOrderedList(existingSelection(existing), selectedMedia) &&
-    normalizeMotionKind(runtimeItem.motion?.kind) === motionKind &&
-    runtimeItem.motion?.easing === easing &&
-    runtimeItem.crossfade === crossfade &&
-    runtimeItem.start === 0 &&
-    runtimeItem.end === duration &&
-    runtimeItem.sentences[0] === 1 &&
-    runtimeItem.sentences[1] === fullRangeEnd &&
-    runtimeItem.transitions.in === "cut" &&
-    runtimeItem.transitions.out === "cut"
+    normalizeMotionKind(existingItem.motion?.kind) === motionKind &&
+    existingItem.motion?.easing === easing &&
+    existingItem.crossfade === crossfade &&
+    existingItem.start === 0 &&
+    existingItem.end === duration &&
+    existingItem.sentences[0] === 1 &&
+    existingItem.sentences[1] === fullRangeEnd &&
+    existingItem.transitions.in === "cut" &&
+    existingItem.transitions.out === "cut"
   );
 }
 
@@ -126,7 +122,7 @@ function hasBackgroundItemChanged(
   next: BgLayer["items"][number],
 ): boolean {
   return (
-    previous.mediaId !== next.mediaId ||
+    !sameOrderedList(backgroundMediaIds(previous), backgroundMediaIds(next)) ||
     previous.sentences[0] !== next.sentences[0] ||
     previous.sentences[1] !== next.sentences[1] ||
     previous.start !== next.start ||
@@ -137,6 +133,13 @@ function hasBackgroundItemChanged(
     previous.transitions.out !== next.transitions.out ||
     previous.crossfade !== next.crossfade
   );
+}
+
+function backgroundMediaIds(item: BgLayer["items"][number]): string[] {
+  if (item.mediaIds && item.mediaIds.length > 0) {
+    return item.mediaIds.filter(Boolean);
+  }
+  return item.mediaId ? [item.mediaId] : [];
 }
 
 function withBackgroundCacheStatus(
@@ -177,78 +180,31 @@ export function BgModal({
     setState(initialState(existing));
   }, [existing, open]);
 
-  function buildImageItems(selectedMedia: string[], crossfadeSeconds: number): BgLayer["items"] {
-    const slotDuration = duration / selectedMedia.length;
-    const fadeSeconds = Math.min(crossfadeSeconds, slotDuration / 2);
-    return selectedMedia.map((mediaId, index) => {
-      const existingForIndex = existing?.items[index];
-      const start = Math.max(0, index * slotDuration - (index > 0 ? fadeSeconds : 0));
-      const end = Math.min(
-        duration,
-        (index + 1) * slotDuration + (index < selectedMedia.length - 1 ? fadeSeconds : 0),
-      );
-      const nextItem = {
-        id: existingForIndex?.id ?? `bg-${Date.now()}-${index}`,
-        mediaId,
-        sentences: [1, Math.max(totalSentences, 1)] as [number, number],
-        start,
-        end,
-        motion: { kind: state.motionKind, easing: state.easing },
-        transitions: {
-          in: index > 0 && crossfadeSeconds > 0 ? "fade" : "cut",
-          out: index < selectedMedia.length - 1 && crossfadeSeconds > 0 ? "fade" : "cut",
-        },
-        crossfade: crossfadeSeconds,
-      } as BgLayer["items"][number];
-      return withBackgroundCacheStatus(existingForIndex, nextItem);
-    });
-  }
-
-  function buildVideoItems(selectedMedia: string[], crossfadeSeconds: number): BgLayer["items"] {
-    const items: BgLayer["items"] = [];
-    let start = 0;
-    for (let index = 0; index < selectedMedia.length; index += 1) {
-      const mediaId = selectedMedia[index];
-      if (!mediaId) continue;
-      const mediaItem = mediaById.get(mediaId);
-      const clipDuration = typeof mediaItem?.duration === "number" && mediaItem.duration > 0
-        ? mediaItem.duration
-        : Math.max(0, duration - start);
-      const end = Math.min(duration, start + clipDuration);
-      if (end <= start) break;
-      const existingForIndex = existing?.items[index];
-      const nextItem = {
-        id: existingForIndex?.id ?? `bg-${Date.now()}-${index}`,
-        mediaId,
-        sentences: [1, Math.max(totalSentences, 1)] as [number, number],
-        start,
-        end,
-        motion: { kind: state.motionKind, easing: state.easing },
-        transitions: {
-          in: index > 0 && crossfadeSeconds > 0 ? "fade" : "cut",
-          out: index < selectedMedia.length - 1 && crossfadeSeconds > 0 && end < duration ? "fade" : "cut",
-        },
-        crossfade: crossfadeSeconds,
-      } as BgLayer["items"][number];
-      items.push(withBackgroundCacheStatus(existingForIndex, nextItem));
-      start = end;
-      if (start >= duration) break;
-    }
-    return items;
+  function buildPlaylistItem(selectedMedia: string[], crossfadeSeconds: number): BgLayer["items"][number] {
+    const existingItem = existing?.items[0];
+    const nextItem = {
+      id: existingItem?.id ?? `bg-${Date.now()}`,
+      mediaIds: selectedMedia,
+      sentences: [1, Math.max(totalSentences, 1)] as [number, number],
+      start: 0,
+      end: duration,
+      motion: { kind: state.motionKind, easing: state.easing },
+      transitions: { in: "cut", out: "cut" },
+      crossfade: crossfadeSeconds,
+    } as BgLayer["items"][number];
+    return withBackgroundCacheStatus(existingItem, nextItem);
   }
 
   function handleSave() {
     if (state.selectedMedia.length === 0 || !isCrossfadeValid) return;
-    if (existing && isMediaIdsOnlyPlaylistUnchanged(existing, state.selectedMedia, state.motionKind, state.easing, crossfade, duration, totalSentences)) {
+    if (existing && isBackgroundPlaylistUnchanged(existing, state.selectedMedia, state.motionKind, state.easing, crossfade, duration, totalSentences)) {
       onSave(existing);
       onClose();
       return;
     }
     const selectedKind = lockedKind ?? mediaById.get(state.selectedMedia[0] ?? "")?.kind;
     if (!selectedKind) return;
-    const nextItems = selectedKind === "image"
-      ? buildImageItems(state.selectedMedia, crossfade)
-      : buildVideoItems(state.selectedMedia, crossfade);
+    const nextItems = [buildPlaylistItem(state.selectedMedia, crossfade)];
     if (nextItems.length === 0) return;
     const layer: BgLayer = {
       id: existing?.id ?? "bg-main",
@@ -377,8 +333,8 @@ export function BgModal({
               {state.selectedMedia.length > 1 ? (
                 <p className="mt-2 text-[12px] text-(--text-3)">
                   {lockedKind === "video"
-                    ? `${state.selectedMedia.length} clips play in sequence. Short video leaves black fallback; long video is cut.`
-                    : `${state.selectedMedia.length} images split the full duration evenly.`}{" "}
+                    ? `${state.selectedMedia.length} clips stay in one background timeline item and play in sequence during render.`
+                    : `${state.selectedMedia.length} images stay in one background timeline item and cycle during render.`}{" "}
                   Reorder by clicking to deselect, then re-select in the desired order.
                 </p>
               ) : null}

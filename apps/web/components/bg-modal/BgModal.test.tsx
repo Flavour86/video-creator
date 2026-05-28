@@ -189,9 +189,15 @@ describe("BgModal", () => {
 
     const layer = onSave.mock.calls[0][0];
     expect(layer).not.toBe(existing);
-    expect(layer.items).toHaveLength(2);
-    expect(layer.items[0]).toMatchObject({ mediaId: "bg.jpg", start: 0, end: 5 });
-    expect(layer.items[1]).toMatchObject({ mediaId: "bg-2.jpg", start: 5, end: 10 });
+    expect(layer.items).toHaveLength(1);
+    expect(layer.items[0]).toMatchObject({
+      mediaIds: ["bg.jpg", "bg-2.jpg"],
+      start: 0,
+      end: 10,
+      transitions: { in: "cut", out: "cut" },
+      cache_status: "invalid",
+    });
+    expect(layer.items[0].mediaId).toBeUndefined();
   });
 
   it("supports import from disk", () => {
@@ -235,7 +241,7 @@ describe("BgModal", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
-  it("builds image playlists to evenly span full duration", () => {
+  it("builds image playlists as a single full-duration background item", () => {
     const { onSave } = renderModal({ duration: 12 });
     fireEvent.click(screen.getByRole("button", { name: /bg\.jpg/i }));
     fireEvent.click(screen.getByRole("button", { name: /bg-2\.jpg/i }));
@@ -243,47 +249,49 @@ describe("BgModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add background" }));
 
     const layer = onSave.mock.calls[0][0];
-    expect(layer.items).toHaveLength(2);
+    expect(layer.items).toHaveLength(1);
     expect(layer.items[0]).toMatchObject({
-      mediaId: "bg.jpg",
+      mediaIds: ["bg.jpg", "bg-2.jpg"],
       start: 0,
-      end: 7,
-      transitions: { in: "cut", out: "fade" },
-    });
-    expect(layer.items[1]).toMatchObject({
-      mediaId: "bg-2.jpg",
-      start: 5,
       end: 12,
-      transitions: { in: "fade", out: "cut" },
+      transitions: { in: "cut", out: "cut" },
+      crossfade: 1,
     });
+    expect(layer.items[0].mediaId).toBeUndefined();
   });
 
-  it("builds video playlists in selected order and leaves black fallback when short", () => {
+  it("builds video playlists as a single full-duration background item", () => {
     const { onSave } = renderModal({ duration: 10 });
     fireEvent.click(screen.getByRole("button", { name: /clip-a\.mp4/i }));
     fireEvent.click(screen.getByRole("button", { name: /clip-b\.mp4/i }));
     fireEvent.click(screen.getByRole("button", { name: "Add background" }));
 
     const layer = onSave.mock.calls[0][0];
-    expect(layer.items).toHaveLength(2);
-    expect(layer.items[0]).toMatchObject({ mediaId: "clip-a.mp4", start: 0, end: 4 });
-    expect(layer.items[1]).toMatchObject({ mediaId: "clip-b.mp4", start: 4, end: 7 });
-    expect(layer.items[1].end).toBeLessThan(10);
+    expect(layer.items).toHaveLength(1);
+    expect(layer.items[0]).toMatchObject({
+      mediaIds: ["clip-a.mp4", "clip-b.mp4"],
+      start: 0,
+      end: 10,
+    });
+    expect(layer.items[0].mediaId).toBeUndefined();
   });
 
-  it("trims video playlists when total duration is longer than voice duration", () => {
+  it("keeps the background timeline item constant for long video playlists", () => {
     const { onSave } = renderModal({ duration: 10 });
     fireEvent.click(screen.getByRole("button", { name: /clip-long-a\.mp4/i }));
     fireEvent.click(screen.getByRole("button", { name: /clip-long-b\.mp4/i }));
     fireEvent.click(screen.getByRole("button", { name: "Add background" }));
 
     const layer = onSave.mock.calls[0][0];
-    expect(layer.items).toHaveLength(2);
-    expect(layer.items[0]).toMatchObject({ mediaId: "clip-long-a.mp4", start: 0, end: 6 });
-    expect(layer.items[1]).toMatchObject({ mediaId: "clip-long-b.mp4", start: 6, end: 10 });
+    expect(layer.items).toHaveLength(1);
+    expect(layer.items[0]).toMatchObject({
+      mediaIds: ["clip-long-a.mp4", "clip-long-b.mp4"],
+      start: 0,
+      end: 10,
+    });
   });
 
-  it("preserves existing cache status for unchanged edited background strips", () => {
+  it("preserves existing cache status for unchanged edited background playlist", () => {
     const { onSave } = renderModal({
       existing: {
         id: "bg-main",
@@ -291,26 +299,15 @@ describe("BgModal", () => {
         name: "Background",
         items: [
           {
-            id: "bg-1",
-            mediaId: "bg.jpg",
+            id: "bg-playlist",
+            mediaIds: ["bg.jpg", "bg-2.jpg"],
             sentences: [1, 6],
+            end: 10,
             start: 0,
-            end: 5,
             motion: { kind: "ken_burns", easing: "linear" },
             transitions: { in: "cut", out: "cut" },
             crossfade: 0,
             cache_status: "warm",
-          },
-          {
-            id: "bg-2",
-            mediaId: "bg-2.jpg",
-            sentences: [1, 6],
-            start: 5,
-            end: 10,
-            motion: { kind: "ken_burns", easing: "linear" },
-            transitions: { in: "cut", out: "cut" },
-            crossfade: 0,
-            cache_status: "partial",
           },
         ],
       },
@@ -318,11 +315,10 @@ describe("BgModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     const layer = onSave.mock.calls[0][0];
-    expect(layer.items[0]).toMatchObject({ id: "bg-1", cache_status: "warm" });
-    expect(layer.items[1]).toMatchObject({ id: "bg-2", cache_status: "partial" });
+    expect(layer.items[0]).toMatchObject({ id: "bg-playlist", cache_status: "warm" });
   });
 
-  it("invalidates edited background strips when playlist properties change", () => {
+  it("invalidates edited background playlist when playlist properties change", () => {
     const { onSave } = renderModal({
       existing: {
         id: "bg-main",
@@ -330,21 +326,10 @@ describe("BgModal", () => {
         name: "Background",
         items: [
           {
-            id: "bg-1",
-            mediaId: "bg.jpg",
+            id: "bg-playlist",
+            mediaIds: ["bg.jpg", "bg-2.jpg"],
             sentences: [1, 6],
             start: 0,
-            end: 5,
-            motion: { kind: "ken_burns", easing: "linear" },
-            transitions: { in: "cut", out: "cut" },
-            crossfade: 0,
-            cache_status: "warm",
-          },
-          {
-            id: "bg-2",
-            mediaId: "bg-2.jpg",
-            sentences: [1, 6],
-            start: 5,
             end: 10,
             motion: { kind: "ken_burns", easing: "linear" },
             transitions: { in: "cut", out: "cut" },
@@ -358,7 +343,6 @@ describe("BgModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     const layer = onSave.mock.calls[0][0];
-    expect(layer.items[0]).toMatchObject({ id: "bg-1", cache_status: "invalid" });
-    expect(layer.items[1]).toMatchObject({ id: "bg-2", cache_status: "invalid" });
+    expect(layer.items[0]).toMatchObject({ id: "bg-playlist", cache_status: "invalid" });
   });
 });

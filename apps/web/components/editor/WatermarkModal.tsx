@@ -9,7 +9,7 @@ type WatermarkModalProps = {
   media: EditorMediaItem[];
   onChange: (watermark: Project["watermark"]) => void;
   onClose: () => void;
-  onImport: (files: FileList | null) => Promise<void> | void;
+  onImport: (files: FileList | null) => Promise<unknown> | unknown;
   open: boolean;
   projectPath: string;
   value: Project["watermark"];
@@ -27,36 +27,22 @@ export function WatermarkModal({
   value,
 }: WatermarkModalProps) {
   const uploadRef = useRef<HTMLInputElement | null>(null);
-  const enabled = value !== null;
+  const enabled = Boolean(value && value.enabled !== false);
   const selectedId = value?.mediaId ?? "";
-  const libraryAssets = media.filter((item): item is WatermarkMedia => item.kind === "image" || item.kind === "video");
-  const selectedFromMedia = media.find((item): item is WatermarkMedia =>
-    (item.mediaId === selectedId || item.filename === selectedId) && isWatermarkMedia(item),
-  ) ?? null;
-  const selectedIsUploadedWatermark = selectedFromMedia?.kind === "watermark_image" || selectedFromMedia?.kind === "watermark_video";
-  const selectable = !value
-    ? []
-    : selectedIsUploadedWatermark
-      ? [selectedFromMedia]
-      : libraryAssets;
+  const selectable = media.filter(isWatermarkMedia);
   const selected = selectable.find((item) => item.mediaId === selectedId || item.filename === selectedId) ?? null;
 
   function toggleEnabled(nextEnabled: boolean) {
-    if (!nextEnabled) {
-      onChange(null);
+    if (value) {
+      onChange({ ...value, enabled: nextEnabled });
       return;
     }
-    if (value) return;
     const fallback = selectable[0];
     if (!fallback) return;
     onChange(defaultWatermark(fallback.mediaId || fallback.filename));
   }
 
   function selectAsset(mediaId: string) {
-    if (!enabled) {
-      onChange(defaultWatermark(mediaId));
-      return;
-    }
     if (!value) {
       onChange(defaultWatermark(mediaId));
       return;
@@ -125,6 +111,8 @@ export function WatermarkModal({
                   const mediaId = item.mediaId || item.filename;
                   return (
                     <button
+                      aria-label={`${item.filename}${active ? " selected" : ""}`}
+                      aria-pressed={active}
                       className={`flex flex-col gap-1.5 overflow-hidden rounded-(--r-sm) border p-1.5 text-left transition ${
                         active
                           ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
@@ -139,6 +127,11 @@ export function WatermarkModal({
                         <span className="absolute left-1 top-1 rounded-[3px] bg-black/60 px-[5px] py-px font-mono text-[9px] uppercase tracking-[0.04em] text-white">
                           {item.kind.includes("video") ? "MP4" : "IMG"}
                         </span>
+                        {active ? (
+                          <span className="absolute right-1 top-1 rounded-[3px] bg-(--amber) px-[5px] py-px font-mono text-[9px] font-semibold uppercase tracking-[0.04em] text-(--bg-0)">
+                            Selected
+                          </span>
+                        ) : null}
                       </div>
                       <div className="truncate text-[11px] text-(--text)">{item.filename}</div>
                     </button>
@@ -154,6 +147,55 @@ export function WatermarkModal({
             <p className="mt-[14px] text-xs text-(--text-2)">
               Current watermark: {selected ? `${selected.filename} / ${selected.kind.includes("video") ? "video overlay" : "image overlay"}.` : "none"}
             </p>
+
+            {value ? (
+              <section className="grid gap-3 border-t border-(--line-soft) pt-4" aria-label="Watermark placement and appearance">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex items-center gap-2 text-[11px] text-(--text-3)">
+                    <span className="w-10 shrink-0 font-mono uppercase">POSX</span>
+                    <input
+                      aria-label="Watermark POSX"
+                      className="h-8 min-w-0 flex-1 rounded-(--r-sm) border border-(--line) bg-(--bg-2) px-2 font-mono text-xs text-(--text)"
+                      max={100}
+                      min={0}
+                      onChange={(event) => onChange({ ...value, posX: clamp(Number(event.target.value), 0, 100) })}
+                      type="number"
+                      value={value.posX}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px] text-(--text-3)">
+                    <span className="w-10 shrink-0 font-mono uppercase">POSY</span>
+                    <input
+                      aria-label="Watermark POSY"
+                      className="h-8 min-w-0 flex-1 rounded-(--r-sm) border border-(--line) bg-(--bg-2) px-2 font-mono text-xs text-(--text)"
+                      max={100}
+                      min={0}
+                      onChange={(event) => onChange({ ...value, posY: clamp(Number(event.target.value), 0, 100) })}
+                      type="number"
+                      value={value.posY}
+                    />
+                  </label>
+                </div>
+                <ControlSlider
+                  label="Size"
+                  max={0.5}
+                  min={0.02}
+                  onChange={(scale) => onChange({ ...value, scale })}
+                  output={`${Math.round(value.scale * 100)}%`}
+                  step={0.01}
+                  value={value.scale}
+                />
+                <ControlSlider
+                  label="Opacity"
+                  max={100}
+                  min={0}
+                  onChange={(opacity) => onChange({ ...value, opacity })}
+                  output={`${Math.round(value.opacity)}%`}
+                  step={1}
+                  value={value.opacity}
+                />
+              </section>
+            ) : null}
           </div>
 
           <footer className="flex justify-end border-t border-(--line-soft) bg-(--bg-2) px-5 py-[14px]">
@@ -182,10 +224,51 @@ function watermarkThumbSrc(projectPath: string, item: EditorMediaItem): string |
 
 function defaultWatermark(mediaId: string): NonNullable<Project["watermark"]> {
   return {
+    enabled: true,
     mediaId,
     opacity: 85,
     posX: 9,
     posY: 11,
     scale: 0.08,
   };
+}
+
+function ControlSlider({
+  label,
+  max,
+  min,
+  onChange,
+  output,
+  step,
+  value,
+}: {
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  output: string;
+  step: number;
+  value: number;
+}) {
+  return (
+    <label className="grid grid-cols-[54px_minmax(0,1fr)_42px] items-center gap-2 text-[11px] text-(--text-3)">
+      <span>{label}</span>
+      <input
+        aria-label={`Watermark ${label.toLowerCase()}`}
+        className="h-2 w-full accent-(--amber)"
+        max={max}
+        min={min}
+        onChange={(event) => onChange(Number(event.target.value))}
+        step={step}
+        type="range"
+        value={value}
+      />
+      <span className="text-right font-mono text-(--text-2)">{output}</span>
+    </label>
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
 }
