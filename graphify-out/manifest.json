@@ -2,1776 +2,1376 @@
   "E:\\claude\\video-creator\\apps\\server\\package.json": {
     "mtime": 1778120357.3646095,
     "ast_hash": "0fb24a9b9047a63a8cef40accaee8cf2",
-    "semantic_hash": ""
+    "semantic_hash": "0fb24a9b9047a63a8cef40accaee8cf2"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\main.py": {
     "mtime": 1779252870.2508788,
     "ast_hash": "a0b185ec40d77efaaacc3e8ace9bb90e",
-    "semantic_hash": ""
+    "semantic_hash": "a0b185ec40d77efaaacc3e8ace9bb90e"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\runtime_status.py": {
     "mtime": 1778328094.6036115,
     "ast_hash": "06597e9edeb410558c398b33c2802204",
-    "semantic_hash": ""
+    "semantic_hash": "06597e9edeb410558c398b33c2802204"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\settings.py": {
     "mtime": 1778742952.2262695,
     "ast_hash": "1f1cb474f64ba505c9a9c1daa7389669",
-    "semantic_hash": ""
+    "semantic_hash": "1f1cb474f64ba505c9a9c1daa7389669"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\__init__.py": {
     "mtime": 1778753433.9807973,
     "ast_hash": "cabe2754f5d1058d7fde844f0fbf5f6f",
-    "semantic_hash": ""
+    "semantic_hash": "cabe2754f5d1058d7fde844f0fbf5f6f"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\__main__.py": {
     "mtime": 1778295795.6881816,
     "ast_hash": "398baf3807d31bed3711a893ab601995",
-    "semantic_hash": ""
+    "semantic_hash": "398baf3807d31bed3711a893ab601995"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\adapters\\__init__.py": {
     "mtime": 1778735225.35873,
     "ast_hash": "fc61096ebba1b8da393b5f257308e9e1",
-    "semantic_hash": ""
+    "semantic_hash": "fc61096ebba1b8da393b5f257308e9e1"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\adapters\\ai\\base.py": {
     "mtime": 1778762601.7348325,
     "ast_hash": "9e385bd0e89466172779510f770be652",
-    "semantic_hash": ""
+    "semantic_hash": "9e385bd0e89466172779510f770be652"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\adapters\\ai\\__init__.py": {
     "mtime": 1778735228.3551745,
     "ast_hash": "420a7fcc2f0074807f119dd8f5448428",
-    "semantic_hash": ""
+    "semantic_hash": "420a7fcc2f0074807f119dd8f5448428"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\app_db.py": {
     "mtime": 1778735477.989687,
     "ast_hash": "3673b01ed38a8540520d54e701549d55",
-    "semantic_hash": ""
+    "semantic_hash": "3673b01ed38a8540520d54e701549d55"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations.py": {
     "mtime": 1778735500.8487086,
     "ast_hash": "ebb6092ce0797a5f17ca95b9f10e7594",
-    "semantic_hash": ""
+    "semantic_hash": "ebb6092ce0797a5f17ca95b9f10e7594"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\projects.py": {
-    "mtime": 1779414994.5470667,
-    "ast_hash": "b5e742d378df4738a960cc8f9c9f4608",
-    "semantic_hash": ""
+    "mtime": 1779684019.4754553,
+    "ast_hash": "93ca7c66f70ff062459b06d237808fb9",
+    "semantic_hash": "93ca7c66f70ff062459b06d237808fb9"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\project_configs.py": {
-    "mtime": 1778753455.288784,
-    "ast_hash": "1b9ab4d5612d7f057e9b80bbab662992",
-    "semantic_hash": ""
+    "mtime": 1779677372.4522407,
+    "ast_hash": "808fb0825a8736fd4ab6a49e9e1bb3cf",
+    "semantic_hash": "808fb0825a8736fd4ab6a49e9e1bb3cf"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\renders.py": {
     "mtime": 1779416579.9356868,
     "ast_hash": "30ef0a0eab5be62e9c438930afb45cc4",
-    "semantic_hash": ""
+    "semantic_hash": "30ef0a0eab5be62e9c438930afb45cc4"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\__init__.py": {
     "mtime": 1778137058.798396,
     "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
-    "semantic_hash": ""
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\001_initial.sql": {
     "mtime": 1778458181.1727877,
     "ast_hash": "d3614c2ae190890863ac462056ab07b5",
-    "semantic_hash": ""
+    "semantic_hash": "d3614c2ae190890863ac462056ab07b5"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\002_projects.sql": {
     "mtime": 1778466224.2220132,
     "ast_hash": "7d8dcdf571ef0de3c3e12c5f844337cb",
-    "semantic_hash": ""
+    "semantic_hash": "7d8dcdf571ef0de3c3e12c5f844337cb"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\003_project_configs.sql": {
     "mtime": 1778466454.0319593,
     "ast_hash": "fdef2d08e202b5318de99fee15a62da6",
-    "semantic_hash": ""
+    "semantic_hash": "fdef2d08e202b5318de99fee15a62da6"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\004_render_artifacts_events.sql": {
     "mtime": 1778466784.325297,
     "ast_hash": "400f06d16c9f153be5e7cb4f4b46c2b1",
-    "semantic_hash": ""
+    "semantic_hash": "400f06d16c9f153be5e7cb4f4b46c2b1"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\005_spec_cleanup.sql": {
     "mtime": 1778557207.1513762,
     "ast_hash": "524c1c6b0680bc76e94a2208e9d3f672",
-    "semantic_hash": ""
+    "semantic_hash": "524c1c6b0680bc76e94a2208e9d3f672"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\006_projects_canonical.sql": {
     "mtime": 1778735674.021855,
     "ast_hash": "b651845305a498017e98da2d7a6499d8",
-    "semantic_hash": ""
+    "semantic_hash": "b651845305a498017e98da2d7a6499d8"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\007_project_configs_canonical.sql": {
     "mtime": 1778739424.1951287,
     "ast_hash": "1dccd5c3f01fc04bb083ebf161c3d7da",
-    "semantic_hash": ""
+    "semantic_hash": "1dccd5c3f01fc04bb083ebf161c3d7da"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\008_render_history_canonical.sql": {
     "mtime": 1778743736.6325068,
     "ast_hash": "5817bac354678f33b986b5d8ba5b5705",
-    "semantic_hash": ""
+    "semantic_hash": "5817bac354678f33b986b5d8ba5b5705"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\009_render_artifacts_events_canonical.sql": {
     "mtime": 1778744083.946608,
     "ast_hash": "50527e989fdfbdd2f4d1a9af12ad2bee",
-    "semantic_hash": ""
+    "semantic_hash": "50527e989fdfbdd2f4d1a9af12ad2bee"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\db\\migrations\\010_app_settings_whitelist.sql": {
     "mtime": 1778762605.9923043,
     "ast_hash": "6e7fc13495966e70b94c8e098d13d54c",
-    "semantic_hash": ""
+    "semantic_hash": "6e7fc13495966e70b94c8e098d13d54c"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\domain\\project.py": {
     "mtime": 1778816001.9785285,
     "ast_hash": "9ea145093fea2d842b74a015ef11ca38",
-    "semantic_hash": ""
+    "semantic_hash": "9ea145093fea2d842b74a015ef11ca38"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\domain\\timing.py": {
     "mtime": 1778139227.8205335,
     "ast_hash": "a8255bd84b2708393268c46a83eef445",
-    "semantic_hash": ""
+    "semantic_hash": "a8255bd84b2708393268c46a83eef445"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\cache.py": {
-    "mtime": 1778204271.0424042,
-    "ast_hash": "26941680e6830e096f02ca095cb86720",
-    "semantic_hash": ""
+    "mtime": 1779797250.8940747,
+    "ast_hash": "ada20cfdd98910a4a1cafa794e7b3515",
+    "semantic_hash": "ada20cfdd98910a4a1cafa794e7b3515"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\chunker.py": {
     "mtime": 1778753252.8360431,
     "ast_hash": "44cd2528eb06e4db09edddee520377b4",
-    "semantic_hash": ""
+    "semantic_hash": "44cd2528eb06e4db09edddee520377b4"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\clip_render.py": {
     "mtime": 1779153980.3421438,
     "ast_hash": "c7547217982d930202e77e9c66f32da0",
-    "semantic_hash": ""
+    "semantic_hash": "c7547217982d930202e77e9c66f32da0"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\filtergraph.py": {
-    "mtime": 1779154086.3220813,
-    "ast_hash": "5baacc679ff03892cf64ddacb074e422",
-    "semantic_hash": ""
+    "mtime": 1779949155.9328682,
+    "ast_hash": "821531e7833f58b0f0ee685ff3022d52",
+    "semantic_hash": "821531e7833f58b0f0ee685ff3022d52"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\render.py": {
-    "mtime": 1779416595.957115,
-    "ast_hash": "5f90caa03f704358d4766d524014a8c5",
-    "semantic_hash": ""
+    "mtime": 1779797325.83671,
+    "ast_hash": "46aa7fdeacde0ce962cecc6d2ebb9c87",
+    "semantic_hash": "46aa7fdeacde0ce962cecc6d2ebb9c87"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\render_progress.py": {
     "mtime": 1779416572.2411015,
     "ast_hash": "f349ce8562fbd89fd5becce2985de996",
-    "semantic_hash": ""
+    "semantic_hash": "f349ce8562fbd89fd5becce2985de996"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\srt.py": {
-    "mtime": 1779024289.5077631,
-    "ast_hash": "725ca44dda510a540a21613792f17942",
-    "semantic_hash": ""
+    "mtime": 1779874228.3710465,
+    "ast_hash": "f15902ed1e4c0085c48958d347d8eaff",
+    "semantic_hash": "f15902ed1e4c0085c48958d347d8eaff"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\transcribe.py": {
-    "mtime": 1779327874.5322938,
-    "ast_hash": "20d4b460b9ca913f91b14b94fbdd29cd",
-    "semantic_hash": ""
+    "mtime": 1779866926.4562962,
+    "ast_hash": "be11e2a0022f41a24ffb839ed7224c65",
+    "semantic_hash": "be11e2a0022f41a24ffb839ed7224c65"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\pipeline\\__init__.py": {
     "mtime": 1778139231.3145676,
     "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
-    "semantic_hash": ""
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\routes\\alignment.py": {
-    "mtime": 1779024182.3474147,
-    "ast_hash": "03ebb8e3bbc3b4dec82df81f4ae16d34",
-    "semantic_hash": ""
+    "mtime": 1779873475.9624755,
+    "ast_hash": "c57fd7323d3d3386211127b159bf8ea9",
+    "semantic_hash": "c57fd7323d3d3386211127b159bf8ea9"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\routes\\media.py": {
     "mtime": 1778753264.5275698,
     "ast_hash": "1467b03e032d4fffe0b37b496a85f848",
-    "semantic_hash": ""
+    "semantic_hash": "1467b03e032d4fffe0b37b496a85f848"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\routes\\projects.py": {
-    "mtime": 1779372652.6503909,
-    "ast_hash": "29dd913d749913a7fb67c2f88a8743ec",
-    "semantic_hash": ""
+    "mtime": 1779895934.768524,
+    "ast_hash": "2eabe3c963c9f385e5467f1fd9410c6f",
+    "semantic_hash": "2eabe3c963c9f385e5467f1fd9410c6f"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\routes\\render.py": {
-    "mtime": 1779414623.8731415,
-    "ast_hash": "9535000835c074c06d8a52e1d2ed0803",
-    "semantic_hash": ""
+    "mtime": 1779853475.4358208,
+    "ast_hash": "3535a7dbd1f427451c7cd4b853877a6d",
+    "semantic_hash": "3535a7dbd1f427451c7cd4b853877a6d"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\routes\\setup.py": {
-    "mtime": 1778907821.9413478,
-    "ast_hash": "6a3516d69cf0f9e7a89cf05c031952eb",
-    "semantic_hash": ""
+    "mtime": 1779873436.2616985,
+    "ast_hash": "46dbc2b3026514307ec8f9fa77b2d686",
+    "semantic_hash": "46dbc2b3026514307ec8f9fa77b2d686"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\routes\\uploads.py": {
     "mtime": 1779153923.7509956,
     "ast_hash": "3c8e7734f2771db7702da4317bcbfd28",
-    "semantic_hash": ""
+    "semantic_hash": "3c8e7734f2771db7702da4317bcbfd28"
   },
   "E:\\claude\\video-creator\\apps\\server\\server\\routes\\ws.py": {
     "mtime": 1779416607.8228052,
     "ast_hash": "95258bb8af60559863b526da233c5b94",
-    "semantic_hash": ""
+    "semantic_hash": "95258bb8af60559863b526da233c5b94"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\conftest.py": {
     "mtime": 1778762611.7642496,
     "ast_hash": "8bb2bb17b74db9354c1f4ca25c749315",
-    "semantic_hash": ""
+    "semantic_hash": "8bb2bb17b74db9354c1f4ca25c749315"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_ai_provider_adapter.py": {
     "mtime": 1778735237.7832384,
     "ast_hash": "e86ec83a24f4645269de4f45e4b6302e",
-    "semantic_hash": ""
+    "semantic_hash": "e86ec83a24f4645269de4f45e4b6302e"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_alignment_integration.py": {
     "mtime": 1778141532.897704,
     "ast_hash": "60f4955371df35c92ff283884ecaed52",
-    "semantic_hash": ""
+    "semantic_hash": "60f4955371df35c92ff283884ecaed52"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_alignment_subtitles.py": {
-    "mtime": 1778842342.1526783,
-    "ast_hash": "2b8d7e9a25c8d782835ab4d58e9bacd8",
-    "semantic_hash": ""
+    "mtime": 1779874212.0180988,
+    "ast_hash": "ef3304b19c4a80d5d78d03b09e87723d",
+    "semantic_hash": "ef3304b19c4a80d5d78d03b09e87723d"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_app_db.py": {
     "mtime": 1778752812.6196554,
     "ast_hash": "f498ab23a53efff7a72145ba605eba33",
-    "semantic_hash": ""
+    "semantic_hash": "f498ab23a53efff7a72145ba605eba33"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_audio_endpoint.py": {
     "mtime": 1778140132.949978,
     "ast_hash": "f0378c870de5160872c2a89c48079db1",
-    "semantic_hash": ""
+    "semantic_hash": "f0378c870de5160872c2a89c48079db1"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_backend_global_acceptance.py": {
     "mtime": 1778752969.705674,
     "ast_hash": "c395cbbd0a4e39b28550689723203eb0",
-    "semantic_hash": ""
+    "semantic_hash": "c395cbbd0a4e39b28550689723203eb0"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_chunker.py": {
     "mtime": 1778332981.947522,
     "ast_hash": "e26a42b953045723766cd302ab2696cd",
-    "semantic_hash": ""
+    "semantic_hash": "e26a42b953045723766cd302ab2696cd"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_clip_cache.py": {
     "mtime": 1779339118.6785474,
     "ast_hash": "8cca03be01b4e90a836bed007029dfe0",
-    "semantic_hash": ""
+    "semantic_hash": "8cca03be01b4e90a836bed007029dfe0"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_filtergraph.py": {
-    "mtime": 1779415476.3765662,
-    "ast_hash": "9a592cdc7a180d5b9aeecbbc2f3d5974",
-    "semantic_hash": ""
+    "mtime": 1779948450.397357,
+    "ast_hash": "776834d678916c98a5dfcc606540787b",
+    "semantic_hash": "776834d678916c98a5dfcc606540787b"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_health.py": {
     "mtime": 1778735451.2042544,
     "ast_hash": "850e2d6bae6eefb075afcac8ca3aabe3",
-    "semantic_hash": ""
+    "semantic_hash": "850e2d6bae6eefb075afcac8ca3aabe3"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_layers_endpoint.py": {
     "mtime": 1778557751.1593628,
     "ast_hash": "e10a86c03118d159d00f035906e94d2d",
-    "semantic_hash": ""
+    "semantic_hash": "e10a86c03118d159d00f035906e94d2d"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_media_upload.py": {
     "mtime": 1778943049.9698935,
     "ast_hash": "41cbc681b3dd14dcc85028a850de2602",
-    "semantic_hash": ""
+    "semantic_hash": "41cbc681b3dd14dcc85028a850de2602"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_projects_route.py": {
-    "mtime": 1779364533.574187,
-    "ast_hash": "81b38cff0849ddcc9b39ae55a419164a",
-    "semantic_hash": ""
+    "mtime": 1779684058.4024382,
+    "ast_hash": "e2e7842dd0f70ecd755c8ad7be0d1482",
+    "semantic_hash": "e2e7842dd0f70ecd755c8ad7be0d1482"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_project_load.py": {
     "mtime": 1778466680.4536457,
     "ast_hash": "1d525817c02468de29547e1babeb7640",
-    "semantic_hash": ""
+    "semantic_hash": "1d525817c02468de29547e1babeb7640"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_project_schema.py": {
     "mtime": 1778918511.4227417,
     "ast_hash": "364a35bf0e5c6ab82f0ea1a435c7a28e",
-    "semantic_hash": ""
+    "semantic_hash": "364a35bf0e5c6ab82f0ea1a435c7a28e"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_render_endpoint.py": {
-    "mtime": 1779433193.096313,
-    "ast_hash": "d988477826ca4c12df2204000bd1bcea",
-    "semantic_hash": ""
+    "mtime": 1779695962.4267414,
+    "ast_hash": "ee5b6ca47d15ca70c42aa24196d7415f",
+    "semantic_hash": "ee5b6ca47d15ca70c42aa24196d7415f"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_render_history.py": {
     "mtime": 1779415798.8848722,
     "ast_hash": "61813d6ed48ecd1c32f3f5705c6e69ed",
-    "semantic_hash": ""
+    "semantic_hash": "61813d6ed48ecd1c32f3f5705c6e69ed"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_render_performance.py": {
     "mtime": 1779433211.8997612,
     "ast_hash": "bf62d8cf4b10df908a55070531b20825",
-    "semantic_hash": ""
+    "semantic_hash": "bf62d8cf4b10df908a55070531b20825"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_render_progress.py": {
     "mtime": 1779433242.0201461,
     "ast_hash": "4628be20cb75a06e09617b250c17aa70",
-    "semantic_hash": ""
+    "semantic_hash": "4628be20cb75a06e09617b250c17aa70"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_setup_route.py": {
-    "mtime": 1778907841.6114664,
-    "ast_hash": "5e9d614aa0afd157c40b8d7767bbcbc9",
-    "semantic_hash": ""
+    "mtime": 1779799023.040207,
+    "ast_hash": "b69936767a63a0c8fc17e3cb66f24faf",
+    "semantic_hash": "b69936767a63a0c8fc17e3cb66f24faf"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_setup_test01_fixture.py": {
     "mtime": 1778739825.8079233,
     "ast_hash": "f090813088b5a7e71aec4413559b9ab8",
-    "semantic_hash": ""
+    "semantic_hash": "f090813088b5a7e71aec4413559b9ab8"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_shared_api_schemas.py": {
     "mtime": 1779372433.5279753,
     "ast_hash": "fdd55297c8a4644f5f7ea09d75a091a9",
-    "semantic_hash": ""
+    "semantic_hash": "fdd55297c8a4644f5f7ea09d75a091a9"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_srt.py": {
-    "mtime": 1779022542.1299245,
-    "ast_hash": "9b8d67c393f8a73033b0e7e65a71acdb",
-    "semantic_hash": ""
+    "mtime": 1779794276.3343322,
+    "ast_hash": "3cbf5c6ef76a3782359a0adcbbd6a497",
+    "semantic_hash": "3cbf5c6ef76a3782359a0adcbbd6a497"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\test_transcribe.py": {
-    "mtime": 1779247966.248424,
-    "ast_hash": "4ace3d0fe36a0197dc5369e1343aadaf",
-    "semantic_hash": ""
+    "mtime": 1779866811.3100467,
+    "ast_hash": "4be33df54d8046fbaa0c5605e427a883",
+    "semantic_hash": "4be33df54d8046fbaa0c5605e427a883"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\__init__.py": {
     "mtime": 1778120357.3656082,
     "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
-    "semantic_hash": ""
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\fixtures\\smoke-project\\project.json": {
     "mtime": 1778141512.6882105,
     "ast_hash": "8ab35a401942ea9ad3fa1a58fb0481de",
-    "semantic_hash": ""
+    "semantic_hash": "8ab35a401942ea9ad3fa1a58fb0481de"
   },
   "E:\\claude\\video-creator\\apps\\web\\.eslintrc.json": {
     "mtime": 1778120193.9489336,
     "ast_hash": "9b8be5ef96ddd69ecd1ddc1554c61a88",
-    "semantic_hash": ""
+    "semantic_hash": "9b8be5ef96ddd69ecd1ddc1554c61a88"
   },
   "E:\\claude\\video-creator\\apps\\web\\next-env.d.ts": {
     "mtime": 1778120156.3382592,
     "ast_hash": "90426577ad8f38459f3e566411c85589",
-    "semantic_hash": ""
+    "semantic_hash": "90426577ad8f38459f3e566411c85589"
   },
   "E:\\claude\\video-creator\\apps\\web\\next.config.ts": {
     "mtime": 1778239857.090745,
     "ast_hash": "34af9c325ef7440fbd90d9c6de9434ab",
-    "semantic_hash": ""
+    "semantic_hash": "34af9c325ef7440fbd90d9c6de9434ab"
   },
   "E:\\claude\\video-creator\\apps\\web\\package.json": {
     "mtime": 1778856831.8546202,
     "ast_hash": "f7c7ae83c0bb8c29067da4e84fb6ff02",
-    "semantic_hash": ""
+    "semantic_hash": "f7c7ae83c0bb8c29067da4e84fb6ff02"
   },
   "E:\\claude\\video-creator\\apps\\web\\playwright.config.ts": {
     "mtime": 1779154338.0639625,
     "ast_hash": "dbcd9c1862e77d97a7b60345ad783b52",
-    "semantic_hash": ""
+    "semantic_hash": "dbcd9c1862e77d97a7b60345ad783b52"
   },
   "E:\\claude\\video-creator\\apps\\web\\playwright.e2e.config.ts": {
     "mtime": 1778857637.4778864,
     "ast_hash": "2a9756e7abfbad135501840cd165425d",
-    "semantic_hash": ""
+    "semantic_hash": "2a9756e7abfbad135501840cd165425d"
   },
   "E:\\claude\\video-creator\\apps\\web\\postcss.config.mjs": {
     "mtime": 1778120100.641998,
     "ast_hash": "0f8aa602547b154dc06be77b007c51d2",
-    "semantic_hash": ""
+    "semantic_hash": "0f8aa602547b154dc06be77b007c51d2"
   },
   "E:\\claude\\video-creator\\apps\\web\\tsconfig.json": {
     "mtime": 1778120100.6399984,
     "ast_hash": "dd6177e3e2268095b5e23370dd1630fc",
-    "semantic_hash": ""
+    "semantic_hash": "dd6177e3e2268095b5e23370dd1630fc"
   },
   "E:\\claude\\video-creator\\apps\\web\\vitest.config.ts": {
     "mtime": 1778858370.4407396,
     "ast_hash": "aa8969b596ec63e0dbeaf6780623553b",
-    "semantic_hash": ""
+    "semantic_hash": "aa8969b596ec63e0dbeaf6780623553b"
   },
   "E:\\claude\\video-creator\\apps\\web\\vitest.setup.ts": {
     "mtime": 1778143641.5130637,
     "ast_hash": "0223945ddd2bf77f3af5706c9ff54c25",
-    "semantic_hash": ""
+    "semantic_hash": "0223945ddd2bf77f3af5706c9ff54c25"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\layout.tsx": {
     "mtime": 1779262368.296795,
     "ast_hash": "b1d36dde76f8cda81551eb43107791a4",
-    "semantic_hash": ""
+    "semantic_hash": "b1d36dde76f8cda81551eb43107791a4"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\page-chrome.test.ts": {
     "mtime": 1779417167.1200733,
     "ast_hash": "8442d3359b3d0d5e1f009f5d98fab8a0",
-    "semantic_hash": ""
+    "semantic_hash": "8442d3359b3d0d5e1f009f5d98fab8a0"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\page.test.tsx": {
-    "mtime": 1779375124.8717277,
-    "ast_hash": "f4f828cea6d5c9995301bdcd10743325",
-    "semantic_hash": ""
+    "mtime": 1779627370.5857527,
+    "ast_hash": "076e05c7557ae99772c2764aa61cb490",
+    "semantic_hash": "076e05c7557ae99772c2764aa61cb490"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\page.tsx": {
     "mtime": 1779375095.2031035,
     "ast_hash": "a9f2e80eca12d7fd07d6e09d9e45b67d",
-    "semantic_hash": ""
+    "semantic_hash": "a9f2e80eca12d7fd07d6e09d9e45b67d"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\editor\\page.test.tsx": {
-    "mtime": 1779417112.4339721,
-    "ast_hash": "6c0a4dc0bf6eb33a63b7868d290ec8c3",
-    "semantic_hash": ""
+    "mtime": 1779941332.1571455,
+    "ast_hash": "5b117d300b8590982575d37be3a09f05",
+    "semantic_hash": "5b117d300b8590982575d37be3a09f05"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\editor\\page.tsx": {
-    "mtime": 1779417033.5355043,
-    "ast_hash": "89c364a4e011012b6cf72cb8b9dae759",
-    "semantic_hash": ""
+    "mtime": 1779941300.3365967,
+    "ast_hash": "fd1f508453f9c32a172a24f66e2c2a69",
+    "semantic_hash": "fd1f508453f9c32a172a24f66e2c2a69"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\editor\\[projectId]\\page.tsx": {
     "mtime": 1778815286.4300332,
     "ast_hash": "41c55e6f6cc22e163940f34f36978dfc",
-    "semantic_hash": ""
+    "semantic_hash": "41c55e6f6cc22e163940f34f36978dfc"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\launcher\\page.tsx": {
     "mtime": 1778137813.828159,
     "ast_hash": "41c55e6f6cc22e163940f34f36978dfc",
-    "semantic_hash": ""
+    "semantic_hash": "41c55e6f6cc22e163940f34f36978dfc"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\render\\page.test.tsx": {
-    "mtime": 1779436084.853025,
-    "ast_hash": "b87c70564e7fcab67f31b32bacdcbeed",
-    "semantic_hash": ""
+    "mtime": 1779695943.7253213,
+    "ast_hash": "4aee7fbe2f6adc4d1f14f5b93e80a143",
+    "semantic_hash": "4aee7fbe2f6adc4d1f14f5b93e80a143"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\render\\page.tsx": {
     "mtime": 1779417015.3492427,
     "ast_hash": "53cbb825932c944b5b90f1408558f1e4",
-    "semantic_hash": ""
+    "semantic_hash": "53cbb825932c944b5b90f1408558f1e4"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\render\\RenderPageClient.tsx": {
-    "mtime": 1779419242.8453584,
-    "ast_hash": "0077d477ba9d7945643fb03b765cd71b",
-    "semantic_hash": ""
+    "mtime": 1779695927.8768451,
+    "ast_hash": "b38a1e0c1c03a737773728d53d9018bc",
+    "semantic_hash": "b38a1e0c1c03a737773728d53d9018bc"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\render\\[projectId]\\[renderId]\\page.tsx": {
     "mtime": 1779417167.1200733,
     "ast_hash": "77add578cf09142e5be2ee76fa8cd161",
-    "semantic_hash": ""
+    "semantic_hash": "77add578cf09142e5be2ee76fa8cd161"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\setup\\page.test.tsx": {
     "mtime": 1779246282.665508,
     "ast_hash": "193d347a94c37e545d8d1d44e0e57eb1",
-    "semantic_hash": ""
+    "semantic_hash": "193d347a94c37e545d8d1d44e0e57eb1"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\setup\\page.tsx": {
     "mtime": 1779249528.501804,
     "ast_hash": "22e2e2b87702433fa34ed868582cf314",
-    "semantic_hash": ""
+    "semantic_hash": "22e2e2b87702433fa34ed868582cf314"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\tokens\\page.test.tsx": {
     "mtime": 1778246057.672777,
     "ast_hash": "4cddf55844c108be8023725eed1b5875",
-    "semantic_hash": ""
+    "semantic_hash": "4cddf55844c108be8023725eed1b5875"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\tokens\\page.tsx": {
     "mtime": 1778246363.5878155,
     "ast_hash": "c07da5d8e94a82444fd8a8e39b73f724",
-    "semantic_hash": ""
+    "semantic_hash": "c07da5d8e94a82444fd8a8e39b73f724"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\app-shell\\AppShell.test.tsx": {
     "mtime": 1779238075.9808295,
     "ast_hash": "846ac1a50bd4eeb39285905c2d3e98aa",
-    "semantic_hash": ""
+    "semantic_hash": "846ac1a50bd4eeb39285905c2d3e98aa"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\app-shell\\AppShell.tsx": {
     "mtime": 1779238021.423764,
     "ast_hash": "bcece0f1fe7805175a1f93578651334e",
-    "semantic_hash": ""
+    "semantic_hash": "bcece0f1fe7805175a1f93578651334e"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\app-shell\\PageChrome.test.tsx": {
     "mtime": 1778246172.407312,
     "ast_hash": "8d9e49eb567371fc2064ed3ff1e5ebbf",
-    "semantic_hash": ""
+    "semantic_hash": "8d9e49eb567371fc2064ed3ff1e5ebbf"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\app-shell\\PageChrome.tsx": {
     "mtime": 1778807010.022198,
     "ast_hash": "1b9d2f2294846c7bdbe5383dd992b4d9",
-    "semantic_hash": ""
+    "semantic_hash": "1b9d2f2294846c7bdbe5383dd992b4d9"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\app-shell\\ThemeInitScript.test.tsx": {
     "mtime": 1778238137.5513027,
     "ast_hash": "62c2a5a5ed78c93ad70118f65b7d4cc0",
-    "semantic_hash": ""
+    "semantic_hash": "62c2a5a5ed78c93ad70118f65b7d4cc0"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\app-shell\\ThemeInitScript.tsx": {
     "mtime": 1778238164.5725343,
     "ast_hash": "8e425441f25d055a5b527f489935e8f3",
-    "semantic_hash": ""
+    "semantic_hash": "8e425441f25d055a5b527f489935e8f3"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\assign-modal\\AssignModal.test.tsx": {
-    "mtime": 1779355803.4626834,
-    "ast_hash": "2327f238e9b33089256753b419c51147",
-    "semantic_hash": ""
+    "mtime": 1779849142.6252284,
+    "ast_hash": "f8e7ef9f932d2acdadc94aa9d08ed0c0",
+    "semantic_hash": "f8e7ef9f932d2acdadc94aa9d08ed0c0"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\assign-modal\\AssignModal.tsx": {
-    "mtime": 1779356793.3935995,
-    "ast_hash": "3fb247e2e8f4fe15eb2e4eb5aa6200eb",
-    "semantic_hash": ""
+    "mtime": 1779940053.7305732,
+    "ast_hash": "f8cf6cc8c71c452efbf976580b0bbc6d",
+    "semantic_hash": "f8cf6cc8c71c452efbf976580b0bbc6d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\bg-modal\\BgModal.test.tsx": {
-    "mtime": 1779356842.033074,
-    "ast_hash": "47125af480a61a14b1fbab1f92606d99",
-    "semantic_hash": ""
+    "mtime": 1779849040.8895805,
+    "ast_hash": "1b3d7c5ed039a61d41b42cc9507aab71",
+    "semantic_hash": "1b3d7c5ed039a61d41b42cc9507aab71"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\bg-modal\\BgModal.tsx": {
-    "mtime": 1779356822.3855238,
-    "ast_hash": "3ddc416d6b87bb9c26fc233230dbd1cd",
-    "semantic_hash": ""
+    "mtime": 1779850839.234105,
+    "ast_hash": "13577874ebc52b19c0677a62413345c4",
+    "semantic_hash": "13577874ebc52b19c0677a62413345c4"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\EditorBar.test.tsx": {
-    "mtime": 1779269199.787874,
-    "ast_hash": "bba846c0d18a3833e7d06380c5c70544",
-    "semantic_hash": ""
+    "mtime": 1779703146.502929,
+    "ast_hash": "aaa166c488c4b1ce4d10dd13b26b862c",
+    "semantic_hash": "aaa166c488c4b1ce4d10dd13b26b862c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\EditorBar.tsx": {
-    "mtime": 1779269357.4022858,
-    "ast_hash": "0d637d1185c3905ff4651d40026c777d",
-    "semantic_hash": ""
+    "mtime": 1779702696.3454723,
+    "ast_hash": "1368c2938635b54c1f2b8c84c08b3e12",
+    "semantic_hash": "1368c2938635b54c1f2b8c84c08b3e12"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\EditorModal.test.tsx": {
-    "mtime": 1779349368.0822084,
-    "ast_hash": "15124805ffb3422a3758b8907504b017",
-    "semantic_hash": ""
+    "mtime": 1779941829.3096411,
+    "ast_hash": "69f2bc951cc70361cb09ff8373f2743b",
+    "semantic_hash": "69f2bc951cc70361cb09ff8373f2743b"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\EditorModal.tsx": {
-    "mtime": 1779349437.3693159,
-    "ast_hash": "43b6448db602a9918ca55febe2c592df",
-    "semantic_hash": ""
+    "mtime": 1779941765.1096878,
+    "ast_hash": "ac9bc507aadfe3e7497ade1d9935f5c5",
+    "semantic_hash": "ac9bc507aadfe3e7497ade1d9935f5c5"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\Inspector.test.tsx": {
-    "mtime": 1779173932.652841,
-    "ast_hash": "fc74712594d6b88603ae824004c9776e",
-    "semantic_hash": ""
+    "mtime": 1779940684.1167152,
+    "ast_hash": "05f042370b4e6da76105bd06680b87f8",
+    "semantic_hash": "05f042370b4e6da76105bd06680b87f8"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\Inspector.tsx": {
-    "mtime": 1779349412.954934,
-    "ast_hash": "f3be4c834574a96fd8fad93e32fbb065",
-    "semantic_hash": ""
+    "mtime": 1779940633.966841,
+    "ast_hash": "e4096466da941064861d33abfafdc77d",
+    "semantic_hash": "e4096466da941064861d33abfafdc77d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\LayersPopover.test.tsx": {
     "mtime": 1779349310.3471296,
     "ast_hash": "6cff22206130280a6d40f8e897368b9c",
-    "semantic_hash": ""
+    "semantic_hash": "6cff22206130280a6d40f8e897368b9c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\LayersPopover.tsx": {
     "mtime": 1779349269.9962802,
     "ast_hash": "0c5eeb80872c267d81dfdd994c8e591c",
-    "semantic_hash": ""
+    "semantic_hash": "0c5eeb80872c267d81dfdd994c8e591c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\PreviewControls.test.tsx": {
     "mtime": 1779074940.0913575,
     "ast_hash": "eabd7d22df69f4645c8996ab74c9ce00",
-    "semantic_hash": ""
+    "semantic_hash": "eabd7d22df69f4645c8996ab74c9ce00"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\PreviewControls.tsx": {
     "mtime": 1779075664.530648,
     "ast_hash": "cc4801bfe58d595c9c9593e283fa316d",
-    "semantic_hash": ""
+    "semantic_hash": "cc4801bfe58d595c9c9593e283fa316d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\PreviewSurface.test.tsx": {
-    "mtime": 1779238249.0776172,
-    "ast_hash": "553e754f8b4f81258b707f1e5eb0b4b6",
-    "semantic_hash": ""
+    "mtime": 1779941158.8990443,
+    "ast_hash": "a51d51d74c4ee5ca3415ae1e5b1ec769",
+    "semantic_hash": "a51d51d74c4ee5ca3415ae1e5b1ec769"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\PreviewSurface.tsx": {
-    "mtime": 1779349397.6026988,
-    "ast_hash": "bf095651e4f6fd6aa631cb730cce17b2",
-    "semantic_hash": ""
+    "mtime": 1779948644.8550425,
+    "ast_hash": "c627007b3c9477b86eb014f9f8a0f1c9",
+    "semantic_hash": "c627007b3c9477b86eb014f9f8a0f1c9"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\RenderStrip.test.tsx": {
-    "mtime": 1778921204.8962877,
-    "ast_hash": "31005c065422ff8e9ba30dfc7c0010a4",
-    "semantic_hash": ""
+    "mtime": 1779766007.1173928,
+    "ast_hash": "36c34fff0cace342fe7d90fd4cb35ca3",
+    "semantic_hash": "36c34fff0cace342fe7d90fd4cb35ca3"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\RenderStrip.tsx": {
-    "mtime": 1778921083.1831372,
-    "ast_hash": "28ffc1e04bcf0f52e3a2325d58d49550",
-    "semantic_hash": ""
+    "mtime": 1779766257.549209,
+    "ast_hash": "7c65f5951c278d346ae3b02e554b18f8",
+    "semantic_hash": "7c65f5951c278d346ae3b02e554b18f8"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\Timeline.test.tsx": {
-    "mtime": 1779364572.5973222,
-    "ast_hash": "1a1baf5cf680d943d58b9eb161f7e86f",
-    "semantic_hash": ""
+    "mtime": 1779941368.5484924,
+    "ast_hash": "60e822d52fb970e5020769ef1d7b7759",
+    "semantic_hash": "60e822d52fb970e5020769ef1d7b7759"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\Timeline.tsx": {
-    "mtime": 1779365193.8229375,
-    "ast_hash": "0d025ef29180edd16226fd667fee7b64",
-    "semantic_hash": ""
+    "mtime": 1779941352.702242,
+    "ast_hash": "6edb2caa87417f062506e38cd5f5135f",
+    "semantic_hash": "6edb2caa87417f062506e38cd5f5135f"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\TranscriptPane.test.tsx": {
-    "mtime": 1779355753.1846483,
-    "ast_hash": "4eacb2691f1fe483be589c35fde15856",
-    "semantic_hash": ""
+    "mtime": 1779941308.6114862,
+    "ast_hash": "f48e63aceda873aa615a099c6c887f70",
+    "semantic_hash": "f48e63aceda873aa615a099c6c887f70"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\TranscriptPane.tsx": {
-    "mtime": 1779355739.4175327,
-    "ast_hash": "00f6442c7492e1a8fcb0569a79aa5418",
-    "semantic_hash": ""
+    "mtime": 1779941294.697258,
+    "ast_hash": "16e1a18324ff8adf083fb709eddd038a",
+    "semantic_hash": "16e1a18324ff8adf083fb709eddd038a"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\editor\\types.ts": {
-    "mtime": 1778942439.8702748,
-    "ast_hash": "250ad47bdde25a3e8df505940377d177",
-    "semantic_hash": ""
+    "mtime": 1779940031.4416237,
+    "ast_hash": "3855f55059bb7f8a03b09ff656f01567",
+    "semantic_hash": "3855f55059bb7f8a03b09ff656f01567"
+  },
+  "E:\\claude\\video-creator\\apps\\web\\components\\editor\\WatermarkModal.test.tsx": {
+    "mtime": 1779940656.8338838,
+    "ast_hash": "339203147e4779962bb7c07888b4d2bf",
+    "semantic_hash": "339203147e4779962bb7c07888b4d2bf"
+  },
+  "E:\\claude\\video-creator\\apps\\web\\components\\editor\\WatermarkModal.tsx": {
+    "mtime": 1779940602.4323373,
+    "ast_hash": "3d15084c9578098c3a29146526bb6fa0",
+    "semantic_hash": "3d15084c9578098c3a29146526bb6fa0"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\inspector\\InspectorPanel.test.tsx": {
     "mtime": 1778148461.328961,
     "ast_hash": "852f8f545a01afded20c9f4ad58a7b59",
-    "semantic_hash": ""
+    "semantic_hash": "852f8f545a01afded20c9f4ad58a7b59"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\inspector\\InspectorPanel.tsx": {
     "mtime": 1779153174.9328804,
     "ast_hash": "c09fac40c8d557b5a2c7b3eebef65cac",
-    "semantic_hash": ""
+    "semantic_hash": "c09fac40c8d557b5a2c7b3eebef65cac"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\launcher\\MetricGrid.tsx": {
     "mtime": 1778287918.9612958,
     "ast_hash": "2584662e74ee5d46275e7d274874ca87",
-    "semantic_hash": ""
+    "semantic_hash": "2584662e74ee5d46275e7d274874ca87"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\launcher\\ProjectCard.test.tsx": {
-    "mtime": 1778815925.838888,
-    "ast_hash": "95376af5e357a25cee9d6a3cf7321bbc",
-    "semantic_hash": ""
+    "mtime": 1779627418.129732,
+    "ast_hash": "c166de66d1280d9bd3f020d114744f85",
+    "semantic_hash": "c166de66d1280d9bd3f020d114744f85"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\launcher\\ProjectCard.tsx": {
-    "mtime": 1778855959.161919,
-    "ast_hash": "a72800236f438cd03bb976c3345f2470",
-    "semantic_hash": ""
+    "mtime": 1779626955.1466577,
+    "ast_hash": "ff506719e1b51947776e12ffa2e489bc",
+    "semantic_hash": "ff506719e1b51947776e12ffa2e489bc"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\launcher\\ProjectThumb.tsx": {
     "mtime": 1779153204.752445,
     "ast_hash": "175eeb896f8d48b16164bcaa325d3472",
-    "semantic_hash": ""
+    "semantic_hash": "175eeb896f8d48b16164bcaa325d3472"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\launcher\\RuntimeCard.test.tsx": {
     "mtime": 1778327941.912241,
     "ast_hash": "88c8af883e5b0e8cb5d7c356c32ef8c8",
-    "semantic_hash": ""
+    "semantic_hash": "88c8af883e5b0e8cb5d7c356c32ef8c8"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\launcher\\RuntimeCard.tsx": {
     "mtime": 1778328550.1802564,
     "ast_hash": "15187273f2697eba46c50c4968538aad",
-    "semantic_hash": ""
+    "semantic_hash": "15187273f2697eba46c50c4968538aad"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\launcher\\TipsCard.tsx": {
     "mtime": 1778287947.31747,
     "ast_hash": "25af54a7cfd71637fc45ad7d27ff1552",
-    "semantic_hash": ""
+    "semantic_hash": "25af54a7cfd71637fc45ad7d27ff1552"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\layers-popover\\LayersPopover.test.tsx": {
     "mtime": 1778148476.6779678,
     "ast_hash": "1c55a57df53c953135d8b83e5630383c",
-    "semantic_hash": ""
+    "semantic_hash": "1c55a57df53c953135d8b83e5630383c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\layers-popover\\LayersPopover.tsx": {
     "mtime": 1778148736.146104,
     "ast_hash": "c2ff29c968b6c6dfcb41a370b566f7f8",
-    "semantic_hash": ""
+    "semantic_hash": "c2ff29c968b6c6dfcb41a370b566f7f8"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\preview-player\\PreviewPlayer.test.tsx": {
     "mtime": 1778203011.2037387,
     "ast_hash": "927bd03f42076ca864db763315604ab3",
-    "semantic_hash": ""
+    "semantic_hash": "927bd03f42076ca864db763315604ab3"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\preview-player\\PreviewPlayer.tsx": {
     "mtime": 1779153185.4737897,
     "ast_hash": "6eec971639de9fe3ae894f6d34dc5a84",
-    "semantic_hash": ""
+    "semantic_hash": "6eec971639de9fe3ae894f6d34dc5a84"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\preview-player\\Waveform.test.tsx": {
     "mtime": 1778142745.603805,
     "ast_hash": "8ebebe7e226182c5f0d00653841f897d",
-    "semantic_hash": ""
+    "semantic_hash": "8ebebe7e226182c5f0d00653841f897d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\preview-player\\Waveform.tsx": {
     "mtime": 1778156814.6568043,
     "ast_hash": "fa6ae2f80b182e5fb1b21422cbe86120",
-    "semantic_hash": ""
+    "semantic_hash": "fa6ae2f80b182e5fb1b21422cbe86120"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\AfterRenderPanel.test.tsx": {
     "mtime": 1779418404.6078892,
     "ast_hash": "bb09b80918442ac94c796ef0c44f6aec",
-    "semantic_hash": ""
+    "semantic_hash": "bb09b80918442ac94c796ef0c44f6aec"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\AfterRenderPanel.tsx": {
     "mtime": 1779418150.271083,
     "ast_hash": "42a41d3a3d7056eedf41836b0f8930e1",
-    "semantic_hash": ""
+    "semantic_hash": "42a41d3a3d7056eedf41836b0f8930e1"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\BigBar.tsx": {
     "mtime": 1779417552.6241448,
     "ast_hash": "d573c9fffa12d589782bd90dab330e92",
-    "semantic_hash": ""
+    "semantic_hash": "d573c9fffa12d589782bd90dab330e92"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\HistoryPanel.test.tsx": {
     "mtime": 1779418956.749401,
     "ast_hash": "960be1f5b3d1ca991e7624d9226d9bb7",
-    "semantic_hash": ""
+    "semantic_hash": "960be1f5b3d1ca991e7624d9226d9bb7"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\HistoryPanel.tsx": {
     "mtime": 1779373629.98273,
     "ast_hash": "3257dfa4696e1c9380fa2ed6141ad85e",
-    "semantic_hash": ""
+    "semantic_hash": "3257dfa4696e1c9380fa2ed6141ad85e"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\HistorySettingsPopover.tsx": {
     "mtime": 1778294790.0402446,
     "ast_hash": "2a77d70b2459d4dd16ab6573edf9c05d",
-    "semantic_hash": ""
+    "semantic_hash": "2a77d70b2459d4dd16ab6573edf9c05d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\LogCard.test.tsx": {
     "mtime": 1779417735.9800532,
     "ast_hash": "430c917d751c483e48d6794c35610e6c",
-    "semantic_hash": ""
+    "semantic_hash": "430c917d751c483e48d6794c35610e6c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\LogCard.tsx": {
     "mtime": 1779417579.8707101,
     "ast_hash": "5c06f157afea23179e0359e224a4ea17",
-    "semantic_hash": ""
+    "semantic_hash": "5c06f157afea23179e0359e224a4ea17"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\OutputPanel.test.tsx": {
     "mtime": 1779418384.4302185,
     "ast_hash": "b0ca777079d7727290d0548cb36327b7",
-    "semantic_hash": ""
+    "semantic_hash": "b0ca777079d7727290d0548cb36327b7"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\OutputPanel.tsx": {
     "mtime": 1779418715.5308228,
     "ast_hash": "4a8d400e999dd542ceee7e6829a2ab50",
-    "semantic_hash": ""
+    "semantic_hash": "4a8d400e999dd542ceee7e6829a2ab50"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\RenderAside.tsx": {
     "mtime": 1779418171.196916,
     "ast_hash": "f6daa4c97ff00d9de7a2738a530f7bcd",
-    "semantic_hash": ""
+    "semantic_hash": "f6daa4c97ff00d9de7a2738a530f7bcd"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\RenderCard.test.tsx": {
     "mtime": 1779417735.9790585,
     "ast_hash": "fde2c91a15a7c4bfdaf774ae5ab25427",
-    "semantic_hash": ""
+    "semantic_hash": "fde2c91a15a7c4bfdaf774ae5ab25427"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\RenderCard.tsx": {
     "mtime": 1779417544.7206743,
     "ast_hash": "51a83915098c3e3c1f301b5136aa60b2",
-    "semantic_hash": ""
+    "semantic_hash": "51a83915098c3e3c1f301b5136aa60b2"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\RenderHead.tsx": {
     "mtime": 1779435803.2404897,
     "ast_hash": "25e898243224a96047db9a3d700a1837",
-    "semantic_hash": ""
+    "semantic_hash": "25e898243224a96047db9a3d700a1837"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\RenderStats.tsx": {
     "mtime": 1778294644.4939947,
     "ast_hash": "1fbd239f6bfa16ad6451c90e4b7a55fa",
-    "semantic_hash": ""
+    "semantic_hash": "1fbd239f6bfa16ad6451c90e4b7a55fa"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render\\StagesList.tsx": {
     "mtime": 1778294664.1983774,
     "ast_hash": "04f192a36551a24f58973a66ddcd317b",
-    "semantic_hash": ""
+    "semantic_hash": "04f192a36551a24f58973a66ddcd317b"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render-draft-bar\\RenderDraftBar.test.tsx": {
     "mtime": 1779417033.5360074,
     "ast_hash": "11570786dc6520a67b2a82c19c984d9e",
-    "semantic_hash": ""
+    "semantic_hash": "11570786dc6520a67b2a82c19c984d9e"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render-draft-bar\\RenderDraftBar.tsx": {
     "mtime": 1779417033.5360074,
     "ast_hash": "b38a3e04ee9ac42d6012f70ebb648a0e",
-    "semantic_hash": ""
+    "semantic_hash": "b38a3e04ee9ac42d6012f70ebb648a0e"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render-history\\RenderHistory.test.tsx": {
     "mtime": 1779419449.0088513,
     "ast_hash": "e78d207ab53d206bf6df89a0e7812e3f",
-    "semantic_hash": ""
+    "semantic_hash": "e78d207ab53d206bf6df89a0e7812e3f"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render-history\\RenderHistory.tsx": {
     "mtime": 1779419440.6267545,
     "ast_hash": "d4730fbb64b145cf4c660dff3a333fa6",
-    "semantic_hash": ""
+    "semantic_hash": "d4730fbb64b145cf4c660dff3a333fa6"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render-pipeline\\RenderPipeline.test.tsx": {
     "mtime": 1779419463.9636092,
     "ast_hash": "ecf399192389141e7b928f54f7eada38",
-    "semantic_hash": ""
+    "semantic_hash": "ecf399192389141e7b928f54f7eada38"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\render-pipeline\\RenderPipeline.tsx": {
     "mtime": 1779419457.123239,
     "ast_hash": "4708ebf29edca744119b385ab3169a63",
-    "semantic_hash": ""
+    "semantic_hash": "4708ebf29edca744119b385ab3169a63"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\setup\\AlignmentCard.test.tsx": {
     "mtime": 1778841356.9926412,
     "ast_hash": "1b7ac0cc162ce616e7904e1a23df48ab",
-    "semantic_hash": ""
+    "semantic_hash": "1b7ac0cc162ce616e7904e1a23df48ab"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\setup\\AlignmentCard.tsx": {
     "mtime": 1778855959.1629179,
     "ast_hash": "eabd77c9aa73ed258cde95caa76243bf",
-    "semantic_hash": ""
+    "semantic_hash": "eabd77c9aa73ed258cde95caa76243bf"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\setup\\PathCard.tsx": {
     "mtime": 1778287992.3398533,
     "ast_hash": "e075dc7c92c3564a172bb2e68292ba33",
-    "semantic_hash": ""
+    "semantic_hash": "e075dc7c92c3564a172bb2e68292ba33"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\setup\\StatusTile.test.tsx": {
     "mtime": 1778327994.0533166,
     "ast_hash": "033dec53a3465c6bb639b0a282611f7c",
-    "semantic_hash": ""
+    "semantic_hash": "033dec53a3465c6bb639b0a282611f7c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\setup\\StatusTile.tsx": {
     "mtime": 1778855959.163919,
     "ast_hash": "d200732558211c386a256ad338de920e",
-    "semantic_hash": ""
+    "semantic_hash": "d200732558211c386a256ad338de920e"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\setup\\Stepper.tsx": {
     "mtime": 1779252995.9467003,
     "ast_hash": "20477ceb9973af2ecb67ed98b15dd864",
-    "semantic_hash": ""
+    "semantic_hash": "20477ceb9973af2ecb67ed98b15dd864"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\subtitle-toggle\\SubtitleToggle.test.tsx": {
     "mtime": 1778202384.192219,
     "ast_hash": "3681641d1fd661f3dfd7e59cd454217d",
-    "semantic_hash": ""
+    "semantic_hash": "3681641d1fd661f3dfd7e59cd454217d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\subtitle-toggle\\SubtitleToggle.tsx": {
     "mtime": 1778202285.8029215,
     "ast_hash": "2e2c3a19da24408d435f2fca447709e4",
-    "semantic_hash": ""
+    "semantic_hash": "2e2c3a19da24408d435f2fca447709e4"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\timeline\\Timeline.test.tsx": {
     "mtime": 1778143666.3199713,
     "ast_hash": "0493bd49b352a00a8470e38bd4733aa5",
-    "semantic_hash": ""
+    "semantic_hash": "0493bd49b352a00a8470e38bd4733aa5"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\timeline\\Timeline.tsx": {
     "mtime": 1778148888.2974317,
     "ast_hash": "7c54d539c343fe2df1d154780a838b10",
-    "semantic_hash": ""
+    "semantic_hash": "7c54d539c343fe2df1d154780a838b10"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\timeline\\TimelineRuler.test.tsx": {
     "mtime": 1778142699.6015484,
     "ast_hash": "aad9ff977e92bb84eed8f644b235b8ce",
-    "semantic_hash": ""
+    "semantic_hash": "aad9ff977e92bb84eed8f644b235b8ce"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\timeline\\TimelineRuler.tsx": {
     "mtime": 1778140681.016879,
     "ast_hash": "7e691926f67030191ca5feea40580a66",
-    "semantic_hash": ""
+    "semantic_hash": "7e691926f67030191ca5feea40580a66"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\timeline\\TimelineTrack.test.tsx": {
     "mtime": 1778143671.0738487,
     "ast_hash": "6772af2a9032fa045e73b648e10b7999",
-    "semantic_hash": ""
+    "semantic_hash": "6772af2a9032fa045e73b648e10b7999"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\timeline\\TimelineTrack.tsx": {
-    "mtime": 1779153190.9170482,
-    "ast_hash": "52169a3bc6454262d86478acfab3bafc",
-    "semantic_hash": ""
+    "mtime": 1779850758.0520937,
+    "ast_hash": "5ee2125083bde3f8109a783024632130",
+    "semantic_hash": "5ee2125083bde3f8109a783024632130"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\transcript-panel\\TranscriptPanel.test.tsx": {
     "mtime": 1778143648.1739368,
     "ast_hash": "918752035c973bee7a74d535d9b71af7",
-    "semantic_hash": ""
+    "semantic_hash": "918752035c973bee7a74d535d9b71af7"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\transcript-panel\\TranscriptPanel.tsx": {
     "mtime": 1778148927.7373023,
     "ast_hash": "e45bf88c015c71c9ffb690931454895c",
-    "semantic_hash": ""
+    "semantic_hash": "e45bf88c015c71c9ffb690931454895c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Button.test.tsx": {
     "mtime": 1778233456.0288527,
     "ast_hash": "2a166bf2abeaac0cd37aa30be303be74",
-    "semantic_hash": ""
+    "semantic_hash": "2a166bf2abeaac0cd37aa30be303be74"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Button.tsx": {
     "mtime": 1778233491.3597944,
     "ast_hash": "30ba065ad264f4bcc918105a05b9deb2",
-    "semantic_hash": ""
+    "semantic_hash": "30ba065ad264f4bcc918105a05b9deb2"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\ConfirmDialog.tsx": {
     "mtime": 1778294599.7008252,
     "ast_hash": "c66f2dd6538b19b7edb877ba4e24f4c9",
-    "semantic_hash": ""
+    "semantic_hash": "c66f2dd6538b19b7edb877ba4e24f4c9"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Form.test.tsx": {
     "mtime": 1778234537.4737625,
     "ast_hash": "2ef7bf938dd2eaeb12552eb5fda08bff",
-    "semantic_hash": ""
+    "semantic_hash": "2ef7bf938dd2eaeb12552eb5fda08bff"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Form.tsx": {
     "mtime": 1778234584.0899274,
     "ast_hash": "17f434d535a6ad443138bae0b313490d",
-    "semantic_hash": ""
+    "semantic_hash": "17f434d535a6ad443138bae0b313490d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\IconButton.test.tsx": {
     "mtime": 1778233566.8236127,
     "ast_hash": "72b1777ef06a3c5e312edfef62d9dde4",
-    "semantic_hash": ""
+    "semantic_hash": "72b1777ef06a3c5e312edfef62d9dde4"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\IconButton.tsx": {
     "mtime": 1778233607.3082995,
     "ast_hash": "61568eb4689af866edbad4b3262bd074",
-    "semantic_hash": ""
+    "semantic_hash": "61568eb4689af866edbad4b3262bd074"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\index.test.ts": {
     "mtime": 1778233325.3517587,
     "ast_hash": "09f204ab06cc05df5b8fd55878d98416",
-    "semantic_hash": ""
+    "semantic_hash": "09f204ab06cc05df5b8fd55878d98416"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\index.ts": {
     "mtime": 1778294607.544461,
     "ast_hash": "a542c1f9ad3570bf59556d26c00b73af",
-    "semantic_hash": ""
+    "semantic_hash": "a542c1f9ad3570bf59556d26c00b73af"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Kbd.test.tsx": {
     "mtime": 1778234072.9858046,
     "ast_hash": "79d4a5016303c0f8553365c52510c357",
-    "semantic_hash": ""
+    "semantic_hash": "79d4a5016303c0f8553365c52510c357"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Kbd.tsx": {
     "mtime": 1778234102.7257495,
     "ast_hash": "0478badd94ab99008e8f34b7854af9c1",
-    "semantic_hash": ""
+    "semantic_hash": "0478badd94ab99008e8f34b7854af9c1"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\LayerChip.test.tsx": {
     "mtime": 1778234799.5202923,
     "ast_hash": "05f1fbe61b6caeaa3e2017cb68102d4d",
-    "semantic_hash": ""
+    "semantic_hash": "05f1fbe61b6caeaa3e2017cb68102d4d"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\LayerChip.tsx": {
     "mtime": 1778234816.79354,
     "ast_hash": "e76f4f97af00cbfd2a69f9447f15c1d5",
-    "semantic_hash": ""
+    "semantic_hash": "e76f4f97af00cbfd2a69f9447f15c1d5"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\SegmentedControl.test.tsx": {
     "mtime": 1778233835.4090657,
     "ast_hash": "9b1796fcc34fa45535139c1d23c8542c",
-    "semantic_hash": ""
+    "semantic_hash": "9b1796fcc34fa45535139c1d23c8542c"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\SegmentedControl.tsx": {
     "mtime": 1778233886.408463,
     "ast_hash": "2f3b49a53f804c511b2110ca98550ef2",
-    "semantic_hash": ""
+    "semantic_hash": "2f3b49a53f804c511b2110ca98550ef2"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\SharedPrimitives.test.tsx": {
     "mtime": 1778238284.5077844,
     "ast_hash": "8cd9110d45b919717355276fc1935ce4",
-    "semantic_hash": ""
+    "semantic_hash": "8cd9110d45b919717355276fc1935ce4"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\StatusTag.test.tsx": {
     "mtime": 1778233966.4289281,
     "ast_hash": "3c9b8cc53777c113d30751fafc7490ea",
-    "semantic_hash": ""
+    "semantic_hash": "3c9b8cc53777c113d30751fafc7490ea"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\StatusTag.tsx": {
     "mtime": 1778855959.1659214,
     "ast_hash": "0f933fe52ccd745922933c6a8203d2d2",
-    "semantic_hash": ""
+    "semantic_hash": "0f933fe52ccd745922933c6a8203d2d2"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Surface.test.tsx": {
     "mtime": 1778234354.171075,
     "ast_hash": "effc8ca32c6c416fc226cb9016ee2170",
-    "semantic_hash": ""
+    "semantic_hash": "effc8ca32c6c416fc226cb9016ee2170"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\ui\\Surface.tsx": {
     "mtime": 1778234379.1056907,
     "ast_hash": "5876610096b13b9fbf17c23bd5deb7cc",
-    "semantic_hash": ""
+    "semantic_hash": "5876610096b13b9fbf17c23bd5deb7cc"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\watermark-panel\\WatermarkPanel.test.tsx": {
-    "mtime": 1779022456.723696,
-    "ast_hash": "1a70eed6818493c171bc035b878d647c",
-    "semantic_hash": ""
+    "mtime": 1779849175.2498689,
+    "ast_hash": "863acd9c351ef93f1d5666ab6f424dbe",
+    "semantic_hash": "863acd9c351ef93f1d5666ab6f424dbe"
   },
   "E:\\claude\\video-creator\\apps\\web\\components\\watermark-panel\\WatermarkPanel.tsx": {
-    "mtime": 1779022623.967002,
-    "ast_hash": "861b77b8652d8363fba5d9b86e2b768f",
-    "semantic_hash": ""
+    "mtime": 1779850434.9829743,
+    "ast_hash": "e4a903bb8556fbe67e1f4d907a46272d",
+    "semantic_hash": "e4a903bb8556fbe67e1f4d907a46272d"
   },
   "E:\\claude\\video-creator\\apps\\web\\i18n\\request.ts": {
     "mtime": 1778239913.5944104,
     "ast_hash": "ff3da15a09b6bda3d0afec9ec227b184",
-    "semantic_hash": ""
+    "semantic_hash": "ff3da15a09b6bda3d0afec9ec227b184"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\format.ts": {
     "mtime": 1778294355.213752,
     "ast_hash": "6a79482ea81e83c51dd0fa7993da5b78",
-    "semantic_hash": ""
+    "semantic_hash": "6a79482ea81e83c51dd0fa7993da5b78"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\layers.test.ts": {
-    "mtime": 1779069154.3296986,
-    "ast_hash": "94ab00d11c451e8fe8440ea6aec634da",
-    "semantic_hash": ""
+    "mtime": 1779852962.3729582,
+    "ast_hash": "2888653d6e415f0b90eb18a6ca9a4c4e",
+    "semantic_hash": "2888653d6e415f0b90eb18a6ca9a4c4e"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\layers.ts": {
-    "mtime": 1779154602.646646,
-    "ast_hash": "e9a28281d81f183b8aea9d5ae7339987",
-    "semantic_hash": ""
+    "mtime": 1779852824.9604075,
+    "ast_hash": "049f504877e7391ad7ded80d7b381f28",
+    "semantic_hash": "049f504877e7391ad7ded80d7b381f28"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\api\\server.ts": {
     "mtime": 1778834106.6715186,
     "ast_hash": "d061e57725a2cb6ed8fd9add57f2aac3",
-    "semantic_hash": ""
+    "semantic_hash": "d061e57725a2cb6ed8fd9add57f2aac3"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\editor-operation-log\\operation-log.test.ts": {
-    "mtime": 1779339162.8980227,
-    "ast_hash": "b7156be673298c30fcaf137bc72fcc4f",
-    "semantic_hash": ""
+    "mtime": 1779627336.139786,
+    "ast_hash": "7d79b47ded00bb95d19b61e4b305da9a",
+    "semantic_hash": "7d79b47ded00bb95d19b61e4b305da9a"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\editor-operation-log\\operation-log.ts": {
-    "mtime": 1779364277.2675304,
-    "ast_hash": "8b21b102b4f561662a49d85e42045584",
-    "semantic_hash": ""
+    "mtime": 1779769613.758594,
+    "ast_hash": "985d45107eba5b5ccd321848f9dc0b37",
+    "semantic_hash": "985d45107eba5b5ccd321848f9dc0b37"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\format\\render.test.ts": {
     "mtime": 1779418328.0083623,
     "ast_hash": "36564b772de3853976b0997f37387a8a",
-    "semantic_hash": ""
+    "semantic_hash": "36564b772de3853976b0997f37387a8a"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\format\\render.ts": {
     "mtime": 1779418308.6651702,
     "ast_hash": "d1ccdc7b243f26e14c749c61e484a54d",
-    "semantic_hash": ""
+    "semantic_hash": "d1ccdc7b243f26e14c749c61e484a54d"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useAlignment.test.ts": {
     "mtime": 1778333059.574165,
     "ast_hash": "85c3326660ee67bb72331f0b14c2040d",
-    "semantic_hash": ""
+    "semantic_hash": "85c3326660ee67bb72331f0b14c2040d"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useAlignment.ts": {
     "mtime": 1778469285.9745777,
     "ast_hash": "e0016fb57187e076d3aa8279ae28ea92",
-    "semantic_hash": ""
+    "semantic_hash": "e0016fb57187e076d3aa8279ae28ea92"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useAssignModal.test.ts": {
     "mtime": 1778148422.3509939,
     "ast_hash": "c6fbedaf32cbcf5d0ebb7929a787856a",
-    "semantic_hash": ""
+    "semantic_hash": "c6fbedaf32cbcf5d0ebb7929a787856a"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useAssignModal.ts": {
     "mtime": 1778148528.587416,
     "ast_hash": "388558d8c8f3bae5feac8902c4cf307f",
-    "semantic_hash": ""
+    "semantic_hash": "388558d8c8f3bae5feac8902c4cf307f"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\usePlaybackTime.test.ts": {
     "mtime": 1778142623.8246386,
     "ast_hash": "891063255a3a451cd05b7a6b0c181fb6",
-    "semantic_hash": ""
+    "semantic_hash": "891063255a3a451cd05b7a6b0c181fb6"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\usePlaybackTime.ts": {
     "mtime": 1778140618.0142353,
     "ast_hash": "e5fa3f1cadee83b6abac43f5facf6ae6",
-    "semantic_hash": ""
+    "semantic_hash": "e5fa3f1cadee83b6abac43f5facf6ae6"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useProject.test.ts": {
     "mtime": 1778469746.5826116,
     "ast_hash": "c1ab0bc0b822b3e0a8e7be3121447bb3",
-    "semantic_hash": ""
+    "semantic_hash": "c1ab0bc0b822b3e0a8e7be3121447bb3"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useProject.ts": {
     "mtime": 1778918886.7816024,
     "ast_hash": "f0d184499dba41a4393b11b787bc04be",
-    "semantic_hash": ""
+    "semantic_hash": "f0d184499dba41a4393b11b787bc04be"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useRenderProgress.ts": {
     "mtime": 1779407249.1555254,
     "ast_hash": "7b2489dd0899f2f2c2d71385ee54cb0e",
-    "semantic_hash": ""
+    "semantic_hash": "7b2489dd0899f2f2c2d71385ee54cb0e"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useRuntimeStatus.test.ts": {
     "mtime": 1778327948.433502,
     "ast_hash": "fd410cdcdfe08f8b653fe0c6eaa2c166",
-    "semantic_hash": ""
+    "semantic_hash": "fd410cdcdfe08f8b653fe0c6eaa2c166"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\hooks\\useRuntimeStatus.ts": {
     "mtime": 1778242293.701338,
     "ast_hash": "0e8b44e9f720e61a1bb6024aa5bb5ba2",
-    "semantic_hash": ""
+    "semantic_hash": "0e8b44e9f720e61a1bb6024aa5bb5ba2"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\i18n\\language-store.test.ts": {
     "mtime": 1778771750.2397442,
     "ast_hash": "260116acc8548687cee516e28aaa7d57",
-    "semantic_hash": ""
+    "semantic_hash": "260116acc8548687cee516e28aaa7d57"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\i18n\\language-store.ts": {
     "mtime": 1778238827.2370174,
     "ast_hash": "1a46a05521cc8d9046dee6c6f18b3532",
-    "semantic_hash": ""
+    "semantic_hash": "1a46a05521cc8d9046dee6c6f18b3532"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\i18n\\messages.test.ts": {
     "mtime": 1778239188.9327698,
     "ast_hash": "5c52e33ba4933ef0bff9c0498997ec21",
-    "semantic_hash": ""
+    "semantic_hash": "5c52e33ba4933ef0bff9c0498997ec21"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\i18n\\messages.ts": {
     "mtime": 1778239263.7579439,
     "ast_hash": "48f1b1291076d25c6df32dcabdc5d7ae",
-    "semantic_hash": ""
+    "semantic_hash": "48f1b1291076d25c6df32dcabdc5d7ae"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\i18n\\messages\\en.json": {
-    "mtime": 1779418218.9606705,
-    "ast_hash": "b542f52a8af0f8ff6b35edba4700247f",
-    "semantic_hash": ""
+    "mtime": 1779627208.1093364,
+    "ast_hash": "54e0436b481dbcb1c08c682bcf2ecc4d",
+    "semantic_hash": "54e0436b481dbcb1c08c682bcf2ecc4d"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\i18n\\messages\\zh.json": {
-    "mtime": 1779418226.2370825,
-    "ast_hash": "92aea784eacdcf690fe3b9ce1582a011",
-    "semantic_hash": ""
+    "mtime": 1779627216.7844863,
+    "ast_hash": "89525ef64c0ee9fb9f98c45636e08e21",
+    "semantic_hash": "89525ef64c0ee9fb9f98c45636e08e21"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\launcher\\palettes.ts": {
     "mtime": 1778287885.2303946,
     "ast_hash": "22eda2ac3096fcea6000f1b29aba8a44",
-    "semantic_hash": ""
+    "semantic_hash": "22eda2ac3096fcea6000f1b29aba8a44"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\preview\\resolveDisplay.test.ts": {
-    "mtime": 1779078363.7162583,
-    "ast_hash": "77a2cd7bf71709f3252794998bb4305d",
-    "semantic_hash": ""
+    "mtime": 1779948416.8152437,
+    "ast_hash": "faa05f61258f695b7e47d412fa737fb1",
+    "semantic_hash": "faa05f61258f695b7e47d412fa737fb1"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\preview\\resolveDisplay.ts": {
-    "mtime": 1779154656.6223516,
-    "ast_hash": "4485dc0aff2ec0153c66fdd5351d2f3b",
-    "semantic_hash": ""
+    "mtime": 1779948407.8235445,
+    "ast_hash": "fcd59d084964e0538d8d6990169f8d1d",
+    "semantic_hash": "fcd59d084964e0538d8d6990169f8d1d"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\normalize.test.ts": {
-    "mtime": 1779374340.7375638,
-    "ast_hash": "e78b0a45ec36b928c604ccdfa820484f",
-    "semantic_hash": ""
+    "mtime": 1779696111.111915,
+    "ast_hash": "1890564b8308ffa3664d8bf2708a5899",
+    "semantic_hash": "1890564b8308ffa3664d8bf2708a5899"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\normalize.ts": {
-    "mtime": 1779417512.207465,
-    "ast_hash": "45fd55d6fb2d6af245fb7d48d032ac31",
-    "semantic_hash": ""
+    "mtime": 1779696103.0953789,
+    "ast_hash": "2785f1c059e38df179db368756c1b974",
+    "semantic_hash": "2785f1c059e38df179db368756c1b974"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\routes.ts": {
     "mtime": 1779417015.3465724,
     "ast_hash": "d8ce9f8223cfc871908e0dd1fc2641a3",
-    "semantic_hash": ""
+    "semantic_hash": "d8ce9f8223cfc871908e0dd1fc2641a3"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\types.ts": {
     "mtime": 1779374344.450948,
     "ast_hash": "29bb04ffd36b6600ddac695021838dd0",
-    "semantic_hash": ""
+    "semantic_hash": "29bb04ffd36b6600ddac695021838dd0"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useFfmpegLog.ts": {
     "mtime": 1779372616.3257904,
     "ast_hash": "057b575f04f04e83ce787cd65a816d85",
-    "semantic_hash": ""
+    "semantic_hash": "057b575f04f04e83ce787cd65a816d85"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useFlash.ts": {
     "mtime": 1778294503.30275,
     "ast_hash": "d592aeef229423652dc881591fd34332",
-    "semantic_hash": ""
+    "semantic_hash": "d592aeef229423652dc881591fd34332"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderCancel.test.tsx": {
     "mtime": 1779418864.2399347,
     "ast_hash": "ce88e7eb04a70418fa7ebc3b719208a1",
-    "semantic_hash": ""
+    "semantic_hash": "ce88e7eb04a70418fa7ebc3b719208a1"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderCancel.ts": {
     "mtime": 1779418852.3187456,
     "ast_hash": "ff1823c4a937721d3dd366861fb4dd0b",
-    "semantic_hash": ""
+    "semantic_hash": "ff1823c4a937721d3dd366861fb4dd0b"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderHistory.test.tsx": {
     "mtime": 1779408334.6064482,
     "ast_hash": "ecba6b3b1e7d917a1f6479435ef985ea",
-    "semantic_hash": ""
+    "semantic_hash": "ecba6b3b1e7d917a1f6479435ef985ea"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderHistory.ts": {
     "mtime": 1779408230.7918217,
     "ast_hash": "584bda48cba4421e8aa1ab2a6b17cd7a",
-    "semantic_hash": ""
+    "semantic_hash": "584bda48cba4421e8aa1ab2a6b17cd7a"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderHotkeys.test.ts": {
     "mtime": 1778771526.258114,
     "ast_hash": "54fb3c38244965e009a2e88e6152317d",
-    "semantic_hash": ""
+    "semantic_hash": "54fb3c38244965e009a2e88e6152317d"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderHotkeys.ts": {
     "mtime": 1778771548.1990435,
     "ast_hash": "5e51b848365304521b3e63773dd0be3b",
-    "semantic_hash": ""
+    "semantic_hash": "5e51b848365304521b3e63773dd0be3b"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderJob.test.tsx": {
     "mtime": 1779408328.915372,
     "ast_hash": "fa74d34b82beaf5c7b116b3cdfb13cd1",
-    "semantic_hash": ""
+    "semantic_hash": "fa74d34b82beaf5c7b116b3cdfb13cd1"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useRenderJob.ts": {
     "mtime": 1779408225.9420497,
     "ast_hash": "eb4ece3be88265a98b42645c4c86c40f",
-    "semantic_hash": ""
+    "semantic_hash": "eb4ece3be88265a98b42645c4c86c40f"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useStickyScroll.ts": {
     "mtime": 1778294496.3404374,
     "ast_hash": "3ac5abc33e093c5ed91ceaf7aa92abfd",
-    "semantic_hash": ""
+    "semantic_hash": "3ac5abc33e093c5ed91ceaf7aa92abfd"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\render\\useSystemActions.ts": {
     "mtime": 1778294484.8759298,
     "ast_hash": "f291db7d9e327a53aa01b0a14c73f7b5",
-    "semantic_hash": ""
+    "semantic_hash": "f291db7d9e327a53aa01b0a14c73f7b5"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\setup\\useSetupDraft.test.ts": {
     "mtime": 1778852173.638733,
     "ast_hash": "7a4c55981805535a06851b386adbd47b",
-    "semantic_hash": ""
+    "semantic_hash": "7a4c55981805535a06851b386adbd47b"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\setup\\useSetupDraft.ts": {
     "mtime": 1779245875.2913964,
     "ast_hash": "92a5c92b3c95f8773ffceadd887deeb7",
-    "semantic_hash": ""
+    "semantic_hash": "92a5c92b3c95f8773ffceadd887deeb7"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\shortcuts\\isTextEditingTarget.test.ts": {
     "mtime": 1778771513.3714197,
     "ast_hash": "3f614a11daab7c7b77e01fb94c5495e3",
-    "semantic_hash": ""
+    "semantic_hash": "3f614a11daab7c7b77e01fb94c5495e3"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\shortcuts\\isTextEditingTarget.ts": {
     "mtime": 1778771532.3796954,
     "ast_hash": "45ac6d1061fba8b699be208d16b38acd",
-    "semantic_hash": ""
+    "semantic_hash": "45ac6d1061fba8b699be208d16b38acd"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\theme\\theme-constants.ts": {
     "mtime": 1778238164.5705352,
     "ast_hash": "f617b07da4c06c467cf29e80b011d6aa",
-    "semantic_hash": ""
+    "semantic_hash": "f617b07da4c06c467cf29e80b011d6aa"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\theme\\theme-store.test.ts": {
     "mtime": 1778771746.4101245,
     "ast_hash": "396a6bc7e1c36c1a042da48b2ac67e7a",
-    "semantic_hash": ""
+    "semantic_hash": "396a6bc7e1c36c1a042da48b2ac67e7a"
   },
   "E:\\claude\\video-creator\\apps\\web\\lib\\theme\\theme-store.ts": {
     "mtime": 1778238164.5705352,
     "ast_hash": "511ffb974492f846dc7a0f3519c74136",
-    "semantic_hash": ""
+    "semantic_hash": "511ffb974492f846dc7a0f3519c74136"
   },
   "E:\\claude\\video-creator\\apps\\web\\scripts\\run-e2e-tests.mjs": {
     "mtime": 1778857881.1983643,
     "ast_hash": "c87962ced57a7be280e7b2e087778d5d",
-    "semantic_hash": ""
+    "semantic_hash": "c87962ced57a7be280e7b2e087778d5d"
   },
   "E:\\claude\\video-creator\\apps\\web\\scripts\\run-visual-tests.mjs": {
     "mtime": 1778773076.3820655,
     "ast_hash": "ef96c3dc40f183c9c2524b3e65cd50d6",
-    "semantic_hash": ""
+    "semantic_hash": "ef96c3dc40f183c9c2524b3e65cd50d6"
   },
   "E:\\claude\\video-creator\\apps\\web\\styles\\globals.test.ts": {
     "mtime": 1778246400.977307,
     "ast_hash": "c6503b63efb3b4ebfcc0bd4dc5631f8e",
-    "semantic_hash": ""
+    "semantic_hash": "c6503b63efb3b4ebfcc0bd4dc5631f8e"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\e2e-utils.ts": {
     "mtime": 1779407257.1752906,
     "ast_hash": "1259b066b4e781b76e5cbb3bca071828",
-    "semantic_hash": ""
+    "semantic_hash": "1259b066b4e781b76e5cbb3bca071828"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\launcher-setup-flows.spec.ts": {
     "mtime": 1779407329.1403637,
     "ast_hash": "d97e35a0b4fb20f7e23042f934c971a3",
-    "semantic_hash": ""
+    "semantic_hash": "d97e35a0b4fb20f7e23042f934c971a3"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\render-correctness.spec.ts": {
     "mtime": 1779590731.1465755,
     "ast_hash": "3583ac06eb513d24156aa61c44bd1b78",
-    "semantic_hash": ""
+    "semantic_hash": "3583ac06eb513d24156aa61c44bd1b78"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\editor-visual-cases.ts": {
-    "mtime": 1779358153.8016417,
-    "ast_hash": "69f2e6bf67892fbaafbc28c8c0b3d270",
-    "semantic_hash": ""
+    "mtime": 1779768503.7052374,
+    "ast_hash": "f0acbfbe4a17465224987a27e59531f7",
+    "semantic_hash": "f0acbfbe4a17465224987a27e59531f7"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\editor.visual.spec.ts": {
-    "mtime": 1779375144.3122258,
-    "ast_hash": "fc39da719650d6d5e2ec93e7431e82f8",
-    "semantic_hash": ""
+    "mtime": 1779949038.2409248,
+    "ast_hash": "1397ebd7222d970042756f1f8ee46e53",
+    "semantic_hash": "1397ebd7222d970042756f1f8ee46e53"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\launcher.visual.spec.ts": {
     "mtime": 1779375140.1539855,
     "ast_hash": "e6c98573bdd411fedc75c6ba7f5f3233",
-    "semantic_hash": ""
+    "semantic_hash": "e6c98573bdd411fedc75c6ba7f5f3233"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\render-visual-cases.ts": {
     "mtime": 1779589426.8442802,
     "ast_hash": "172cb141ddba2a45b0b53cae648b87f5",
-    "semantic_hash": ""
+    "semantic_hash": "172cb141ddba2a45b0b53cae648b87f5"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\render.visual.spec.ts": {
     "mtime": 1779589511.7187092,
     "ast_hash": "b79d9d64c162aedfdea0c460fef8812a",
-    "semantic_hash": ""
+    "semantic_hash": "b79d9d64c162aedfdea0c460fef8812a"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\screenshot-inventory.test.ts": {
     "mtime": 1779436407.8383498,
     "ast_hash": "c6f76b9cccc2b07964fef983ebe33468",
-    "semantic_hash": ""
+    "semantic_hash": "c6f76b9cccc2b07964fef983ebe33468"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\setup.visual.spec.ts": {
     "mtime": 1779246686.710053,
     "ast_hash": "75e8321f86d768629b225f782efdd644",
-    "semantic_hash": ""
+    "semantic_hash": "75e8321f86d768629b225f782efdd644"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\shell.spec.ts": {
     "mtime": 1778773247.010338,
     "ast_hash": "3a0690c4450e3b2606cb312971c7acc0",
-    "semantic_hash": ""
+    "semantic_hash": "3a0690c4450e3b2606cb312971c7acc0"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\ssim.ts": {
     "mtime": 1778772453.7572625,
     "ast_hash": "83009f5409279314eaff1a1b7d20d01b",
-    "semantic_hash": ""
+    "semantic_hash": "83009f5409279314eaff1a1b7d20d01b"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\visual-manifest.ts": {
     "mtime": 1779436385.391129,
     "ast_hash": "87b23d4ace3fb52966e5633d4062b3c6",
-    "semantic_hash": ""
+    "semantic_hash": "87b23d4ace3fb52966e5633d4062b3c6"
   },
   "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\visual-test-utils.ts": {
-    "mtime": 1779357811.179563,
-    "ast_hash": "12411051137170b34e6656825cd0ccc5",
-    "semantic_hash": ""
+    "mtime": 1779768233.3726394,
+    "ast_hash": "09c50f8b853aa86970a948741bce9b4d",
+    "semantic_hash": "09c50f8b853aa86970a948741bce9b4d"
   },
   "E:\\claude\\video-creator\\apps\\server\\README.md": {
     "mtime": 1778120357.3636093,
     "ast_hash": "3d1c805fa6aebe2af726a4f67b1bbaae",
-    "semantic_hash": ""
+    "semantic_hash": "3d1c805fa6aebe2af726a4f67b1bbaae"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\fixtures\\smoke-project\\README.md": {
     "mtime": 1778141518.69379,
     "ast_hash": "4f8f6808372aeafe1b9d921dcb562910",
-    "semantic_hash": ""
+    "semantic_hash": "4f8f6808372aeafe1b9d921dcb562910"
   },
   "E:\\claude\\video-creator\\apps\\server\\tests\\fixtures\\smoke-project\\transcript.txt": {
     "mtime": 1778141507.8894901,
     "ast_hash": "a9fdf9013634e80ec3d7471429034b9b",
-    "semantic_hash": ""
+    "semantic_hash": "a9fdf9013634e80ec3d7471429034b9b"
   },
   "E:\\claude\\video-creator\\apps\\web\\app\\icon.svg": {
     "mtime": 1779354370.0635097,
     "ast_hash": "ba3d2d28ed6af8339508c246cf55dd48",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\AssignModal-light-1.actual.png": {
-    "mtime": 1779358326.5111754,
-    "ast_hash": "e49232be3f63f78d3dde030be1c443a3",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\AssignModal-light.actual.png": {
-    "mtime": 1779358323.0293427,
-    "ast_hash": "8754d37047ca157cf0a7ed1db859da01",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\AssignModal-light.diff.png": {
-    "mtime": 1779353451.0616448,
-    "ast_hash": "1647ab9939f4564f61268be5f1c969a0",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\AssignModal.actual.png": {
-    "mtime": 1779358319.5324693,
-    "ast_hash": "aad73eb8470e38bebdb4b50b4815521e",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\AssignModal.diff.png": {
-    "mtime": 1779264608.854239,
-    "ast_hash": "db2c61741c562c8dfbfcf46479be5936",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\center-act.png": {
-    "mtime": 1779241085.4759307,
-    "ast_hash": "03937f9e04f672a903d79a43bb2d66a9",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\center-diff.png": {
-    "mtime": 1779241085.5823185,
-    "ast_hash": "ba3d34e28a335432a13543c3aa4c2dc2",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\center-ref.png": {
-    "mtime": 1779241085.3777473,
-    "ast_hash": "754c463c3824169e1fea1a16a770c778",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\change-background-light.actual.png": {
-    "mtime": 1779358330.007303,
-    "ast_hash": "5592efe0bfb7cc0846b985a5375f0478",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\change-background-light.diff.png": {
-    "mtime": 1779353744.321408,
-    "ast_hash": "d7f02ecb7a313edafdfdfcb7af5f0fb0",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-dark.actual.png": {
-    "mtime": 1779358281.2923315,
-    "ast_hash": "6764929cfeedc3918ee7f25bf9de482b",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-dark.diff.png": {
-    "mtime": 1779357574.6236744,
-    "ast_hash": "3b005b7ff05b5188d3d83a4a0fecd232",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-draft-render-strip-dark.actual.png": {
-    "mtime": 1779358287.906008,
-    "ast_hash": "22374bb4b404e28473b76696f3284ce0",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-draft-render-strip-dark.diff.png": {
-    "mtime": 1779358081.446716,
-    "ast_hash": "d8f0c1ed77679ec4ee23639e0caeba2a",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-draft-render-strip-light.actual.png": {
-    "mtime": 1779358291.2701805,
-    "ast_hash": "32947abbbbc31669967816ffbfa4a054",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-inspector-1.actual.png": {
-    "mtime": 1779358315.076107,
-    "ast_hash": "f83011aa5c57b9a094c706ba88d1d6ea",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-inspector-2.actual.png": {
-    "mtime": 1779358316.940799,
-    "ast_hash": "ff7e998e1cecc6e5fe6df832969914d7",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-inspector-dark.actual.png": {
-    "mtime": 1779358311.4260883,
-    "ast_hash": "c4e620bf158c9502dce20ddfd255ff52",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-inspector-dark.diff.png": {
-    "mtime": 1779262884.2703052,
-    "ast_hash": "966cd8b79adf6cf9a77f5e6e3dcb23f9",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-inspector-light.actual.png": {
-    "mtime": 1779358313.2613366,
-    "ast_hash": "9366b8c6a31964a307f5c5194b3746ab",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-light.actual.png": {
-    "mtime": 1779358284.5259442,
-    "ast_hash": "9cf2cbaf00e35b24901d51d8c15f4ad4",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-light.diff.png": {
-    "mtime": 1779357754.1850014,
-    "ast_hash": "3e342d8af0088f1c55ae394b9007e02f",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-preview-1.actual.png": {
-    "mtime": 1779358303.742784,
-    "ast_hash": "c83fedda3e55007c3d6f16463bfcf579",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-preview-dark.actual.png": {
-    "mtime": 1779358299.6930082,
-    "ast_hash": "3b6ab8a2f503d0c05cbba90b5d226e48",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-preview-dark.diff.png": {
-    "mtime": 1779238337.6448565,
-    "ast_hash": "964ac53f451953c5380260909443de4b",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-preview-light.actual.png": {
-    "mtime": 1779358301.7138877,
-    "ast_hash": "2e0699c8fd80e4a6ad1d60cfaa27d6f5",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-preview-popover.actual.png": {
-    "mtime": 1779358305.8337975,
-    "ast_hash": "cf39464742c43a86905155f90d989c38",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-timeline-dark.actual.png": {
-    "mtime": 1779358307.777659,
-    "ast_hash": "e0e4735b964ca854d8bffa0b830ed00e",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-timeline-dark.diff.png": {
-    "mtime": 1779261072.6926532,
-    "ast_hash": "dd8bfd9647cc5c1e6568241d52a5f9c8",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-timeline-light.actual.png": {
-    "mtime": 1779358309.5595417,
-    "ast_hash": "ce6be02e3486d2c178eb85b71e17b922",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-timeline-light.diff.png": {
-    "mtime": 1779264002.7027502,
-    "ast_hash": "1caa999fa8e2108ed8bc91ce517c1077",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-transcript-1.actual.png": {
-    "mtime": 1779358294.1717665,
-    "ast_hash": "9631f10f938f9f18013933d966f3909a",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-transcript-1.diff.png": {
-    "mtime": 1779262660.852445,
-    "ast_hash": "94718297d669bb6b64df0445c9a3e620",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-transcript-2.actual.png": {
-    "mtime": 1779358295.9401095,
-    "ast_hash": "13609bf09353a76ee147429ca94b54c5",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-transcript-2.diff.png": {
-    "mtime": 1779263637.0089433,
-    "ast_hash": "88b3995c1f59f0e284d0cb8f6f890b92",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-transcript-3.actual.png": {
-    "mtime": 1779358297.7930589,
-    "ast_hash": "1158b6c2bec7e2fa64f4f362f6e4e31c",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\editor-transcript-3.diff.png": {
-    "mtime": 1779263753.7174861,
-    "ast_hash": "e991d9bb3cca55d5915752852a3cffb6",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Launcher-dark.actual.png": {
-    "mtime": 1778640794.5386615,
-    "ast_hash": "dce7afb72bce6dbf4c0a9d6710dd5fba",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Launcher-dark.diff.png": {
-    "mtime": 1778854398.6971936,
-    "ast_hash": "f96dc4ffbe23800cf272a1362fb1ab7e",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Launcher-light.actual.png": {
-    "mtime": 1778640819.1438534,
-    "ast_hash": "773eb54ef350265a96e668e96f239c01",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Launcher-play-dark.actual.png": {
-    "mtime": 1778641474.644477,
-    "ast_hash": "e730155755a23b8419fddd2e7670e452",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Launcher-play-light.actual.png": {
-    "mtime": 1778641461.3381016,
-    "ast_hash": "14e39f0c389b939a4b137b7b89bb1ba5",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\left-act.png": {
-    "mtime": 1779241085.2063482,
-    "ast_hash": "bb3cc32dbd11deab36a12eb6c8d5823b",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\left-diff.png": {
-    "mtime": 1779241085.248354,
-    "ast_hash": "c267b2c7a4aab139b53b39b619a09a00",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\left-ref.png": {
-    "mtime": 1779241085.1693184,
-    "ast_hash": "209223a3a2c464c4275e01a8e5217d9c",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\render-dark.actual.png": {
-    "mtime": 1779590987.9553032,
-    "ast_hash": "15f039678d0f4aebfaa26f722d004d53",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\render-dark.diff.png": {
-    "mtime": 1779436717.0080183,
-    "ast_hash": "04fbffb067b9775d74ccdbba87034c48",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\render-light.actual.png": {
-    "mtime": 1779590990.8788683,
-    "ast_hash": "8af909bf3294bf41f8a08524f1937ca2",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\right-act.png": {
-    "mtime": 1779241085.6469202,
-    "ast_hash": "07c884536e4d4d7791abb1a56f914670",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\right-diff.png": {
-    "mtime": 1779241085.6785924,
-    "ast_hash": "99f9c755eec2871026291ff21a17c1cf",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\right-ref.png": {
-    "mtime": 1779241085.6163187,
-    "ast_hash": "35db501ca3bbbe1143e95a75063aa5be",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment-running.actual.png": {
-    "mtime": 1779355359.1116614,
-    "ast_hash": "0653f2ebc8183f1e4ea85ed665d37921",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment-running.diff.png": {
-    "mtime": 1779247724.7919395,
-    "ast_hash": "077af7c0012578ae218c38cd6c1f3ef9",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment-selected.actual.png": {
-    "mtime": 1779355357.244777,
-    "ast_hash": "d8b28cbca5c80070ff148d0a0313341b",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment-selected.diff.png": {
-    "mtime": 1779247715.9085536,
-    "ast_hash": "bd696f30f8d7d83d878af357b3a72172",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment-success.actual.png": {
-    "mtime": 1779355360.9861262,
-    "ast_hash": "3f41550a897dc89b11c90e76ed4ed068",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment-success.diff.png": {
-    "mtime": 1779247734.0721662,
-    "ast_hash": "7741f21e036b7258667d66c1d47444d4",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment.actual.png": {
-    "mtime": 1779355355.3623874,
-    "ast_hash": "c048434f810f884d7be7916f0f00047e",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-alignment.diff.png": {
-    "mtime": 1779247706.6949246,
-    "ast_hash": "aca0dd9ab01264af8729358c56c939f8",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-srt-failed.actual.png": {
-    "mtime": 1779355353.5008519,
-    "ast_hash": "0bed49aa43b1817c684478a64f67389a",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-srt-failed.diff.png": {
-    "mtime": 1779253541.1450613,
-    "ast_hash": "4865cd7f61ee96782d73ca7774e55a5d",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-srt-running.actual.png": {
-    "mtime": 1779355351.6342366,
-    "ast_hash": "e39bfb4ac2519b47cf362b567e40aae4",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-srt-running.diff.png": {
-    "mtime": 1779253521.4529727,
-    "ast_hash": "ebffd238ec1a907dcfc685cf7e668bd2",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-srt.actual.png": {
-    "mtime": 1779355349.7862916,
-    "ast_hash": "11ffcb22d4f8d0d468ba59468d9b83f4",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark-srt.diff.png": {
-    "mtime": 1779253505.3111198,
-    "ast_hash": "329a5c50e64b3e99be6d0bdecde543c0",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark.actual.png": {
-    "mtime": 1779355346.0514858,
-    "ast_hash": "3f41550a897dc89b11c90e76ed4ed068",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-dark.diff.png": {
-    "mtime": 1779247340.5187879,
-    "ast_hash": "d766db1aaa7198e024df07d580916e76",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-light.actual.png": {
-    "mtime": 1779355347.9148016,
-    "ast_hash": "362173645757608484f8ba360a3765a3",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\Setup-light.diff.png": {
-    "mtime": 1779247670.8764398,
-    "ast_hash": "c2ca6f69abf4b81440c1fdcaf2e0f830",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\shell-dark.actual.png": {
-    "mtime": 1779355362.8137834,
-    "ast_hash": "73ce4788bd1b10e8bed66d63b1a9816a",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\shell-light.actual.png": {
-    "mtime": 1779355364.7690432,
-    "ast_hash": "14271b33dd5e993b607c20deb5bc6a18",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\SubtitleModal.actual.png": {
-    "mtime": 1779358333.2598853,
-    "ast_hash": "2dbbde2eee0f47c0f995dfe6bf128859",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\inspector-act.png": {
-    "mtime": 1779205237.6898365,
-    "ast_hash": "9c6705b8c1bbd2131edbf3d92cf9e613",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\inspector-ref.png": {
-    "mtime": 1779205237.6592925,
-    "ast_hash": "4fadae4ce1639d36cec68cba8bbc3c3d",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\preview-act.png": {
-    "mtime": 1779205237.8302157,
-    "ast_hash": "7435e5a485582d479c290980e3396b09",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\preview-ref.png": {
-    "mtime": 1779205237.7658367,
-    "ast_hash": "32bf500e54012bf0ddaf7df5c5e77d13",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\timeline-act.png": {
-    "mtime": 1779205237.5491726,
-    "ast_hash": "45801f6ea59095b6b984caaa1c99132a",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\timeline-ref.png": {
-    "mtime": 1779205237.5111654,
-    "ast_hash": "af33255f837b852894a278d5b9f9767f",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\transcript-act.png": {
-    "mtime": 1779205237.6261883,
-    "ast_hash": "78c9ca2a4c65e5329ae319c6bf0fbaee",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\actual\\debug\\transcript-ref.png": {
-    "mtime": 1779205237.5876825,
-    "ast_hash": "1df2f831f98dc290425248d7852b8da6",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\current-check\\launcher-current.png": {
-    "mtime": 1778853738.8765664,
-    "ast_hash": "14efafa5e1ea08d50381492c8a104c9b",
-    "semantic_hash": ""
-  },
-  "E:\\claude\\video-creator\\apps\\web\\tests\\visual\\artifacts\\current-check\\setup-current.png": {
-    "mtime": 1778853740.8991344,
-    "ast_hash": "5160e38b86811e279420a97531144afc",
-    "semantic_hash": ""
+    "semantic_hash": "ba3d2d28ed6af8339508c246cf55dd48"
   }
 }

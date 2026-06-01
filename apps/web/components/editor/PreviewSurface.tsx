@@ -64,7 +64,7 @@ export function PreviewSurface({
   const { height: canvasHeight, width: canvasWidth } = useMemo(() => resolutionDimensions(resolution), [resolution]);
   const watermarkSourceUrl = useMemo(() => {
     if (!watermark) return "";
-    return watermarkMediaUrl(projectPath, watermark.mediaId, media);
+    return mediaSourceUrl(projectPath, watermark.mediaId, media);
   }, [media, projectPath, watermark]);
 
   const activeVideoDecoderIds = useMemo(() => {
@@ -131,20 +131,24 @@ export function PreviewSurface({
       syncVideoDecoder(decoder, clockTime);
       return decoder;
     }
-    const image = ensureImage(mediaId, primaryUrl ?? mediaUrl(projectPath, mediaId), allowUploadFallback);
+    const image = ensureImage(mediaId, primaryUrl ?? mediaSourceUrl(projectPath, mediaId, media), allowUploadFallback);
     if (!image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
       return null;
     }
     return image;
-  }, [ensureImage, projectPath]);
+  }, [ensureImage, media, projectPath]);
 
   const drawFrame = useCallback((clockTime: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (canvas.width !== canvasWidth) canvas.width = canvasWidth;
     if (canvas.height !== canvasHeight) canvas.height = canvasHeight;
-    const resolvedDisplay = resolveDisplay(layers, sentences, clockTime);
-    const background = resolvedDisplay.bg;
+    const resolvedDisplay = resolveDisplay(layers, sentences, clockTime, { media });
+    const backgrounds = resolvedDisplay.backgrounds.length > 0
+      ? resolvedDisplay.backgrounds
+      : resolvedDisplay.bg
+        ? [resolvedDisplay.bg]
+        : [];
     const subtitleText = resolvedDisplay.subtitle ? normalizeSubtitleText(resolvedDisplay.subtitle.text) : "";
     const subtitleVisible = subtitlesEnabled && subtitleText.length > 0;
     setSubtitleLiveText((previous) => {
@@ -155,7 +159,7 @@ export function PreviewSurface({
     const drawOrder: string[] = ["black"];
     const metadata = {
       drawOrder,
-      hasBackground: Boolean(background),
+      hasBackground: backgrounds.length > 0,
       hasForeground: resolvedDisplay.fg.length > 0,
       hasPip: resolvedDisplay.pip.length > 0,
       pipBoxes: [] as Array<{ height: number; mediaId: string; width: number; x: number; y: number }>,
@@ -178,21 +182,23 @@ export function PreviewSurface({
     context.fillRect(0, 0, canvasWidth, canvasHeight);
     context.restore();
 
-    if (background) {
-      const source = resolveSource(background.mediaId, clockTime);
-      if (source) {
-        drawCover(context, source, {
-          canvasHeight,
-          canvasWidth,
-          opacity: clamp(background.opacity, 0, 1),
-        });
+    if (backgrounds.length > 0) {
+      for (const background of backgrounds) {
+        const source = resolveSource(background.mediaId, background.sourceTime);
+        if (source) {
+          drawCover(context, source, {
+            canvasHeight,
+            canvasWidth,
+            opacity: clamp(background.opacity, 0, 1),
+          });
+        }
       }
       drawOrder.push("bg");
     }
 
     if (resolvedDisplay.fg.length > 0) {
       for (const layer of resolvedDisplay.fg) {
-        const source = resolveSource(layer.mediaId, clockTime);
+        const source = resolveSource(layer.mediaId, layer.sourceTime);
         if (!source) continue;
         drawContain(context, source, {
           canvasHeight,
@@ -206,7 +212,7 @@ export function PreviewSurface({
 
     if (resolvedDisplay.pip.length > 0) {
       for (const layer of resolvedDisplay.pip) {
-        const source = resolveSource(layer.mediaId, clockTime);
+        const source = resolveSource(layer.mediaId, layer.sourceTime);
         if (!source) continue;
         const pipBox = drawPip(context, source, layer, canvasWidth, canvasHeight);
         metadata.pipBoxes.push({ mediaId: layer.mediaId, ...pipBox });
@@ -228,7 +234,7 @@ export function PreviewSurface({
     }
 
     applyCanvasMetadata(canvas, metadata);
-  }, [canvasHeight, canvasWidth, layers, playing, resolveSource, sentences, subtitleStyle, subtitlesEnabled, watermark, watermarkSourceUrl]);
+  }, [canvasHeight, canvasWidth, layers, media, playing, resolveSource, sentences, subtitleStyle, subtitlesEnabled, watermark, watermarkSourceUrl]);
 
   const drawAtClock = useCallback(() => {
     const time = clamp(readClockTime(), 0, Math.max(duration, 0));
@@ -293,7 +299,6 @@ export function PreviewSurface({
                 key={mediaId}
                 muted
                 onError={(event) => {
-                  if (watermark?.enabled === false || watermark?.mediaId !== mediaId) return;
                   const node = event.currentTarget;
                   if (node.dataset.uploadFallback === "true") return;
                   node.dataset.uploadFallback = "true";
@@ -303,7 +308,7 @@ export function PreviewSurface({
                 playsInline
                 preload="metadata"
                 ref={(node) => registerVideoDecoder(mediaId, node)}
-                src={watermark?.enabled !== false && watermark?.mediaId === mediaId ? watermarkSourceUrl : mediaUrl(projectPath, mediaId)}
+                src={watermark?.enabled !== false && watermark?.mediaId === mediaId ? watermarkSourceUrl : mediaSourceUrl(projectPath, mediaId, media)}
               />
             ))}
           </div>
@@ -343,9 +348,9 @@ function uploadMediaUrl(filename: string): string {
   return `/api/server/uploads/media-file?filename=${encodeURIComponent(filename)}`;
 }
 
-function watermarkMediaUrl(projectPath: string, mediaId: string, media: EditorMediaItem[]): string {
+function mediaSourceUrl(projectPath: string, mediaId: string, media: EditorMediaItem[]): string {
   const asset = media.find((item) => item.mediaId === mediaId || item.filename === mediaId);
-  if (asset?.path.startsWith("uploads/") && (asset.kind === "watermark_image" || asset.kind === "watermark_video")) {
+  if (asset?.path.startsWith("uploads/")) {
     return uploadMediaUrl(asset.mediaId || asset.filename);
   }
   return mediaUrl(projectPath, mediaId);

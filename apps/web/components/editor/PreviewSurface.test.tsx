@@ -299,6 +299,63 @@ describe("PreviewSurface", () => {
     expect(fillText).toHaveBeenCalled();
   });
 
+  it("draws both background images during a playlist crossfade", () => {
+    const imageFactory = vi.fn(function imageFactory() {
+      const image = document.createElement("img");
+      Object.defineProperty(image, "complete", { configurable: true, value: true });
+      Object.defineProperty(image, "naturalWidth", { configurable: true, value: 1920 });
+      Object.defineProperty(image, "naturalHeight", { configurable: true, value: 1080 });
+      return image;
+    });
+    vi.stubGlobal("Image", imageFactory);
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...BG_LAYER.items[0]!,
+        mediaId: undefined,
+        mediaIds: ["bg-a.png", "bg-b.png"],
+        start: 0,
+        end: 10,
+        crossfade: 1,
+      }],
+    };
+
+    renderSurface({ currentTime: 4.5, layers: [layer] });
+
+    expect(drawnFilenames().slice(0, 2)).toEqual(["bg-a.png", "bg-b.png"]);
+    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-has-background", "true");
+  });
+
+  it("uses uploaded media URLs for newly imported background assets", () => {
+    const createdImages: HTMLImageElement[] = [];
+    const imageFactory = vi.fn(function imageFactory() {
+      const image = document.createElement("img");
+      createdImages.push(image);
+      return image;
+    });
+    vi.stubGlobal("Image", imageFactory);
+
+    renderSurface({
+      layers: [{
+        ...BG_LAYER,
+        items: [{ ...BG_LAYER.items[0]!, mediaId: "uploaded-bg.png" }],
+      }],
+      media: [{
+        filename: "uploaded-bg.png",
+        import_mode: "copy",
+        imported_at: "2026-05-28T00:00:00.000Z",
+        kind: "image",
+        mediaId: "uploaded-bg.png",
+        path: "uploads/uploaded-bg.png",
+        size: 100,
+        thumb_url: "",
+      }],
+    });
+
+    expect(createdImages[0].src).toContain("/api/server/uploads/media-file");
+    expect(createdImages[0].src).toContain("filename=uploaded-bg.png");
+  });
+
   it("keeps background beneath fullscreen foreground and keeps pip present", () => {
     renderSurface({
       currentTime: 5,

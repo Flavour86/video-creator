@@ -52,6 +52,23 @@ const MEDIA = [
     imported_at: "2026-05-26T00:00:02Z",
     created_at: null,
   },
+  {
+    mediaId: "watermark-role-scene.png",
+    filename: "watermark-role-scene.png",
+    kind: "image" as const,
+    role: "watermark" as const,
+    path: "uploads/watermark-role-scene.png",
+    thumb_path: "uploads/.thumbs/watermark-role-scene.jpg",
+    thumb_url: "/uploads/thumb?filename=watermark-role-scene.jpg",
+    width: 1280,
+    height: 720,
+    duration: null,
+    size: 1024,
+    hash: null,
+    import_mode: "copy" as const,
+    imported_at: "2026-05-26T00:00:03Z",
+    created_at: null,
+  },
 ];
 
 function renderModal(overrides: Partial<ComponentProps<typeof WatermarkModal>> = {}) {
@@ -74,14 +91,16 @@ function renderModal(overrides: Partial<ComponentProps<typeof WatermarkModal>> =
 }
 
 describe("WatermarkModal", () => {
-  it("shows the current watermark plus other available replacement assets", () => {
+  it("shows the current watermark plus other scoped replacement assets", () => {
     renderModal({
       value: { mediaId: "callout-map.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
     });
     expect(screen.getByRole("button", { name: /callout-map\.png selected/i })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /station-intro\.mp4/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /existing-scene\.png/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /watermark-role-scene\.png/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /existing-scene\.png/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Import from disk/i })).toHaveClass("rounded");
     expect(document.querySelector("input[type='file']")).not.toHaveAttribute("multiple");
   });
 
@@ -97,9 +116,9 @@ describe("WatermarkModal", () => {
   it("can create a watermark by selecting an existing asset when none is configured", () => {
     const { onChange } = renderModal({ value: null });
 
-    fireEvent.click(screen.getByRole("button", { name: /existing-scene\.png/i }));
+    fireEvent.click(screen.getByRole("button", { name: /watermark-role-scene\.png/i }));
 
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, mediaId: "existing-scene.png" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, mediaId: "watermark-role-scene.png" }));
   });
 
   it("can replace an uploaded watermark by selecting another existing asset", () => {
@@ -107,9 +126,9 @@ describe("WatermarkModal", () => {
       value: { mediaId: "callout-map.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /existing-scene\.png/i }));
+    fireEvent.click(screen.getByRole("button", { name: /watermark-role-scene\.png/i }));
 
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ mediaId: "existing-scene.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ mediaId: "watermark-role-scene.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 }));
   });
 
   it("shows no asset only when no watermark-compatible media exists", () => {

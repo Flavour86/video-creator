@@ -149,6 +149,7 @@ describe("Timeline", () => {
     renderTimeline();
     expect(screen.getByTestId("timeline-row-bg")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^bg-a\.png over s1-s4$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Resize start bg-a\.png over s1-s4/i })).not.toBeInTheDocument();
   });
 
   it("supports body drag and grip resize with timeline constraints", () => {
@@ -221,8 +222,8 @@ describe("Timeline", () => {
     expect(onSeek).not.toHaveBeenCalled();
   });
 
-  it("seeks on empty timeline tracks and allows direct playhead dragging", () => {
-    const { onSeek } = renderTimeline({ currentTime: 5, duration: 20 });
+  it("seeks only from the waveform/ruler area and drags from the playhead head", () => {
+    const { onSeek, onUpdateClipTiming } = renderTimeline({ currentTime: 5, duration: 20 });
     const emptyTrack = screen.getByTestId("timeline-row-bg").querySelector("[data-timeline-track='1']") as HTMLElement;
     vi.spyOn(emptyTrack, "getBoundingClientRect").mockReturnValue({
       bottom: 44,
@@ -237,7 +238,11 @@ describe("Timeline", () => {
     });
 
     fireEvent.click(emptyTrack, { clientX: 100 });
-    expect(onSeek).toHaveBeenLastCalledWith(10);
+    expect(onSeek).not.toHaveBeenCalled();
+    fireEvent.mouseDown(screen.getByRole("button", { name: "bg-a.png over s1-s4" }), { clientX: 20 });
+    fireEvent.mouseMove(window, { clientX: 80 });
+    fireEvent.mouseUp(window, { clientX: 80 });
+    expect(onUpdateClipTiming).not.toHaveBeenCalled();
 
     const waveformButton = screen.getByTestId("timeline-waveform").closest("button") as HTMLButtonElement;
     vi.spyOn(waveformButton, "getBoundingClientRect").mockReturnValue({
@@ -251,6 +256,9 @@ describe("Timeline", () => {
       x: 0,
       y: 45,
     });
+    fireEvent.click(waveformButton, { clientX: 100 });
+    expect(onSeek).toHaveBeenLastCalledWith(10);
+
     const playhead = screen.getByRole("slider", { name: /playhead/i });
     fireEvent.mouseDown(playhead, { clientX: 50 });
     fireEvent.mouseMove(window, { clientX: 150 });

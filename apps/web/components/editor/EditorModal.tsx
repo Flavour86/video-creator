@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Button, Field, NumberInput, Select } from "@/components/ui";
 import type { SubtitlesSettings } from "@/lib/hooks/useProject";
 import type { EditorMediaItem, EditorModal as EditorModalKind } from "./types";
@@ -19,6 +19,50 @@ type EditorModalProps = {
 };
 
 const SUBTITLE_PREVIEW_TEXT = "This subtitle preview follows your style and stays inside the safe zone.";
+const SUBTITLE_SIDE_SAFE_RATIO = 0.08;
+const SUBTITLE_POSITION_MARGINS: Record<SubtitlesSettings["style"]["position"], number> = {
+  bottom: 60,
+  bottom_low: 24,
+  top: 40,
+};
+
+type PreviewResolution = EditorModalProps["previewResolution"];
+
+type SubtitlePreviewMetrics = {
+  aspectClass: string;
+  frameWidth: number;
+  maxHeight: string;
+  renderHeight: number;
+  renderWidth: number;
+  width: string;
+};
+
+const SUBTITLE_PREVIEW_METRICS: Record<PreviewResolution, SubtitlePreviewMetrics> = {
+  "1080p": {
+    aspectClass: "aspect-video",
+    frameWidth: 720,
+    maxHeight: "min(58vh, 520px)",
+    renderHeight: 1080,
+    renderWidth: 1920,
+    width: "100%",
+  },
+  "720p": {
+    aspectClass: "aspect-video",
+    frameWidth: 720,
+    maxHeight: "min(58vh, 520px)",
+    renderHeight: 720,
+    renderWidth: 1280,
+    width: "100%",
+  },
+  "9:16": {
+    aspectClass: "aspect-[9/16]",
+    frameWidth: 292.5,
+    maxHeight: "min(58vh, 520px)",
+    renderHeight: 1920,
+    renderWidth: 1080,
+    width: "min(100%, calc(min(58vh, 520px) * 9 / 16))",
+  },
+};
 
 export function EditorModal({
   assignRange,
@@ -55,7 +99,7 @@ export function EditorModal({
     <Dialog.Root onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }} open={open}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-(--bg-0)/70 backdrop-blur-sm" />
-        <Dialog.Content className={`fixed left-1/2 z-50 flex max-h-[90vh] -translate-x-1/2 flex-col border border-(--line) bg-(--bg-1) shadow-(--shadow-2) ${compactSubtitles ? "top-1/2 w-[min(620px,calc(100vw-32px))] -translate-y-1/2 rounded-(--r-lg)" : "top-0 my-[5vh] w-[min(900px,calc(100vw-32px))] rounded-lg"}`}>
+        <Dialog.Content className={`fixed left-1/2 z-50 flex max-h-[90vh] -translate-x-1/2 flex-col border border-(--line) bg-(--bg-1) shadow-(--shadow-2) ${compactSubtitles ? "top-1/2 w-[min(760px,calc(100vw-32px))] -translate-y-1/2 rounded-(--r-lg)" : "top-0 my-[5vh] w-[min(900px,calc(100vw-32px))] rounded-lg"}`}>
           <header className={`flex items-start justify-between gap-4 border-b border-(--line) ${compactSubtitles ? "px-5 py-[15px]" : "px-6 py-4"}`}>
             <div>
               <Dialog.Title className={`${compactSubtitles ? "text-base" : "text-xl"} font-semibold tracking-normal text-(--text)`}>{title}</Dialog.Title>
@@ -100,19 +144,31 @@ function SubtitlesFields({
   value: SubtitlesSettings;
 }) {
   const t = useTranslations("pages.editor.modals");
-  const aspectClass = previewResolution === "9:16"
-    ? "mx-auto h-[220px] w-auto max-h-[220px] aspect-[9/16]"
-    : "mx-auto w-full max-w-[400px] max-h-[220px] aspect-video";
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const metrics = SUBTITLE_PREVIEW_METRICS[previewResolution];
+  const [measuredFrameWidth, setMeasuredFrameWidth] = useState<number | null>(null);
   const cueLines = wrapCueLine(SUBTITLE_PREVIEW_TEXT, value.style.max_chars_per_line);
-  const cuePositionClass = value.style.position === "top" ? "top-4" : value.style.position === "bottom_low" ? "bottom-3" : "bottom-7";
-  const cueBackgroundClass =
-    value.style.bg_style === "pill"
-      ? "rounded-full bg-black/60 px-4 py-2"
-      : value.style.bg_style === "block"
-        ? "rounded-md bg-black/80 px-4 py-2"
-        : value.style.bg_style === "shadow"
-          ? "drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
-          : "";
+  const frameWidth = measuredFrameWidth ?? metrics.frameWidth;
+  const previewScale = frameWidth / metrics.renderWidth;
+  const cueStyle = subtitlePreviewCueStyle(value, previewScale, metrics);
+
+  useEffect(() => {
+    setMeasuredFrameWidth(null);
+    const node = previewRef.current;
+    if (!node) return;
+
+    const updateFrameWidth = () => {
+      const width = node.getBoundingClientRect().width || node.clientWidth;
+      setMeasuredFrameWidth(width > 0 ? width : null);
+    };
+
+    updateFrameWidth();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(updateFrameWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [previewResolution]);
 
   return (
     <>
@@ -198,26 +254,88 @@ function SubtitlesFields({
         </button>
         {t("burnIn")}
       </label>
-      <div className={`relative rounded-md border border-(--line) bg-(--bg-2) ${aspectClass}`} data-testid="subtitles-live-preview">
+      <div className="w-full">
+        <div
+          className={`relative mx-auto overflow-hidden rounded-md border border-(--line) bg-(--bg-2) ${metrics.aspectClass}`}
+          data-preview-scale={previewScale}
+          data-preview-width={frameWidth}
+          data-render-height={metrics.renderHeight}
+          data-render-width={metrics.renderWidth}
+          data-testid="subtitles-live-preview"
+          ref={previewRef}
+          style={{
+            aspectRatio: `${metrics.renderWidth} / ${metrics.renderHeight}`,
+            maxHeight: metrics.maxHeight,
+            width: metrics.width,
+          }}
+        >
         {value.burn_in ? (
           <div
-            className={`absolute inset-x-6 text-center font-semibold text-white ${cuePositionClass} ${cueBackgroundClass}`}
-            style={{
-              fontFamily: value.style.font,
-              fontSize: `${Math.max(14, (value.style.size / 28) * 14)}px`,
-            }}
+            className="absolute text-center font-semibold text-white"
+            data-testid="subtitles-preview-cue"
+            style={cueStyle}
           >
             {cueLines.map((line, index) => (
               <div key={`${line}-${index}`}>{line}</div>
             ))}
           </div>
         ) : null}
-        <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white">
+          <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white">
           Preview · {previewResolution === "9:16" ? "9:16" : "16:9"}
-        </span>
+          </span>
+        </div>
       </div>
     </>
   );
+}
+
+function subtitlePreviewCueStyle(
+  value: SubtitlesSettings,
+  previewScale: number,
+  metrics: SubtitlePreviewMetrics,
+): CSSProperties {
+  const positionMargin = SUBTITLE_POSITION_MARGINS[value.style.position] * previewScale;
+  const sideSafe = metrics.renderWidth * SUBTITLE_SIDE_SAFE_RATIO * previewScale;
+  const backgroundStyle = subtitlePreviewBackgroundStyle(value.style.bg_style, previewScale);
+  const positionStyle = value.style.position === "top" ? { top: positionMargin } : { bottom: positionMargin };
+
+  return {
+    ...positionStyle,
+    ...backgroundStyle,
+    fontFamily: value.style.font,
+    fontSize: value.style.size * previewScale,
+    left: "50%",
+    lineHeight: 1.24,
+    maxWidth: `calc(100% - ${sideSafe * 2}px)`,
+    transform: "translateX(-50%)",
+    width: `calc(100% - ${sideSafe * 2}px)`,
+  };
+}
+
+function subtitlePreviewBackgroundStyle(
+  bgStyle: SubtitlesSettings["style"]["bg_style"],
+  previewScale: number,
+): CSSProperties {
+  if (bgStyle === "pill") {
+    return {
+      backgroundColor: "rgb(0 0 0 / 0.6)",
+      borderRadius: 9999,
+      padding: `${10 * previewScale}px ${22 * previewScale}px`,
+    };
+  }
+  if (bgStyle === "block") {
+    return {
+      backgroundColor: "rgb(0 0 0 / 0.8)",
+      borderRadius: 8 * previewScale,
+      padding: `${10 * previewScale}px ${18 * previewScale}px`,
+    };
+  }
+  if (bgStyle === "shadow") {
+    return {
+      filter: `drop-shadow(0 ${2 * previewScale}px ${8 * previewScale}px rgb(0 0 0 / 0.9))`,
+    };
+  }
+  return {};
 }
 
 function MediaFields({

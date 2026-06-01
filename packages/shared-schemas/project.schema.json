@@ -156,6 +156,10 @@
       "title": "MediaKind",
       "enum": ["image", "video", "audio", "watermark_image", "watermark_video"]
     },
+    "MediaRole": {
+      "title": "MediaRole",
+      "enum": ["background", "foreground", "pip", "watermark"]
+    },
     "MediaImportMode": {
       "title": "MediaImportMode",
       "enum": ["copy", "link", "generated"]
@@ -183,6 +187,7 @@
         "id": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1 },
         "kind": { "$ref": "#/$defs/MediaKind" },
+        "role": { "$ref": "#/$defs/MediaRole" },
         "path": { "type": "string", "minLength": 1 },
         "thumb_path": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
         "dimensions": { "oneOf": [{ "$ref": "#/$defs/Dimensions" }, { "type": "null" }] },

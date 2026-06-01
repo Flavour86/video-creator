@@ -10,10 +10,16 @@ import type { Layer } from "@/lib/preview/resolveDisplay";
 type MediaItem = {
   filename: string;
   kind: "image" | "video";
+  role?: "foreground" | "pip";
   thumb_url: string;
   importing?: boolean;
   import_progress?: number | null;
   import_error?: string | null;
+};
+
+type ScopedMediaItems = {
+  foreground: MediaItem[];
+  pip: MediaItem[];
 };
 
 type Props = {
@@ -22,10 +28,10 @@ type Props = {
   toSentence: number;
   editItemId?: string;
   editLayerId?: string;
-  media: MediaItem[];
+  media: MediaItem[] | ScopedMediaItems;
   sentences: AlignedSentence[];
   layers: Layer[];
-  onImport?: (files: FileList | null) => Promise<unknown> | unknown;
+  onImport?: (files: FileList | null, role: "foreground" | "pip") => Promise<unknown> | unknown;
   onConfirm: (updatedLayers: Layer[], newLayerId: string, newItemId: string) => void;
   onClose: () => void;
 };
@@ -233,6 +239,7 @@ export function AssignModal({
   const [pipOpacity, setPipOpacity] = useState(90);
   const [submitError, setSubmitError] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const scopedMedia = mediaForCompositing(media, compositing);
 
   // Sync state when modal opens with new props
   useEffect(() => {
@@ -314,6 +321,12 @@ export function AssignModal({
       setLayerId("new");
     }
   }, [compositing, layerId, matchingLayers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!selectedMedia) return;
+    if (scopedMedia.some((item) => item.filename === selectedMedia)) return;
+    setSelectedMedia("");
+  }, [scopedMedia, selectedMedia]);
 
   // Range preview
   const fromSentObj = sentences.find((s) => s.index === from);
@@ -497,20 +510,20 @@ export function AssignModal({
                     className="hidden"
                     multiple
                     onChange={(event) => {
-                      void onImport(event.target.files);
-                      event.currentTarget.value = "";
-                    }}
+                  void onImport(event.target.files, compositing === "fg" ? "foreground" : "pip");
+                  event.currentTarget.value = "";
+                }}
                     ref={inputRef}
                     type="file"
                   />
                 </>
               ) : null}
             </div>
-            {media.length === 0 ? (
+            {scopedMedia.length === 0 ? (
               <p className="text-sm text-(--text-3)">No media added yet.</p>
             ) : (
               <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto">
-                {media.map((item) => {
+                {scopedMedia.map((item) => {
                   const active = selectedMedia === item.filename;
                   return (
                     <button
@@ -893,4 +906,16 @@ export function AssignModal({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+function mediaForCompositing(
+  media: MediaItem[] | ScopedMediaItems,
+  compositing: "fg" | "pip",
+): MediaItem[] {
+  if (!Array.isArray(media)) {
+    return compositing === "fg" ? media.foreground : media.pip;
+  }
+  const role = compositing === "fg" ? "foreground" : "pip";
+  const scoped = media.filter((item) => !item.role || item.role === role);
+  return scoped;
 }

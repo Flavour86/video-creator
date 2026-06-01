@@ -77,12 +77,14 @@ describe("TranscriptPane", () => {
     expect(props.onSeek).toHaveBeenCalledTimes(1);
   });
 
-  it("does not apply playback-position highlighting without a shift selection", () => {
-    renderPane({ activeRange: [1, 1], selectedRange: null });
+  it("applies playback-position highlighting separately from manual range selection", () => {
+    renderPane({ activeRange: [2, 2], selectedRange: [1, 1] });
 
-    const row = screen.getByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i }).parentElement;
-    expect(row).not.toHaveClass("bg-(--bg-3)");
-    expect(row?.querySelector("[aria-hidden='true']")).not.toBeInTheDocument();
+    const selectedRow = screen.getByRole("button", { name: /1 00:00-00:05 Capitalism begins here/i }).parentElement;
+    const currentRow = screen.getByRole("button", { name: /2 00:05-00:10 Low confidence sentence/i }).parentElement;
+    expect(selectedRow).toHaveClass("bg-(--amber-bg)");
+    expect(currentRow).toHaveAttribute("aria-current", "true");
+    expect(currentRow).toHaveClass("bg-(--bg-3)");
   });
 
   it("opens the sentence menu from right-click without seeking", () => {

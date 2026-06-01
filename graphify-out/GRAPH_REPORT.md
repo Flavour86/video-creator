@@ -1,13 +1,17 @@
-# Graph Report - apps/  (2026-05-27)
+# Graph Report - apps/  (2026-06-01)
 
 ## Corpus Check
-- 364 files · ~99,999 words
-- Verdict: corpus is large enough that graph structure adds value.
+- Large corpus: 275 files · ~159,494 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 3527 nodes · 5761 edges · 232 communities (214 shown, 18 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 520 edges (avg confidence: 0.77)
+- 3622 nodes · 5968 edges · 233 communities (216 shown, 17 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 534 edges (avg confidence: 0.79)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `649cc62`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_clip_cache_components()  clip_cache_key()  clip_cache_key_from_components()|clip_cache_components() / clip_cache_key() / clip_cache_key_from_components()]]
@@ -227,6 +231,7 @@
 - [[_COMMUNITY_MockWebSocket  .constructor()|MockWebSocket / .constructor()]]
 - [[_COMMUNITY_Generate a text response for the given prompt.|Generate a text response for the given prompt.]]
 - [[_COMMUNITY_App Icon|App Icon]]
+- [[_COMMUNITY_timeline  head|timeline / head]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `connection()` - 51 edges
@@ -236,55 +241,58 @@
 5. `insert_render()` - 38 edges
 6. `editor` - 37 edges
 7. `editor` - 37 edges
-8. `project_id_for_path()` - 33 edges
-9. `AlignmentResult` - 33 edges
-10. `_write_project()` - 27 edges
+8. `AlignmentResult` - 36 edges
+9. `project_id_for_path()` - 33 edges
+10. `build_compose_command()` - 33 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `Video Creator App Icon` --conceptually_related_to--> `Local Video Creator App`  [INFERRED]
+  web/app/icon.svg → server/README.md
+- `test_projects_list_deletes_missing_path_and_corrupt_config_rows()` --calls--> `connection()`  [INFERRED]
+  server/tests/test_projects_route.py → server/server/db/app_db.py
 - `test_health_returns_cached_project_count()` --calls--> `touch_recent()`  [INFERRED]
   server/tests/test_health.py → server/server/db/projects.py
 - `test_recent_projects_keep_missing_paths_as_missing_metadata()` --calls--> `touch_recent()`  [INFERRED]
   server/tests/test_projects_route.py → server/server/db/projects.py
 - `test_recent_projects_detect_test01_raw_ingredients()` --calls--> `touch_recent()`  [INFERRED]
   server/tests/test_projects_route.py → server/server/db/projects.py
-- `test_load_prefers_latest_sqlite_config_snapshot()` --calls--> `save_config_snapshot()`  [INFERRED]
-  server/tests/test_project_load.py → server/server/db/project_configs.py
-- `test_large_render_log_retains_tail_and_writes_full_log()` --calls--> `insert_render()`  [INFERRED]
-  server/tests/test_render_progress.py → server/server/db/renders.py
 
-## Communities (232 total, 18 thin omitted)
+## Hyperedges (group relationships)
+- **Smoke Alignment Fixture Flow** — smoke_project_readme_smoke_project_fixture, smoke_project_readme_test_alignment_integration, smoke_project_readme_vc_integration, smoke_project_readme_voice_wav, smoke_project_transcript_smoke_test_transcript, smoke_project_transcript_alignment_pipeline [INFERRED 0.85]
+
+## Communities (233 total, 17 thin omitted)
 
 ### Community 0 - "clip_cache_components() / clip_cache_key() / clip_cache_key_from_components()"
 Cohesion: 0.06
-Nodes (59): clip_cache_components(), clip_cache_key(), clip_cache_key_from_components(), clip_cache_metadata_path(), clip_cache_path(), _compute_file_sha256(), is_cached(), _json_object() (+51 more)
+Nodes (56): clip_cache_components(), clip_cache_key(), clip_cache_key_from_components(), clip_cache_metadata_path(), clip_cache_path(), _compute_file_sha256(), is_cached(), _json_object() (+48 more)
 
 ### Community 1 - "alignmentSignature() / BgLayer / cacheStatusFromItem()"
 Cohesion: 0.04
-Nodes (43): BgLayer, cacheStatusFromItem(), CacheSummaryError, clampSentenceIndex(), ClipCacheState, ClipCacheSummary, ClipLayer, connectDraftProgress() (+35 more)
+Nodes (43): BgLayer, cacheStatusFromItem(), CacheSummaryError, chunkPlanForSize(), ClipCacheState, ClipCacheSummary, ClipLayer, connectDraftProgress() (+35 more)
 
 ### Community 2 - "_discard_setup_draft() / _alignment_quality_error() / _alignment_response()"
-Cohesion: 0.07
-Nodes (68): _discard_setup_draft(), _alignment_quality_error(), _alignment_response(), _alignment_state(), _apply_setup_draft_update(), _apply_staged_path(), _cached_subtitle_generation(), _clear_staged_file() (+60 more)
+Cohesion: 0.08
+Nodes (49): _alignment_state(), _apply_setup_draft_update(), _apply_staged_path(), _cached_subtitle_generation(), _clear_staged_file(), create_setup_draft(), _default_draft_project_path(), _default_setup_alignment() (+41 more)
 
 ### Community 3 - "Exception / alignment_device_for_language() / Return a preferred forced-alignmen"
 Cohesion: 0.08
 Nodes (56): Exception, alignment_device_for_language(), Return a preferred forced-alignment device for heavier language models., _alignment_duration_s(), _append_log_line(), cancel_render(), _clear_active(), _create_job() (+48 more)
 
 ### Community 4 - "_append_black_fade_overlay() / _append_dip_black_segments() / build_compose_comm"
-Cohesion: 0.11
-Nodes (58): _append_black_fade_overlay(), _append_dip_black_segments(), build_compose_command(), _build_filtergraph(), _burns_subtitles(), _duration_s(), _escape_subtitles_path(), _fmt() (+50 more)
+Cohesion: 0.28
+Nodes (35): build_compose_command(), _alignment(), _bg_layer(), _expected_clip(), _fg_layer(), _filtergraph(), _input_paths(), _item() (+27 more)
 
 ### Community 5 - "audio / background / bgLayer"
-Cohesion: 0.04
-Nodes (52): audio, background, bgLayer, calls, contextualHeading, fgLayer, fileInput, layout (+44 more)
+Cohesion: 0.03
+Nodes (55): audio, background, bgLayer, calls, contextualHeading, fgLayer, fileInput, layout (+47 more)
 
 ### Community 6 - "list / _cjk_sentence_spans() / _clean_transcript()"
-Cohesion: 0.08
-Nodes (51): list, _cjk_sentence_spans(), _clean_transcript(), _get_tokenizer(), Sentence segmentation using NLTK Punkt tokenizer., Remove structural transcript noise before sentence segmentation.      Markdown h, Split text into sentences with character offsets., segment() (+43 more)
+Cohesion: 0.07
+Nodes (65): AlignedSentence, AlignedWord, Timing-related domain models., Sentence, list, _alignment_from_srt(), _best_chunk_end(), _build_cues() (+57 more)
 
 ### Community 7 - "backgroundAssets() / backgroundMotionOptions / BackgroundVisualItem"
-Cohesion: 0.05
-Nodes (42): backgroundAssets(), backgroundMotionOptions, BackgroundVisualItem, clamp(), defaultSelection(), easingOptions, edgeMarginXFromPlacement(), edgeMarginYFromPlacement() (+34 more)
+Cohesion: 0.08
+Nodes (28): assetButtonTitle(), BackgroundAssetCard(), BackgroundAssetList(), backgroundMotionOptions, BackgroundVisualItem, defaultSelection(), easingOptions, Inspector() (+20 more)
 
 ### Community 8 - "inspector / addBackground / background"
 Cohesion: 0.04
@@ -303,44 +311,44 @@ Cohesion: 0.04
 Nodes (46): appShell, brand, controls, nav, statusBar, mark, phaseLabel, productName (+38 more)
 
 ### Community 12 - "set_project_thumbnail() / _alignment_state() / _audio_path()"
-Cohesion: 0.12
-Nodes (38): set_project_thumbnail(), _alignment_state(), _audio_path(), _clip_item_cache_status(), _ensure_placeholder_thumbnail(), _ffprobe_duration(), _find_voice_file(), _format_duration() (+30 more)
+Cohesion: 0.09
+Nodes (50): remove_recent(), set_project_thumbnail(), _alignment_state(), _audio_path(), _clip_item_cache_status(), _default_subtitles_layer(), delete_recent_project(), _ensure_placeholder_thumbnail() (+42 more)
 
 ### Community 13 - "appendOperation() / applyLayerOperation() / applyOperation()"
-Cohesion: 0.09
-Nodes (36): appendOperation(), applyLayerOperation(), applyOperation(), buildWorkingConfig(), _can_coalesce_replace_layers(), clearOperationLog(), clearRecoveryState(), coalesceOperationKey() (+28 more)
+Cohesion: 0.11
+Nodes (25): appendOperation(), buildWorkingConfig(), _can_coalesce_replace_layers(), clearRecoveryState(), coalesceOperationKey(), collectDiffPaths(), cryptoId(), EditorOperation (+17 more)
 
 ### Community 14 - "beginPath / BG_LAYER / BG_VIDEO_LAYER"
-Cohesion: 0.05
-Nodes (33): beginPath, BG_LAYER, BG_VIDEO_LAYER, canvas, clip, decoders, drawImage, fakeContext (+25 more)
+Cohesion: 0.04
+Nodes (42): backgroundDraw, beginPath, BG_LAYER, BG_VIDEO_LAYER, bgIndex, canvas, clip, createdImages (+34 more)
 
 ### Community 15 - "parseProgressEvent() / RenderPreset / RenderProgressEvent"
-Cohesion: 0.07
-Nodes (27): RenderPreset, RenderProgressEvent, RenderProgressState, RenderStage, RenderStartResponse, Props, RenderDraftBar(), renderLabel() (+19 more)
+Cohesion: 0.09
+Nodes (22): RenderPreset, RenderProgressEvent, RenderProgressState, RenderStage, RenderStartResponse, formatEta(), progressPercent(), Props (+14 more)
 
 ### Community 16 - "RenderPage() / RenderPageProps / dialog"
-Cohesion: 0.1
-Nodes (20): RenderPage(), RenderPageProps, dialog, mocks, openSpy, RenderPageClient(), RenderPageClientProps, firstSearchValue() (+12 more)
+Cohesion: 0.12
+Nodes (20): Props, RenderDraftBar(), renderLabel(), link, onCancel, RenderPage(), RenderPageProps, dialog (+12 more)
 
 ### Community 17 - "BaseSettings / _assemble_chunks() / _build_duplicate_result()"
-Cohesion: 0.13
-Nodes (33): BaseSettings, _assemble_chunks(), _build_duplicate_result(), _chunk_dir(), _chunk_path(), _chunks_root(), _cleanup_chunks(), _error() (+25 more)
+Cohesion: 0.12
+Nodes (34): BaseSettings, _watermark_path(), _assemble_chunks(), _build_duplicate_result(), _chunk_dir(), _chunk_path(), _chunks_root(), _cleanup_chunks() (+26 more)
 
 ### Community 18 - "HistoryPanelProps / HistorySettingsPopover() / PanelHead()"
-Cohesion: 0.06
-Nodes (21): HistoryPanelProps, HistorySettingsPopover(), PanelHead(), PathCardProps, button, checkbox, input, label (+13 more)
+Cohesion: 0.08
+Nodes (13): PathCardProps, button, button, chip, chip, navItems, onValueChange, button (+5 more)
 
 ### Community 19 - "project_id_for_path() / touch_recent() / insert_render()"
-Cohesion: 0.25
-Nodes (33): project_id_for_path(), touch_recent(), insert_render(), mark_render_finished(), datetime_now(), test_create_job_avoids_existing_mp4_path_without_overwrite(), test_create_job_avoids_existing_successful_render_id(), test_delete_project_history_rejects_cross_project_render_id() (+25 more)
+Cohesion: 0.24
+Nodes (34): project_id_for_path(), touch_recent(), insert_render(), mark_render_finished(), clip_cache_path_for_item(), datetime_now(), test_create_job_avoids_existing_mp4_path_without_overwrite(), test_create_job_avoids_existing_successful_render_id() (+26 more)
 
 ### Community 20 - "actualPath / alignmentHash() / artifactPaths"
 Cohesion: 0.07
 Nodes (26): actualPath, alignmentHash(), artifactPaths, BackendHandle, Bounds, Cue, __dirname, escapeSubtitlePath() (+18 more)
 
 ### Community 21 - "appendItemToLayer() / areItemsEquivalent() / AssignModal()"
-Cohesion: 0.07
-Nodes (24): areItemsEquivalent(), AssignModal(), AssignVisualItem, EASING_OPTIONS, fmtTime(), MediaItem, MOTION_OPTIONS, parseClock() (+16 more)
+Cohesion: 0.1
+Nodes (16): areItemsEquivalent(), AssignModal(), AssignVisualItem, EASING_OPTIONS, fmtTime(), mediaForCompositing(), MediaItem, MOTION_OPTIONS (+8 more)
 
 ### Community 22 - "expectStepDone() / LauncherApiMockOptions / makeUpload()"
 Cohesion: 0.08
@@ -352,63 +360,63 @@ Nodes (33): actual, cancelRender, changeBg, changeBgAria, draftActive, drafting,
 
 ### Community 24 - "actual / cancelRender / changeBg"
 Cohesion: 0.06
-Nodes (33): actual, cancelRender, changeBg, changeBgAria, draftActive, drafting, dropHint, fit (+25 more)
+Nodes (31): actual, cancelRender, changeBg, changeBgAria, draftActive, drafting, dropHint, fit (+23 more)
 
 ### Community 25 - "formatAudioChain() / formatBitrate() / formatBytes()"
 Cohesion: 0.15
-Nodes (26): formatBitrate(), formatBytes(), formatColor(), formatCount(), formatDimensions(), formatEta(), formatFps(), formatHistoryMeta() (+18 more)
+Nodes (25): formatBitrate(), formatBytes(), formatColor(), formatCount(), formatDimensions(), formatEta(), formatFps(), formatHistoryMeta() (+17 more)
 
 ### Community 26 - "RenderManifest / RenderPreset / AfterRenderPanel()"
-Cohesion: 0.09
-Nodes (20): RenderManifest, RenderPreset, AfterRenderPanel(), AfterRenderPanelProps, onPlay, HistoryPanel(), DONE_ENTRY, onDelete (+12 more)
+Cohesion: 0.13
+Nodes (12): AfterRenderPanel(), AfterRenderPanelProps, onPlay, HistoryPanel(), HistoryPanelProps, DONE_ENTRY, onDelete, HistorySettingsPopover() (+4 more)
 
 ### Community 27 - "RENDER_STATE_CASES / RENDER_VISUAL_CASES / RENDER_VISUAL_SCREENSHOTS"
-Cohesion: 0.11
-Nodes (28): RENDER_STATE_CASES, RENDER_VISUAL_CASES, RENDER_VISUAL_SCREENSHOTS, RenderStateCase, RenderVisualCase, RenderVisualState, RenderVisualTheme, assertWrittenRenderSpec() (+20 more)
+Cohesion: 0.12
+Nodes (25): RENDER_STATE_CASES, RENDER_VISUAL_CASES, RENDER_VISUAL_SCREENSHOTS, RenderStateCase, RenderVisualCase, RenderVisualState, RenderVisualTheme, eventsForState() (+17 more)
 
 ### Community 28 - "buildFgItem() / deleteVisualItem() / FgItemParams"
-Cohesion: 0.09
+Cohesion: 0.08
 Nodes (29): buildFgItem(), deleteVisualItem(), FgItemParams, hasSentenceOverlap(), hasVisualMediaReference(), isPersistedMotionKind(), isVisualItem(), mergeVisualPatch() (+21 more)
 
 ### Community 29 - "_backup_corrupt_db() / _configure_connection() / connection()"
-Cohesion: 0.13
-Nodes (27): _backup_corrupt_db(), _configure_connection(), connection(), init_db(), InitDbResult, _is_corruption_error(), _migrate(), Global application SQLite DB. (+19 more)
+Cohesion: 0.1
+Nodes (34): AppDatabaseError, _backup_corrupt_db(), _configure_connection(), connection(), init_db(), InitDbResult, _is_corruption_error(), _migrate() (+26 more)
 
 ### Community 30 - "EDITOR_VISUAL_CASES / EditorVisualAction / EditorVisualCaptureTarget"
-Cohesion: 0.12
-Nodes (29): EDITOR_VISUAL_CASES, EditorVisualAction, EditorVisualCaptureTarget, EditorVisualCase, EditorVisualTheme, BUG_27_ALIGNMENT, BUG_27_PROJECT, buildMediaSvg() (+21 more)
+Cohesion: 0.06
+Nodes (43): EDITOR_VISUAL_CASES, EDITOR_VISUAL_SCREENSHOTS, EditorVisualAction, EditorVisualCaptureTarget, EditorVisualCase, EditorVisualTheme, assignDialog, backgroundDialog (+35 more)
 
 ### Community 31 - "AlignedWord / alignmentPath() / AlignmentResult"
-Cohesion: 0.09
-Nodes (20): AlignedWord, AlignmentResult, AlignmentState, AlignmentTarget, MOCK_RESULT, postUrl, { result }, useAlignment() (+12 more)
+Cohesion: 0.17
+Nodes (11): AlignmentResult, AssignModalStore, { result }, useAssignModal, Props, buttons, { container }, onSeek (+3 more)
 
 ### Community 32 - "clamp() / clampClipToDuration() / clipClass()"
 Cohesion: 0.09
-Nodes (22): clamp(), clampClipToDuration(), clipsFromSentences(), computeDragPatch(), deriveSubtitleCueCount(), dotClass(), DragMode, DragState (+14 more)
+Nodes (25): clamp(), clampClipToDuration(), clipsFromSentences(), computeDragPatch(), deriveSubtitleCueCount(), dotClass(), DragMode, DragState (+17 more)
 
 ### Community 33 - "latest_config_for_project_path() / project_path_for_id() / remove_recent()"
-Cohesion: 0.1
-Nodes (29): latest_config_for_project_path(), project_path_for_id(), remove_recent(), ensure_project_layout(), load_project(), Project file load/save with validation., create_project(), _default_subtitles() (+21 more)
+Cohesion: 0.19
+Nodes (15): latest_config_for_project_path(), project_path_for_id(), ensure_project_layout(), load_project(), Project file load/save with validation., _default_subtitles(), delete_project(), _error() (+7 more)
 
 ### Community 34 - "EDITOR_VISUAL_SCREENSHOTS / byScreenshot / collectScreenshotRefs()"
 Cohesion: 0.07
-Nodes (25): EDITOR_VISUAL_SCREENSHOTS, byScreenshot, covered, declared, duplicates, editorRefs, entries, expected (+17 more)
+Nodes (24): byScreenshot, covered, declared, duplicates, editorRefs, entries, expected, extra (+16 more)
 
 ### Community 35 - "dotClass() / LayersPopover() / LayersPopoverProps"
-Cohesion: 0.09
-Nodes (18): LayersPopover(), LayersPopoverProps, props, trigger, Layer, Props, BG, SENTENCES (+10 more)
+Cohesion: 0.12
+Nodes (14): AlignedSentence, Props, BG, SENTENCES, SUB, Timeline(), TRACK_ORDER, Props (+6 more)
 
 ### Community 36 - "BaseModel / AlignedSentence / AlignedWord"
-Cohesion: 0.13
-Nodes (27): BaseModel, AlignedSentence, AlignedWord, AlignmentResult, Timing-related domain models., Sentence, CreateProjectRequest, OpenProjectRequest (+19 more)
+Cohesion: 0.15
+Nodes (24): BaseModel, AlignmentResult, CreateProjectRequest, OpenProjectRequest, ProjectResponse, PutLayersRequest, PutLayersResponse, PutProjectConfigRequest (+16 more)
 
 ### Community 37 - "request() / requestError() / ServerRequestOptions"
-Cohesion: 0.1
-Nodes (18): request(), requestError(), ServerRequestOptions, chunkPlanForSize(), uploadChunk(), uploadFileWithSplits(), uploadSinglePart(), RenderHistoryResponse (+10 more)
+Cohesion: 0.11
+Nodes (16): getServerJson(), request(), requestError(), ServerRequestOptions, RenderHistoryResponse, RenderProgressEvent, first, requestMock (+8 more)
 
 ### Community 38 - "formatRenderFilename() / activeStageIndex() / detailForStage()"
-Cohesion: 0.15
-Nodes (23): formatRenderFilename(), activeStageIndex(), filenameFromPath(), finalFrameCountFromEvents(), normalizeHistory(), normalizeJob(), normalizePreset(), normalizeResolution() (+15 more)
+Cohesion: 0.1
+Nodes (33): formatRenderFilename(), RenderManifest, RenderPreset, activeStageIndex(), filenameFromPath(), finalFrameCountFromEvents(), normalizeHistory(), normalizeJob() (+25 more)
 
 ### Community 39 - "assignMedia / cancel / change"
 Cohesion: 0.07
@@ -419,44 +427,44 @@ Cohesion: 0.11
 Nodes (11): test_setup_alignment_uses_staged_voice_transcript_and_updates_status(), test_setup_artifact_upload_failure_keeps_previous_staged_file(), test_setup_draft_artifact_upload_stages_blob_without_client_path(), test_setup_draft_cancel_cleans_internal_cache_only(), test_setup_draft_stage_copy_failure_returns_controlled_error(), test_setup_draft_stage_same_file_is_noop(), test_setup_draft_stages_artifacts_without_creating_final_project(), test_setup_inspect_populates_metadata_and_hash() (+3 more)
 
 ### Community 41 - "DEFAULT_SUBTITLES / ProjectStore / saveConfigPatch()"
-Cohesion: 0.09
-Nodes (19): DEFAULT_SUBTITLES, ProjectStore, SubtitlesSettings, BASE_CONFIG, BG_LAYER, body, { result }, s (+11 more)
+Cohesion: 0.14
+Nodes (12): DEFAULT_SUBTITLES, ProjectStore, SubtitlesSettings, BASE_CONFIG, BG_LAYER, body, { result }, s (+4 more)
 
 ### Community 42 - "config_hash() / has_valid_config_for_project_id() / Canonical project config per"
 Cohesion: 0.11
 Nodes (15): config_hash(), has_valid_config_for_project_id(), Canonical project config persistence., save_config_snapshot(), get_project_by_path(), list_renders_for_project(), Tests for PUT /projects/layers — written before implementation (TDD)., test_put_layers_rejects_invalid_config_without_writing() (+7 more)
 
 ### Community 43 - "get_render() / list_render_events() / mark_render_started()"
-Cohesion: 0.22
-Nodes (20): get_render(), list_render_events(), mark_render_started(), test_render_status_lifecycle_keeps_rows_events_and_artifacts_consistent(), _clear_render_runtime(), _render_job(), test_active_render_cancel_preserves_partial_and_records_cancelled(), test_browser_disconnect_unregisters_render_progress_subscriber() (+12 more)
+Cohesion: 0.15
+Nodes (31): get_render(), list_render_events(), mark_render_started(), publish_progress(), subscribe_progress(), test_render_status_lifecycle_keeps_rows_events_and_artifacts_consistent(), _clear_render_runtime(), _render_job() (+23 more)
 
 ### Community 44 - "compareLauncher() / LAUNCHER_VIEWPORT / prepareVisualPage()"
-Cohesion: 0.14
-Nodes (22): compareLauncher(), LAUNCHER_VIEWPORT, prepareVisualPage(), PROJECTS, routeLauncher(), settleChrome(), Theme, alignmentForState() (+14 more)
+Cohesion: 0.12
+Nodes (25): compareLauncher(), LAUNCHER_VIEWPORT, prepareVisualPage(), PROJECTS, routeLauncher(), settleChrome(), Theme, assertWrittenRenderSpec() (+17 more)
 
 ### Community 45 - "backgroundMediaIds() / BgLayer / BgModal()"
-Cohesion: 0.13
-Nodes (21): backgroundMediaIds(), BgLayer, BgModal(), EASING_OPTIONS, existingSelection(), hasBackgroundItemChanged(), initialState(), isBackgroundPlaylistUnchanged() (+13 more)
+Cohesion: 0.12
+Nodes (20): backgroundMediaIds(), BgLayer, BgModal(), EASING_OPTIONS, existingSelection(), hasBackgroundItemChanged(), initialState(), isBackgroundPlaylistUnchanged() (+12 more)
 
 ### Community 46 - "test_transcribe.py / _align() / _make_transcribe_wx_mock()"
-Cohesion: 0.13
-Nodes (19): _align(), _make_transcribe_wx_mock(), _make_wx_mock(), Unit tests for the WhisperX alignment wrapper (T3.2).  Tests use mocks so whispe, Run transcribe.align with whisperx, torch, and threading mocked out., Run transcribe.align with whisperx, torch, and threading mocked out., test_align_cache_hit_false_on_fresh_run(), test_align_confidence_averaged() (+11 more)
+Cohesion: 0.14
+Nodes (19): _align(), _make_transcribe_wx_mock(), _make_wx_mock(), Unit tests for the WhisperX alignment wrapper (T3.2).  Tests use mocks so whispe, Run transcribe.align with whisperx, torch, and threading mocked out., test_align_cache_hit_false_on_fresh_run(), test_align_confidence_averaged(), test_align_passes_language_to_load_model() (+11 more)
 
 ### Community 47 - "AlignedSentence / PreviewPlayer() / Props"
-Cohesion: 0.13
-Nodes (20): AlignedSentence, PreviewPlayer(), Props, BG, { container }, images, img, activeItem() (+12 more)
+Cohesion: 0.14
+Nodes (24): activeItem(), backgroundMediaAtTime(), BaseItem, bgCrossfade(), BgItem, clamp(), DisplaySpec, imagePlaylistEntries() (+16 more)
 
 ### Community 48 - "clampNumber() / EditorModal() / EditorModalProps"
-Cohesion: 0.11
-Nodes (16): clampNumber(), EditorModal(), EditorModalProps, fileExt(), formatKindBadge(), normalizeSubtitlesSettings(), SubtitlesFields(), DEFAULT_SUBTITLES (+8 more)
+Cohesion: 0.15
+Nodes (14): clampNumber(), EditorModal(), EditorModalProps, fileExt(), formatKindBadge(), normalizeSubtitlesSettings(), PreviewResolution, SUBTITLE_POSITION_MARGINS (+6 more)
 
 ### Community 49 - "EASING_OPTIONS / InspectorPanel() / MediaItem"
 Cohesion: 0.1
 Nodes (19): EASING_OPTIONS, InspectorPanel(), MediaItem, MOTION_OPTIONS, Props, BASE_PROPS, { container }, easingSelect (+11 more)
 
 ### Community 50 - "EditorWorkingState / after / BASE_STATE"
-Cohesion: 0.09
-Nodes (21): EditorWorkingState, after, BASE_STATE, baseWithClip, before, BG_LAYER, content, contractFiles (+13 more)
+Cohesion: 0.1
+Nodes (20): after, BASE_STATE, baseWithClip, before, BG_LAYER, content, contractFiles, current (+12 more)
 
 ### Community 51 - "modals / addToProject / apply"
 Cohesion: 0.09
@@ -467,24 +475,24 @@ Cohesion: 0.09
 Nodes (22): modals, addToProject, apply, asset, background, backgroundSubtitle, backgroundTitle, burnIn (+14 more)
 
 ### Community 53 - "align() / _align_segments() / _device()"
-Cohesion: 0.16
-Nodes (21): align(), _align_segments(), _device(), _load_audio_array(), _load_audio_with_ffmpeg(), _load_audio_with_soundfile(), _load_model(), _load_transcribe_model() (+13 more)
+Cohesion: 0.17
+Nodes (19): align(), _align_segments(), _device(), _load_audio_array(), _load_audio_with_ffmpeg(), _load_audio_with_soundfile(), _load_model(), _load_transcribe_model() (+11 more)
 
 ### Community 54 - "test_projects_route.py / test_create_project_failure_consumes_setup_session() / "
-Cohesion: 0.16
-Nodes (18): test_create_project_failure_consumes_setup_session(), test_create_project_from_setup_draft_materializes_final_layout(), test_get_project_config_backfills_missing_subtitle_layer(), test_project_id_config_inspect_and_delete_routes(), test_projects_list_deletes_corrupt_rows_and_cascades_project_configs(), test_projects_list_maps_render_status_tag(), test_projects_list_paginates_and_sorts_by_last_render_time(), test_projects_list_returns_project_id_cards_without_paths() (+10 more)
+Cohesion: 0.14
+Nodes (20): test_create_project_failure_consumes_setup_session(), test_create_project_from_setup_draft_materializes_final_layout(), test_get_project_config_backfills_missing_subtitle_layer(), test_project_id_config_inspect_and_delete_routes(), test_projects_list_deletes_corrupt_rows_and_cascades_project_configs(), test_projects_list_deletes_missing_path_and_corrupt_config_rows(), test_projects_list_maps_render_status_tag(), test_projects_list_paginates_and_sorts_by_last_render_time() (+12 more)
 
 ### Community 55 - "AlignmentRunCard() / alignmentStatusLabel() / fileName()"
-Cohesion: 0.13
-Nodes (17): AlignmentRunCard(), alignmentStatusLabel(), fileName(), fileTileBadgeClass(), fileTileClass(), FileTileIcon, FileTileState, outputPresets (+9 more)
+Cohesion: 0.15
+Nodes (14): AlignmentRunCard(), alignmentStatusLabel(), fileTileBadgeClass(), fileTileClass(), FileTileIcon, FileTileState, outputPresets, SetupFileTile() (+6 more)
 
 ### Community 56 - "AppShell() / AppShellChrome() / AppShellChromeProps"
-Cohesion: 0.14
-Nodes (15): AppShell(), AppShellChrome(), AppShellChromeProps, AppShellProps, brandLink, header, layoutSource, statusBar (+7 more)
+Cohesion: 0.09
+Nodes (22): metadata, AppShell(), AppShellChrome(), AppShellChromeProps, AppShellProps, brandLink, header, layoutSource (+14 more)
 
 ### Community 57 - "applyCanvasMetadata() / compactSubtitleText() / drawSubtitle()"
-Cohesion: 0.12
-Nodes (11): drawSubtitle(), FALLBACK_SUBTITLE_STYLE, findNaturalBreakIndex(), formatPreviewTimecode(), limitSubtitleLines(), PreviewSurface(), PreviewSurfaceProps, VIDEO_EXTENSIONS (+3 more)
+Cohesion: 0.13
+Nodes (12): FALLBACK_SUBTITLE_STYLE, findNaturalBreakIndex(), formatPreviewTimecode(), mediaSourceUrl(), mediaUrl(), PreviewSurface(), PreviewSurfaceProps, uploadMediaUrl() (+4 more)
 
 ### Community 58 - "glyph() / glyphClass() / glyphForEvent()"
 Cohesion: 0.14
@@ -499,12 +507,12 @@ Cohesion: 0.1
 Nodes (20): devDependencies, autoprefixer, eslint, eslint-config-next, jsdom, @playwright/test, pngjs, postcss (+12 more)
 
 ### Community 61 - "getServerJson() / RuntimeStatusState / { result }"
-Cohesion: 0.15
-Nodes (14): getServerJson(), RuntimeStatusState, { result }, RUNTIME_STATUS, useRuntimeStatus(), MetricGrid(), MetricGridProps, cudaValue() (+6 more)
+Cohesion: 0.13
+Nodes (14): RuntimeStatusState, { result }, RUNTIME_STATUS, useRuntimeStatus(), MetricGrid(), MetricGridProps, cudaValue(), RuntimeCard() (+6 more)
 
 ### Community 62 - "displayProjectName() / EditorBar() / EditorBarProps"
-Cohesion: 0.15
-Nodes (14): displayProjectName(), EditorBar(), EditorBarProps, RenderStrip(), RenderStripProps, stageLabelFor(), statusLabelFor(), onCancel (+6 more)
+Cohesion: 0.22
+Nodes (9): displayProjectName(), EditorBar(), EditorBarProps, EditorMediaItem, EditorModal, EditorRenderJob, EditorRenderJobStatus, EditorSelection (+1 more)
 
 ### Community 63 - "title / cancelled / cancelling"
 Cohesion: 0.11
@@ -515,16 +523,16 @@ Cohesion: 0.11
 Nodes (19): title, cancelled, cancelling, composing, done, doneDraft, failed, ffmpegFatalError (+11 more)
 
 ### Community 65 - "get_latest_render_event() / _event_from_db() / _log_event_phase()"
-Cohesion: 0.18
-Nodes (18): get_latest_render_event(), _event_from_db(), _log_event_phase(), _parse_detail(), publish_log(), publish_progress(), In-memory render progress fan-out., subscribe_progress() (+10 more)
+Cohesion: 0.36
+Nodes (7): get_latest_render_event(), _event_from_db(), _log_event_phase(), _parse_detail(), publish_log(), In-memory render progress fan-out., _subscribers_for_render()
 
 ### Community 66 - "audioCodec / bitrate / color"
 Cohesion: 0.11
 Nodes (18): audioCodec, bitrate, color, crf, estSize, file, framerate, head (+10 more)
 
 ### Community 67 - "createAnother / eyebrow / lastRender"
-Cohesion: 0.11
-Nodes (18): createAnother, eyebrow, lastRender, legacyTitle, media, metrics, newProject, opened (+10 more)
+Cohesion: 0.13
+Nodes (15): createAnother, eyebrow, lastRender, legacyTitle, media, newProject, opened, openFolder (+7 more)
 
 ### Community 68 - "assignMedia / cancel / change"
 Cohesion: 0.11
@@ -543,20 +551,20 @@ Cohesion: 0.18
 Nodes (14): _build_item(), _error(), get_audio(), get_media_file(), _get_project(), _get_project_id(), get_thumb(), _legacy_media_route_removed() (+6 more)
 
 ### Community 72 - "test_alignment_subtitles.py / _alignment() / test_alignment_cache_hit_regenerate"
-Cohesion: 0.2
-Nodes (15): test_alignment_cache_hit_regenerates_missing_subtitles(), test_alignment_endpoint_uses_chinese_language_and_cpu(), test_alignment_endpoint_writes_subtitles(), test_setup_subtitle_alignment_cache_hit_and_transcript_change_invalidation(), test_setup_subtitle_alignment_cuda_oom_falls_back_to_cpu(), test_setup_subtitle_alignment_fails_when_transcript_empty(), test_setup_subtitle_alignment_falls_back_to_cpu_when_cuda_unavailable(), test_setup_subtitle_alignment_reports_corrections() (+7 more)
+Cohesion: 0.11
+Nodes (44): ClipItem, _append_black_fade_overlay(), _append_dip_black_segments(), _build_filtergraph(), _burns_subtitles(), _duration_s(), _escape_subtitles_path(), _expand_background_playlist_item() (+36 more)
 
 ### Community 73 - "status / status / activeRenders"
-Cohesion: 0.12
-Nodes (17): status, status, activeRenders, aligned, cached, cachedProjects, composing, error (+9 more)
+Cohesion: 0.15
+Nodes (13): status, activeRenders, cached, cachedProjects, composing, error, idle, info (+5 more)
 
 ### Community 74 - "Checkbox / checkboxClasses / CheckboxProps"
 Cohesion: 0.12
 Nodes (16): Checkbox, checkboxClasses, CheckboxProps, controlShellClasses, fieldClasses, FieldProps, hintClasses, labelClasses (+8 more)
 
 ### Community 75 - "backgroundPlaylistOnly / clip / DRAG_LAYER"
-Cohesion: 0.12
-Nodes (14): backgroundPlaylistOnly, clip, DRAG_LAYER, endPatch, LAYERS, manyClips, movePatch, { onDeleteItem } (+6 more)
+Cohesion: 0.1
+Nodes (18): backgroundPlaylistOnly, clip, DRAG_LAYER, emptyTrack, endPatch, LAYERS, manyClips, movePatch (+10 more)
 
 ### Community 76 - "correctionTitle / forced / hash"
 Cohesion: 0.12
@@ -583,8 +591,8 @@ Cohesion: 0.13
 Nodes (15): draft, final, idle, render, backToEditor, cancel, errorHint, eyebrow (+7 more)
 
 ### Community 82 - "createAnother / eyebrow / lastRender"
-Cohesion: 0.13
-Nodes (15): createAnother, eyebrow, lastRender, legacyTitle, media, newProject, opened, openFolder (+7 more)
+Cohesion: 0.11
+Nodes (18): createAnother, eyebrow, lastRender, legacyTitle, media, metrics, newProject, opened (+10 more)
 
 ### Community 83 - "draft / final / idle"
 Cohesion: 0.13
@@ -599,48 +607,48 @@ Cohesion: 0.26
 Nodes (11): _dump_project(), _item_root(), _phase1_output(), test_ai_field_rejected(), test_characters_field_rejected(), test_editor_schema_accepts_task1_media_visual_subtitle_and_resolution_fields(), test_editor_schema_rejects_legacy_subtitle_and_resolution_values(), test_editor_schema_rejects_out_of_range_pip_and_subtitle_values() (+3 more)
 
 ### Community 86 - "metadata / RootLayout() / script"
-Cohesion: 0.17
-Nodes (7): metadata, script, ThemeInitScript(), normalizeTheme(), readStoredTheme(), ThemeMode, ThemeStore
+Cohesion: 0.2
+Nodes (19): create_project(), _discard_setup_draft(), _alignment_response(), clear_setup_session_cookie(), delete_setup_draft(), _error(), get_setup_draft(), _invalid_draft_project_path_response() (+11 more)
 
 ### Community 87 - "EditorMediaItem / defaultWatermark() / isWatermarkMedia()"
-Cohesion: 0.15
-Nodes (8): EditorMediaItem, file, fileInput, MEDIA, { onImport }, WatermarkMedia, WatermarkModal(), WatermarkModalProps
+Cohesion: 0.12
+Nodes (9): file, fileInput, MEDIA, { onChange }, { onImport }, value, WatermarkMedia, WatermarkModal() (+1 more)
 
 ### Community 88 - "baseButtonClasses / Button / ButtonProps"
 Cohesion: 0.18
 Nodes (9): baseButtonClasses, Button, ButtonProps, ButtonSize, buttonSizeClasses, ButtonVariant, buttonVariantClasses, ConfirmDialogProps (+1 more)
 
 ### Community 89 - "calculateSsimFromPngBuffers() / SsimImageData / toSsimImageData()"
-Cohesion: 0.21
-Nodes (12): calculateSsimFromPngBuffers(), SsimImageData, toSsimImageData(), applyBoxBlur(), applyIgnoredRegions(), compareScreenshots(), cropReferenceRegion(), VISUAL_ARTIFACTS_DIR (+4 more)
+Cohesion: 0.12
+Nodes (14): { container }, coordinates, file, inspector, LAYERS, MEDIA, { onOpenAssignEdit, onReplaceItemMedia }, { onOpenBackground } (+6 more)
 
 ### Community 90 - "BG_LAYER / fg2 / FG_LAYER"
-Cohesion: 0.15
-Nodes (12): BG_LAYER, fg2, FG_LAYER, fgBottom, fgTop, layer, noGapSentences, pipBottom (+4 more)
+Cohesion: 0.14
+Nodes (13): BG_LAYER, fg2, FG_LAYER, fgBottom, fgTop, layer, media, noGapSentences (+5 more)
 
 ### Community 91 - "alignment_language_for_text() / compute_alignment_hash() / Return hex sha256 of "
-Cohesion: 0.21
-Nodes (12): alignment_language_for_text(), compute_alignment_hash(), Return hex sha256 of audio bytes + separator + transcript bytes., Return the WhisperX alignment language implied by transcript text., Return hex sha256 of audio bytes, transcript bytes, and non-English align langua, _error(), get_alignment(), Forced alignment endpoint with content-hash cache. (+4 more)
+Cohesion: 0.24
+Nodes (10): alignment_language_for_text(), compute_alignment_hash(), Return the WhisperX alignment language implied by transcript text., Return hex sha256 of audio bytes, transcript bytes, and non-English align langua, _error(), get_alignment(), Forced alignment endpoint with content-hash cache., run_alignment() (+2 more)
 
 ### Community 92 - "body / copied / copying"
 Cohesion: 0.15
 Nodes (13): body, copied, copying, empty, invalid, parsed, pending, title (+5 more)
 
 ### Community 93 - "outputPreset / projectName / setup"
-Cohesion: 0.15
-Nodes (13): outputPreset, projectName, setup, willBeCreated, draft, final, vertical, createProject (+5 more)
+Cohesion: 0.11
+Nodes (18): outputPreset, projectName, setup, willBeCreated, draft, final, vertical, createProject (+10 more)
 
 ### Community 94 - "tag / cancelled / composing"
 Cohesion: 0.15
 Nodes (13): tag, cancelled, composing, done, failed, loggingHistory, muxing, outputMissing (+5 more)
 
 ### Community 95 - "tokens / cinema / colors"
-Cohesion: 0.15
-Nodes (13): tokens, cinema, colors, components, radii, shadows, spacing, type (+5 more)
+Cohesion: 0.2
+Nodes (14): _cjk_sentence_spans(), _clean_transcript(), _get_tokenizer(), Sentence segmentation using NLTK Punkt tokenizer., Remove structural transcript noise before sentence segmentation.      Markdown h, Split text into sentences with character offsets., segment(), test_abbreviations() (+6 more)
 
 ### Community 96 - "status / activeRenders / cached"
-Cohesion: 0.15
-Nodes (13): status, activeRenders, cached, cachedProjects, composing, error, idle, info (+5 more)
+Cohesion: 0.12
+Nodes (17): status, status, activeRenders, aligned, cached, cachedProjects, composing, error (+9 more)
 
 ### Community 97 - "tag / cancelled / composing"
 Cohesion: 0.15
@@ -655,20 +663,20 @@ Cohesion: 0.15
 Nodes (8): cinemaTokens, colorTokens, radiusTokens, shadowTokens, spacingTokens, TokenItem, TypeSample, typeSamples
 
 ### Community 100 - "emptyPagination / LauncherPage() / previewVideoSrc()"
-Cohesion: 0.19
-Nodes (10): emptyPagination, LauncherPage(), previewVideoSrc(), basePageChromeClasses, PageChrome(), PageChromeProps, PageChromeVariant, pageChromeVariantClasses (+2 more)
+Cohesion: 0.25
+Nodes (7): basePageChromeClasses, PageChrome(), PageChromeProps, PageChromeVariant, pageChromeVariantClasses, main, { rerender }
 
 ### Community 101 - "dictionaries / getMessages() / MessageLocale"
-Cohesion: 0.21
-Nodes (4): dictionaries, MessageLocale, Messages, REAL_RUNTIME
+Cohesion: 0.1
+Nodes (11): card, push, RUNTIME_STATUS, dictionaries, MessageLocale, Messages, handlers, PROJECT (+3 more)
 
 ### Community 102 - "layerItemCount() / LayersPopover() / Props"
-Cohesion: 0.2
-Nodes (9): LayersPopover(), Props, BASE_PROPS, deleteButtons, LAYERS, onAddItem, onDeleteLayer, onSelectItem (+1 more)
+Cohesion: 0.18
+Nodes (10): LayersPopover(), Props, BASE_PROPS, deleteButtons, LAYERS, onAddItem, onDeleteLayer, onSelectItem (+2 more)
 
 ### Community 103 - "props / renderBar() / emptyStates"
-Cohesion: 0.17
-Nodes (9): props, emptyStates, noLayersYet, noMediaYet, noProjectOpen, noProjectSelected, noProjectsYet, noRendersYet (+1 more)
+Cohesion: 0.09
+Nodes (17): props, PreviewControls(), PreviewControlsProps, { props }, { rerender }, emptyStates, noLayersYet, noMediaYet (+9 more)
 
 ### Community 104 - "validation / folderMissing / invalidSentenceRange"
 Cohesion: 0.17
@@ -683,8 +691,8 @@ Cohesion: 0.17
 Nodes (12): dependencies, lucide-react, next, next-intl, @radix-ui/react-dialog, react, react-dom, tailwind-merge (+4 more)
 
 ### Community 107 - "launcherRenderVariant() / Meta() / ProjectCard()"
-Cohesion: 0.24
-Nodes (8): launcherRenderVariant(), ProjectCard(), ProjectCardProps, renderStatusLabel(), statusVariant(), handlers, PROJECT, formatRelativeTime()
+Cohesion: 0.27
+Nodes (8): emptyPagination, LauncherPage(), previewVideoSrc(), launcherRenderVariant(), ProjectCard(), ProjectCardProps, renderStatusLabel(), formatRelativeTime()
 
 ### Community 108 - "assertBoundary() / assertPipPlacement() / assertWatermarkPresent()"
 Cohesion: 0.21
@@ -711,8 +719,8 @@ Cohesion: 0.22
 Nodes (6): isPlayable(), Props, RenderHistory(), RenderHistoryItem, renderStatusLabel(), openMock
 
 ### Community 114 - "AppDatabaseError / Public-safe database initialization/connection failure. / che"
-Cohesion: 0.27
-Nodes (9): AppDatabaseError, Public-safe database initialization/connection failure., load_migrations(), Migration, MigrationError, SQLite migration runner for the application DB., Raised when migration integrity checks fail., run_migrations() (+1 more)
+Cohesion: 0.14
+Nodes (12): cue, DEFAULT_SUBTITLES, dialog, file, fileInput, firstArg, MEDIA, { onApplySubtitles } (+4 more)
 
 ### Community 115 - "truncateHash() / AlignmentCard() / AlignmentCardProps"
 Cohesion: 0.27
@@ -731,8 +739,8 @@ Cohesion: 0.2
 Nodes (10): stage, compose, failedAt, history, mux, prerender, queued, running (+2 more)
 
 ### Community 119 - "checking / cuda / fetchFailed"
-Cohesion: 0.2
-Nodes (10): checking, cuda, fetchFailed, ffmpeg, ready, renderCache, sidecar, unavailable (+2 more)
+Cohesion: 0.04
+Nodes (46): appShell, brand, controls, nav, statusBar, mark, phaseLabel, productName (+38 more)
 
 ### Community 120 - "stage / compose / failedAt"
 Cohesion: 0.2
@@ -759,8 +767,8 @@ Cohesion: 0.22
 Nodes (9): steps, alignment, alignmentSub, projectName, projectNameSub, subtitle, subtitleSub, voice (+1 more)
 
 ### Community 126 - "statusBar / alignmentCached / autosaveAgo"
-Cohesion: 0.22
-Nodes (9): statusBar, alignmentCached, autosaveAgo, cacheWarm, ariaLabel, command, defaults, runtime (+1 more)
+Cohesion: 0.18
+Nodes (9): AlignedWord, AlignmentState, AlignmentTarget, MOCK_RESULT, postUrl, { result }, useAlignment(), useAlignmentForTarget() (+1 more)
 
 ### Community 127 - "steps / alignment / alignmentSub"
 Cohesion: 0.22
@@ -795,20 +803,20 @@ Cohesion: 0.25
 Nodes (8): head, meta, metaCancelled, metaFinished, metaPaused, metaStopped, resume, log
 
 ### Community 135 - "controls / globalNavLabel / languageLabel"
-Cohesion: 0.25
-Nodes (8): controls, globalNavLabel, languageLabel, languageOptions, primaryNavigationLabel, themeLabel, en, zh
+Cohesion: 0.17
+Nodes (11): BASE_PROPS, confirmBtn, existingLayer, existingPipLayer, fgLayer, layer, MEDIA, onConfirm (+3 more)
 
 ### Community 136 - "launcherCuda / launcherFfmpeg / launcherNodePython"
-Cohesion: 0.25
-Nodes (8): launcherCuda, launcherFfmpeg, launcherNodePython, launcherSidecar, setupAlignment, setupDisk, setupSidecar, routeStatus
+Cohesion: 0.23
+Nodes (12): applyLayerOperation(), applyOperation(), clearOperationLog(), editorOperationStorageKey(), emptyOperationLog(), ensureOperationLog(), invertOperation(), loadOperationLog() (+4 more)
 
 ### Community 137 - "tooltips / assignMediaToSentence / changeMedia"
 Cohesion: 0.25
 Nodes (8): tooltips, assignMediaToSentence, changeMedia, deleteItem, deleteLayer, refreshRenders, removeWatermark, toggleTheme
 
 ### Community 138 - "cinema / colors / components"
-Cohesion: 0.25
-Nodes (8): cinema, colors, components, radii, shadows, spacing, type, sections
+Cohesion: 0.26
+Nodes (11): alignmentForState(), compareSetup(), draftForState(), prepareVisualPage(), routeSetupDraft(), settleChrome(), SETUP_CASES, SETUP_VIEWPORT (+3 more)
 
 ### Community 139 - "settings / cancel / keepCancelled"
 Cohesion: 0.25
@@ -835,16 +843,16 @@ Cohesion: 0.25
 Nodes (7): Field(), Kbd(), kbdClasses, KbdProps, LayerChip(), SegmentedControl(), clsx
 
 ### Community 146 - "body / createCall / fetchMock"
-Cohesion: 0.25
-Nodes (6): body, createCall, fetchMock, file, { result }, url
+Cohesion: 0.18
+Nodes (9): fileName(), SetupScreen(), body, createCall, fetchMock, file, { result }, url (+1 more)
 
 ### Community 147 - "baseSurfaceClasses / Surface / SurfacePadding"
 Cohesion: 0.25
 Nodes (7): baseSurfaceClasses, Surface, SurfacePadding, surfacePaddingClasses, SurfaceProps, SurfaceTone, surfaceToneClasses
 
 ### Community 148 - "PreviewControls() / PreviewControlsProps / { props }"
-Cohesion: 0.33
-Nodes (4): PreviewControls(), PreviewControlsProps, { props }, { rerender }
+Cohesion: 0.22
+Nodes (7): WatermarkSettings, MediaItem, POSITIONS, Props, MEDIA, onChange, WatermarkPanel()
 
 ### Community 149 - "choose / optional / title"
 Cohesion: 0.29
@@ -863,8 +871,8 @@ Cohesion: 0.29
 Nodes (7): tips, dropFolder, folder, phase2, phaseTwo, rerecord, title
 
 ### Community 153 - "appShell / brand / mark"
-Cohesion: 0.29
-Nodes (6): appShell, brand, mark, phaseLabel, productName, globalControls
+Cohesion: 0.33
+Nodes (6): RenderStrip(), RenderStripProps, stageLabelFor(), statusLabelFor(), onCancel, { rerender }
 
 ### Community 154 - "emptyStates / noLayersYet / noMediaYet"
 Cohesion: 0.29
@@ -900,31 +908,31 @@ Nodes (6): activeItemClasses, itemBaseClasses, rootClasses, SegmentedControlItem
 
 ### Community 165 - "card / mockServer() / projectsPage()"
 Cohesion: 0.29
-Nodes (3): card, push, RUNTIME_STATUS
+Nodes (4): LayersPopover(), LayersPopoverProps, props, trigger
 
 ### Community 166 - "ABC / AIProvider / generate()"
 Cohesion: 0.4
 Nodes (4): ABC, AIProvider, Phase 2-safe AI provider boundary., Abstract interface for AI integrations.
 
 ### Community 167 - "isSpaceShortcutInteractiveTarget() / isTextEditingTarget() / child"
-Cohesion: 0.4
-Nodes (4): isSpaceShortcutInteractiveTarget(), isTextEditingTarget(), child, editable
+Cohesion: 0.19
+Nodes (8): isSpaceShortcutInteractiveTarget(), event, handlers, targets, useRenderHotkeys(), isTextEditingTarget(), child, editable
 
 ### Community 168 - "clamp() / drawContain() / drawPip()"
-Cohesion: 0.47
-Nodes (6): clamp(), drawContain(), drawPip(), drawRoundedRectPath(), drawWatermark(), sourceDimensions()
+Cohesion: 0.33
+Nodes (9): clamp(), drawContain(), drawCover(), drawPip(), drawRoundedRectPath(), drawSubtitle(), drawWatermark(), limitSubtitleLines() (+1 more)
 
 ### Community 169 - "kv / device / duration"
 Cohesion: 0.33
 Nodes (6): kv, device, duration, estimated, model, pending
 
 ### Community 170 - "nav / editor / launcher"
-Cohesion: 0.33
-Nodes (6): nav, editor, launcher, render, setup, tokens
+Cohesion: 0.29
+Nodes (6): PreviewPlayer(), Props, BG, { container }, images, img
 
 ### Community 171 - "pages / tokens / descriptions"
-Cohesion: 0.33
-Nodes (6): pages, tokens, descriptions, eyebrow, summary, title
+Cohesion: 0.29
+Nodes (6): globalControls, pages, tokens, eyebrow, summary, title
 
 ### Community 172 - "kv / device / duration"
 Cohesion: 0.33
@@ -943,8 +951,8 @@ Cohesion: 0.33
 Nodes (5): baseStatusTagClasses, StatusTag(), StatusTagProps, StatusTagVariant, statusTagVariantClasses
 
 ### Community 176 - "voice / choose / emptyTitle"
-Cohesion: 0.4
-Nodes (5): voice, choose, emptyTitle, replace, title
+Cohesion: 0.29
+Nodes (7): clampSentenceIndex(), mergeSentences(), normalizeMergedRange(), normalizeSentenceRange(), remapSentenceAnchoredItem(), remapVisualItemAfterSentenceMerge(), resolveMergeRange()
 
 ### Community 177 - "menu / assignRange / mergeNext"
 Cohesion: 0.4
@@ -987,12 +995,12 @@ Cohesion: 0.4
 Nodes (5): transport, next, pause, play, prev
 
 ### Community 187 - "BigBar() / fillClassForPhase() / useFlash()"
-Cohesion: 0.7
-Nodes (3): BigBar(), fillClassForPhase(), useFlash()
+Cohesion: 0.25
+Nodes (8): BigBar(), fillClassForPhase(), phaseTitle(), RenderCard(), tagKey(), tagVariant(), RenderJob, useFlash()
 
 ### Community 188 - "job() / renderPanel() / { rerender }"
-Cohesion: 0.5
-Nodes (3): renderPanel(), { rerender }, withIntl()
+Cohesion: 0.33
+Nodes (5): checkbox, input, label, search, select
 
 ### Community 191 - "test_render_performance.py / _benchmark_results() / Hardware-sensitive render pe"
 Cohesion: 0.6
@@ -1024,7 +1032,7 @@ Nodes (4): layers, add, delete, head
 
 ### Community 198 - "status / aligned / missing"
 Cohesion: 0.5
-Nodes (4): status, aligned, missing, pending
+Nodes (5): findVisualItemById(), hasSentenceBounds(), hasTimeBounds(), hasVisualItemId(), isSentenceAnchoredItem()
 
 ### Community 199 - "cache / hit / miss"
 Cohesion: 0.5
@@ -1039,8 +1047,8 @@ Cohesion: 0.5
 Nodes (4): layers, add, delete, head
 
 ### Community 202 - "RenderHead() / RenderHeadProps / running()"
-Cohesion: 0.67
-Nodes (3): RenderHead(), RenderHeadProps, running()
+Cohesion: 0.5
+Nodes (4): status, aligned, missing, pending
 
 ### Community 203 - "child / env / passthroughArgs"
 Cohesion: 0.5
@@ -1050,7 +1058,33 @@ Nodes (3): child, env, passthroughArgs
 Cohesion: 0.67
 Nodes (3): metrics, activeRenders, cachedProjects
 
+### Community 206 - "README.md / code:powershell (ffmpeg -f lavfi -i "sine=frequency=440:duration=10""
+Cohesion: 0.29
+Nodes (8): ffmpeg Sine Wave Command, Smoke Project Fixture, test_alignment_integration.py (T3.3), VC_INTEGRATION=1, voice.wav, Alignment Pipeline, Plausible Timestamps, Smoke Test Transcript
+
+### Community 213 - "README.md / Video Creator Sidecar"
+Cohesion: 0.33
+Nodes (6): Amber Video Panel, Play Button Symbol, Video Creator App Icon, FastAPI Backend, Local Video Creator App, Video Creator Sidecar
+
 ## Knowledge Gaps
-- **1641 isolated node(s):** `name`, `version`, `private`, `dev`, `test` (+1636 more)
+- **1669 isolated node(s):** `name`, `version`, `private`, `dev`, `test` (+1664 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+
+## Suggested Questions
+_Questions this graph is uniquely positioned to answer:_
+
+- **Why does `list` connect `list / _cjk_sentence_spans() / _clean_transcript()` to `get_latest_render_event() / _event_from_db() / _log_event_phase()`, `get_render() / list_render_events() / mark_render_started()`, `highlight() / normalizeRange() / sanitizeSentenceText()`, `tokens / cinema / colors`?**
+  _High betweenness centrality (0.346) - this node is a cross-community bridge._
+- **Why does `pages` connect `pages / tokens / descriptions` to `actual / cancelRender / changeBg`, `createAnother / eyebrow / lastRender`, `draft / final / idle`, `outputPreset / projectName / setup`?**
+  _High betweenness centrality (0.193) - this node is a cross-community bridge._
+- **Why does `pages` connect `props / renderBar() / emptyStates` to `draft / final / idle`, `createAnother / eyebrow / lastRender`, `outputPreset / projectName / setup`, `actual / cancelRender / changeBg`?**
+  _High betweenness centrality (0.186) - this node is a cross-community bridge._
+- **Are the 48 inferred relationships involving `connection()` (e.g. with `touch_recent()` and `list_recent()`) actually correct?**
+  _`connection()` has 48 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 48 inferred relationships involving `touch_recent()` (e.g. with `connection()` and `_materialize_project_from_setup_draft()`) actually correct?**
+  _`touch_recent()` has 48 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 37 inferred relationships involving `insert_render()` (e.g. with `connection()` and `project_id_for_path()`) actually correct?**
+  _`insert_render()` has 37 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `name`, `version`, `private` to the rest of the system?**
+  _1669 weakly-connected nodes found - possible documentation gaps or missing edges._

@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
@@ -25,8 +26,13 @@ const TEST_PROJECT_ID = "p_test01";
 const DEFAULT_SCENE_SEEK_SECONDS = 38.399;
 const INSPECTOR_SEPARATOR = "\u00B7";
 const INSPECTOR_SEPARATOR_PATTERN = /[\u00B7\u2022\u2219\u30FB]/g;
+const BUG_EVIDENCE_DIR = path.resolve(process.cwd(), "..", "..", "docs", "designs", "bugs", "evidences");
 
 type IgnoreRegion = { x: number; y: number; width: number; height: number };
+type EditorApiOverrides = {
+  alignment?: object | (() => object);
+  project?: object | (() => object);
+};
 
 test.describe("editor visual parity", () => {
   test.describe.configure({ mode: "serial" });
@@ -59,6 +65,143 @@ test.describe("editor strict modal bug visual parity", () => {
       await compareEditorVisualCase(page, visualCase);
     });
   }
+});
+
+test.describe("bug 2026-05-28 evidence", () => {
+  test.describe.configure({ mode: "serial" });
+  test.skip(process.env.VC_BUG_EVIDENCE !== "1", "Set VC_BUG_EVIDENCE=1 to capture bug-batch evidence screenshots.");
+  test.use({ deviceScaleFactor: 1, viewport: { width: 1841, height: 1016 } });
+
+  test("captures editor evidence matrix", async ({ page }) => {
+    const consoleErrors: string[] = [];
+    const failedResponses: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        const location = message.location().url;
+        consoleErrors.push(location ? `${message.text()} @ ${location}` : message.text());
+      }
+    });
+    page.on("response", (response) => {
+      if (response.status() >= 400) {
+        failedResponses.push(`${response.status()} ${response.url()}`);
+      }
+    });
+
+    let activeProject: object = BUG_EVIDENCE_PROJECT;
+    const evidenceCase: EditorVisualCase = {
+      action: "none",
+      capture: "page",
+      name: "bug evidence",
+      reference: "bug-evidence.png",
+      theme: "dark",
+    };
+
+    await prepareVisualPage(page, "dark");
+    await routeEditorApi(page, evidenceCase, { project: () => activeProject });
+    await page.goto(`/editor/${TEST_PROJECT_ID}`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+    await settleChrome(page);
+    await seekEvidenceTimeline(page, 38.399);
+
+    await captureEvidence(page.getByTestId("editor-layout-grid").locator("aside").nth(1), "global-config-alignment.png");
+
+    await page.getByRole("button", { name: /^Watermark$/i }).click();
+    await page.getByRole("heading", { name: /^Watermark asset$/i }).waitFor();
+    const watermarkDialog = page.getByRole("dialog");
+    await expect(watermarkDialog.getByRole("button", { name: /qr-watermark\.png/i })).toBeVisible();
+    await expect(watermarkDialog.getByText("neon-lights.jpg")).toHaveCount(0);
+    await captureEvidence(watermarkDialog, "asset-scope-watermark.png");
+    await captureEvidence(watermarkDialog, "watermark-upload-style.png");
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: /Change Background/i }).click();
+    await page.getByRole("heading", { name: /Change background/i }).waitFor();
+    const backgroundDialog = page.getByRole("dialog");
+    await expect(backgroundDialog.getByRole("button", { name: /neon-lights\.jpg/i })).toBeVisible();
+    await expect(backgroundDialog.getByText("tokyo-skyline.jpg")).toHaveCount(0);
+    await captureEvidence(backgroundDialog, "asset-scope-background.png");
+    await page.keyboard.press("Escape");
+
+    await openAssignModal(page);
+    const assignDialog = page.getByRole("dialog");
+    await expect(assignDialog.getByRole("button", { name: /tokyo-skyline\.jpg/i })).toBeVisible();
+    await expect(assignDialog.getByText("neon-lights.jpg")).toHaveCount(0);
+    await page.getByRole("button", { name: /Picture-in-picture/i }).click();
+    await expect(assignDialog.getByRole("button", { name: /callout-map\.png/i })).toBeVisible();
+    await expect(assignDialog.getByText("qr-watermark.png")).toHaveCount(0);
+    await captureEvidence(assignDialog, "asset-scope-foreground-pip.png");
+    await page.keyboard.press("Escape");
+
+    await seekEvidenceTimeline(page, 100);
+    await waitForPreviewMetadata(page, { hasBackground: "true" });
+    await expectPreviewNonBlack(page);
+    await captureEvidence(page.getByTestId("preview-stack"), "background-image-playlist-1080p.png");
+
+    await setPlaybackTime(page, 63.5);
+    await waitForPreviewMetadata(page, { hasBackground: "true" });
+    await expectPreviewNonBlack(page);
+    await captureEvidence(page.getByTestId("preview-stack"), "background-crossfade-preview.png");
+
+    activeProject = BUG_EVIDENCE_VIDEO_BACKGROUND_PROJECT;
+    await page.unroute("**/api/server/**");
+    await routeEditorApi(page, evidenceCase, { project: () => activeProject });
+    await page.goto(`/editor/${TEST_PROJECT_ID}?evidence=video`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+    await settleChrome(page);
+    await setPlaybackTime(page, 12);
+    await waitForPreviewMetadata(page, { hasBackground: "false" });
+    await expectPreviewMostlyBlack(page);
+    await captureEvidence(page.getByTestId("preview-stack"), "background-video-playlist-short-fallback.png");
+
+    activeProject = BUG_EVIDENCE_PROJECT;
+    await page.unroute("**/api/server/**");
+    await routeEditorApi(page, evidenceCase, { project: () => activeProject });
+    await page.goto(`/editor/${TEST_PROJECT_ID}?evidence=transcript`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+    await settleChrome(page);
+    await seekEvidenceTimeline(page, 64);
+    await expect(page.locator("[aria-current='true']")).toHaveCount(1);
+    await captureEvidence(page.getByTestId("transcript-list"), "transcript-playhead-current-highlight.png");
+
+    const timeline = page.getByTestId("timeline-waveform").locator("xpath=ancestor::section[1]");
+    await captureEvidence(timeline, "timeline-seek-zone.png");
+    await captureEvidence(timeline, "timeline-playhead-head-drag.png");
+    await page.getByRole("button", { name: "tokyo-skyline.jpg over s6-s7" }).first().click();
+    await captureEvidence(timeline, "timeline-clips-drag-resize.png");
+    await captureEvidence(timeline, "timeline-grid-aligned-no-scrollbar.png");
+
+    activeProject = BUG_27_PROJECT;
+    await page.unroute("**/api/server/**");
+    await routeEditorApi(page, evidenceCase, { project: () => activeProject });
+    await page.goto(`/editor/${TEST_PROJECT_ID}?evidence=scrollbar`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+    await settleChrome(page);
+    await captureEvidence(page.getByTestId("timeline-waveform").locator("xpath=ancestor::section[1]"), "timeline-grid-aligned-scrollbar.png");
+
+    activeProject = BUG_EVIDENCE_PROJECT;
+    await page.unroute("**/api/server/**");
+    await routeEditorApi(page, evidenceCase, { project: () => activeProject });
+    await page.goto(`/editor/${TEST_PROJECT_ID}?evidence=subtitles`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+    await settleChrome(page);
+    await page.getByRole("button", { name: /^Subtitles$/i }).click();
+    await page.getByRole("heading", { name: /^Subtitles$/i }).waitFor();
+    await captureEvidence(page.getByRole("dialog"), "subtitle-preview-1080p.png");
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("radio", { name: "720p" }).click();
+    await page.getByRole("button", { name: /^Subtitles$/i }).click();
+    await page.getByRole("heading", { name: /^Subtitles$/i }).waitFor();
+    await captureEvidence(page.getByRole("dialog"), "subtitle-preview-720p.png");
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("radio", { name: "9:16" }).click();
+    await page.getByRole("button", { name: /^Subtitles$/i }).click();
+    await page.getByRole("heading", { name: /^Subtitles$/i }).waitFor();
+    await captureEvidence(page.getByRole("dialog"), "subtitle-preview-9x16.png");
+
+    expect([...consoleErrors, ...failedResponses]).toEqual([]);
+  });
 });
 
 async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase): Promise<void> {
@@ -278,9 +421,25 @@ async function prepareVisualPage(page: Page, theme: Theme): Promise<void> {
   );
 }
 
-async function routeEditorApi(page: Page, visualCase: EditorVisualCase): Promise<void> {
+async function routeEditorApi(page: Page, visualCase: EditorVisualCase, overrides: EditorApiOverrides = {}): Promise<void> {
   const usesPackedTimelineFixture = visualCase.reference.includes("bug-27-1")
     || visualCase.reference.startsWith("editor-timeline-");
+
+  await page.route("**/_next/image**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const target = url.searchParams.get("url") || "";
+    let filename = "";
+    try {
+      filename = new URL(target, request.url()).searchParams.get("filename") || "";
+    } catch {
+      filename = target;
+    }
+    await route.fulfill({
+      body: buildMediaSvg(filename),
+      contentType: "image/svg+xml",
+    });
+  });
 
   await page.route("**/api/server/**", async (route) => {
     const request = route.request();
@@ -292,13 +451,15 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase): Promise
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/alignment` && method === "GET") {
-      await route.fulfill({ json: usesPackedTimelineFixture ? BUG_27_ALIGNMENT : TEST_ALIGNMENT });
+      const alignment = overrideValue(overrides.alignment) ?? (usesPackedTimelineFixture ? BUG_27_ALIGNMENT : TEST_ALIGNMENT);
+      await route.fulfill({ json: alignment });
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/config` && method === "GET") {
+      const project = overrideValue(overrides.project) ?? (usesPackedTimelineFixture ? BUG_27_PROJECT : TEST_PROJECT);
       await route.fulfill({
         json: {
-          config: usesPackedTimelineFixture ? BUG_27_PROJECT : TEST_PROJECT,
+          config: project,
           config_hash: "h-visual",
           has_unrendered_changes: true,
           last_rendered_config_hash: null,
@@ -322,8 +483,9 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase): Promise
       await route.fulfill({ json: { output_path: "renders/r-visual.mp4", render_id: "r-visual" } });
       return;
     }
-    if (pathname.includes(`/api/server/projects/${TEST_PROJECT_ID}/render-cache`) && method === "GET" && usesPackedTimelineFixture) {
-      await route.fulfill({ json: { cached_count: 24, state: "warm", total_count: 24 } });
+    if (pathname.includes(`/api/server/projects/${TEST_PROJECT_ID}/render-cache`) && method === "GET") {
+      const totalCount = usesPackedTimelineFixture ? 24 : 6;
+      await route.fulfill({ json: { cached_count: totalCount, state: "warm", total_count: totalCount } });
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/render/r-visual` && method === "DELETE") {
@@ -346,6 +508,13 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase): Promise
       });
       return;
     }
+    if (pathname === "/api/server/uploads/media-file") {
+      await route.fulfill({
+        body: "",
+        contentType: "video/mp4",
+      });
+      return;
+    }
     if (pathname === "/api/server/projects/audio") {
       await route.fulfill({ body: "", contentType: "audio/mpeg" });
       return;
@@ -356,6 +525,10 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase): Promise
     }
     await route.fallback();
   });
+}
+
+function overrideValue<T>(value: T | (() => T) | undefined): T | undefined {
+  return typeof value === "function" ? (value as () => T)() : value;
 }
 
 async function settleChrome(page: Page): Promise<void> {
@@ -751,6 +924,78 @@ const TEST_PROJECT = {
   },
 };
 
+const BUG_EVIDENCE_PROJECT = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => {
+    if (layer.kind === "bg") {
+      return {
+        ...layer,
+        items: layer.items.map((item) => ({
+          ...item,
+          end: 128,
+          mediaId: "neon-lights.jpg",
+          mediaIds: ["neon-lights.jpg", "ramen-shop.jpg"],
+        })),
+      };
+    }
+    if (layer.id === "L-fg-1") {
+      return { ...layer, items: layer.items.filter((item) => item.id !== "fg-004") };
+    }
+    return layer;
+  }),
+  media: [
+    ...TEST_PROJECT.media.map((entry) => {
+      const role =
+        entry.id === "neon-lights.jpg" || entry.id === "ramen-shop.jpg" || entry.id === "yamanote-line.mp4"
+          ? "background"
+          : entry.id === "tokyo-skyline.jpg" || entry.id === "station-intro.mp4"
+            ? "foreground"
+            : "pip";
+      return { ...entry, role };
+    }),
+    {
+      created_at: "2026-05-11T00:00:00Z",
+      dimensions: { height: 512, width: 512 },
+      duration: null,
+      hash: "hash-watermark",
+      id: "qr-watermark.png",
+      import_mode: "copy",
+      imported_at: "2026-05-11T00:00:00Z",
+      kind: "watermark_image",
+      name: "qr-watermark.png",
+      path: "media/qr-watermark.png",
+      role: "watermark",
+      size: 120000,
+      thumb_path: "uploads/thumb/qr-watermark.png",
+    },
+  ],
+  watermark: {
+    mediaId: "qr-watermark.png",
+    opacity: 85,
+    posX: 9,
+    posY: 11,
+    scale: 0.08,
+  },
+};
+
+const BUG_EVIDENCE_VIDEO_BACKGROUND_PROJECT = {
+  ...BUG_EVIDENCE_PROJECT,
+  layers: BUG_EVIDENCE_PROJECT.layers.map((layer) => {
+    if (layer.kind !== "bg") return layer;
+    return {
+      ...layer,
+      items: layer.items.map((item) => ({
+        ...item,
+        crossfade: 0,
+        end: 120,
+        mediaId: "yamanote-line.mp4",
+        mediaIds: ["yamanote-line.mp4"],
+        transitions: { in: "cut", out: "cut" },
+      })),
+    };
+  }),
+};
+
 const BUG_27_PROJECT = {
   ...TEST_PROJECT,
   layers: TEST_PROJECT.layers.map((layer) => (
@@ -775,6 +1020,92 @@ async function setPlaybackTime(page: Page, targetTime: number): Promise<void> {
       // Ignore audio seek errors in test mode.
     }
   }, targetTime);
+}
+
+async function seekEvidenceTimeline(page: Page, targetTime: number, duration = 942): Promise<void> {
+  const waveformButton = page.getByTestId("timeline-waveform").locator("xpath=ancestor::button[1]");
+  await waveformButton.waitFor({ state: "visible" });
+  const box = await waveformButton.boundingBox();
+  if (!box) throw new Error("Timeline waveform was not available for evidence seek.");
+  const ratio = Math.max(0, Math.min(1, targetTime / Math.max(duration, 1)));
+  await page.mouse.click(box.x + box.width * ratio, box.y + box.height / 2);
+}
+
+async function captureEvidence(target: Page | Locator, filename: string): Promise<void> {
+  await fs.mkdir(BUG_EVIDENCE_DIR, { recursive: true });
+  const outputPath = path.join(BUG_EVIDENCE_DIR, filename);
+  if (isLocator(target)) {
+    await target.waitFor({ state: "visible" });
+    await target.screenshot({ path: outputPath });
+    return;
+  }
+  await target.screenshot({ path: outputPath });
+}
+
+async function waitForPreviewMetadata(
+  page: Page,
+  expected: { drawOrderIncludes?: string; hasBackground?: "false" | "true" },
+): Promise<void> {
+  if (expected.hasBackground !== undefined) {
+    await expect
+      .poll(
+        async () => page.getByTestId("preview-canvas").evaluate((canvas) => (canvas as HTMLCanvasElement).dataset.hasBackground),
+        { timeout: 10_000 },
+      )
+      .toBe(expected.hasBackground);
+  }
+  if (expected.drawOrderIncludes !== undefined) {
+    await expect
+      .poll(
+        async () => page.getByTestId("preview-canvas").evaluate((canvas) => (canvas as HTMLCanvasElement).dataset.drawOrder ?? ""),
+        { timeout: 10_000 },
+      )
+      .toContain(expected.drawOrderIncludes);
+  }
+}
+
+async function expectPreviewNonBlack(page: Page): Promise<void> {
+  await expect
+    .poll(async () => (await previewCanvasStats(page)).nonBlackRatio, { timeout: 10_000 })
+    .toBeGreaterThan(0.12);
+}
+
+async function expectPreviewMostlyBlack(page: Page): Promise<void> {
+  await expect
+    .poll(async () => (await previewCanvasStats(page)).averageLuminance, { timeout: 10_000 })
+    .toBeLessThan(24);
+}
+
+async function previewCanvasStats(page: Page): Promise<{ averageLuminance: number; nonBlackRatio: number }> {
+  return page.getByTestId("preview-canvas").evaluate((node) => {
+    const canvas = node as HTMLCanvasElement;
+    const context = canvas.getContext("2d");
+    if (!context || canvas.width <= 0 || canvas.height <= 0) {
+      return { averageLuminance: 0, nonBlackRatio: 0 };
+    }
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const stepX = Math.max(1, Math.floor(canvas.width / 36));
+    const stepY = Math.max(1, Math.floor(canvas.height / 20));
+    let luminance = 0;
+    let nonBlack = 0;
+    let count = 0;
+    for (let y = 0; y < canvas.height; y += stepY) {
+      for (let x = 0; x < canvas.width; x += stepX) {
+        const index = (y * canvas.width + x) * 4;
+        const red = data[index] ?? 0;
+        const green = data[index + 1] ?? 0;
+        const blue = data[index + 2] ?? 0;
+        const pixelLuminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+        luminance += pixelLuminance;
+        if (pixelLuminance > 8) nonBlack += 1;
+        count += 1;
+      }
+    }
+    return {
+      averageLuminance: count > 0 ? luminance / count : 0,
+      nonBlackRatio: count > 0 ? nonBlack / count : 0,
+    };
+  });
 }
 
 function buildMediaSvg(filename: string): Buffer {

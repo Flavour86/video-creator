@@ -187,6 +187,7 @@ export function TranscriptPane({
         {virtualWindow.sentences.map((sentence, index) => {
           const sentencePosition = virtualWindow.startIndex + index;
           const selected = selectedRange ? sentence.index >= selectedRange[0] && sentence.index <= selectedRange[1] : false;
+          const current = sentence.index >= activeRange[0] && sentence.index <= activeRange[1];
           const currentSearchMatch = query.trim() ? sentencePosition === currentMatch : false;
           const orphan = sentence.end_s <= sentence.start_s;
           const rowRange: [number, number] = selected && selectedRange ? [selectedRange[0], selectedRange[1]] : [sentence.index, sentence.index];
@@ -195,11 +196,14 @@ export function TranscriptPane({
               className={`group relative grid w-full grid-cols-1 items-stretch border-l-2 text-[13px] leading-[1.5] text-(--text-2) hover:bg-(--bg-2) ${
                 selected
                   ? "border-l-(--amber) bg-(--amber-bg) text-(--text)"
+                  : current
+                    ? "border-l-(--amber) bg-(--bg-3) text-(--text)"
                   : orphan
                     ? "border-l-(--red) text-(--red)"
                     : "border-transparent"
               } ${currentSearchMatch ? "ring-1 ring-(--amber-line) ring-inset" : ""}`}
               key={sentence.index}
+              aria-current={current ? "true" : undefined}
               ref={(node) => {
                 if (node) {
                   sentenceRefs.current.set(sentence.index, node);

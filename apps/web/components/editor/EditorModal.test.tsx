@@ -34,6 +34,17 @@ const DEFAULT_SUBTITLES = {
   },
 };
 
+const SUBTITLE_PREVIEW_CASES: Array<[
+  Parameters<typeof EditorModal>[0]["previewResolution"],
+  number,
+  number,
+  number,
+]> = [
+  ["1080p", 1920, 1080, 720],
+  ["720p", 1280, 720, 720],
+  ["9:16", 1080, 1920, 292.5],
+];
+
 function renderModal(overrides: Partial<Parameters<typeof EditorModal>[0]> = {}) {
   const onImport = vi.fn().mockResolvedValue(undefined);
   const onApplySubtitles = vi.fn();
@@ -126,17 +137,99 @@ describe("EditorModal", () => {
     const preview = screen.getByTestId("subtitles-live-preview");
     expect(preview.className).toContain("aspect-[9/16]");
     expect(preview.className).not.toContain("aspect-video");
+    expect(preview).toHaveStyle({ width: "min(100%, calc(min(58vh, 520px) * 9 / 16))" });
     fireEvent.click(screen.getByRole("switch", { name: "Show subtitles" }));
     expect(screen.getByText(/subtitle preview follows your style/i)).toBeInTheDocument();
     expect(screen.queryByText(/drop an image onto a sentence/i)).not.toBeInTheDocument();
+  });
+
+  it.each(SUBTITLE_PREVIEW_CASES)(
+    "scales subtitle preview text from render pixels for %s",
+    (previewResolution, renderWidth, renderHeight, frameWidth) => {
+      const subtitleSize = 56;
+      renderModal({
+        modal: "subtitles",
+        previewResolution,
+        subtitles: {
+          burn_in: true,
+          style: {
+            ...DEFAULT_SUBTITLES.style,
+            size: subtitleSize,
+          },
+        },
+      });
+
+      const preview = screen.getByTestId("subtitles-live-preview");
+      const cue = screen.getByTestId("subtitles-preview-cue");
+      const scale = frameWidth / renderWidth;
+
+      expect(preview).toHaveAttribute("data-render-width", String(renderWidth));
+      expect(preview).toHaveAttribute("data-render-height", String(renderHeight));
+      expect(Number.parseFloat(preview.dataset.previewWidth ?? "")).toBeCloseTo(frameWidth, 2);
+      expect(Number.parseFloat(preview.dataset.previewScale ?? "")).toBeCloseTo(scale, 4);
+      expect(Number.parseFloat(cue.style.fontSize)).toBeCloseTo(subtitleSize * scale, 2);
+      expect(Number.parseFloat(cue.style.bottom)).toBeCloseTo(60 * scale, 2);
+      expect(Number.parseFloat(cue.style.maxWidth.match(/- ([\d.]+)px/)?.[1] ?? "")).toBeCloseTo(frameWidth * 0.16, 2);
+    },
+  );
+
+  it("scales subtitle top and low-bottom safe-zone margins in the live preview", () => {
+    const scale = 720 / 1920;
+    const { rerender } = render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <EditorModal
+          assignRange={[1, 2]}
+          media={MEDIA}
+          modal="subtitles"
+          onClose={vi.fn()}
+          onApplySubtitles={vi.fn()}
+          onImport={vi.fn()}
+          previewResolution="1080p"
+          projectPath="E:/projects/test01"
+          subtitles={{
+            burn_in: true,
+            style: {
+              ...DEFAULT_SUBTITLES.style,
+              position: "top",
+            },
+          }}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    expect(Number.parseFloat(screen.getByTestId("subtitles-preview-cue").style.top)).toBeCloseTo(40 * scale, 2);
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <EditorModal
+          assignRange={[1, 2]}
+          media={MEDIA}
+          modal="subtitles"
+          onClose={vi.fn()}
+          onApplySubtitles={vi.fn()}
+          onImport={vi.fn()}
+          previewResolution="1080p"
+          projectPath="E:/projects/test01"
+          subtitles={{
+            burn_in: true,
+            style: {
+              ...DEFAULT_SUBTITLES.style,
+              position: "bottom_low",
+            },
+          }}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    expect(Number.parseFloat(screen.getByTestId("subtitles-preview-cue").style.bottom)).toBeCloseTo(24 * scale, 2);
   });
 
   it("uses the compact amber editor dialog treatment for subtitle controls", () => {
     renderModal({ modal: "subtitles", subtitles: DEFAULT_SUBTITLES });
 
     const dialog = screen.getByRole("dialog");
-    expect(dialog.className).toContain("w-[min(620px");
-    expect(screen.getByTestId("subtitles-live-preview").className).toContain("max-h-[220px]");
+    expect(dialog.className).toContain("w-[min(760px");
+    expect(screen.getByTestId("subtitles-live-preview")).toHaveStyle({ width: "100%" });
     fireEvent.click(screen.getByRole("switch", { name: "Show subtitles" }));
     expect(screen.getByRole("switch", { name: "Show subtitles" }).className).toContain("bg-(--amber)");
     expect(screen.getByRole("button", { name: "Apply" }).className).toContain("bg-(--amber)");

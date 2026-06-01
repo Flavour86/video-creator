@@ -94,6 +94,68 @@ describe("resolveDisplay", () => {
     expect(resolveDisplay([layer], [], 22).bg?.mediaId).toBe("three.jpg");
   });
 
+  it("uses media durations for video background playlists and falls back to black after a short playlist", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: undefined,
+        mediaIds: ["intro.mp4", "outro.mp4"],
+        start: 0,
+        end: 12,
+      }],
+    };
+    const media = [
+      { filename: "intro.mp4", kind: "video", mediaId: "intro.mp4", duration: 4 },
+      { filename: "outro.mp4", kind: "video", mediaId: "outro.mp4", duration: 3 },
+    ];
+
+    expect(resolveDisplay([layer], [], 3.9, { media }).bg?.mediaId).toBe("intro.mp4");
+    expect(resolveDisplay([layer], [], 4, { media }).bg?.mediaId).toBe("outro.mp4");
+    expect(resolveDisplay([layer], [], 6.9, { media }).bg?.mediaId).toBe("outro.mp4");
+    expect(resolveDisplay([layer], [], 7, { media }).bg).toBeUndefined();
+  });
+
+  it("uses the media duration for a single video background and falls back to black", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: "intro.mp4",
+        mediaIds: undefined,
+        start: 0,
+        end: 10,
+      }],
+    };
+    const media = [{ filename: "intro.mp4", kind: "video", mediaId: "intro.mp4", duration: 4 }];
+
+    expect(resolveDisplay([layer], [], 3, { media }).bg?.mediaId).toBe("intro.mp4");
+    expect(resolveDisplay([layer], [], 5, { media }).bg).toBeUndefined();
+  });
+
+  it("returns both background images during the crossfade overlap", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: undefined,
+        mediaIds: ["one.jpg", "two.jpg"],
+        start: 0,
+        end: 10,
+        crossfade: 1,
+      }],
+    };
+
+    const spec = resolveDisplay([layer], [], 4.5);
+
+    expect(spec.backgrounds.map((entry) => entry.mediaId)).toEqual(["one.jpg", "two.jpg"]);
+    expect(spec.backgrounds[0].opacity).toBeCloseTo(0.5);
+    expect(spec.backgrounds[1].opacity).toBeCloseTo(0.5);
+  });
+
   it("includes fg item when currentTime is within its range", () => {
     const spec = resolveDisplay([BG_LAYER, FG_LAYER], [], 10);
     expect(spec.fg).toHaveLength(1);

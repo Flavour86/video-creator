@@ -156,6 +156,13 @@ class MediaKind(Enum):
     watermark_video = 'watermark_video'
 
 
+class MediaRole(Enum):
+    background = 'background'
+    foreground = 'foreground'
+    pip = 'pip'
+    watermark = 'watermark'
+
+
 class MediaImportMode(Enum):
     copy = 'copy'
     link = 'link'
@@ -187,6 +194,7 @@ class MediaAsset(BaseModel):
     id: constr(min_length=1)
     name: constr(min_length=1)
     kind: MediaKind
+    role: MediaRole | None = None
     path: constr(min_length=1)
     thumb_path: str | None = None
     dimensions: Dimensions | None = None

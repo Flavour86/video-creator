@@ -128,16 +128,11 @@ export function Inspector({
   onUpdateRange,
   projectPath,
   selected,
-  subtitles,
-  watermark,
 }: InspectorProps) {
   const t = useTranslations("pages.editor.inspector");
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const backgroundLayer = layers.find((entry) => entry.kind === "bg");
   const hasBackground = !!backgroundLayer;
-  const backgroundLabel = backgroundLayer?.items[0] && isVisualItem(backgroundLayer.items[0])
-    ? backgroundLabelForItem(backgroundLayer.items[0])
-    : "No background";
   const fallbackSelection = defaultSelection(layers);
   const effectiveSelection = selected ?? fallbackSelection;
   const layer = effectiveSelection ? layers.find((entry) => entry.id === effectiveSelection.layerId) : undefined;
@@ -150,13 +145,10 @@ export function Inspector({
       <aside className="flex min-h-0 flex-col overflow-y-auto bg-(--bg-1)" data-testid="editor-inspector">
         <Header label={t("title")} />
         <GlobalControls
-          backgroundLabel={backgroundLabel}
           hasBackground={hasBackground}
           onOpenBackground={onOpenBackground}
           onOpenSubtitles={onOpenSubtitles}
           onOpenWatermark={onOpenWatermark}
-          subtitles={subtitles}
-          watermark={watermark}
         />
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-(--text-3)">
           <p className="text-sm">{t("empty")}</p>
@@ -180,13 +172,10 @@ export function Inspector({
     <aside className="flex min-h-0 flex-col overflow-y-auto bg-(--bg-1)" data-testid="editor-inspector">
       <Header label={t("title")} />
       <GlobalControls
-        backgroundLabel={backgroundLabel}
         hasBackground={hasBackground}
         onOpenBackground={onOpenBackground}
         onOpenSubtitles={onOpenSubtitles}
         onOpenWatermark={onOpenWatermark}
-        subtitles={subtitles}
-        watermark={watermark}
       />
       <section className="flex flex-col gap-3 border-b border-(--line-soft) px-[14px] py-[14px]">
         <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-2)">
@@ -622,13 +611,6 @@ function assetButtonTitle(item: VisualItem): string {
   return `${ids[0]} +${ids.length - 1}`;
 }
 
-function backgroundLabelForItem(item: VisualItem): string {
-  const ids = mediaIdsForItem(item);
-  if (ids.length === 0) return "No background";
-  if (ids.length === 1) return ids[0] ?? "No background";
-  return `${ids[0]} +${ids.length - 1}`;
-}
-
 function BackgroundAssetList({
   assets,
   item,
@@ -751,25 +733,18 @@ function GridRow({ children, htmlFor, label }: { children: ReactNode; htmlFor?: 
 }
 
 function GlobalControls({
-  backgroundLabel,
   hasBackground,
   onOpenBackground,
   onOpenSubtitles,
   onOpenWatermark,
-  subtitles,
-  watermark,
 }: {
-  backgroundLabel: string;
   hasBackground: boolean;
   onOpenBackground: () => void;
   onOpenSubtitles: () => void;
   onOpenWatermark: () => void;
-  subtitles: Project["subtitles"];
-  watermark: Project["watermark"];
 }) {
   const t = useTranslations("pages.editor.inspector");
-  const watermarkLabel = watermark?.mediaId ?? "Choose";
-  const globalControlClass = "flex w-full items-center justify-between gap-[10px] rounded border border-(--line) bg-(--bg-2) px-[10px] py-2 text-[12px] transition-colors hover:border-(--amber) hover:bg-(--bg-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--amber)";
+  const globalControlClass = "flex w-full items-center justify-start gap-[10px] rounded border border-(--line) bg-(--bg-2) px-[10px] py-2 text-left text-[12px] transition-colors hover:border-(--amber) hover:bg-(--bg-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--amber)";
   return (
     <section className="border-b border-(--line-soft) px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
@@ -783,7 +758,6 @@ function GlobalControls({
           type="button"
         >
           <span className="inline-flex items-center gap-[7px] text-(--text-2)"><ImageIcon aria-hidden="true" className="h-3.5 w-3.5" />Watermark</span>
-          <span className="font-mono text-[10.5px] text-(--text-4)">{watermarkLabel}</span>
         </button>
         <button
           aria-label={t("subtitles")}
@@ -792,7 +766,6 @@ function GlobalControls({
           type="button"
         >
           <span className="inline-flex items-center gap-[7px] text-(--text-2)"><Type aria-hidden="true" className="h-3.5 w-3.5" />{t("subtitles")}</span>
-          <span className="font-mono text-[10.5px] text-(--text-4)">{subtitles?.burn_in ? t("subtitlesVisible") : t("subtitlesHidden")}</span>
         </button>
         <button
           aria-label={hasBackground ? t("changeBackground") : t("addBackground")}
@@ -801,7 +774,6 @@ function GlobalControls({
           type="button"
         >
           <span className="inline-flex items-center gap-[7px] text-(--text-2)"><PlusCircle aria-hidden="true" className="h-3.5 w-3.5" />{hasBackground ? t("changeBackground") : t("addBackground")}</span>
-          <span className="font-mono text-[10.5px] text-(--text-4)">{backgroundLabel}</span>
         </button>
       </div>
     </section>

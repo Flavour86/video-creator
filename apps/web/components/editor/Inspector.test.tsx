@@ -153,7 +153,19 @@ describe("Inspector", () => {
     renderInspector();
     expect(screen.getByRole("button", { name: /Change Background/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add Background" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Change Background/i })).toHaveTextContent("bg0.png");
+    expect(screen.getByRole("button", { name: /Change Background/i })).not.toHaveTextContent("bg0.png");
+    expect(screen.getByRole("button", { name: /Change Background/i })).toHaveTextContent("Change Background");
+  });
+
+  it("shows only left-aligned global config action labels", () => {
+    renderInspector();
+
+    expect(screen.getByRole("button", { name: "Watermark" })).toHaveTextContent(/^Watermark$/);
+    expect(screen.getByRole("button", { name: "Subtitles" })).toHaveTextContent(/^Subtitles$/);
+    expect(screen.getByRole("button", { name: "Change Background" })).toHaveTextContent(/^Change Background$/);
+    expect(screen.queryByText("Choose")).not.toBeInTheDocument();
+    expect(screen.queryByText("Visible")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hidden")).not.toBeInTheDocument();
   });
 
   it("keeps all global config actions neutral until hover", () => {
@@ -177,7 +189,7 @@ describe("Inspector", () => {
     });
     expect(screen.getByRole("button", { name: /Add Background/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Change Background" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Add Background/i })).toHaveTextContent("No background");
+    expect(screen.getByRole("button", { name: /Add Background/i })).toHaveTextContent(/^Add Background$/);
   });
 
   it("renders as an independently scrollable inspector rail", () => {

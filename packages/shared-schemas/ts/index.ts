@@ -12,6 +12,11 @@
 export type MediaKind = "image" | "video" | "audio" | "watermark_image" | "watermark_video";
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "MediaRole".
+ */
+export type MediaRole = "background" | "foreground" | "pip" | "watermark";
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "MediaImportMode".
  */
 export type MediaImportMode = "copy" | "link" | "generated";
@@ -262,6 +267,7 @@ export interface MediaAsset {
   id: string;
   name: string;
   kind: MediaKind;
+  role?: MediaRole;
   path: string;
   thumb_path?: string | null;
   dimensions?: Dimensions | null;

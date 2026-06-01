@@ -3,7 +3,7 @@
 import { KeyboardEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { MediaAsset, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse, TranscriptSentenceCue } from "@vc/shared-schemas";
+import type { MediaAsset, MediaRole, Project, ProjectConfigLoadResponse, ProjectConfigSaveResponse, TranscriptSentenceCue } from "@vc/shared-schemas";
 import { PageChrome } from "@/components/app-shell/PageChrome";
 import { AssignModal } from "@/components/assign-modal/AssignModal";
 import { BgModal } from "@/components/bg-modal/BgModal";
@@ -143,15 +143,11 @@ function EditorContent() {
   }, [hasUnrenderedChanges, lastRenderedConfigHash, latestConfigHash]);
   const renderDraftDisabled = saving || renderJob.running || !project || !renderHashDiffers;
   const renderFinalDisabled = saving || renderJob.running || !project || !renderHashDiffers;
-  const visualMedia = useMemo(
-    () =>
-      media.filter(
-        (
-          entry,
-        ): entry is EditorMediaItem & { kind: "image" | "video" } => entry.kind === "image" || entry.kind === "video",
-      ),
-    [media],
+  const scopedMedia = useMemo(
+    () => scopeEditorMedia(media, layers, project?.watermark ?? null),
+    [layers, media, project?.watermark],
   );
+  const visualMedia = scopedMedia.visual;
 
   const refreshRenderCacheSummary = useCallback(async (id: string, fallback: ClipCacheSummary) => {
     try {
@@ -227,7 +223,7 @@ function EditorContent() {
       setLastRenderedConfigHash(response.last_rendered_config_hash ?? null);
       setSaveStatus(dirty ? "pending" : "saved");
       setLayers(workingLayers);
-      const configMedia = toEditorMediaItemsFromConfig(workingConfig.media ?? []);
+      const configMedia = toEditorMediaItemsFromConfig(workingConfig.media ?? [], workingLayers, workingConfig.watermark);
       setMedia(normalizeEditorMediaItems(configMedia));
       setServerCacheSummary(loadedCacheSummary);
       setLocalCacheInvalidation(normalizedBackgrounds.changed ? "clip" : "none");
@@ -728,6 +724,11 @@ function EditorContent() {
     setPlaying(true);
   }, [seekTo, sentences]);
 
+  const seekTranscriptSentence = useCallback((time: number) => {
+    seekTo(time);
+    setPlaying(false);
+  }, [seekTo]);
+
   const mergeSentenceWithNext = useCallback((range: [number, number]) => {
     if (!project) return;
     const mergeResult = mergeSentences(sentences, range);
@@ -784,7 +785,7 @@ function EditorContent() {
     });
   }, [project, projectId, resolution, selected, selectedSentenceRange]);
 
-  const uploadEditorMedia = useCallback(async (files: FileList | null, options?: { watermarkOnly?: boolean }): Promise<MediaAsset[]> => {
+  const uploadEditorMedia = useCallback(async (files: FileList | null, options?: { role?: MediaRole; watermarkOnly?: boolean }): Promise<MediaAsset[]> => {
     if (!files || files.length === 0) return [];
     const incoming = options?.watermarkOnly ? Array.from(files).slice(0, 1) : Array.from(files);
     const uploaded: MediaAsset[] = [];
@@ -792,7 +793,7 @@ function EditorContent() {
     setMedia((previous) => {
       let next = previous;
       for (const file of incoming) {
-        const pending = pendingMediaItemFromFile(file);
+        const pending = pendingMediaItemFromFile(file, options?.role);
         pendingIds.set(pendingKeyForFile(file), pending.mediaId);
         next = mergePendingItem(next, pending);
       }
@@ -824,10 +825,10 @@ function EditorContent() {
     if (uploaded.length === 0) return [];
     return options?.watermarkOnly
       ? uploaded.map(promoteUploadedWatermarkAsset)
-      : uploaded;
+      : uploaded.map((entry) => withMediaRole(entry, options?.role));
   }, []);
 
-  const importMedia = useCallback(async (files: FileList | null, options?: { watermarkOnly?: boolean }) => {
+  const importMedia = useCallback(async (files: FileList | null, options?: { role?: MediaRole; watermarkOnly?: boolean }) => {
     if (!project) return [];
     const normalizedUploaded = await uploadEditorMedia(files, options);
     if (normalizedUploaded.length === 0) return [];
@@ -838,7 +839,7 @@ function EditorContent() {
     const nextWatermark = replacementWatermark
       ? watermarkForReplacement(project.watermark, replacementWatermark.id)
       : project.watermark;
-    const nextEditorMedia = toEditorMediaItemsFromConfig(nextConfigMedia);
+    const nextEditorMedia = toEditorMediaItemsFromConfig(nextConfigMedia, layers, nextWatermark);
     setProject({ ...project, media: nextConfigMedia, watermark: nextWatermark });
     setMedia((previous) => mergeImportedMediaWithPending(nextEditorMedia, previous));
     if (replacementWatermark && projectId) {
@@ -851,15 +852,15 @@ function EditorContent() {
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
     return normalizedUploaded;
-  }, [project, projectId, uploadEditorMedia]);
+  }, [layers, project, projectId, uploadEditorMedia]);
 
   const replaceInspectorItemMedia = useCallback(async (layerId: string, itemId: string, files: FileList | null, mediaIndex?: number) => {
     if (!project) return;
-    const uploaded = await uploadEditorMedia(files);
+    const layer = layers.find((entry) => entry.id === layerId);
+    const uploaded = await uploadEditorMedia(files, { role: roleForLayerKind(layer?.kind) });
     const visualUploaded = uploaded.filter((entry) => entry.kind === "image" || entry.kind === "video");
     if (visualUploaded.length === 0) return;
     const mediaIds = visualUploaded.map((entry) => entry.id);
-    const layer = layers.find((entry) => entry.id === layerId);
     if (!layer || layer.kind === "sub") return;
     const firstMediaId = mediaIds[0];
     if (layer.kind !== "bg" && !firstMediaId) return;
@@ -882,7 +883,7 @@ function EditorContent() {
     const nextConfigMedia = mergeConfigMedia(project.media ?? [], visualUploaded);
     setLayers(updatedLayers);
     setProject({ ...project, media: nextConfigMedia, layers: updatedLayers as Project["layers"] });
-    setMedia((previous) => mergeImportedMediaWithPending(toEditorMediaItemsFromConfig(nextConfigMedia), previous));
+    setMedia((previous) => mergeImportedMediaWithPending(toEditorMediaItemsFromConfig(nextConfigMedia, updatedLayers, project.watermark), previous));
     setSelected({ layerId, itemId });
     if (projectId) {
       appendOperation(projectId, {
@@ -937,7 +938,7 @@ function EditorContent() {
             if (first && value.trim()) seekTo(first.start_s);
           }}
           onSearchKeyDown={onSearchKeyDown}
-          onSeek={seekTo}
+          onSeek={seekTranscriptSentence}
           onScrollPositionChange={onTranscriptScroll}
           onSelectRange={setSelectedSentenceRange}
           query={query}
@@ -1047,16 +1048,12 @@ function EditorContent() {
           editLayerId={assignEdit?.layerId}
           fromSentence={assignRange[0]}
           layers={layers}
-          media={visualMedia.map((entry) => ({
-            filename: entry.filename,
-            kind: entry.kind,
-            thumb_url: entry.thumb_url,
-            importing: entry.importing,
-            import_progress: entry.import_progress,
-            import_error: entry.import_error,
-          }))}
+          media={{
+            foreground: scopedMedia.foreground.map(toAssignModalMedia),
+            pip: scopedMedia.pip.map(toAssignModalMedia),
+          }}
           onClose={() => setModal(null)}
-          onImport={importMedia}
+          onImport={(files, role) => importMedia(files, { role })}
           onConfirm={applyAssignedLayers}
           open
           sentences={sentences}
@@ -1066,7 +1063,7 @@ function EditorContent() {
         <BgModal
           duration={duration}
           existing={(layers.find((layer) => layer.kind === "bg") as BgLayer | undefined)}
-          media={visualMedia.map((entry) => ({
+          media={scopedMedia.background.map((entry) => ({
             duration: entry.duration,
             filename: entry.filename,
             import_error: entry.import_error,
@@ -1076,14 +1073,14 @@ function EditorContent() {
             thumb_url: entry.thumb_url,
           }))}
           onClose={() => setModal(null)}
-          onImport={importMedia}
+          onImport={(files) => importMedia(files, { role: "background" })}
           onSave={applyBackgroundLayer}
           open
           totalSentences={sentences.length}
         />
       ) : modal === "watermark" ? (
         <WatermarkModal
-          media={media}
+          media={scopedMedia.watermark}
           onChange={applyWatermarkSettings}
           onClose={() => setModal(null)}
           onImport={importWatermarkMedia}
@@ -1460,13 +1457,28 @@ function remapSentenceAnchoredItem<T extends SentenceAnchoredItem>(
 
 function promoteUploadedWatermarkAsset(entry: MediaAsset): MediaAsset {
   const nextKind = watermarkAssetKind(entry.kind);
-  if (nextKind === entry.kind) return entry;
-  return { ...entry, kind: nextKind };
+  return withMediaRole({ ...entry, kind: nextKind }, "watermark");
+}
+
+function withMediaRole(entry: MediaAsset, role: MediaRole | undefined): MediaAsset {
+  if (!role || entry.role === role) return entry;
+  return { ...entry, role };
+}
+
+function roleForLayerKind(kind: Layer["kind"] | undefined): MediaRole | undefined {
+  if (kind === "bg") return "background";
+  if (kind === "fg") return "foreground";
+  if (kind === "pip") return "pip";
+  return undefined;
+}
+
+function isWatermarkConfigAsset(entry: Pick<MediaAsset, "kind" | "role">): boolean {
+  return entry.role === "watermark" || entry.kind === "watermark_image" || entry.kind === "watermark_video";
 }
 
 function replaceWatermarkAssets(media: MediaAsset[], replacement: MediaAsset): MediaAsset[] {
   return [
-    ...media.filter((entry) => entry.kind !== "watermark_image" && entry.kind !== "watermark_video"),
+    ...media.filter((entry) => !isWatermarkConfigAsset(entry)),
     replacement,
   ];
 }
@@ -1486,8 +1498,7 @@ function promoteWatermarkSelection(media: MediaAsset[], watermark: Project["wate
   return media.map((entry) => {
     if (entry.id !== mediaId) return entry;
     const nextKind = watermarkAssetKind(entry.kind);
-    if (nextKind === entry.kind) return entry;
-    return { ...entry, kind: nextKind };
+    return withMediaRole({ ...entry, kind: nextKind }, "watermark");
   });
 }
 
@@ -1497,8 +1508,7 @@ function promoteWatermarkSelectionInEditorMedia(media: EditorMediaItem[], waterm
   return media.map((entry) => {
     if (entry.mediaId !== mediaId) return entry;
     const nextKind = watermarkEditorKind(entry.kind);
-    if (nextKind === entry.kind) return entry;
-    return { ...entry, kind: nextKind };
+    return { ...entry, kind: nextKind, role: "watermark" };
   });
 }
 
@@ -1522,26 +1532,41 @@ function mergeConfigMedia(existing: MediaAsset[], incoming: MediaAsset[]): Media
   return [...byId.values()];
 }
 
-function normalizeEditorMediaItems(items: EditorMediaItem[]): EditorMediaItem[] {
-  return items.map((entry) => ({
-    ...entry,
-    mediaId: entry.mediaId || entry.filename,
-    path: entry.path || "",
-    import_mode: entry.import_mode ?? "copy",
-    imported_at: entry.imported_at ?? new Date().toISOString(),
-    importing: entry.importing ?? false,
-    import_progress: entry.import_progress ?? null,
-    import_error: entry.import_error ?? null,
-  }));
+function normalizeEditorMediaItems(
+  items: EditorMediaItem[],
+  layers: Layer[] = [],
+  watermark: Project["watermark"] = null,
+): EditorMediaItem[] {
+  return items.map((entry) => {
+    const normalized = {
+      ...entry,
+      mediaId: entry.mediaId || entry.filename,
+      path: entry.path || "",
+      import_mode: entry.import_mode ?? "copy",
+      imported_at: entry.imported_at ?? new Date().toISOString(),
+      importing: entry.importing ?? false,
+      import_progress: entry.import_progress ?? null,
+      import_error: entry.import_error ?? null,
+    };
+    return {
+      ...normalized,
+      role: normalized.role ?? singleInferredMediaRole(mediaRolesForItem(normalized, layers, watermark)),
+    };
+  });
 }
 
-function toEditorMediaItemsFromConfig(configMedia: MediaAsset[]): EditorMediaItem[] {
+function toEditorMediaItemsFromConfig(
+  configMedia: MediaAsset[],
+  layers: Layer[] = [],
+  watermark: Project["watermark"] = null,
+): EditorMediaItem[] {
   return configMedia.map((entry) => {
     const thumbUrl = resolveThumbUrl(entry);
-    return {
+    const item: EditorMediaItem = {
       mediaId: entry.id,
       filename: entry.name || entry.id,
       kind: entry.kind,
+      role: entry.role,
       path: entry.path,
       thumb_path: entry.thumb_path ?? null,
       thumb_url: thumbUrl,
@@ -1557,7 +1582,106 @@ function toEditorMediaItemsFromConfig(configMedia: MediaAsset[]): EditorMediaIte
       import_progress: null,
       import_error: null,
     };
+    return {
+      ...item,
+      role: item.role ?? singleInferredMediaRole(mediaRolesForItem(item, layers, watermark)),
+    };
   });
+}
+
+type VisualEditorMediaItem = EditorMediaItem & { kind: "image" | "video" };
+
+type ScopedEditorMedia = {
+  background: VisualEditorMediaItem[];
+  foreground: VisualEditorMediaItem[];
+  pip: VisualEditorMediaItem[];
+  visual: VisualEditorMediaItem[];
+  watermark: EditorMediaItem[];
+};
+
+function scopeEditorMedia(
+  media: EditorMediaItem[],
+  layers: Layer[],
+  watermark: Project["watermark"],
+): ScopedEditorMedia {
+  const scoped: ScopedEditorMedia = {
+    background: [],
+    foreground: [],
+    pip: [],
+    visual: [],
+    watermark: [],
+  };
+  for (const item of media) {
+    const roles = mediaRolesForItem(item, layers, watermark);
+    const visual = isGenericVisualMedia(item) ? { ...item, role: item.role ?? singleInferredMediaRole(roles) } : null;
+    if (visual) {
+      scoped.visual.push(visual);
+      if (roles.has("background")) scoped.background.push(visual);
+      if (roles.has("foreground")) scoped.foreground.push(visual);
+      if (roles.has("pip")) scoped.pip.push(visual);
+    }
+    if (roles.has("watermark")) {
+      scoped.watermark.push({ ...item, role: "watermark" });
+    }
+  }
+  return scoped;
+}
+
+function mediaRolesForItem(
+  item: Pick<EditorMediaItem, "filename" | "kind" | "mediaId" | "role">,
+  layers: Layer[],
+  watermark: Project["watermark"],
+): Set<MediaRole> {
+  const roles = new Set<MediaRole>();
+  if (item.role) roles.add(item.role);
+  if (item.kind === "watermark_image" || item.kind === "watermark_video") roles.add("watermark");
+  const ids = new Set([item.mediaId, item.filename].filter((value): value is string => Boolean(value)));
+  if (watermark?.mediaId && ids.has(watermark.mediaId)) roles.add("watermark");
+  for (const layer of layers) {
+    const role = roleForLayerKind(layer.kind);
+    if (!role) continue;
+    const referenced = layer.items.some((candidate) => itemReferencesAnyMedia(candidate, ids));
+    if (referenced) roles.add(role);
+  }
+  return roles;
+}
+
+function itemReferencesAnyMedia(item: unknown, mediaIds: ReadonlySet<string>): boolean {
+  if (!item || typeof item !== "object") return false;
+  const candidate = item as { mediaId?: unknown; mediaIds?: unknown };
+  if (typeof candidate.mediaId === "string" && mediaIds.has(candidate.mediaId)) return true;
+  if (Array.isArray(candidate.mediaIds)) {
+    return candidate.mediaIds.some((entry) => typeof entry === "string" && mediaIds.has(entry));
+  }
+  return false;
+}
+
+function isGenericVisualMedia(item: EditorMediaItem): item is VisualEditorMediaItem {
+  return item.kind === "image" || item.kind === "video";
+}
+
+function singleInferredMediaRole(roles: ReadonlySet<MediaRole>): MediaRole | undefined {
+  return roles.size === 1 ? roles.values().next().value : undefined;
+}
+
+function toAssignModalMedia(entry: VisualEditorMediaItem): {
+  filename: string;
+  import_error?: string | null;
+  import_progress?: number | null;
+  importing?: boolean;
+  kind: "image" | "video";
+  role?: "foreground" | "pip";
+  thumb_url: string;
+} {
+  return {
+    filename: entry.filename,
+    import_error: entry.import_error,
+    import_progress: entry.import_progress,
+    importing: entry.importing,
+    kind: entry.kind,
+    role: entry.role === "foreground" || entry.role === "pip" ? entry.role : undefined,
+    thumb_url: entry.thumb_url,
+  };
 }
 
 function resolveThumbUrl(media: MediaAsset): string {
@@ -1578,11 +1702,12 @@ function pendingMediaIdForFile(file: File): string {
   return `pending:${pendingKeyForFile(file)}`;
 }
 
-function pendingMediaItemFromFile(file: File): EditorMediaItem {
+function pendingMediaItemFromFile(file: File, role?: MediaRole): EditorMediaItem {
   return {
     mediaId: pendingMediaIdForFile(file),
     filename: file.name,
     kind: inferMediaKindFromFile(file),
+    role,
     path: "",
     thumb_path: null,
     thumb_url: "",

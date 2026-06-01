@@ -101,13 +101,15 @@ def _expected_clip(
     duration_s: float,
     *,
     crossfade_s: float | None = None,
+    transition_in: str = "cut",
+    transition_out: str = "cut",
 ) -> Path:
     key = clip_cache_key(
         media_path=media_path,
         duration_s=duration_s,
         motion={"kind": "none", "easing": "linear"},
-        transition_in="cut",
-        transition_out="cut",
+        transition_in=transition_in,
+        transition_out=transition_out,
         resolution="1280x720",
         fps=30,
         crf=28,
@@ -539,6 +541,234 @@ def test_single_background_playlist_item_expands_for_render_cache(tmp_path: Path
     filtergraph = _filtergraph(command)
     assert "[bg][clip1]overlay=enable='between(t,0,5)':eof_action=pass[v1]" in filtergraph
     assert "[v1][clip2]overlay=enable='between(t,5,10)':eof_action=pass[v2]" in filtergraph
+
+
+def test_background_image_playlist_crossfade_overlaps_adjacent_slots(tmp_path: Path) -> None:
+    bg0 = _write_media(tmp_path, "bg0.jpg", b"bg0")
+    bg1 = _write_media(tmp_path, "bg1.jpg", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-playlist",
+                        "mediaIds": ["bg0.jpg", "bg1.jpg"],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 1.0,
+                    }
+                ],
+            ),
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, bg0, 5.0, crossfade_s=1.0, transition_out="fade")),
+        str(_expected_clip(tmp_path, bg1, 6.0, crossfade_s=1.0, transition_in="fade")),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "[bg][clip1]overlay=enable='between(t,0,5)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,4,10)':eof_action=pass[v2]" in filtergraph
+
+
+def test_background_video_playlist_uses_media_durations_then_black_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("server.pipeline.clip_render._probe_media_duration_s", lambda path: 30.0)
+    bg0 = _write_media(tmp_path, "bg0.mp4", b"bg0")
+    bg1 = _write_media(tmp_path, "bg1.mp4", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-playlist",
+                        "mediaIds": ["bg0.mp4", "bg1.mp4"],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 0.0,
+                    }
+                ],
+            ),
+        ],
+        media=[
+            {
+                "id": "bg0.mp4",
+                "name": "bg0.mp4",
+                "kind": "video",
+                "path": "media/bg0.mp4",
+                "duration": 4.0,
+                "import_mode": "copy",
+                "imported_at": "2026-05-28T00:00:00Z",
+            },
+            {
+                "id": "bg1.mp4",
+                "name": "bg1.mp4",
+                "kind": "video",
+                "path": "media/bg1.mp4",
+                "duration": 3.0,
+                "import_mode": "copy",
+                "imported_at": "2026-05-28T00:00:00Z",
+            },
+        ],
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, bg0, 4.0, crossfade_s=0.0)),
+        str(_expected_clip(tmp_path, bg1, 3.0, crossfade_s=0.0)),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "color=black:s=1280x720:r=30:d=10[bg]" in filtergraph
+    assert "[bg][clip1]overlay=enable='between(t,0,4)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,4,7)':eof_action=pass[v2]" in filtergraph
+    assert "between(t,7,10)" not in filtergraph
+
+
+def test_single_background_video_uses_media_duration_then_black_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("server.pipeline.clip_render._probe_media_duration_s", lambda path: 30.0)
+    bg0 = _write_media(tmp_path, "bg0.mp4", b"bg0")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-video",
+                        "mediaId": "bg0.mp4",
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 0.0,
+                    }
+                ],
+            ),
+        ],
+        media=[
+            {
+                "id": "bg0.mp4",
+                "name": "bg0.mp4",
+                "kind": "video",
+                "path": "media/bg0.mp4",
+                "duration": 4.0,
+                "import_mode": "copy",
+                "imported_at": "2026-05-28T00:00:00Z",
+            },
+        ],
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, bg0, 4.0, crossfade_s=0.0)),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "color=black:s=1280x720:r=30:d=10[bg]" in filtergraph
+    assert "[bg][clip1]overlay=enable='between(t,0,4)':eof_action=pass[v1]" in filtergraph
+    assert "between(t,4,10)" not in filtergraph
+
+
+def test_background_video_playlist_crossfade_overlaps_by_configured_duration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("server.pipeline.clip_render._probe_media_duration_s", lambda path: 30.0)
+    bg0 = _write_media(tmp_path, "bg0.mp4", b"bg0")
+    bg1 = _write_media(tmp_path, "bg1.mp4", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-playlist",
+                        "mediaIds": ["bg0.mp4", "bg1.mp4"],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 1.0,
+                    }
+                ],
+            ),
+        ],
+        media=[
+            {
+                "id": "bg0.mp4",
+                "name": "bg0.mp4",
+                "kind": "video",
+                "path": "media/bg0.mp4",
+                "duration": 4.0,
+                "import_mode": "copy",
+                "imported_at": "2026-05-28T00:00:00Z",
+            },
+            {
+                "id": "bg1.mp4",
+                "name": "bg1.mp4",
+                "kind": "video",
+                "path": "media/bg1.mp4",
+                "duration": 3.0,
+                "import_mode": "copy",
+                "imported_at": "2026-05-28T00:00:00Z",
+            },
+        ],
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, bg0, 4.0, crossfade_s=1.0, transition_out="fade")),
+        str(_expected_clip(tmp_path, bg1, 3.0, crossfade_s=1.0, transition_in="fade")),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "[bg][clip1]overlay=enable='between(t,0,4)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,3,6)':eof_action=pass[v2]" in filtergraph
 
 
 def test_filtergraph_build_for_50_layers_meets_target(tmp_path: Path) -> None:

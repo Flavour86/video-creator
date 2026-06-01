@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Upload, X } from "lucide-react";
+import { Folder, X } from "lucide-react";
 import type { Project } from "@vc/shared-schemas";
 import { useRef } from "react";
 import { Button } from "@/components/ui";
@@ -86,21 +86,19 @@ export function WatermarkModal({
 
             <input
               accept=".png,.jpg,.jpeg,.mp4,image/png,image/jpeg,video/mp4"
+              aria-label="Import from disk"
               className="hidden"
               onChange={(event) => void onImport(event.currentTarget.files)}
               ref={uploadRef}
               type="file"
             />
             <button
-              className="flex w-full items-center justify-between gap-3 rounded-(--r-sm) border border-dashed border-(--line) bg-(--bg-2) px-3 py-[10px] text-left text-(--text-2) hover:border-(--amber)/50"
+              className="inline-flex w-fit items-center gap-2 rounded border border-(--line) bg-(--bg-2) px-2.5 py-1.5 text-xs font-semibold text-(--text-2) hover:bg-(--bg-3)"
               onClick={() => uploadRef.current?.click()}
               type="button"
             >
-              <span className="inline-flex items-center gap-2 text-xs text-(--text)">
-                <Upload className="h-4 w-4" />
-                Upload image or video watermark...
-              </span>
-              <span className="font-mono text-[11px] text-(--text-4)">PNG / JPG / MP4</span>
+              <Folder aria-hidden="true" className="h-3.5 w-3.5" />
+              Import from disk...
             </button>
 
             {selectable.length > 0 ? (
@@ -208,7 +206,7 @@ export function WatermarkModal({
 }
 
 function isWatermarkMedia(item: EditorMediaItem): item is WatermarkMedia {
-  return item.kind === "image" || item.kind === "video" || item.kind === "watermark_image" || item.kind === "watermark_video";
+  return item.role === "watermark" || item.kind === "watermark_image" || item.kind === "watermark_video";
 }
 
 function watermarkThumbSrc(projectPath: string, item: EditorMediaItem): string | null {

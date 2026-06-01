@@ -167,13 +167,31 @@ def _expand_background_playlist_item(
     media_ids = _item_media_ids(item)
     if len(media_ids) == 0:
         return [item]
+    media_index = _project_media_index(project)
     if len(media_ids) == 1:
+        media_id = media_ids[0]
+        media = media_index.get(media_id)
+        media_duration = _media_duration(media)
+        if _media_is_video(media, media_id) and media_duration and media_duration > 0:
+            start_s = _item_float(item, "start")
+            end_s = min(_item_float(item, "end"), start_s + media_duration)
+            return [
+                _playlist_child_item(
+                    item,
+                    media_id=media_id,
+                    index=0,
+                    start_s=start_s,
+                    end_s=end_s,
+                    transition_in=_transition_value(item, "in") or "cut",
+                    transition_out="cut",
+                )
+            ] if end_s > start_s else []
         if _item_has_media_id(item):
             return [item]
         return [
             _playlist_child_item(
                 item,
-                media_id=media_ids[0],
+                media_id=media_id,
                 index=0,
                 start_s=_item_float(item, "start"),
                 end_s=_item_float(item, "end"),
@@ -181,10 +199,9 @@ def _expand_background_playlist_item(
                 transition_out=_transition_value(item, "out") or "cut",
             )
         ]
-    media_index = _project_media_index(project)
-    first_kind = _media_kind(media_index.get(media_ids[0]))
+    first_is_video = _media_is_video(media_index.get(media_ids[0]), media_ids[0])
     has_video_duration = any(_media_duration(media_index.get(media_id)) for media_id in media_ids)
-    if first_kind == "video" and has_video_duration:
+    if first_is_video and has_video_duration:
         return _expand_video_playlist_item(item, media_ids, media_index)
     return _expand_even_playlist_item(item, media_ids)
 
@@ -199,20 +216,16 @@ def _expand_even_playlist_item(item: ClipRenderItem, media_ids: list[str]) -> li
     crossfade_s = min(_item_crossfade(item), slot_s / 2)
     expanded: list[ClipRenderItem] = []
     for index, media_id in enumerate(media_ids):
-        item_start = start_s + index * slot_s
-        item_end = start_s + (index + 1) * slot_s
-        if crossfade_s > 0:
-            if index > 0:
-                item_start -= crossfade_s
-            if index < len(media_ids) - 1:
-                item_end += crossfade_s
+        slot_start = start_s + index * slot_s
+        slot_end = end_s if index == len(media_ids) - 1 else start_s + (index + 1) * slot_s
+        item_start = slot_start - crossfade_s if index > 0 and crossfade_s > 0 else slot_start
         expanded.append(
             _playlist_child_item(
                 item,
                 media_id=media_id,
                 index=index,
                 start_s=max(start_s, item_start),
-                end_s=min(end_s, item_end),
+                end_s=slot_end,
                 transition_in="fade" if index > 0 and crossfade_s > 0 else "cut",
                 transition_out="fade" if index < len(media_ids) - 1 and crossfade_s > 0 else "cut",
             )
@@ -233,12 +246,14 @@ def _expand_video_playlist_item(
     for index, media_id in enumerate(media_ids):
         media_duration = _media_duration(media_index.get(media_id))
         clip_duration = media_duration if media_duration and media_duration > 0 else end_s - cursor
-        item_end = min(end_s, cursor + clip_duration)
-        if item_end <= cursor:
+        item_start = max(start_s, cursor)
+        item_end = min(end_s, item_start + clip_duration)
+        if item_end <= item_start:
             break
+        item_crossfade_s = min(crossfade_s, (item_end - item_start) / 2)
         transition_out = (
             "fade"
-            if index < len(media_ids) - 1 and crossfade_s > 0 and item_end < end_s
+            if index < len(media_ids) - 1 and item_crossfade_s > 0 and item_end < end_s
             else "cut"
         )
         expanded.append(
@@ -246,13 +261,17 @@ def _expand_video_playlist_item(
                 item,
                 media_id=media_id,
                 index=index,
-                start_s=cursor,
+                start_s=item_start,
                 end_s=item_end,
-                transition_in="fade" if index > 0 and crossfade_s > 0 else "cut",
+                transition_in="fade" if index > 0 and item_crossfade_s > 0 else "cut",
                 transition_out=transition_out,
             )
         )
-        cursor = item_end
+        cursor = (
+            item_end - item_crossfade_s
+            if index < len(media_ids) - 1 and item_crossfade_s > 0
+            else item_end
+        )
         if cursor >= end_s:
             break
     return expanded
@@ -554,9 +573,13 @@ def _item_media_ids(item: ClipRenderItem) -> list[str]:
     raw = _unwrap_root_model(item)
     if isinstance(raw, Mapping):
         value = raw.get("mediaIds") or raw.get("media_ids")
+        fallback_media_id = raw.get("mediaId") or raw.get("media_id")
     else:
         value = getattr(raw, "media_ids", None)
+        fallback_media_id = getattr(raw, "media_id", None)
     if value is None:
+        if isinstance(fallback_media_id, str) and fallback_media_id:
+            return [fallback_media_id]
         return []
     if not isinstance(value, list):
         raise TypeError("Visual item mediaIds must be a list.")
@@ -610,6 +633,22 @@ def _media_kind(media: object | None) -> str | None:
     if isinstance(value, Enum):
         return str(value.value)
     return value if isinstance(value, str) else None
+
+
+def _media_is_video(media: object | None, media_id: str) -> bool:
+    kind = _media_kind(media) or ""
+    if "video" in kind:
+        return True
+    return Path(media_id).suffix.lower() in {
+        ".avi",
+        ".flv",
+        ".m4v",
+        ".mkv",
+        ".mov",
+        ".mp4",
+        ".rmvb",
+        ".webm",
+    }
 
 
 def _media_duration(media: object | None) -> float | None:

@@ -5,6 +5,7 @@ export type EditorMediaItem = {
   mediaId: string;
   filename: string;
   kind: "image" | "video" | "audio" | "watermark_image" | "watermark_video";
+  role?: "background" | "foreground" | "pip" | "watermark";
   path: string;
   thumb_path?: string | null;
   thumb_url: string;

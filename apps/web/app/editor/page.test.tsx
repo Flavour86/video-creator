@@ -126,6 +126,13 @@ const TEST_PROJECT_MEDIA = ["PIP.png", "bg0.png", "bg1.png", "bg2.png", "foregro
   id: filename,
   name: filename,
   kind: "image" as const,
+  role: filename === "bg1.png" || filename === "bg2.png"
+    ? "background" as const
+    : filename === "PIP.png"
+      ? "pip" as const
+      : filename === "foreground.png"
+        ? "foreground" as const
+        : undefined,
   path: `media/${filename}`,
   thumb_path: `uploads/thumb/${filename.replace(/\.[^.]+$/, ".jpg")}`,
   import_mode: "copy" as const,
@@ -754,6 +761,8 @@ it("updates only background through Change Background modal and appends one oper
   fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
 
   expect(await screen.findByRole("heading", { name: "Change background" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /PIP\.png/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /foreground\.png/i })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /bg1\.png/i }));
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -783,6 +792,33 @@ it("updates only background through Change Background modal and appends one oper
     expect(fgLayer?.items?.[0]?.cache_status).toBe("warm");
     expect(pipLayer?.items?.[0]?.cache_status).toBe("warm");
   });
+});
+
+it("scopes foreground, PiP, and background asset pickers from roles and legacy layer references", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+  const backgroundDialog = await screen.findByRole("dialog");
+  expect(within(backgroundDialog).getByRole("button", { name: /bg0\.png/i })).toBeInTheDocument();
+  expect(within(backgroundDialog).getByRole("button", { name: /bg1\.png/i })).toBeInTheDocument();
+  expect(within(backgroundDialog).queryByRole("button", { name: /PIP\.png/i })).not.toBeInTheDocument();
+  expect(within(backgroundDialog).queryByRole("button", { name: /foreground\.png/i })).not.toBeInTheDocument();
+  fireEvent.click(within(backgroundDialog).getByRole("button", { name: "Cancel" }));
+
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
+  const assignDialog = await screen.findByRole("dialog");
+  expect(within(assignDialog).getByRole("button", { name: /foreground\.png/i })).toBeInTheDocument();
+  expect(within(assignDialog).queryByRole("button", { name: /bg0\.png/i })).not.toBeInTheDocument();
+  expect(within(assignDialog).queryByRole("button", { name: /PIP\.png/i })).not.toBeInTheDocument();
+
+  fireEvent.click(within(assignDialog).getByRole("button", { name: /picture-in-picture/i }));
+  expect(within(assignDialog).getByRole("button", { name: /PIP\.png/i })).toBeInTheDocument();
+  expect(within(assignDialog).queryByRole("button", { name: /foreground\.png/i })).not.toBeInTheDocument();
+  expect(within(assignDialog).queryByRole("button", { name: /bg0\.png/i })).not.toBeInTheDocument();
 });
 
 it("edits foreground directly in inspector and invalidates only the edited foreground item", async () => {
@@ -1310,7 +1346,7 @@ it("replaces the previous watermark asset when a new watermark is uploaded", asy
   });
 
   expect(await within(dialog).findByText(/Current watermark: logo-new\.png \/ image overlay\./i)).toBeInTheDocument();
-  expect(within(dialog).getByRole("button", { name: /bg0\.png/i })).toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: /bg0\.png/i })).not.toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: /logo-new\.png selected/i })).toHaveAttribute("aria-pressed", "true");
 });
 
@@ -1423,6 +1459,27 @@ it("ignores Space play/pause shortcut when typing in editable targets", async ()
   expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
   expect(playSpy).not.toHaveBeenCalled();
+});
+
+it("clicking a transcript sentence seeks there and pauses playback", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.keyDown(window, { key: " ", code: "Space" });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument());
+
+  fireEvent.click(screen.getByRole("button", { name: /3 00:10-00:15 Capitalism changes incentives/i }));
+
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  await waitFor(() => expect(audio.currentTime).toBe(10));
+  expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /3 00:10-00:15 Capitalism changes incentives/i }).parentElement).toHaveAttribute("aria-current", "true");
 });
 
 it("toggles Space play/pause from a focused non-input control without resetting the playhead", async () => {
@@ -1560,7 +1617,8 @@ it("imports media through POST /uploads and shows the imported asset in modal", 
   renderEditor();
   await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
 
-  const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+  const dialog = await screen.findByRole("dialog", { name: /assign media to range/i });
+  const fileInput = dialog.querySelector("input[type='file']") as HTMLInputElement | null;
   expect(fileInput).not.toBeNull();
   fireEvent.change(fileInput!, {
     target: { files: [new File([new Uint8Array([1, 2])], "new-upload.jpg", { type: "image/jpeg" })] },
@@ -1590,7 +1648,8 @@ it("shows a failed upload error state in assign modal when image is smaller than
   renderEditor();
   await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
 
-  const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+  const dialog = await screen.findByRole("dialog", { name: /assign media to range/i });
+  const fileInput = dialog.querySelector("input[type='file']") as HTMLInputElement | null;
   expect(fileInput).not.toBeNull();
   fireEvent.change(fileInput!, {
     target: { files: [new File([new Uint8Array([1, 2])], "tiny4x4.png", { type: "image/png" })] },
@@ -1611,10 +1670,10 @@ it("creates a foreground clip from assign modal and appends one replace_layers o
   renderEditor();
   await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
 
-  fireEvent.click(screen.getByAltText("PIP.png").closest("button")!);
+  fireEvent.click(screen.getByAltText("foreground.png").closest("button")!);
   fireEvent.click(screen.getByRole("button", { name: /add to project/i }));
 
-  expect(await screen.findByRole("button", { name: "PIP.png over s5" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "foreground.png over s5" })).toBeInTheDocument();
   const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
   expect(raw).not.toBeNull();
   const parsed = JSON.parse(raw ?? "{}");
@@ -1633,7 +1692,9 @@ it("opens assign media with the clicked sentence range and real thumbnails", asy
   const dialog = await screen.findByRole("dialog");
   expect(within(dialog).getByLabelText("From")).toHaveValue(5);
   expect(within(dialog).getByLabelText("To")).toHaveValue(5);
-  expect(within(dialog).getAllByRole("img")).toHaveLength(5);
+  expect(within(dialog).getAllByRole("img")).toHaveLength(1);
+  expect(within(dialog).getByRole("button", { name: /foreground\.png/i })).toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: /PIP\.png/i })).not.toBeInTheDocument();
 });
 
 it("keeps draft render progress in the editor and can cancel it", async () => {

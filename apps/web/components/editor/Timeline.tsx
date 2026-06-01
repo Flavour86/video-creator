@@ -191,7 +191,6 @@ export function Timeline({
             duration={duration}
             key={row.rowId}
             onDeleteItem={onDeleteItem}
-            onSeek={onSeek}
             onSelect={onSelect}
             onStartDrag={(input) => {
               dragStateRef.current = input;
@@ -202,12 +201,17 @@ export function Timeline({
         ))}
       </div>
 
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 top-[33px] z-40 w-px bg-(--amber)"
+        style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${TRACK_RIGHT_PADDING_PX}px) * ${playheadPercent} / 100)` }}
+      />
       <button
         aria-label="Playhead"
         aria-valuemax={Math.max(duration, 0)}
         aria-valuemin={0}
         aria-valuenow={currentTime}
-        className="absolute bottom-0 top-[33px] z-40 w-px cursor-ew-resize bg-(--amber) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
+        className="absolute top-[29px] z-50 h-4 w-4 -translate-x-1/2 cursor-ew-resize bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--amber)"
         onMouseDown={(event) => {
           event.preventDefault();
           playheadDraggingRef.current = true;
@@ -217,7 +221,7 @@ export function Timeline({
         style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${TRACK_RIGHT_PADDING_PX}px) * ${playheadPercent} / 100)` }}
         type="button"
       >
-        <span className="absolute -top-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[7px] border-x-transparent border-t-(--amber)" />
+        <span className="absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[7px] border-x-transparent border-t-(--amber)" />
       </button>
     </section>
   );
@@ -299,14 +303,13 @@ function useTimelineRows(layers: Layer[], duration: number, sentences: AlignedSe
 type TrackRowProps = {
   duration: number;
   onDeleteItem: (selection: { layerId: string; itemId: string }) => void;
-  onSeek: (time: number) => void;
   onSelect: (selection: EditorSelection) => void;
   onStartDrag: (input: DragState) => void;
   row: TimelineRow;
   selected: EditorSelection;
 };
 
-function TrackRow({ duration, onDeleteItem, onSeek, onSelect, onStartDrag, row, selected }: TrackRowProps) {
+function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected }: TrackRowProps) {
   return (
     <div className="grid h-[44px] items-center border-t border-(--line-soft)" data-testid={`timeline-row-${row.kind}`} style={{ gridTemplateColumns: `${LABEL_COLUMN_WIDTH_PX}px minmax(0,1fr)` }}>
       <div className="flex items-center gap-[7px] truncate border-r border-(--line) px-[10px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-(--text-3)">
@@ -319,8 +322,8 @@ function TrackRow({ duration, onDeleteItem, onSeek, onSelect, onStartDrag, row, 
         className="relative h-full overflow-x-hidden bg-[repeating-linear-gradient(90deg,transparent_0_calc(10%_-_1px),var(--line-soft)_calc(10%_-_1px)_10%)]"
         data-timeline-track="1"
         onClick={(event) => {
+          event.stopPropagation();
           onSelect(null);
-          onSeek(timeFromEvent(event, duration));
         }}
       >
         {row.clips.map((clip) => {
@@ -333,6 +336,7 @@ function TrackRow({ duration, onDeleteItem, onSeek, onSelect, onStartDrag, row, 
           const isSelected = selected?.layerId === clip.layerId && selected.itemId === clip.id;
           const label = clipLabel(clip);
           const canDelete = clip.kind !== "bg" && clip.kind !== "sub";
+          const canEditTiming = clip.kind === "fg" || clip.kind === "pip";
           return (
             <div
               className={`absolute top-1/2 h-[calc(100%-8px)] -translate-y-1/2 rounded-sm border font-mono text-[10.5px] ${clipClass(clip.kind, clip.orphaned === true)} ${isSelected ? "z-[5] outline outline-2 outline-(--amber) outline-offset-1 shadow-[0_0_0_4px_var(--amber-bg)]" : ""}`}
@@ -351,7 +355,7 @@ function TrackRow({ duration, onDeleteItem, onSeek, onSelect, onStartDrag, row, 
                   onSelect({ layerId: clip.layerId, itemId: clip.id });
                 }}
                 onMouseDown={(event) => {
-                  if (clip.kind === "sub") return;
+                  if (!canEditTiming) return;
                   event.stopPropagation();
                   onStartDrag(makeDragState(event, clip, "move"));
                 }}
@@ -360,7 +364,7 @@ function TrackRow({ duration, onDeleteItem, onSeek, onSelect, onStartDrag, row, 
                 <span className="absolute left-2 top-1/2 max-w-[calc(100%-16px)] -translate-y-1/2 truncate">{label}</span>
               </button>
 
-              {clip.kind !== "sub" ? (
+              {canEditTiming ? (
                 <>
                   <button
                     aria-label={`Resize start ${label}`}
