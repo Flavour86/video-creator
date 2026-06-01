@@ -31,6 +31,7 @@ const BUG_EVIDENCE_DIR = path.resolve(process.cwd(), "..", "..", "docs", "design
 type IgnoreRegion = { x: number; y: number; width: number; height: number };
 type EditorApiOverrides = {
   alignment?: object | (() => object);
+  onConfigSave?: (config: object) => void;
   project?: object | (() => object);
 };
 
@@ -203,6 +204,166 @@ test.describe("bug 2026-05-28 evidence", () => {
     expect([...consoleErrors, ...failedResponses]).toEqual([]);
   });
 });
+
+test.describe("bug 2026-06-01 evidence", () => {
+  test.describe.configure({ mode: "serial" });
+  test.skip(process.env.VC_BUG_EVIDENCE !== "1", "Set VC_BUG_EVIDENCE=1 to capture bug-batch evidence screenshots.");
+  test.use({ deviceScaleFactor: 1, viewport: { width: 1841, height: 1016 } });
+
+  test("captures persistence, upload deletion, video preview, and timeline evidence", async ({ page }) => {
+    test.setTimeout(120_000);
+    const consoleErrors: string[] = [];
+    const failedResponses: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        const location = message.location().url;
+        consoleErrors.push(location ? `${message.text()} @ ${location}` : message.text());
+      }
+    });
+    page.on("response", (response) => {
+      if (response.status() >= 400) {
+        failedResponses.push(`${response.status()} ${response.url()}`);
+      }
+    });
+    await instrumentPreviewVideoDrawing(page);
+
+    const evidenceCase: EditorVisualCase = {
+      action: "none",
+      capture: "page",
+      name: "bug 2026-06-01 evidence",
+      reference: "bug-2026-06-01-evidence.png",
+      theme: "dark",
+    };
+
+    let activeProject: object = structuredClone(BUG_2026_06_01_PROJECT);
+
+    await prepareVisualPage(page, "dark");
+    await routeEditorApi(page, evidenceCase, {
+      onConfigSave: (config) => {
+        activeProject = config;
+      },
+      project: () => activeProject,
+    });
+    await page.goto(`/editor/${TEST_PROJECT_ID}?evidence=2026-06-01`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+    await settleChrome(page);
+
+    await captureEvidence(page, "topbar-no-manual-save-autosave-state.png");
+    await mutateEditorConfigForReloadEvidence(page);
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+    await settleChrome(page);
+    await verifyReloadedEditorMutations(page);
+
+    await page.getByRole("button", { name: /^Watermark$/i }).click();
+    await page.getByRole("heading", { name: /^Watermark asset$/i }).waitFor();
+    const watermarkDialog = page.getByRole("dialog");
+    await expect(watermarkDialog.getByRole("button", { name: /uploaded-watermark\.png selected/i })).toBeVisible();
+    await expect(watermarkDialog.getByRole("button", { name: /delete uploaded-watermark\.png/i })).toBeVisible();
+    await captureEvidence(watermarkDialog, "watermark-persisted-image-selected.png");
+    await captureEvidence(watermarkDialog, "watermark-import-inline-enabled.png");
+    await captureEvidence(watermarkDialog, "modal-uploaded-asset-delete-watermark.png");
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: /Change Background/i }).click();
+    await page.getByRole("heading", { name: /Change background/i }).waitFor();
+    const backgroundDialog = page.getByRole("dialog");
+    await expect(backgroundDialog.getByRole("button", { name: /uploaded-video-a\.mp4 selected/i })).toBeVisible();
+    await expect(backgroundDialog.getByRole("img", { name: "uploaded-video-a.mp4" })).toBeVisible();
+    await expect(backgroundDialog.getByRole("button", { name: /delete uploaded-video-a\.mp4/i })).toBeVisible();
+    await captureEvidence(backgroundDialog, "asset-persists-after-refresh-background.png");
+    await captureEvidence(backgroundDialog, "modal-uploaded-asset-delete-background.png");
+    await captureEvidence(backgroundDialog, "background-video-thumbnail-visible.png");
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: /^Watermark$/i }).click();
+    await page.getByRole("heading", { name: /^Watermark asset$/i }).waitFor();
+    await captureEvidence(page.getByRole("dialog"), "asset-persists-after-refresh-watermark.png");
+    await page.keyboard.press("Escape");
+
+    await openAssignModal(page);
+    const assignDialog = page.getByRole("dialog");
+    await expect(assignDialog.getByRole("button", { name: /^uploaded-foreground\.png$/i })).toBeVisible();
+    await expect(assignDialog.getByRole("button", { name: /delete uploaded-foreground\.png/i })).toBeVisible();
+    await page.getByRole("button", { name: /Picture-in-picture/i }).click();
+    await expect(assignDialog.getByRole("button", { name: /^uploaded-pip\.png$/i })).toBeVisible();
+    await expect(assignDialog.getByRole("button", { name: /delete uploaded-pip\.png/i })).toBeVisible();
+    await captureEvidence(assignDialog, "modal-uploaded-asset-delete-foreground-pip.png");
+    await page.keyboard.press("Escape");
+
+    await setPlaybackTime(page, 2.5);
+    await waitForPreviewMetadata(page, { drawOrderIncludes: "bg", hasBackground: "true" });
+    await expectPreviewNonBlack(page);
+    const firstVideoStats = await previewCanvasStats(page);
+    await captureEvidence(page.getByTestId("preview-stack"), "preview-video-background-1080p.png");
+
+    await page.getByRole("radio", { name: "720p" }).click();
+    await setPlaybackTime(page, 3.5);
+    await waitForPreviewMetadata(page, { drawOrderIncludes: "bg", hasBackground: "true" });
+    const secondVideoStats = await previewCanvasStats(page);
+    expect(Math.abs(secondVideoStats.averageLuminance - firstVideoStats.averageLuminance)).toBeGreaterThan(1);
+    await captureEvidence(page.getByTestId("preview-stack"), "preview-video-background-720p.png");
+
+    await page.getByRole("radio", { name: "9:16" }).click();
+    await setPlaybackTime(page, 4.5);
+    await waitForPreviewMetadata(page, { drawOrderIncludes: "bg", hasBackground: "true" });
+    await captureEvidence(page.getByTestId("preview-stack"), "preview-video-background-9x16.png");
+
+    await setPlaybackTime(page, 6.5);
+    await waitForPreviewMetadata(page, { drawOrderIncludes: "bg", hasBackground: "true" });
+    await captureEvidence(page.getByTestId("preview-stack"), "preview-multi-video-background-continuity.png");
+
+    await seekEvidenceTimeline(page, 33.5);
+    const timeline = page.getByTestId("timeline-waveform").locator("xpath=ancestor::section[1]");
+    await captureEvidence(timeline, "timeline-overlap-clip-drag-no-playhead-move.png");
+    await captureEvidence(timeline, "timeline-playhead-head-only-drag.png");
+
+    expect([...consoleErrors, ...failedResponses]).toEqual([]);
+  });
+});
+
+async function mutateEditorConfigForReloadEvidence(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /^Watermark$/i }).click();
+  await page.getByRole("heading", { name: /^Watermark asset$/i }).waitFor();
+  await waitForConfigAutosave(page, async () => {
+    await page.getByLabel("Watermark POSX").fill("30");
+  });
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "auto / 2 assets" }).click();
+  await waitForConfigAutosave(page, async () => {
+    await page.locator("#editor-bg-crossfade").fill("0.2");
+  });
+
+  await page.getByRole("button", { exact: true, name: "upload-foreground-1 over s6-s7" }).click();
+  await waitForConfigAutosave(page, async () => {
+    await page.getByLabel("Foreground motion").selectOption("zoom_in");
+  });
+}
+
+async function verifyReloadedEditorMutations(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /^Watermark$/i }).click();
+  await page.getByRole("heading", { name: /^Watermark asset$/i }).waitFor();
+  await expect(page.getByLabel("Watermark POSX")).toHaveValue("30");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "auto / 2 assets" }).click();
+  await expect(page.locator("#editor-bg-crossfade")).toHaveValue("0.2");
+
+  await page.getByRole("button", { exact: true, name: "upload-foreground-1 over s6-s7" }).click();
+  await expect(page.getByLabel("Foreground motion")).toHaveValue("zoom_in");
+}
+
+async function waitForConfigAutosave(page: Page, action: () => Promise<void>): Promise<void> {
+  const save = page.waitForResponse((response) => (
+    response.url().includes(`/api/server/projects/${TEST_PROJECT_ID}/config`)
+      && response.request().method() === "PUT"
+  ));
+  await action();
+  await save;
+  await settleChrome(page);
+}
 
 async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase): Promise<void> {
   await prepareVisualPage(page, visualCase.theme);
@@ -469,6 +630,10 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase, override
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/config` && method === "PUT") {
+      const payload = request.postDataJSON() as { config?: object };
+      if (payload.config) {
+        overrides.onConfigSave?.(payload.config);
+      }
       await route.fulfill({
         json: {
           config_hash: "h-visual-next",
@@ -996,6 +1161,60 @@ const BUG_EVIDENCE_VIDEO_BACKGROUND_PROJECT = {
   }),
 };
 
+const BUG_2026_06_01_PROJECT = {
+  ...BUG_EVIDENCE_PROJECT,
+  layers: BUG_EVIDENCE_PROJECT.layers.map((layer) => {
+    if (layer.kind === "bg") {
+      return {
+        ...layer,
+        items: layer.items.map((item) => ({
+          ...item,
+          crossfade: 0.5,
+          end: 12,
+          mediaId: undefined,
+          mediaIds: ["upload-video-bg-1", "upload-video-bg-2"],
+          start: 0,
+          transitions: { in: "cut", out: "cut" },
+        })),
+      };
+    }
+    if (layer.id === "L-fg-1") {
+      return {
+        ...layer,
+        items: [
+          ...layer.items,
+          {
+            cache_status: "warm",
+            end: 47.2,
+            id: "fg-uploaded",
+            mediaId: "upload-foreground-1",
+            motion: { easing: "ease_in_out", kind: "none" },
+            sentences: [6, 7] as [number, number],
+            start: 33.5,
+            transitions: { in: "fade", out: "cut" },
+          },
+        ],
+      };
+    }
+    return layer;
+  }),
+  media: [
+    ...BUG_EVIDENCE_PROJECT.media,
+    uploadedEvidenceAsset("upload-watermark-1", "uploaded-watermark.png", "watermark_image", "watermark"),
+    uploadedEvidenceAsset("upload-video-bg-1", "uploaded-video-a.mp4", "video", "background", 5),
+    uploadedEvidenceAsset("upload-video-bg-2", "uploaded-video-b.mp4", "video", "background", 5),
+    uploadedEvidenceAsset("upload-foreground-1", "uploaded-foreground.png", "image", "foreground"),
+    uploadedEvidenceAsset("upload-pip-1", "uploaded-pip.png", "image", "pip"),
+  ],
+  watermark: {
+    mediaId: "upload-watermark-1",
+    opacity: 85,
+    posX: 9,
+    posY: 11,
+    scale: 0.08,
+  },
+};
+
 const BUG_27_PROJECT = {
   ...TEST_PROJECT,
   layers: TEST_PROJECT.layers.map((layer) => (
@@ -1004,6 +1223,31 @@ const BUG_27_PROJECT = {
       : layer
   )),
 };
+
+function uploadedEvidenceAsset(
+  id: string,
+  name: string,
+  kind: "image" | "video" | "watermark_image",
+  role: "background" | "foreground" | "pip" | "watermark",
+  duration: number | null = null,
+) {
+  const image = kind !== "video";
+  return {
+    created_at: null,
+    dimensions: image ? { height: 1080, width: 1920 } : { height: 1080, width: 1920 },
+    duration,
+    hash: `hash-${id}`,
+    id,
+    import_mode: "copy",
+    imported_at: "2026-06-01T00:00:00Z",
+    kind,
+    name,
+    path: `uploads/${name}`,
+    role,
+    size: image ? 800000 : 4800000,
+    thumb_path: `uploads/.thumbs/${name.replace(/\.[^.]+$/, ".jpg")}`,
+  };
+}
 
 async function setReferencePlayback(page: Page): Promise<void> {
   await setPlaybackTime(page, DEFAULT_SCENE_SEEK_SECONDS);
@@ -1040,6 +1284,47 @@ async function captureEvidence(target: Page | Locator, filename: string): Promis
     return;
   }
   await target.screenshot({ path: outputPath });
+}
+
+async function instrumentPreviewVideoDrawing(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLVideoElement.prototype, "videoWidth", {
+      configurable: true,
+      get() {
+        return 1920;
+      },
+    });
+    Object.defineProperty(HTMLVideoElement.prototype, "videoHeight", {
+      configurable: true,
+      get() {
+        return 1080;
+      },
+    });
+    const originalDrawImage = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage = function drawImageWithTestVideo(
+      this: CanvasRenderingContext2D,
+      source: CanvasImageSource,
+      ...args: number[]
+    ) {
+      if (source instanceof HTMLVideoElement) {
+        const destination = args.length >= 8
+          ? args.slice(4, 8)
+          : args.length >= 4
+            ? args.slice(0, 4)
+            : [0, 0, this.canvas.width, this.canvas.height];
+        const [x = 0, y = 0, width = this.canvas.width, height = this.canvas.height] = destination;
+        const src = source.currentSrc || source.src;
+        const hue = src.includes("uploaded-video-b") ? 195 : 35;
+        const lightness = 32 + Math.round((source.currentTime % 5) * 7);
+        this.save();
+        this.fillStyle = `hsl(${hue} 72% ${lightness}%)`;
+        this.fillRect(x, y, width, height);
+        this.restore();
+        return;
+      }
+      return Reflect.apply(originalDrawImage, this, [source, ...args]);
+    };
+  });
 }
 
 async function waitForPreviewMetadata(

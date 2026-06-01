@@ -10,7 +10,6 @@ function renderBar(overrides: Partial<ComponentProps<typeof EditorBar>> = {}) {
     onHome: vi.fn(),
     onRenderDraft: vi.fn(),
     onRenderFinal: vi.fn(),
-    onSave: vi.fn(),
     projectId: "p_demo",
     projectName: "Demo",
     renderDraftDisabled: false,
@@ -29,12 +28,13 @@ function renderBar(overrides: Partial<ComponentProps<typeof EditorBar>> = {}) {
 }
 
 describe("EditorBar", () => {
-  it("shows launcher, project title, save, and render actions", () => {
+  it("shows launcher, project title, autosave status, and render actions", () => {
     renderBar();
 
     expect(screen.getByRole("button", { name: "Open Launcher" })).toBeInTheDocument();
     expect(screen.getByText("Demo")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /save project config/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save project config/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Autosave status")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
   });
@@ -46,9 +46,16 @@ describe("EditorBar", () => {
     expect(screen.queryByRole("button", { name: /change bg/i })).not.toBeInTheDocument();
   });
 
-  it("shows Pending save label when unsaved edits exist", () => {
+  it("keeps pending edits out of the non-clickable autosave label", () => {
     renderBar({ saveStatus: "pending" });
-    expect(screen.getByRole("button", { name: /save project config \(pending\)/i })).toHaveTextContent("Pending");
+    expect(screen.getByLabelText("Autosave status")).toBeEmptyDOMElement();
+    expect(screen.queryByText("Pending")).not.toBeInTheDocument();
+  });
+
+  it("shows only saving or saved text in the non-clickable autosave label", () => {
+    renderBar({ saveStatus: "saving" });
+    expect(screen.getByLabelText("Autosave saving")).toHaveTextContent("Saving");
+    expect(screen.queryByRole("button", { name: /save project config/i })).not.toBeInTheDocument();
   });
 
   it("disables render actions when config has no unrendered changes", () => {

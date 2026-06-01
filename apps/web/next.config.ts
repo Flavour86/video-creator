@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const config: NextConfig = {
+  experimental: {
+    middlewareClientMaxBodySize: "25mb",
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,

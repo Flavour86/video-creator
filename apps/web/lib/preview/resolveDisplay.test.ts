@@ -112,7 +112,9 @@ describe("resolveDisplay", () => {
     ];
 
     expect(resolveDisplay([layer], [], 3.9, { media }).bg?.mediaId).toBe("intro.mp4");
+    expect(resolveDisplay([layer], [], 3.9, { media }).bg?.sourceTime).toBeCloseTo(3.9);
     expect(resolveDisplay([layer], [], 4, { media }).bg?.mediaId).toBe("outro.mp4");
+    expect(resolveDisplay([layer], [], 4.5, { media }).bg?.sourceTime).toBeCloseTo(0.5);
     expect(resolveDisplay([layer], [], 6.9, { media }).bg?.mediaId).toBe("outro.mp4");
     expect(resolveDisplay([layer], [], 7, { media }).bg).toBeUndefined();
   });
@@ -132,7 +134,30 @@ describe("resolveDisplay", () => {
     const media = [{ filename: "intro.mp4", kind: "video", mediaId: "intro.mp4", duration: 4 }];
 
     expect(resolveDisplay([layer], [], 3, { media }).bg?.mediaId).toBe("intro.mp4");
+    expect(resolveDisplay([layer], [], 3, { media }).bg?.sourceTime).toBe(3);
     expect(resolveDisplay([layer], [], 5, { media }).bg).toBeUndefined();
+  });
+
+  it("uses video metadata for stable background media ids without video extensions", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: "upload-video-bg-1",
+        mediaIds: undefined,
+        start: 2,
+        end: 12,
+      }],
+    };
+    const media = [{ filename: "uploaded-video.mp4", kind: "video", mediaId: "upload-video-bg-1", duration: 4 }];
+
+    expect(resolveDisplay([layer], [], 5, { media }).bg).toEqual({
+      mediaId: "upload-video-bg-1",
+      opacity: 1,
+      sourceTime: 3,
+    });
+    expect(resolveDisplay([layer], [], 7, { media }).bg).toBeUndefined();
   });
 
   it("returns both background images during the crossfade overlap", () => {

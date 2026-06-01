@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ImgHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -16,8 +16,8 @@ const SENTENCES = [
 ];
 
 const MEDIA = [
-  { filename: "img.jpg", kind: "image" as const, thumb_url: "/thumbs/img.jpg" },
-  { filename: "clip.mp4", kind: "video" as const, thumb_url: "" },
+  { filename: "img.jpg", kind: "image" as const, mediaId: "img.jpg", thumb_url: "/thumbs/img.jpg", deletable: true },
+  { filename: "clip.mp4", kind: "video" as const, mediaId: "clip.mp4", thumb_url: "" },
 ];
 
 const BASE_PROPS = {
@@ -31,7 +31,46 @@ const BASE_PROPS = {
   layers: [],
   onConfirm: vi.fn(),
   onClose: vi.fn(),
+  onDeleteMedia: vi.fn(),
+  onReorderMedia: vi.fn(),
 };
+
+function cardForButton(name: RegExp): HTMLElement {
+  return screen.getByRole("button", { name }).closest("[data-reorder-card='true']") as HTMLElement;
+}
+
+function mockElementsFromPoint(element: Element) {
+  const original = document.elementsFromPoint;
+  Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: () => [element] });
+  return () => {
+    Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: original });
+  };
+}
+
+function pointerEventWithPoint(type: "pointerDown" | "pointerMove" | "pointerUp", target: HTMLElement, clientX: number, clientY: number) {
+  const event =
+    type === "pointerDown"
+      ? createEvent.pointerDown(target)
+      : type === "pointerMove"
+        ? createEvent.pointerMove(target)
+        : createEvent.pointerUp(target);
+  Object.defineProperty(event, "button", { value: 0 });
+  Object.defineProperty(event, "clientX", { value: clientX });
+  Object.defineProperty(event, "clientY", { value: clientY });
+  Object.defineProperty(event, "pointerId", { value: 1 });
+  return event;
+}
+
+function pointerDragTo(source: HTMLElement, target: HTMLElement) {
+  const restore = mockElementsFromPoint(target);
+  try {
+    fireEvent(source, pointerEventWithPoint("pointerDown", source, 5, 9));
+    fireEvent(source, pointerEventWithPoint("pointerMove", source, 31, 42));
+    fireEvent(source, pointerEventWithPoint("pointerUp", source, 31, 42));
+  } finally {
+    restore();
+  }
+}
 
 describe("AssignModal", () => {
   it("does not render when open is false", () => {
@@ -50,6 +89,50 @@ describe("AssignModal", () => {
       expect(screen.getByAltText("img.jpg")).toBeInTheDocument();
       expect(screen.getAllByText("MP4").length).toBeGreaterThan(0);
     });
+  });
+
+  it("renders a delete button on uploaded assign cards", async () => {
+    const onDeleteMedia = vi.fn();
+    render(<AssignModal {...BASE_PROPS} onDeleteMedia={onDeleteMedia} />);
+    await waitFor(() => screen.getByRole("dialog"));
+
+    fireEvent.click(screen.getByRole("button", { name: /delete img\.jpg/i }));
+
+    expect(onDeleteMedia).toHaveBeenCalledWith("img.jpg");
+    expect(screen.queryByRole("button", { name: /delete clip\.mp4/i })).not.toBeInTheDocument();
+  });
+
+  it("supports drag sorting the asset picker order", async () => {
+    const onReorderMedia = vi.fn();
+    render(<AssignModal {...BASE_PROPS} onReorderMedia={onReorderMedia} />);
+    await waitFor(() => screen.getByRole("dialog"));
+
+    pointerDragTo(cardForButton(/^clip\.mp4$/i), cardForButton(/^img\.jpg$/i));
+
+    await waitFor(() => expect(onReorderMedia).toHaveBeenCalledWith(["clip.mp4", "img.jpg"]));
+  });
+
+  it("marks asset cards as motion-ready for animated reorder feedback", async () => {
+    render(<AssignModal {...BASE_PROPS} />);
+    await waitFor(() => screen.getByRole("dialog"));
+
+    const card = screen.getByRole("button", { name: /^img\.jpg$/i }).closest("[data-reorder-card='true']");
+
+    expect(card).not.toBeNull();
+    expect(card).toHaveClass("will-change-transform");
+  });
+
+  it("animates the active asset card while it is being dragged", async () => {
+    render(<AssignModal {...BASE_PROPS} />);
+    await waitFor(() => screen.getByRole("dialog"));
+
+    const card = cardForButton(/^img\.jpg$/i);
+
+    fireEvent(card, pointerEventWithPoint("pointerDown", card, 5, 9));
+    fireEvent(card, pointerEventWithPoint("pointerMove", card, 31, 42));
+
+    expect(card).toHaveAttribute("data-drag-active", "true");
+    expect(card).toHaveStyle({ transform: "translate3d(26px, 0px, 0) scale(1.03)" });
   });
 
   it("shows sentence range preview with time info", async () => {
@@ -79,8 +162,8 @@ describe("AssignModal", () => {
     await waitFor(() => screen.getByRole("dialog"));
 
     expect(screen.getByText("No asset chosen")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /img\.jpg/i })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: /clip\.mp4/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /^img\.jpg$/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /^clip\.mp4$/i })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("marks the currently edited asset as selected in the asset grid", async () => {
@@ -112,9 +195,9 @@ describe("AssignModal", () => {
     );
     await waitFor(() => screen.getByRole("dialog"));
 
-    expect(screen.getByRole("button", { name: /img\.jpg selected/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /^img\.jpg selected$/i })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Selected")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /clip\.mp4/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /^clip\.mp4$/i })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("calls onConfirm with a new FG layer when asset selected and Confirm clicked", async () => {

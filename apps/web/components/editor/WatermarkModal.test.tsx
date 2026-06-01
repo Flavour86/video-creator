@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { WatermarkModal } from "./WatermarkModal";
@@ -19,6 +19,7 @@ const MEDIA = [
     import_mode: "copy" as const,
     imported_at: "2026-05-26T00:00:00Z",
     created_at: null,
+    deletable: true,
   },
   {
     mediaId: "station-intro.mp4",
@@ -68,26 +69,68 @@ const MEDIA = [
     import_mode: "copy" as const,
     imported_at: "2026-05-26T00:00:03Z",
     created_at: null,
+    deletable: true,
   },
 ];
 
 function renderModal(overrides: Partial<ComponentProps<typeof WatermarkModal>> = {}) {
   const onChange = vi.fn();
   const onClose = vi.fn();
+  const onDeleteMedia = vi.fn();
   const onImport = vi.fn();
+  const onReorderMedia = vi.fn();
   render(
     <WatermarkModal
       media={MEDIA}
       onChange={onChange}
       onClose={onClose}
+      onDeleteMedia={onDeleteMedia}
       onImport={onImport}
+      onReorderMedia={onReorderMedia}
       open
       projectPath="E:/projects/test01"
       value={null}
       {...overrides}
     />,
   );
-  return { onChange, onClose, onImport };
+  return { onChange, onClose, onDeleteMedia, onImport, onReorderMedia };
+}
+
+function cardForButton(name: RegExp): HTMLElement {
+  return screen.getByRole("button", { name }).closest("[data-reorder-card='true']") as HTMLElement;
+}
+
+function mockElementsFromPoint(element: Element) {
+  const original = document.elementsFromPoint;
+  Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: () => [element] });
+  return () => {
+    Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: original });
+  };
+}
+
+function pointerEventWithPoint(type: "pointerDown" | "pointerMove" | "pointerUp", target: HTMLElement, clientX: number, clientY: number) {
+  const event =
+    type === "pointerDown"
+      ? createEvent.pointerDown(target)
+      : type === "pointerMove"
+        ? createEvent.pointerMove(target)
+        : createEvent.pointerUp(target);
+  Object.defineProperty(event, "button", { value: 0 });
+  Object.defineProperty(event, "clientX", { value: clientX });
+  Object.defineProperty(event, "clientY", { value: clientY });
+  Object.defineProperty(event, "pointerId", { value: 1 });
+  return event;
+}
+
+function pointerDragTo(source: HTMLElement, target: HTMLElement) {
+  const restore = mockElementsFromPoint(target);
+  try {
+    fireEvent(source, pointerEventWithPoint("pointerDown", source, 12, 18));
+    fireEvent(source, pointerEventWithPoint("pointerMove", source, 36, 52));
+    fireEvent(source, pointerEventWithPoint("pointerUp", source, 36, 52));
+  } finally {
+    restore();
+  }
 }
 
 describe("WatermarkModal", () => {
@@ -95,13 +138,15 @@ describe("WatermarkModal", () => {
     renderModal({
       value: { mediaId: "callout-map.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
     });
-    expect(screen.getByRole("button", { name: /callout-map\.png selected/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Selected")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /station-intro\.mp4/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /watermark-role-scene\.png/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /existing-scene\.png/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Import from disk/i })).toHaveClass("rounded");
-    expect(document.querySelector("input[type='file']")).not.toHaveAttribute("multiple");
+    expect(screen.getByRole("button", { name: /^callout-map\.png selected$/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText(/^Selected$/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /station-intro\.mp4/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^watermark-role-scene\.png$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^existing-scene\.png$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/video watermark/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("watermark-import-row")).toContainElement(screen.getByRole("switch", { name: /watermark enabled/i }));
+    expect(screen.getByTestId("watermark-import-row")).toContainElement(screen.getByRole("button", { name: /Import from disk/i }));
+    expect(document.querySelector("input[type='file']")).toHaveAttribute("accept", "image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp");
   });
 
   it("supports media import from upload action", () => {
@@ -113,10 +158,52 @@ describe("WatermarkModal", () => {
     expect(onImport).toHaveBeenCalled();
   });
 
+  it("renders a delete button on uploaded watermark cards", () => {
+    const { onDeleteMedia } = renderModal({
+      value: { mediaId: "callout-map.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /delete callout-map\.png/i }));
+
+    expect(onDeleteMedia).toHaveBeenCalledWith("callout-map.png");
+    expect(screen.queryByRole("button", { name: /delete existing-scene\.png/i })).not.toBeInTheDocument();
+  });
+
+  it("supports drag sorting the watermark asset picker order", async () => {
+    const { onReorderMedia } = renderModal({
+      value: { mediaId: "callout-map.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
+    });
+
+    pointerDragTo(cardForButton(/^watermark-role-scene\.png$/i), cardForButton(/^callout-map\.png selected$/i));
+
+    await waitFor(() => expect(onReorderMedia).toHaveBeenCalledWith(["watermark-role-scene.png", "callout-map.png"]));
+  });
+
+  it("marks asset cards as motion-ready for animated reorder feedback", () => {
+    renderModal();
+
+    const card = screen.getByRole("button", { name: /^callout-map\.png$/i }).closest("[data-reorder-card='true']");
+
+    expect(card).not.toBeNull();
+    expect(card).toHaveClass("will-change-transform");
+  });
+
+  it("animates the active asset card while it is being dragged", () => {
+    renderModal();
+
+    const card = cardForButton(/^callout-map\.png$/i);
+
+    fireEvent(card, pointerEventWithPoint("pointerDown", card, 12, 18));
+    fireEvent(card, pointerEventWithPoint("pointerMove", card, 36, 52));
+
+    expect(card).toHaveAttribute("data-drag-active", "true");
+    expect(card).toHaveStyle({ transform: "translate3d(24px, 0px, 0) scale(1.03)" });
+  });
+
   it("can create a watermark by selecting an existing asset when none is configured", () => {
     const { onChange } = renderModal({ value: null });
 
-    fireEvent.click(screen.getByRole("button", { name: /watermark-role-scene\.png/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^watermark-role-scene\.png$/i }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, mediaId: "watermark-role-scene.png" }));
   });
@@ -126,7 +213,7 @@ describe("WatermarkModal", () => {
       value: { mediaId: "callout-map.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /watermark-role-scene\.png/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^watermark-role-scene\.png$/i }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ mediaId: "watermark-role-scene.png", opacity: 85, posX: 9, posY: 11, scale: 0.08 }));
   });

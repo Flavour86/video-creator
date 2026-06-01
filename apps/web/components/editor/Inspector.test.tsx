@@ -168,6 +168,30 @@ describe("Inspector", () => {
     expect(screen.queryByText("Hidden")).not.toBeInTheDocument();
   });
 
+  it("uses uploaded video thumbnails in the background asset list", () => {
+    const { container } = renderInspector({
+      layers: [{
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-video",
+          mediaId: "clip.mp4",
+          sentences: [1, 3],
+          start: 0,
+          end: 9,
+          motion: { kind: "none", easing: "ease_in_out" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      }],
+      selected: { layerId: "bg-main", itemId: "bg-video" },
+    });
+
+    expect(screen.queryByText("missing asset")).not.toBeInTheDocument();
+    expect(container.querySelector('img[src="/api/server/uploads/thumb?filename=clip.jpg"]')).not.toBeNull();
+  });
+
   it("keeps all global config actions neutral until hover", () => {
     renderInspector();
 

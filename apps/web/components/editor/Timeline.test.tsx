@@ -184,6 +184,61 @@ describe("Timeline", () => {
     expect(startPatch.end).toBeCloseTo(7, 4);
   });
 
+  it("does not seek the playhead while dragging or resizing clips", () => {
+    const { onSeek, onUpdateClipTiming } = renderTimeline({
+      duration: 10,
+      layers: DRAG_LAYER,
+      selected: { layerId: "fg-z1", itemId: "fg-drag" },
+    });
+
+    const clip = screen.getByRole("button", { name: "fg-drag.png over s1" });
+    fireEvent.mouseDown(clip, { clientX: 80 });
+    fireEvent.mouseMove(window, { clientX: 120 });
+    fireEvent.mouseUp(window, { clientX: 120 });
+
+    expect(onUpdateClipTiming).toHaveBeenCalledOnce();
+    expect(onSeek).not.toHaveBeenCalled();
+
+    fireEvent.mouseDown(screen.getByRole("button", { name: /Resize end fg-drag.png over s1/i }), { clientX: 80 });
+    fireEvent.mouseMove(window, { clientX: 120 });
+    fireEvent.mouseUp(window, { clientX: 120 });
+
+    expect(onUpdateClipTiming).toHaveBeenCalledTimes(2);
+    expect(onSeek).not.toHaveBeenCalled();
+  });
+
+  it("previews clip resize with animated width before committing timing", () => {
+    const { onUpdateClipTiming } = renderTimeline({
+      duration: 10,
+      layers: DRAG_LAYER,
+      selected: { layerId: "fg-z1", itemId: "fg-drag" },
+    });
+    const clip = screen.getByRole("button", { name: "fg-drag.png over s1" });
+    const clipFrame = clip.closest("[data-timeline-clip='true']") as HTMLElement;
+    const track = clip.closest("[data-timeline-track='1']") as HTMLElement;
+    vi.spyOn(track, "getBoundingClientRect").mockReturnValue({
+      bottom: 44,
+      height: 44,
+      left: 0,
+      right: 100,
+      toJSON: () => ({}),
+      top: 0,
+      width: 100,
+      x: 0,
+      y: 0,
+    });
+
+    expect(clipFrame).toHaveStyle({ left: "20%", width: "50%" });
+
+    fireEvent.mouseDown(screen.getByRole("button", { name: /Resize end fg-drag\.png over s1/i }), { clientX: 70 });
+    fireEvent.mouseMove(window, { clientX: 90 });
+
+    expect(onUpdateClipTiming).not.toHaveBeenCalled();
+    expect(clipFrame).toHaveAttribute("data-drag-preview", "true");
+    expect(clipFrame).toHaveClass("transition-[left,width,filter,box-shadow]");
+    expect(clipFrame).toHaveStyle({ left: "20%", width: "70%" });
+  });
+
   it("renders aligned subtitle cues but does not allow drag/resize edits", () => {
     const { onUpdateClipTiming } = renderTimeline({
       layers: [LAYERS[0] as Layer],

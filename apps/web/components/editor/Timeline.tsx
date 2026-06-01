@@ -46,11 +46,14 @@ type TimelineRow = {
 };
 
 type DragState = {
+  clipElement: HTMLElement | null;
   mode: DragMode;
   clip: TimelineClip;
   lastClientX: number;
+  originLeftStyle: string;
   originEnd: number;
   originStart: number;
+  originWidthStyle: string;
   startClientX: number;
   trackWidth: number;
 };
@@ -80,6 +83,7 @@ export function Timeline({
 }: TimelineProps) {
   const t = useTranslations("pages.editor");
   const dragStateRef = useRef<DragState | null>(null);
+  const dragPreviewTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const playheadDraggingRef = useRef(false);
   const waveformRef = useRef<HTMLButtonElement | null>(null);
   const rows = useTimelineRows(layers, duration, sentences);
@@ -97,9 +101,9 @@ export function Timeline({
       const drag = dragStateRef.current;
       if (!drag) return;
       if (Math.abs(event.clientX - drag.startClientX) < DRAG_ACTIVATION_PX) return;
-      const patch = computeDragPatch(drag, event.clientX, duration);
       drag.lastClientX = event.clientX;
-      onSeek(patch.start);
+      const patch = computeDragPatch(drag, event.clientX, duration);
+      updateClipPreview(drag, patch, duration);
     }
 
     function onMouseUp(event: MouseEvent) {
@@ -119,19 +123,30 @@ export function Timeline({
         return;
       }
       const patch = computeDragPatch(drag, clientX, duration);
+      updateClipPreview(drag, patch, duration);
+      if (dragPreviewTimeoutRef.current) {
+        window.clearTimeout(dragPreviewTimeoutRef.current);
+      }
+      const settledDrag = drag;
+      dragPreviewTimeoutRef.current = window.setTimeout(() => {
+        settleClipPreview(settledDrag);
+        dragPreviewTimeoutRef.current = null;
+      }, 180);
       onUpdateClipTiming({
         layerId: drag.clip.layerId,
         itemId: drag.clip.id,
         start: patch.start,
         end: patch.end,
       });
-      onSeek(patch.start);
       dragStateRef.current = null;
     }
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     return () => {
+      if (dragPreviewTimeoutRef.current) {
+        window.clearTimeout(dragPreviewTimeoutRef.current);
+      }
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
@@ -193,6 +208,10 @@ export function Timeline({
             onDeleteItem={onDeleteItem}
             onSelect={onSelect}
             onStartDrag={(input) => {
+              if (dragPreviewTimeoutRef.current) {
+                window.clearTimeout(dragPreviewTimeoutRef.current);
+                dragPreviewTimeoutRef.current = null;
+              }
               dragStateRef.current = input;
             }}
             row={row}
@@ -328,18 +347,17 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
       >
         {row.clips.map((clip) => {
           const safeDuration = Math.max(duration, 1);
-          const leftPercent = (clip.start / safeDuration) * 100;
-          const rawWidthPercent = ((clip.end - clip.start) / safeDuration) * 100;
-          const widthPercent = Math.min(Math.max(rawWidthPercent, 0.12), Math.max(0, 100 - leftPercent));
-          const left = `${leftPercent}%`;
-          const width = `${widthPercent}%`;
+          const { left, width } = clipLayoutStyle(clip.start, clip.end, safeDuration);
           const isSelected = selected?.layerId === clip.layerId && selected.itemId === clip.id;
           const label = clipLabel(clip);
           const canDelete = clip.kind !== "bg" && clip.kind !== "sub";
           const canEditTiming = clip.kind === "fg" || clip.kind === "pip";
           return (
             <div
-              className={`absolute top-1/2 h-[calc(100%-8px)] -translate-y-1/2 rounded-sm border font-mono text-[10.5px] ${clipClass(clip.kind, clip.orphaned === true)} ${isSelected ? "z-[5] outline outline-2 outline-(--amber) outline-offset-1 shadow-[0_0_0_4px_var(--amber-bg)]" : ""}`}
+              className={`absolute top-1/2 h-[calc(100%-8px)] -translate-y-1/2 rounded-sm border font-mono text-[10.5px] transition-[left,width,filter,box-shadow] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[left,width,filter] ${clipClass(clip.kind, clip.orphaned === true)} ${isSelected ? "z-[5] outline outline-2 outline-(--amber) outline-offset-1 shadow-[0_0_0_4px_var(--amber-bg)]" : ""}`}
+              data-clip-end={clip.end}
+              data-clip-start={clip.start}
+              data-timeline-clip="true"
               key={clip.id}
               style={{ left, width }}
             >
@@ -414,16 +432,54 @@ function makeDragState(
   mode: DragMode,
 ): DragState {
   const track = event.currentTarget.closest("[data-timeline-track='1']");
+  const clipElement = event.currentTarget.closest("[data-timeline-clip='true']") as HTMLElement | null;
   const rect = track?.getBoundingClientRect();
   const width = rect && rect.width > 0 ? rect.width : 100;
   return {
+    clipElement,
     mode,
     clip,
     lastClientX: event.clientX,
+    originLeftStyle: clipElement?.style.left ?? "",
     originEnd: clip.end,
     originStart: clip.start,
+    originWidthStyle: clipElement?.style.width ?? "",
     startClientX: event.clientX,
     trackWidth: width,
+  };
+}
+
+function updateClipPreview(state: DragState, patch: { end: number; start: number }, duration: number): void {
+  if (!state.clipElement) return;
+  const { left, width } = clipLayoutStyle(patch.start, patch.end, Math.max(duration, 1));
+  state.clipElement.style.left = left;
+  state.clipElement.style.width = width;
+  state.clipElement.dataset.dragPreview = "true";
+  state.clipElement.classList.add("z-[6]", "brightness-110", "shadow-[0_0_0_2px_var(--amber),0_10px_24px_rgb(0_0_0_/_0.35)]");
+}
+
+function settleClipPreview(state: DragState): void {
+  const element = state.clipElement;
+  if (!element) return;
+  const renderedStart = Number(element.dataset.clipStart);
+  const renderedEnd = Number(element.dataset.clipEnd);
+  const stillAtOrigin = Math.abs(renderedStart - state.originStart) < 0.001 && Math.abs(renderedEnd - state.originEnd) < 0.001;
+  if (stillAtOrigin) {
+    element.style.left = state.originLeftStyle;
+    element.style.width = state.originWidthStyle;
+  }
+  element.removeAttribute("data-drag-preview");
+  element.classList.remove("z-[6]", "brightness-110", "shadow-[0_0_0_2px_var(--amber),0_10px_24px_rgb(0_0_0_/_0.35)]");
+}
+
+function clipLayoutStyle(start: number, end: number, duration: number): { left: string; width: string } {
+  const safeDuration = Math.max(duration, 1);
+  const leftPercent = (start / safeDuration) * 100;
+  const rawWidthPercent = ((end - start) / safeDuration) * 100;
+  const widthPercent = Math.min(Math.max(rawWidthPercent, 0.12), Math.max(0, 100 - leftPercent));
+  return {
+    left: `${leftPercent}%`,
+    width: `${widthPercent}%`,
   };
 }
 

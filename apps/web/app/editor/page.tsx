@@ -35,6 +35,7 @@ import {
 } from "@/lib/editor-operation-log/operation-log";
 import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
 import { deleteVisualItem, hasSentenceOverlap, normalizeBackgroundPlaylists, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
+import { reorderItemsByIds } from "@/lib/media-order";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { renderRoute } from "@/lib/render/routes";
 import { isTextEditingTarget } from "@/lib/shortcuts/isTextEditingTarget";
@@ -45,6 +46,15 @@ type ClipCacheState = "warm" | "cold" | "partial" | "invalid";
 type ClipCacheSummary = { cachedCount: number; state: ClipCacheState; totalCount: number };
 type LocalCacheInvalidation = "none" | "clip" | "output";
 type CacheSummaryError = string | null;
+type ConfigAssetIssue = {
+  id: string;
+  message: string;
+};
+type ConfigAssetReference = {
+  mediaId: string;
+  role: MediaRole;
+  source: string;
+};
 type RenderCacheResponse = {
   cached_count: number;
   project_id: string;
@@ -114,6 +124,13 @@ function EditorContent() {
   const skipAutosaveRef = useRef(false);
   const renderSocketRef = useRef<WebSocket | null>(null);
   const appliedAlignmentSignatureRef = useRef("");
+  const canonicalProjectRef = useRef<Project | null>(null);
+  const projectRef = useRef<Project | null>(null);
+  const layersRef = useRef<Layer[]>([]);
+  const latestConfigHashRef = useRef<string | null>(null);
+  const autosaveBaselineRef = useRef<string | null>(null);
+  const inFlightSaveRef = useRef<Promise<string | null> | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const alignmentSentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
   const normalizedAlignmentSentences = useMemo(
@@ -146,6 +163,10 @@ function EditorContent() {
   const scopedMedia = useMemo(
     () => scopeEditorMedia(media, layers, project?.watermark ?? null),
     [layers, media, project?.watermark],
+  );
+  const configAssetIssues = useMemo(
+    () => project ? collectConfigAssetIssues(project.media ?? [], layers, project.watermark) : [],
+    [layers, project],
   );
   const visualMedia = scopedMedia.visual;
 
@@ -193,6 +214,7 @@ function EditorContent() {
         subtitles: working.subtitles,
         watermark: working.watermark,
       };
+      const needsConfigAutosave = projectConfigSignature(workingConfig) !== projectConfigSignature(config);
       let loadedCacheSummary = deriveClipCacheSummaryFromLayers(workingLayers);
       try {
         const cacheResponse = await request<RenderCacheResponse>(`/projects/${encodeURIComponent(id)}/render-cache` as `/${string}`);
@@ -209,9 +231,14 @@ function EditorContent() {
       }
       const selected = selectRecoverySelection(recoveryState?.selected ?? null, workingLayers);
       loadedProjectRef.current = true;
-      skipAutosaveRef.current = true;
+      skipAutosaveRef.current = !needsConfigAutosave;
       pendingScrollTopRef.current = recoveryState?.transcriptScrollTop ?? 0;
       pendingSelectedRangeRef.current = recoveryState?.selectedRange ?? null;
+      autosaveBaselineRef.current = projectConfigSignature(config);
+      latestConfigHashRef.current = response.config_hash;
+      canonicalProjectRef.current = config;
+      projectRef.current = workingConfig;
+      layersRef.current = workingLayers;
       setCanonicalProject(config);
       setProject(workingConfig);
       setProjectName(workingConfig.name ?? id);
@@ -231,6 +258,9 @@ function EditorContent() {
       setResolution(normalizeResolutionPreset(recoveryState?.resolution, working.output?.resolution));
     } catch {
       loadedProjectRef.current = false;
+      canonicalProjectRef.current = null;
+      projectRef.current = null;
+      layersRef.current = [];
       setCanonicalProject(null);
       setProject(null);
       setProjectName(id);
@@ -244,6 +274,8 @@ function EditorContent() {
       setSelectedSentenceRange(null);
       setResolution("1080p");
       setLatestConfigHash(null);
+      latestConfigHashRef.current = null;
+      autosaveBaselineRef.current = null;
       setLastRenderedConfigHash(null);
       setHasUnrenderedChanges(true);
       setSaveStatus("failed");
@@ -341,47 +373,110 @@ function EditorContent() {
     seekTo(sentences[nextIndex]?.start_s ?? 0);
   }, [currentTime, seekTo, sentences]);
 
+  useEffect(() => {
+    canonicalProjectRef.current = canonicalProject;
+  }, [canonicalProject]);
+
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+
+  useEffect(() => {
+    latestConfigHashRef.current = latestConfigHash;
+  }, [latestConfigHash]);
+
+  const buildCurrentSaveProject = useCallback((): Project | null => {
+    const canonical = canonicalProjectRef.current;
+    const currentProject = projectRef.current;
+    if (!canonical || !currentProject) return null;
+    const replayedProject = buildWorkingConfig(canonical, projectId);
+    return {
+      ...replayedProject,
+      layers: layersRef.current as Project["layers"],
+      media: currentProject.media,
+      transcript: currentProject.transcript,
+      output: currentProject.output,
+      subtitles: currentProject.subtitles,
+      watermark: currentProject.watermark,
+    };
+  }, [projectId]);
+
   const saveNow = useCallback(async (): Promise<string | null> => {
-    setSaving(true);
-    setSaveStatus("saving");
-    try {
-      if (!canonicalProject || !project) {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    for (;;) {
+      const nextProject = buildCurrentSaveProject();
+      if (!nextProject) {
         setSaveStatus("failed");
         return null;
       }
-      const replayedProject = buildWorkingConfig(canonicalProject, projectId);
-      const nextProject: Project = {
-        ...replayedProject,
-        layers: layers as Project["layers"],
-        media: project.media,
-        transcript: project.transcript,
-        output: project.output,
-        subtitles: project.subtitles,
-        watermark: project.watermark,
-      };
       if (!isValidProjectSaveConfig(nextProject)) {
         setSaveStatus("failed");
         return null;
       }
-      const response = await request<ProjectConfigSaveResponse>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, {
-        method: "PUT",
-        body: { config: nextProject },
-      });
-      setCanonicalProject(nextProject);
-      setProject(nextProject);
-      setLayers((nextProject.layers ?? []) as Layer[]);
-      setLatestConfigHash(response.config_hash);
-      setHasUnrenderedChanges(response.has_unrendered_changes);
-      setSaveStatus("saved");
-      clearOperationLog(projectId);
-      return response.config_hash;
-    } catch {
-      setSaveStatus("failed");
-      return null;
-    } finally {
-      setSaving(false);
+      const signature = projectConfigSignature(nextProject);
+      if (autosaveBaselineRef.current === signature) {
+        return latestConfigHashRef.current;
+      }
+
+      const inFlight = inFlightSaveRef.current;
+      if (inFlight) {
+        const inFlightHash = await inFlight;
+        if (!inFlightHash) return null;
+        continue;
+      }
+
+      setSaving(true);
+      setSaveStatus("saving");
+      const savePromise = (async () => {
+        try {
+          const response = await request<ProjectConfigSaveResponse>(`/projects/${encodeURIComponent(projectId)}/config` as `/${string}`, {
+            method: "PUT",
+            body: { config: nextProject },
+          });
+          autosaveBaselineRef.current = signature;
+          latestConfigHashRef.current = response.config_hash;
+          canonicalProjectRef.current = nextProject;
+          setCanonicalProject(nextProject);
+          setLatestConfigHash(response.config_hash);
+          setHasUnrenderedChanges(response.has_unrendered_changes);
+          const currentProject = buildCurrentSaveProject();
+          const savedStillCurrent = currentProject !== null && projectConfigSignature(currentProject) === signature;
+          if (savedStillCurrent) {
+            projectRef.current = nextProject;
+            layersRef.current = (nextProject.layers ?? []) as Layer[];
+            setProject(nextProject);
+            setLayers((nextProject.layers ?? []) as Layer[]);
+            clearOperationLog(projectId);
+            setSaveStatus("saved");
+          }
+          return response.config_hash;
+        } catch {
+          setSaveStatus("failed");
+          return null;
+        }
+      })();
+
+      inFlightSaveRef.current = savePromise;
+      const savedHash = await savePromise;
+      if (inFlightSaveRef.current === savePromise) {
+        inFlightSaveRef.current = null;
+        setSaving(false);
+      }
+      if (!savedHash) return null;
+
+      const currentProject = buildCurrentSaveProject();
+      if (!currentProject || projectConfigSignature(currentProject) === signature) {
+        return savedHash;
+      }
     }
-  }, [canonicalProject, layers, project, projectId]);
+  }, [buildCurrentSaveProject, projectId]);
 
   useEffect(() => {
     if (!projectId || !project || !loadedProjectRef.current) {
@@ -401,16 +496,33 @@ function EditorContent() {
   }, [layers, project, projectId, resolution, selected, selectedSentenceRange]);
 
   useEffect(() => {
-    if (!projectId || !loadedProjectRef.current) {
+    if (!projectId || !project || !loadedProjectRef.current) {
       return;
     }
     if (skipAutosaveRef.current) {
       skipAutosaveRef.current = false;
       return;
     }
+    const nextProject = buildCurrentSaveProject();
+    if (!nextProject || autosaveBaselineRef.current === projectConfigSignature(nextProject)) {
+      return;
+    }
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
-  }, [layers, projectId]);
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      void saveNow();
+    }, 75);
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [buildCurrentSaveProject, layers, project, projectId, saveNow]);
 
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -554,10 +666,14 @@ function EditorContent() {
   }, []);
 
   const applyLayerMutation = useCallback((updatedLayers: Layer[], options?: { closeModal?: boolean; nextSelection?: EditorSelection }) => {
-    if (!project) return;
+    const currentProject = projectRef.current ?? project;
+    if (!currentProject) return;
     const previousLayers = layers;
+    const nextProject = { ...currentProject, layers: updatedLayers as Project["layers"] };
+    layersRef.current = updatedLayers;
+    projectRef.current = nextProject;
     setLayers(updatedLayers);
-    setProject({ ...project, layers: updatedLayers as Project["layers"] });
+    setProject(nextProject);
     if (options?.nextSelection !== undefined) {
       setSelected(options.nextSelection);
     }
@@ -663,8 +779,7 @@ function EditorContent() {
       sentences: nextRange,
     });
     applyLayerMutation(updatedLayers);
-    seekTo(boundedStart);
-  }, [applyLayerMutation, layers, seekTo, sentences, timelineDuration]);
+  }, [applyLayerMutation, layers, sentences, timelineDuration]);
 
   const deleteInspectorItem = useCallback((layerId: string, itemId: string) => {
     const updatedLayers = deleteVisualItem(layers, layerId, itemId);
@@ -701,10 +816,13 @@ function EditorContent() {
   }, [project, projectId]);
 
   const applyWatermarkSettings = useCallback((nextWatermark: Project["watermark"]) => {
-    if (!project) return;
-    const previousWatermark = project.watermark;
-    const nextConfigMedia = promoteWatermarkSelection(project.media ?? [], nextWatermark);
-    setProject({ ...project, media: nextConfigMedia, watermark: nextWatermark });
+    const currentProject = projectRef.current ?? project;
+    if (!currentProject) return;
+    const previousWatermark = currentProject.watermark;
+    const nextConfigMedia = promoteWatermarkSelection(currentProject.media ?? [], nextWatermark);
+    const nextProject = { ...currentProject, media: nextConfigMedia, watermark: nextWatermark };
+    projectRef.current = nextProject;
+    setProject(nextProject);
     setMedia((previous) => promoteWatermarkSelectionInEditorMedia(previous, nextWatermark));
     if (projectId) {
       appendOperation(projectId, {
@@ -787,7 +905,9 @@ function EditorContent() {
 
   const uploadEditorMedia = useCallback(async (files: FileList | null, options?: { role?: MediaRole; watermarkOnly?: boolean }): Promise<MediaAsset[]> => {
     if (!files || files.length === 0) return [];
-    const incoming = options?.watermarkOnly ? Array.from(files).slice(0, 1) : Array.from(files);
+    const incoming = options?.watermarkOnly
+      ? Array.from(files).filter(isWatermarkImageFile).slice(0, 1)
+      : Array.from(files);
     const uploaded: MediaAsset[] = [];
     const pendingIds = new Map<string, string>();
     setMedia((previous) => {
@@ -829,23 +949,28 @@ function EditorContent() {
   }, []);
 
   const importMedia = useCallback(async (files: FileList | null, options?: { role?: MediaRole; watermarkOnly?: boolean }) => {
-    if (!project) return [];
+    const startingProject = projectRef.current ?? project;
+    if (!startingProject) return [];
     const normalizedUploaded = await uploadEditorMedia(files, options);
     if (normalizedUploaded.length === 0) return [];
+    const currentProject = projectRef.current ?? startingProject;
+    const currentLayers = layersRef.current.length > 0 ? layersRef.current : layers;
     const replacementWatermark = options?.watermarkOnly ? normalizedUploaded[0] : undefined;
     const nextConfigMedia = replacementWatermark
-      ? replaceWatermarkAssets(project.media ?? [], replacementWatermark)
-      : mergeConfigMedia(project.media ?? [], normalizedUploaded);
+      ? replaceWatermarkAssets(currentProject.media ?? [], replacementWatermark)
+      : mergeConfigMedia(currentProject.media ?? [], normalizedUploaded);
     const nextWatermark = replacementWatermark
-      ? watermarkForReplacement(project.watermark, replacementWatermark.id)
-      : project.watermark;
-    const nextEditorMedia = toEditorMediaItemsFromConfig(nextConfigMedia, layers, nextWatermark);
-    setProject({ ...project, media: nextConfigMedia, watermark: nextWatermark });
+      ? watermarkForReplacement(currentProject.watermark, replacementWatermark.id)
+      : currentProject.watermark;
+    const nextEditorMedia = toEditorMediaItemsFromConfig(nextConfigMedia, currentLayers, nextWatermark);
+    const nextProject = { ...currentProject, media: nextConfigMedia, watermark: nextWatermark };
+    projectRef.current = nextProject;
+    setProject(nextProject);
     setMedia((previous) => mergeImportedMediaWithPending(nextEditorMedia, previous));
     if (replacementWatermark && projectId) {
       appendOperation(projectId, {
         type: "watermark_update",
-        before: project.watermark,
+        before: currentProject.watermark,
         after: nextWatermark,
       });
     }
@@ -855,35 +980,43 @@ function EditorContent() {
   }, [layers, project, projectId, uploadEditorMedia]);
 
   const replaceInspectorItemMedia = useCallback(async (layerId: string, itemId: string, files: FileList | null, mediaIndex?: number) => {
-    if (!project) return;
-    const layer = layers.find((entry) => entry.id === layerId);
+    const startingProject = projectRef.current ?? project;
+    if (!startingProject) return;
+    const startingLayers = layersRef.current.length > 0 ? layersRef.current : layers;
+    const layer = startingLayers.find((entry) => entry.id === layerId);
     const uploaded = await uploadEditorMedia(files, { role: roleForLayerKind(layer?.kind) });
     const visualUploaded = uploaded.filter((entry) => entry.kind === "image" || entry.kind === "video");
     if (visualUploaded.length === 0) return;
+    const currentProject = projectRef.current ?? startingProject;
+    const currentLayers = layersRef.current.length > 0 ? layersRef.current : startingLayers;
+    const currentLayer = currentLayers.find((entry) => entry.id === layerId);
     const mediaIds = visualUploaded.map((entry) => entry.id);
-    if (!layer || layer.kind === "sub") return;
+    if (!currentLayer || currentLayer.kind === "sub") return;
     const firstMediaId = mediaIds[0];
-    if (layer.kind !== "bg" && !firstMediaId) return;
-    const targetItem = layer.items.find((entry) => hasVisualItemId(entry) && entry.id === itemId);
+    if (currentLayer.kind !== "bg" && !firstMediaId) return;
+    const targetItem = currentLayer.items.find((entry) => hasVisualItemId(entry) && entry.id === itemId);
     const currentBackgroundMediaIds = targetItem && "mediaIds" in targetItem && Array.isArray(targetItem.mediaIds)
       ? targetItem.mediaIds.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
       : targetItem && "mediaId" in targetItem && typeof targetItem.mediaId === "string"
         ? [targetItem.mediaId]
         : [];
-    const nextBackgroundMediaIds = layer.kind === "bg" && mediaIndex !== undefined && firstMediaId
+    const nextBackgroundMediaIds = currentLayer.kind === "bg" && mediaIndex !== undefined && firstMediaId
       ? currentBackgroundMediaIds.map((entry, index) => (index === mediaIndex ? firstMediaId : entry))
       : mediaIds;
-    const previousLayers = layers;
+    const previousLayers = currentLayers;
     const updatedLayers = patchVisualItem(
-      layers,
+      currentLayers,
       layerId,
       itemId,
-      layer.kind === "bg" ? { mediaIds: nextBackgroundMediaIds } : { mediaId: firstMediaId },
+      currentLayer.kind === "bg" ? { mediaIds: nextBackgroundMediaIds } : { mediaId: firstMediaId },
     );
-    const nextConfigMedia = mergeConfigMedia(project.media ?? [], visualUploaded);
+    const nextConfigMedia = mergeConfigMedia(currentProject.media ?? [], visualUploaded);
+    const nextProject = { ...currentProject, media: nextConfigMedia, layers: updatedLayers as Project["layers"] };
+    layersRef.current = updatedLayers;
+    projectRef.current = nextProject;
     setLayers(updatedLayers);
-    setProject({ ...project, media: nextConfigMedia, layers: updatedLayers as Project["layers"] });
-    setMedia((previous) => mergeImportedMediaWithPending(toEditorMediaItemsFromConfig(nextConfigMedia, updatedLayers, project.watermark), previous));
+    setProject(nextProject);
+    setMedia((previous) => mergeImportedMediaWithPending(toEditorMediaItemsFromConfig(nextConfigMedia, updatedLayers, currentProject.watermark), previous));
     setSelected({ layerId, itemId });
     if (projectId) {
       appendOperation(projectId, {
@@ -896,6 +1029,50 @@ function EditorContent() {
     setHasUnrenderedChanges(true);
     setSaveStatus("pending");
   }, [layers, project, projectId, uploadEditorMedia]);
+
+  const deleteMediaAsset = useCallback((mediaId: string) => {
+    const currentProject = projectRef.current ?? project;
+    if (!currentProject) return;
+    const currentMedia = currentProject.media ?? [];
+    if (!currentMedia.some((entry) => entry.id === mediaId)) return;
+    const currentLayers = layersRef.current.length > 0 ? layersRef.current : layers;
+    const nextMedia = currentMedia.filter((entry) => entry.id !== mediaId);
+    const nextLayers = removeMediaReferencesFromLayers(currentLayers, mediaId);
+    const nextWatermark = currentProject.watermark?.mediaId === mediaId ? null : currentProject.watermark;
+    const nextProject = {
+      ...currentProject,
+      layers: nextLayers as Project["layers"],
+      media: nextMedia,
+      watermark: nextWatermark,
+    };
+    layersRef.current = nextLayers;
+    projectRef.current = nextProject;
+    setLayers(nextLayers);
+    setProject(nextProject);
+    setMedia((previous) => previous.filter((entry) => entry.mediaId !== mediaId));
+    setSelected((current) => current && selectionExists(nextLayers, current) ? current : defaultSelectionFromLayers(nextLayers));
+    if (nextLayers !== currentLayers) {
+      setLocalCacheInvalidation("clip");
+    }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [layers, project]);
+
+  const reorderMediaAssets = useCallback((orderedMediaIds: string[]) => {
+    const currentProject = projectRef.current ?? project;
+    if (!currentProject || orderedMediaIds.length < 2) return;
+    const currentMedia = currentProject.media ?? [];
+    const nextConfigMedia = reorderItemsByIds(currentMedia, orderedMediaIds, (entry) => entry.id);
+    const configChanged = !sameItemOrder(currentMedia, nextConfigMedia);
+    if (configChanged) {
+      const nextProject = { ...currentProject, media: nextConfigMedia };
+      projectRef.current = nextProject;
+      setProject(nextProject);
+      setHasUnrenderedChanges(true);
+      setSaveStatus("pending");
+    }
+    setMedia((previous) => reorderItemsByIds(previous, orderedMediaIds, (entry) => entry.mediaId || entry.filename));
+  }, [project]);
 
   const importWatermarkMedia = useCallback(async (files: FileList | null) => {
     await importMedia(files, { watermarkOnly: true });
@@ -911,14 +1088,12 @@ function EditorContent() {
         onHome={() => router.push("/")}
         onRenderDraft={renderDraft}
         onRenderFinal={renderFinal}
-        onSave={() => void saveNow()}
         projectName={projectName}
         projectId={projectId}
         renderJob={renderJob}
         renderDraftDisabled={renderDraftDisabled}
         renderFinalDisabled={renderFinalDisabled}
         saveStatus={saveStatus}
-        saving={saving}
       />
       <RenderStrip job={renderJob} onCancel={cancelDraft} />
       <div
@@ -952,6 +1127,7 @@ function EditorContent() {
           data-cache-summary-error={cacheSummaryError ?? ""}
           data-testid="editor-center-pane"
         >
+          <ConfigAssetIssueBanner issues={configAssetIssues} />
           <div className="flex min-h-0 flex-1 flex-col" data-testid="preview-stack">
             <PreviewSurface
               currentTime={currentTime}
@@ -1053,7 +1229,9 @@ function EditorContent() {
             pip: scopedMedia.pip.map(toAssignModalMedia),
           }}
           onClose={() => setModal(null)}
+          onDeleteMedia={deleteMediaAsset}
           onImport={(files, role) => importMedia(files, { role })}
+          onReorderMedia={reorderMediaAssets}
           onConfirm={applyAssignedLayers}
           open
           sentences={sentences}
@@ -1070,10 +1248,13 @@ function EditorContent() {
             importing: entry.importing,
             kind: entry.kind,
             mediaId: entry.mediaId,
+            deletable: entry.deletable,
             thumb_url: entry.thumb_url,
           }))}
           onClose={() => setModal(null)}
+          onDeleteMedia={deleteMediaAsset}
           onImport={(files) => importMedia(files, { role: "background" })}
+          onReorderMedia={reorderMediaAssets}
           onSave={applyBackgroundLayer}
           open
           totalSentences={sentences.length}
@@ -1083,7 +1264,9 @@ function EditorContent() {
           media={scopedMedia.watermark}
           onChange={applyWatermarkSettings}
           onClose={() => setModal(null)}
+          onDeleteMedia={deleteMediaAsset}
           onImport={importWatermarkMedia}
+          onReorderMedia={reorderMediaAssets}
           open
           projectPath={projectPath}
           value={project?.watermark ?? null}
@@ -1119,6 +1302,32 @@ async function resolveProjectPath(projectId: string): Promise<string> {
 
 function isValidProjectId(value: string): boolean {
   return /^p_[A-Za-z0-9_-]+$/.test(value);
+}
+
+function ConfigAssetIssueBanner({ issues }: { issues: ConfigAssetIssue[] }) {
+  if (issues.length === 0) return null;
+  const visibleIssues = issues.slice(0, 3);
+  const remainingCount = issues.length - visibleIssues.length;
+  return (
+    <section
+      aria-label="Config media errors"
+      className="border-b border-(--red) bg-(--bg-1) px-3 py-2 text-xs text-(--text)"
+      data-testid="config-media-errors"
+      role="alert"
+    >
+      <div className="mb-1 font-semibold text-(--red)">Config media errors</div>
+      <ul className="grid gap-0.5 font-mono text-[10.5px] text-(--text-2)">
+        {visibleIssues.map((issue) => (
+          <li className="truncate" key={issue.id}>{issue.message}</li>
+        ))}
+        {remainingCount > 0 ? <li className="text-(--text-3)">+{remainingCount} more</li> : null}
+      </ul>
+    </section>
+  );
+}
+
+function projectConfigSignature(project: Project): string {
+  return JSON.stringify(project);
 }
 
 function normalizeResolutionPreset(candidate: unknown, fallback: unknown = "1080p"): "1080p" | "720p" | "9:16" {
@@ -1514,14 +1723,21 @@ function promoteWatermarkSelectionInEditorMedia(media: EditorMediaItem[], waterm
 
 function watermarkAssetKind(kind: MediaAsset["kind"]): MediaAsset["kind"] {
   if (kind === "image") return "watermark_image";
-  if (kind === "video") return "watermark_video";
   return kind;
 }
 
 function watermarkEditorKind(kind: EditorMediaItem["kind"]): EditorMediaItem["kind"] {
   if (kind === "image") return "watermark_image";
-  if (kind === "video") return "watermark_video";
   return kind;
+}
+
+function isWatermarkImageFile(file: File): boolean {
+  const acceptedMime = file.type === "image/png" || file.type === "image/jpeg" || file.type === "image/webp";
+  return acceptedMime || /\.(png|jpe?g|webp)$/i.test(file.name);
+}
+
+function isDeletableMediaAsset(entry: Pick<MediaAsset, "import_mode" | "path">): boolean {
+  return entry.import_mode === "copy" && entry.path.startsWith("uploads/");
 }
 
 function mergeConfigMedia(existing: MediaAsset[], incoming: MediaAsset[]): MediaAsset[] {
@@ -1530,6 +1746,10 @@ function mergeConfigMedia(existing: MediaAsset[], incoming: MediaAsset[]): Media
     byId.set(entry.id, entry);
   }
   return [...byId.values()];
+}
+
+function sameItemOrder<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((entry, index) => entry === right[index]);
 }
 
 function normalizeEditorMediaItems(
@@ -1547,6 +1767,7 @@ function normalizeEditorMediaItems(
       importing: entry.importing ?? false,
       import_progress: entry.import_progress ?? null,
       import_error: entry.import_error ?? null,
+      config_error: entry.config_error ?? null,
     };
     return {
       ...normalized,
@@ -1560,13 +1781,14 @@ function toEditorMediaItemsFromConfig(
   layers: Layer[] = [],
   watermark: Project["watermark"] = null,
 ): EditorMediaItem[] {
-  return configMedia.map((entry) => {
+  const items = configMedia.map((entry) => {
     const thumbUrl = resolveThumbUrl(entry);
     const item: EditorMediaItem = {
       mediaId: entry.id,
       filename: entry.name || entry.id,
       kind: entry.kind,
       role: entry.role,
+      deletable: isDeletableMediaAsset(entry),
       path: entry.path,
       thumb_path: entry.thumb_path ?? null,
       thumb_url: thumbUrl,
@@ -1581,12 +1803,161 @@ function toEditorMediaItemsFromConfig(
       importing: false,
       import_progress: null,
       import_error: null,
+      config_error: null,
     };
     return {
       ...item,
       role: item.role ?? singleInferredMediaRole(mediaRolesForItem(item, layers, watermark)),
     };
   });
+  return [...items, ...missingConfigAssetPlaceholders(configMedia, layers, watermark)];
+}
+
+function collectConfigAssetIssues(
+  configMedia: MediaAsset[],
+  layers: Layer[],
+  watermark: Project["watermark"],
+): ConfigAssetIssue[] {
+  const issues: ConfigAssetIssue[] = [];
+  const seenIds = new Map<string, number>();
+  const seenNames = new Map<string, number>();
+  for (const entry of configMedia) {
+    seenIds.set(entry.id, (seenIds.get(entry.id) ?? 0) + 1);
+    seenNames.set(entry.name, (seenNames.get(entry.name) ?? 0) + 1);
+  }
+  for (const [id, count] of seenIds) {
+    if (count > 1) {
+      issues.push({
+        id: `duplicate-id:${id}`,
+        message: `Ambiguous media asset id "${id}" appears ${count} times in project.media.`,
+      });
+    }
+  }
+  for (const [name, count] of seenNames) {
+    if (count > 1) {
+      issues.push({
+        id: `duplicate-name:${name}`,
+        message: `Ambiguous media asset name "${name}" appears ${count} times in project.media.`,
+      });
+    }
+  }
+  for (const reference of configAssetReferences(layers, watermark)) {
+    const matches = matchingConfigMedia(configMedia, reference.mediaId);
+    if (matches.length === 0) {
+      issues.push({
+        id: `missing:${reference.role}:${reference.source}:${reference.mediaId}`,
+        message: `Missing ${configAssetRoleLabel(reference.role)} media asset "${reference.mediaId}" referenced by ${reference.source}.`,
+      });
+    } else if (matches.length > 1) {
+      issues.push({
+        id: `ambiguous:${reference.role}:${reference.source}:${reference.mediaId}`,
+        message: `Ambiguous ${configAssetRoleLabel(reference.role)} media asset "${reference.mediaId}" referenced by ${reference.source}.`,
+      });
+    }
+  }
+  return dedupeConfigAssetIssues(issues);
+}
+
+function missingConfigAssetPlaceholders(
+  configMedia: MediaAsset[],
+  layers: Layer[],
+  watermark: Project["watermark"],
+): EditorMediaItem[] {
+  const placeholders = new Map<string, EditorMediaItem>();
+  for (const reference of configAssetReferences(layers, watermark)) {
+    if (matchingConfigMedia(configMedia, reference.mediaId).length > 0 || placeholders.has(reference.mediaId)) continue;
+    const message = `Config error: missing ${configAssetRoleLabel(reference.role)} media asset`;
+    const placeholder: EditorMediaItem = {
+      mediaId: reference.mediaId,
+      filename: reference.mediaId,
+      kind: "image",
+      role: reference.role,
+      path: "",
+      thumb_url: "",
+      width: null,
+      height: null,
+      duration: null,
+      size: 0,
+      hash: null,
+      import_mode: "generated",
+      imported_at: "",
+      created_at: null,
+      importing: false,
+      import_progress: null,
+      import_error: message,
+      config_error: message,
+      deletable: false,
+    };
+    placeholders.set(reference.mediaId, placeholder);
+  }
+  return [...placeholders.values()];
+}
+
+function configAssetReferences(layers: Layer[], watermark: Project["watermark"]): ConfigAssetReference[] {
+  const references: ConfigAssetReference[] = [];
+  for (const layer of layers) {
+    const role = roleForLayerKind(layer.kind);
+    if (!role) continue;
+    layer.items.forEach((item, itemIndex) => {
+      const mediaIds = mediaIdsForConfigItem(item);
+      mediaIds.forEach((mediaId, mediaIndex) => {
+        references.push({
+          mediaId,
+          role,
+          source: configAssetSource(layer, item, itemIndex, mediaIds.length > 1 ? mediaIndex : null),
+        });
+      });
+    });
+  }
+  if (watermark?.mediaId) {
+    references.push({ mediaId: watermark.mediaId, role: "watermark", source: "watermark" });
+  }
+  return references;
+}
+
+function mediaIdsForConfigItem(item: unknown): string[] {
+  if (!item || typeof item !== "object") return [];
+  const candidate = item as { mediaId?: unknown; mediaIds?: unknown };
+  const ids = Array.isArray(candidate.mediaIds) && candidate.mediaIds.length > 0
+    ? candidate.mediaIds
+    : [candidate.mediaId];
+  return uniqueStrings(ids);
+}
+
+function uniqueStrings(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string" || value.length === 0 || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+function matchingConfigMedia(configMedia: MediaAsset[], mediaId: string): MediaAsset[] {
+  return configMedia.filter((entry) => entry.id === mediaId || entry.name === mediaId);
+}
+
+function dedupeConfigAssetIssues(issues: ConfigAssetIssue[]): ConfigAssetIssue[] {
+  const byId = new Map<string, ConfigAssetIssue>();
+  for (const issue of issues) {
+    byId.set(issue.id, issue);
+  }
+  return [...byId.values()];
+}
+
+function configAssetRoleLabel(role: MediaRole): string {
+  if (role === "pip") return "PiP";
+  return role;
+}
+
+function configAssetSource(layer: Layer, item: unknown, itemIndex: number, mediaIndex: number | null): string {
+  const itemId = item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string"
+    ? (item as { id: string }).id
+    : `item ${itemIndex + 1}`;
+  const suffix = mediaIndex === null ? "" : ` media ${mediaIndex + 1}`;
+  return `${layer.name || layer.id}/${itemId}${suffix}`;
 }
 
 type VisualEditorMediaItem = EditorMediaItem & { kind: "image" | "video" };
@@ -1664,21 +2035,69 @@ function singleInferredMediaRole(roles: ReadonlySet<MediaRole>): MediaRole | und
   return roles.size === 1 ? roles.values().next().value : undefined;
 }
 
+function selectionExists(layers: Layer[], selection: NonNullable<EditorSelection>): boolean {
+  return layers.some((layer) => layer.id === selection.layerId && layer.items.some((item) => {
+    return Boolean(item && typeof item === "object" && (item as { id?: unknown }).id === selection.itemId);
+  }));
+}
+
+function removeMediaReferencesFromLayers(layers: Layer[], mediaId: string): Layer[] {
+  let changed = false;
+  const nextLayers = layers.flatMap((layer): Layer[] => {
+    if (layer.kind === "bg") {
+      const nextItems = layer.items.flatMap((item) => {
+        const candidate = item as typeof item & { mediaId?: string; mediaIds?: string[] };
+        if (Array.isArray(candidate.mediaIds)) {
+          const nextMediaIds = candidate.mediaIds.filter((entry) => entry !== mediaId);
+          if (nextMediaIds.length === candidate.mediaIds.length && candidate.mediaId !== mediaId) return [item];
+          changed = true;
+          if (nextMediaIds.length === 0) return [];
+          const nextItem = { ...item, mediaIds: nextMediaIds, cache_status: "invalid" as const };
+          delete (nextItem as { mediaId?: string }).mediaId;
+          return [nextItem];
+        }
+        if (candidate.mediaId === mediaId) {
+          changed = true;
+          return [];
+        }
+        return [item];
+      });
+      const layerChanged = nextItems.length !== layer.items.length || nextItems.some((item, index) => item !== layer.items[index]);
+      if (!layerChanged) return [layer];
+      if (nextItems.length === 0) return [];
+      return [{ ...layer, items: nextItems }];
+    }
+    if (layer.kind === "fg" || layer.kind === "pip") {
+      const nextItems = layer.items.filter((item) => (item as { mediaId?: string }).mediaId !== mediaId);
+      if (nextItems.length === layer.items.length) return [layer];
+      changed = true;
+      if (nextItems.length === 0) return [];
+      return [{ ...layer, items: nextItems } as Layer];
+    }
+    return [layer];
+  });
+  return changed ? nextLayers : layers;
+}
+
 function toAssignModalMedia(entry: VisualEditorMediaItem): {
+  deletable?: boolean;
   filename: string;
   import_error?: string | null;
   import_progress?: number | null;
   importing?: boolean;
   kind: "image" | "video";
+  mediaId: string;
   role?: "foreground" | "pip";
   thumb_url: string;
 } {
   return {
+    deletable: entry.deletable,
     filename: entry.filename,
     import_error: entry.import_error,
     import_progress: entry.import_progress,
     importing: entry.importing,
     kind: entry.kind,
+    mediaId: entry.mediaId,
     role: entry.role === "foreground" || entry.role === "pip" ? entry.role : undefined,
     thumb_url: entry.thumb_url,
   };
@@ -1692,6 +2111,7 @@ function resolveThumbUrl(media: MediaAsset): string {
 }
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_MULTIPART_UPLOAD_BYTES = 9 * 1024 * 1024;
 type UploadResponseEntry = { media: MediaAsset; mediaId: string };
 
 function pendingKeyForFile(file: File): string {
@@ -1762,7 +2182,7 @@ async function uploadFileWithSplits(
   file: File,
   options: { onProgress: (value: number) => void },
 ): Promise<UploadResponseEntry[]> {
-  if (file.size <= MAX_UPLOAD_BYTES) {
+  if (file.size <= MAX_MULTIPART_UPLOAD_BYTES) {
     options.onProgress(100);
     return uploadSinglePart(file);
   }
@@ -1796,15 +2216,15 @@ async function uploadSinglePart(file: File): Promise<UploadResponseEntry[]> {
 }
 
 function chunkPlanForSize(totalBytes: number): number[] {
-  if (totalBytes <= MAX_UPLOAD_BYTES) return [totalBytes];
-  if (totalBytes <= MAX_UPLOAD_BYTES * 2) {
+  if (totalBytes <= MAX_MULTIPART_UPLOAD_BYTES) return [totalBytes];
+  if (totalBytes <= MAX_MULTIPART_UPLOAD_BYTES * 2) {
     const first = Math.ceil(totalBytes / 2);
     return [first, totalBytes - first];
   }
   const chunks: number[] = [];
   let remaining = totalBytes;
   while (remaining > 0) {
-    const part = Math.min(MAX_UPLOAD_BYTES, remaining);
+    const part = Math.min(MAX_MULTIPART_UPLOAD_BYTES, remaining);
     chunks.push(part);
     remaining -= part;
   }

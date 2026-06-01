@@ -2,11 +2,14 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Folder, X } from "lucide-react";
+import { Check, Folder, Trash2, X } from "lucide-react";
+import { moveIdRelativeTo, type ReorderPlacement } from "@/lib/media-order";
+import { useReorderableAssetMotion } from "@/lib/use-reorderable-asset-motion";
 
 type MediaItem = {
   duration?: number | null;
   filename: string;
+  deletable?: boolean;
   import_error?: string | null;
   importing?: boolean;
   kind: "image" | "video";
@@ -36,7 +39,9 @@ type Props = {
   existing?: BgLayer;
   media: MediaItem[];
   onClose: () => void;
+  onDeleteMedia?: (mediaId: string) => void;
   onImport: (files: FileList | null) => Promise<unknown> | unknown;
+  onReorderMedia?: (mediaIds: string[]) => void;
   duration: number;
   onSave: (layer: BgLayer) => void;
   open: boolean;
@@ -142,6 +147,10 @@ function backgroundMediaIds(item: BgLayer["items"][number]): string[] {
   return item.mediaId ? [item.mediaId] : [];
 }
 
+function isFailedPendingUpload(item: MediaItem): boolean {
+  return item.mediaId.startsWith("pending:") && Boolean(item.import_error);
+}
+
 function withBackgroundCacheStatus(
   previous: BgLayer["items"][number] | undefined,
   next: BgLayer["items"][number],
@@ -156,7 +165,9 @@ export function BgModal({
   existing,
   media,
   onClose,
+  onDeleteMedia,
   onImport,
+  onReorderMedia,
   onSave,
   open,
   totalSentences,
@@ -167,10 +178,16 @@ export function BgModal({
   const isEdit = !!existing;
   const crossfade = Number.parseFloat(state.crossfadeInput);
   const isCrossfadeValid = Number.isFinite(crossfade) && crossfade >= 0 && crossfade <= 2;
-  const mediaById = useMemo(() => new Map(media.map((entry) => [entry.mediaId, entry])), [media]);
-  const selectedAssets = useMemo(
-    () => state.selectedMedia.map((id) => mediaById.get(id)).filter((entry): entry is MediaItem => !!entry),
+  const availableMedia = useMemo(() => media.filter((entry) => !isFailedPendingUpload(entry)), [media]);
+  const reorderMotion = useReorderableAssetMotion(availableMedia.map((entry) => entry.mediaId), reorderMedia);
+  const mediaById = useMemo(() => new Map(availableMedia.map((entry) => [entry.mediaId, entry])), [availableMedia]);
+  const selectedMedia = useMemo(
+    () => state.selectedMedia.filter((id) => mediaById.has(id)),
     [mediaById, state.selectedMedia],
+  );
+  const selectedAssets = useMemo(
+    () => selectedMedia.map((id) => mediaById.get(id)).filter((entry): entry is MediaItem => !!entry),
+    [mediaById, selectedMedia],
   );
   const lockedKind = selectedAssets[0]?.kind ?? null;
   const selectedLabel = lockedKind === "video" ? "clips only" : lockedKind === "image" ? "images only" : "select media";
@@ -179,6 +196,14 @@ export function BgModal({
     if (!open) return;
     setState(initialState(existing));
   }, [existing, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setState((current) => {
+      const nextSelected = current.selectedMedia.filter((id) => mediaById.has(id));
+      return sameOrderedList(current.selectedMedia, nextSelected) ? current : { ...current, selectedMedia: nextSelected };
+    });
+  }, [mediaById, open]);
 
   function buildPlaylistItem(selectedMedia: string[], crossfadeSeconds: number): BgLayer["items"][number] {
     const existingItem = existing?.items[0];
@@ -196,15 +221,15 @@ export function BgModal({
   }
 
   function handleSave() {
-    if (state.selectedMedia.length === 0 || !isCrossfadeValid) return;
-    if (existing && isBackgroundPlaylistUnchanged(existing, state.selectedMedia, state.motionKind, state.easing, crossfade, duration, totalSentences)) {
+    if (selectedMedia.length === 0 || !isCrossfadeValid) return;
+    if (existing && isBackgroundPlaylistUnchanged(existing, selectedMedia, state.motionKind, state.easing, crossfade, duration, totalSentences)) {
       onSave(existing);
       onClose();
       return;
     }
-    const selectedKind = lockedKind ?? mediaById.get(state.selectedMedia[0] ?? "")?.kind;
+    const selectedKind = lockedKind ?? mediaById.get(selectedMedia[0] ?? "")?.kind;
     if (!selectedKind) return;
-    const nextItems = [buildPlaylistItem(state.selectedMedia, crossfade)];
+    const nextItems = [buildPlaylistItem(selectedMedia, crossfade)];
     if (nextItems.length === 0) return;
     const layer: BgLayer = {
       id: existing?.id ?? "bg-main",
@@ -231,6 +256,20 @@ export function BgModal({
         return { ...current, selectedMedia: [mediaId] };
       }
       return { ...current, selectedMedia: [...selected, mediaId] };
+    });
+  }
+
+  function reorderMedia(sourceId: string, targetId: string, placement: ReorderPlacement) {
+    const currentOrder = availableMedia.map((item) => item.mediaId);
+    const nextOrder = moveIdRelativeTo(currentOrder, sourceId, targetId, placement);
+    if (sameOrderedList(currentOrder, nextOrder)) return;
+    onReorderMedia?.(nextOrder);
+    setState((current) => {
+      const selected = new Set(current.selectedMedia);
+      const nextSelectedMedia = nextOrder.filter((id) => selected.has(id));
+      return sameOrderedList(current.selectedMedia, nextSelectedMedia)
+        ? current
+        : { ...current, selectedMedia: nextSelectedMedia };
     });
   }
 
@@ -261,7 +300,7 @@ export function BgModal({
                 <div className="flex min-w-0 items-center gap-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Assets</p>
                   <span className="font-mono text-[11px] text-(--text-3)">
-                    {state.selectedMedia.length} selected · {selectedLabel}
+                    {selectedMedia.length} selected · {selectedLabel}
                   </span>
                 </div>
               <button
@@ -284,58 +323,94 @@ export function BgModal({
               ref={fileInputRef}
               type="file"
             />
-            {media.length === 0 ? (
+            {availableMedia.length === 0 ? (
               <p className="text-sm text-(--text-3)">No media added yet.</p>
             ) : (
-              <div className="grid max-h-[260px] grid-cols-4 gap-2 overflow-y-auto">
-                {media.map((item) => (
-                  <button
-                    aria-pressed={state.selectedMedia.includes(item.mediaId)}
-                    className={`relative overflow-hidden rounded-md border p-1 text-left transition-colors ${
-                      state.selectedMedia.includes(item.mediaId)
-                        ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
-                        : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
-                    }`}
-                    key={item.mediaId}
-                    onClick={() => toggleMedia(item.mediaId)}
-                    type="button"
-                  >
-                    <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
-                      {item.thumb_url ? (
-                        <img
-                          alt={item.filename}
-                          className="h-full w-full object-cover"
-                          src={`/api/server${item.thumb_url}`}
-                        />
-                      ) : (
-                        <div className="h-full w-full bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))]" />
-                      )}
-                      <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
-                        {item.kind === "video" ? "MP4" : "IMG"}
-                      </span>
-                      {state.selectedMedia.includes(item.mediaId) ? (
-                        <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-(--amber) text-(--bg-0)">
-                          <Check aria-hidden="true" className="h-3 w-3" />
-                        </span>
+              <div className="flex max-h-[260px] gap-2 overflow-x-auto overflow-y-hidden pb-1" data-reorder-rail="true">
+                {availableMedia.map((item) => {
+                  const active = selectedMedia.includes(item.mediaId);
+                  const hasError = Boolean(item.import_error);
+                  return (
+                    <div
+                      className="relative w-[118px] shrink-0 cursor-grab will-change-transform active:cursor-grabbing"
+                      data-media-id={item.mediaId}
+                      data-reorder-card="true"
+                      key={item.mediaId}
+                      ref={(node) => reorderMotion.registerNode(item.mediaId, node)}
+                      onClickCapture={reorderMotion.suppressClickAfterDrag}
+                      onPointerCancel={reorderMotion.cancelPointerDrag}
+                      onPointerDown={(event) => {
+                        if (hasError) return;
+                        reorderMotion.beginPointerDrag(item.mediaId, event);
+                      }}
+                      onPointerMove={reorderMotion.movePointerDrag}
+                      onPointerUp={reorderMotion.endPointerDrag}
+                    >
+                      <button
+                        aria-label={`${item.filename}${active ? " selected" : ""}`}
+                        aria-pressed={active}
+                        className={`relative w-full overflow-hidden rounded-md border p-1 text-left transition-colors ${
+                          active
+                            ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                            : hasError
+                              ? "border-(--red) bg-(--bg-2)"
+                              : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
+                        }`}
+                        onClick={() => toggleMedia(item.mediaId)}
+                        type="button"
+                      >
+                        <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
+                          {item.thumb_url ? (
+                            <img
+                              alt={item.filename}
+                              className="h-full w-full object-cover"
+                              src={`/api/server${item.thumb_url}`}
+                            />
+                          ) : (
+                            <div className="h-full w-full bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))]" />
+                          )}
+                          <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
+                            {item.kind === "video" ? "MP4" : "IMG"}
+                          </span>
+                          {active ? (
+                            <span className="absolute bottom-1.5 left-1.5 grid h-5 w-5 place-items-center rounded-full bg-(--amber) text-(--bg-0)">
+                              <Check aria-hidden="true" className="h-3 w-3" />
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
+                        {item.import_error ? (
+                          <div className="truncate font-mono text-[10px] text-(--red)">{item.import_error}</div>
+                        ) : null}
+                        {!active && lockedKind && item.kind !== lockedKind ? (
+                          <span className="pointer-events-none absolute inset-x-2 bottom-7 rounded bg-(--amber-bg) px-1 py-0.5 text-center text-[10px] font-semibold text-(--amber)">
+                            Will replace
+                          </span>
+                        ) : null}
+                        <span className="sr-only">{item.filename}</span>
+                      </button>
+                      {item.deletable && onDeleteMedia ? (
+                        <button
+                          aria-label={`Delete ${item.filename}`}
+                          className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded bg-black/65 text-white transition hover:bg-(--red) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--amber)"
+                          data-reorder-delete="true"
+                          onClick={() => onDeleteMedia(item.mediaId)}
+                          type="button"
+                        >
+                          <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                        </button>
                       ) : null}
                     </div>
-                    <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
-                    {!state.selectedMedia.includes(item.mediaId) && lockedKind && item.kind !== lockedKind ? (
-                      <span className="pointer-events-none absolute inset-x-2 bottom-7 rounded bg-(--amber-bg) px-1 py-0.5 text-center text-[10px] font-semibold text-(--amber)">
-                        Will replace
-                      </span>
-                    ) : null}
-                    <span className="sr-only">{item.filename}</span>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             )}
-              {state.selectedMedia.length > 1 ? (
+              {selectedMedia.length > 1 ? (
                 <p className="mt-2 text-[12px] text-(--text-3)">
                   {lockedKind === "video"
-                    ? `${state.selectedMedia.length} clips stay in one background timeline item and play in sequence during render.`
-                    : `${state.selectedMedia.length} images stay in one background timeline item and cycle during render.`}{" "}
-                  Reorder by clicking to deselect, then re-select in the desired order.
+                    ? `${selectedMedia.length} clips stay in one background timeline item and play in sequence during render.`
+                    : `${selectedMedia.length} images stay in one background timeline item and cycle during render.`}{" "}
+                  The selected card order is used in the inspector.
                 </p>
               ) : null}
             </section>
@@ -415,7 +490,7 @@ export function BgModal({
             </button>
             <button
               className="rounded bg-(--text) px-4 py-1.5 text-sm font-semibold text-(--bg-0) disabled:opacity-40"
-              disabled={state.selectedMedia.length === 0 || !isCrossfadeValid}
+              disabled={selectedMedia.length === 0 || !isCrossfadeValid}
               onClick={handleSave}
               type="button"
             >

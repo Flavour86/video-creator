@@ -216,6 +216,54 @@ async def test_uploads_keeps_import_when_thumbnail_generation_fails(
 
 
 @pytest.mark.asyncio
+async def test_uploads_video_generates_persistent_thumbnail_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "storage_root", tmp_path)
+    monkeypatch.setattr(uploads_route, "_probe_dimensions", lambda _path: Dimensions(width=1280, height=720))
+    monkeypatch.setattr(uploads_route, "_probe_duration", lambda _path: 4.25)
+
+    def make_thumb(src: Path, thumb: Path) -> bool:
+        assert src.name == "clip.mp4"
+        thumb.write_bytes(b"jpeg-thumb")
+        return True
+
+    monkeypatch.setattr(uploads_route, "_make_thumb", make_thumb)
+    payload = b"fake-mp4-payload"
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        first = await c.post(
+            "/uploads",
+            files=[("files", ("clip.mp4", payload, "video/mp4"))],
+        )
+        thumb = await c.get("/uploads/thumb", params={"filename": "clip.mp4"})
+
+        def fail_make_thumb(_src: Path, _thumb: Path) -> bool:
+            raise AssertionError("duplicate upload should reuse persisted metadata")
+
+        monkeypatch.setattr(uploads_route, "_make_thumb", fail_make_thumb)
+        duplicate = await c.post(
+            "/uploads",
+            files=[("files", ("clip-copy.mp4", payload, "video/mp4"))],
+        )
+
+    assert first.status_code == 200
+    items = first.json()
+    assert items[0]["mediaId"] == "clip.mp4"
+    assert items[0]["media"]["kind"] == "video"
+    assert items[0]["media"]["duration"] == 4.25
+    assert items[0]["media"]["thumb_path"] == "uploads/.thumbs/clip.jpg"
+    assert (tmp_path / "uploads" / ".meta" / "clip.mp4.json").exists()
+    assert thumb.status_code == 200
+    assert thumb.content == b"jpeg-thumb"
+    assert duplicate.status_code == 200
+    assert duplicate.json()[0]["mediaId"] == "clip.mp4"
+    assert duplicate.json()[0]["media"]["thumb_path"] == "uploads/.thumbs/clip.jpg"
+
+
+@pytest.mark.asyncio
 async def test_uploads_rejects_unsupported_type(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

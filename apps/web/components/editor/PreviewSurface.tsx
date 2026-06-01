@@ -78,15 +78,15 @@ export function PreviewSurface({
         const mediaIds = item.mediaIds && item.mediaIds.length > 0 ? item.mediaIds : item.mediaId ? [item.mediaId] : [];
         if (item.end < windowStart || item.start > windowEnd) continue;
         for (const mediaId of mediaIds) {
-          if (isVideoMediaId(mediaId)) ids.add(mediaId);
+          if (isVideoMedia(mediaId, media)) ids.add(mediaId);
         }
       }
     }
-    if (watermark && watermark.enabled !== false && isVideoMediaId(watermark.mediaId)) {
+    if (watermark && watermark.enabled !== false && isVideoMedia(watermark.mediaId, media)) {
       ids.add(watermark.mediaId);
     }
     return [...ids];
-  }, [displayTime, layers, projectPath, watermark]);
+  }, [displayTime, layers, media, projectPath, watermark]);
 
   const registerVideoDecoder = useCallback((mediaId: string, node: HTMLVideoElement | null) => {
     if (node) {
@@ -125,7 +125,7 @@ export function PreviewSurface({
 
   const resolveSource = useCallback((mediaId: string, clockTime: number, primaryUrl?: string, allowUploadFallback = false): HTMLImageElement | HTMLVideoElement | null => {
     if (!projectPath) return null;
-    if (isVideoMediaId(mediaId)) {
+    if (isVideoMedia(mediaId, media)) {
       const decoder = videoDecoderRefs.current.get(mediaId);
       if (!decoder) return null;
       syncVideoDecoder(decoder, clockTime);
@@ -348,20 +348,43 @@ function uploadMediaUrl(filename: string): string {
   return `/api/server/uploads/media-file?filename=${encodeURIComponent(filename)}`;
 }
 
+function mediaAssetForId(mediaId: string, media: EditorMediaItem[]): EditorMediaItem | undefined {
+  return media.find((item) => item.mediaId === mediaId || item.filename === mediaId);
+}
+
 function mediaSourceUrl(projectPath: string, mediaId: string, media: EditorMediaItem[]): string {
-  const asset = media.find((item) => item.mediaId === mediaId || item.filename === mediaId);
-  if (asset?.path.startsWith("uploads/")) {
-    return uploadMediaUrl(asset.mediaId || asset.filename);
+  const asset = mediaAssetForId(mediaId, media);
+  if (asset?.path && isUploadPath(asset.path)) {
+    return uploadMediaUrl(uploadFilenameForAsset(asset));
   }
-  return mediaUrl(projectPath, mediaId);
+  return mediaUrl(projectPath, asset?.filename || mediaId);
+}
+
+function isUploadPath(path: string): boolean {
+  return path.replace(/\\/g, "/").startsWith("uploads/");
+}
+
+function uploadFilenameForAsset(asset: EditorMediaItem): string {
+  const normalized = asset.path.replace(/\\/g, "/");
+  if (normalized.startsWith("uploads/")) {
+    const filename = normalized.slice("uploads/".length).split("/").filter(Boolean).at(-1);
+    if (filename) return filename;
+  }
+  return asset.filename || asset.mediaId;
 }
 
 function formatPreviewTimecode(seconds: number): string {
   return formatTimecode(seconds, { ms: true }).replace(/^00:/, "");
 }
 
-function isVideoMediaId(mediaId: string): boolean {
-  const extension = mediaId.split(".").at(-1)?.toLowerCase() ?? "";
+function isVideoMedia(mediaId: string, media: EditorMediaItem[]): boolean {
+  const asset = mediaAssetForId(mediaId, media);
+  if (asset?.kind.includes("video")) return true;
+  return [mediaId, asset?.filename, asset?.path].some((value) => typeof value === "string" && isVideoMediaId(value));
+}
+
+function isVideoMediaId(value: string): boolean {
+  const extension = value.split(/[/.\\]/).at(-1)?.toLowerCase() ?? "";
   return VIDEO_EXTENSIONS.has(extension);
 }
 

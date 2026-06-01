@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { Suspense, type ImgHTMLAttributes } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -65,6 +65,39 @@ function renderEditor() {
   );
 }
 
+function mockElementsFromPoint(element: Element) {
+  const original = document.elementsFromPoint;
+  Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: () => [element] });
+  return () => {
+    Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: original });
+  };
+}
+
+function pointerEventWithPoint(type: "pointerDown" | "pointerMove" | "pointerUp", target: HTMLElement, clientX: number, clientY: number) {
+  const event =
+    type === "pointerDown"
+      ? createEvent.pointerDown(target)
+      : type === "pointerMove"
+        ? createEvent.pointerMove(target)
+        : createEvent.pointerUp(target);
+  Object.defineProperty(event, "button", { value: 0 });
+  Object.defineProperty(event, "clientX", { value: clientX });
+  Object.defineProperty(event, "clientY", { value: clientY });
+  Object.defineProperty(event, "pointerId", { value: 1 });
+  return event;
+}
+
+function pointerDragTo(source: HTMLElement, target: HTMLElement) {
+  const restore = mockElementsFromPoint(target);
+  try {
+    fireEvent(source, pointerEventWithPoint("pointerDown", source, 10, 20));
+    fireEvent(source, pointerEventWithPoint("pointerMove", source, 36, 48));
+    fireEvent(source, pointerEventWithPoint("pointerUp", source, 36, 48));
+  } finally {
+    restore();
+  }
+}
+
 it("redirects to launcher when project id param is absent", async () => {
   renderEditor();
   await waitFor(() => expect(_routerReplace).toHaveBeenCalledWith("/"));
@@ -80,6 +113,8 @@ it("shows project id in toolbar when project id param is present", () => {
   _projectIdParam = "p_demo";
   renderEditor();
   expect(screen.getByText("projectId: p_demo")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /save project config/i })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Autosave status")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render draft/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /render final/i })).toBeInTheDocument();
 });
@@ -347,8 +382,10 @@ function mockTest01Fetch(options: {
   project?: typeof TEST_PROJECT;
   renderCache?: { cached_count: number; state: "warm" | "cold" | "partial" | "invalid"; total_count: number };
   renderCacheSequence?: Array<{ cached_count: number; state: "warm" | "cold" | "partial" | "invalid"; total_count: number } | null>;
+  configSaveError?: boolean;
   saveHasUnrenderedChanges?: boolean;
   uploadsResult?: Array<{ mediaId: string; media: Record<string, unknown> }>;
+  uploadsResultSequence?: Array<Array<{ mediaId: string; media: Record<string, unknown> }>>;
   uploadsError?: { status: number; body: Record<string, unknown> };
 } = {}) {
   const hasUnrenderedChanges = options.hasUnrenderedChanges ?? false;
@@ -366,8 +403,11 @@ function mockTest01Fetch(options: {
   const renderCache = options.renderCache;
   const renderCacheSequence = options.renderCacheSequence ?? null;
   let renderCacheCallCount = 0;
+  const configSaveError = options.configSaveError ?? false;
   const saveHasUnrenderedChanges = options.saveHasUnrenderedChanges ?? true;
   const uploadsResult = options.uploadsResult ?? [];
+  const uploadsResultSequence = options.uploadsResultSequence ?? null;
+  let uploadsCallCount = 0;
   const uploadsError = options.uploadsError ?? null;
   global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -377,6 +417,9 @@ function mockTest01Fetch(options: {
     if (url.endsWith("/projects")) return ok([{ project_id: TEST_PROJECT_ID, path: "E:/projects/test01" }]);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/alignment`)) return ok(alignment);
     if (url.includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT") {
+      if (configSaveError) {
+        return { ok: false, status: 500, json: async () => ({ detail: "save failed" }) } as Response;
+      }
       return ok({ project_id: TEST_PROJECT_ID, config_hash: "h2", saved_at: "2026-05-11T00:00:00Z", has_unrendered_changes: saveHasUnrenderedChanges });
     }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/config`)) {
@@ -407,7 +450,11 @@ function mockTest01Fetch(options: {
           json: async () => uploadsError.body,
         } as Response;
       }
-      return ok(uploadsResult);
+      const currentUploadsResult = uploadsResultSequence
+        ? uploadsResultSequence[Math.min(uploadsCallCount, uploadsResultSequence.length - 1)] ?? []
+        : uploadsResult;
+      uploadsCallCount += 1;
+      return ok(currentUploadsResult);
     }
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render/r-test01`)) return ok({ ok: true });
     if (url.includes(`/projects/${TEST_PROJECT_ID}/render`)) return ok({ render_id: "r-test01", output_path: "renders/r-test01.mp4" });
@@ -417,6 +464,61 @@ function mockTest01Fetch(options: {
 
 function ok(body: unknown): Response {
   return { ok: true, json: async () => body } as Response;
+}
+
+function uploadedImageResult(mediaId: string, name: string) {
+  return {
+    mediaId,
+    media: {
+      id: mediaId,
+      name,
+      kind: "image",
+      path: `uploads/${name}`,
+      thumb_path: `uploads/.thumbs/${name.replace(/\.[^.]+$/, ".jpg")}`,
+      dimensions: { width: 1280, height: 720 },
+      duration: null,
+      size: 456789,
+      hash: mediaId,
+      import_mode: "copy",
+      imported_at: "2026-05-16T00:00:00Z",
+      created_at: null,
+    },
+  };
+}
+
+function uploadedVideoResult(mediaId: string, name: string) {
+  return {
+    mediaId,
+    media: {
+      id: mediaId,
+      name,
+      kind: "video",
+      path: `uploads/${name}`,
+      thumb_path: `uploads/.thumbs/${name.replace(/\.[^.]+$/, ".jpg")}`,
+      dimensions: { width: 1280, height: 720 },
+      duration: 4.25,
+      size: 789012,
+      hash: mediaId,
+      import_mode: "copy",
+      imported_at: "2026-05-16T00:00:00Z",
+      created_at: null,
+    },
+  };
+}
+
+function latestConfigSavePayload() {
+  const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  const putConfigCall = calls
+    .filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT")
+    .at(-1);
+  expect(putConfigCall).toBeDefined();
+  return JSON.parse(String(putConfigCall?.[1]?.body ?? "{}")) as {
+    config: {
+      layers: Array<{ kind?: string; items?: Array<{ mediaId?: string; mediaIds?: string[]; sentences?: [number, number] }> }>;
+      media: Array<{ id?: string; kind?: string; name?: string; role?: string }>;
+      watermark?: { mediaId?: string } | null;
+    };
+  };
 }
 
 function readUndo(projectId = TEST_PROJECT_ID): Array<{ op?: Record<string, unknown> }> {
@@ -454,6 +556,40 @@ it("renders the test01 editor from project, alignment, and media data", async ()
   expect(screen.getByLabelText("Background crossfade")).toHaveValue(0.6);
 });
 
+it("surfaces missing and ambiguous config media as errors", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const project = {
+    ...TEST_PROJECT,
+    media: [
+      ...TEST_PROJECT.media,
+      { ...TEST_PROJECT.media[2]!, id: "bg0-copy", name: "bg0.png" },
+    ],
+    layers: TEST_PROJECT.layers.map((layer) => layer.kind === "bg"
+      ? {
+        ...layer,
+        items: [{
+          ...layer.items[0]!,
+          mediaId: undefined,
+          mediaIds: ["bg0.png", "missing-bg.png"],
+        }],
+      }
+      : layer),
+  };
+  mockTest01Fetch({ project });
+
+  renderEditor();
+
+  const alert = await screen.findByRole("alert", { name: "Config media errors" });
+  expect(alert).toHaveTextContent('Ambiguous media asset name "bg0.png"');
+  expect(alert).toHaveTextContent('Ambiguous background media asset "bg0.png"');
+  expect(alert).toHaveTextContent('Missing background media asset "missing-bg.png"');
+
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const missingCard = await screen.findByRole("button", { name: /missing-bg\.png selected/i });
+  expect(missingCard).toHaveTextContent("Config error: missing background media asset");
+});
+
 it("normalizes legacy split background clips into one playlist on load", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({ project: TEST_PROJECT_SPLIT_BG });
@@ -464,7 +600,7 @@ it("normalizes legacy split background clips into one playlist on load", async (
   expect(await screen.findByRole("button", { name: "auto / 3 assets" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /bg1\.png over/i })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /bg2\.png over/i })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Save project config \(pending\)/i })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /save project config/i })).not.toBeInTheDocument();
   expect(screen.queryByText(/Background cycle/i)).not.toBeInTheDocument();
   expect(screen.getByText("bg0.png")).toBeInTheDocument();
   expect(screen.getByText("bg1.png")).toBeInTheDocument();
@@ -516,8 +652,6 @@ it("restores the subtitles timeline layer for aligned projects whose saved confi
 
   expect(await screen.findByText("Subtitles · 5")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Layers - 4" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
-
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -563,7 +697,6 @@ it("remaps clip timestamps on alignment rerun and keeps unmappable anchors orpha
   expect(screen.getByRole("button", { name: "orphan.png over s5" })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByText(/cache invalid 3\/4/i)).toBeInTheDocument());
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -766,17 +899,14 @@ it("updates only background through Change Background modal and appends one oper
   fireEvent.click(screen.getByRole("button", { name: /bg1\.png/i }));
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
+  const pendingOps = readUndo();
+  expect(pendingOps).toHaveLength(1);
+  expect(pendingOps[0]?.op?.type).toBe("replace_layers");
+
   expect(await screen.findByRole("button", { name: "auto / 2 assets" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "foreground.png over s1" })).toBeInTheDocument();
 
-  const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
-  expect(raw).not.toBeNull();
-  const parsed = JSON.parse(raw ?? "{}");
-  expect(parsed.undo).toHaveLength(1);
-  expect(parsed.undo[0]?.op?.type).toBe("replace_layers");
-
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -791,6 +921,38 @@ it("updates only background through Change Background modal and appends one oper
     expect(bgLayer?.items?.[0]?.cache_status).toBe("invalid");
     expect(fgLayer?.items?.[0]?.cache_status).toBe("warm");
     expect(pipLayer?.items?.[0]?.cache_status).toBe("warm");
+  });
+  expect(readUndo()).toHaveLength(0);
+});
+
+it("uses dragged background modal order in the inspector asset list", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const dialog = await screen.findByRole("dialog", { name: /change background/i });
+  fireEvent.click(within(dialog).getByRole("button", { name: /^bg1\.png$/i }));
+  const sourceCard = within(dialog).getByRole("button", { name: /^bg1\.png selected$/i }).closest("[data-reorder-card='true']") as HTMLElement;
+  const targetCard = within(dialog).getByRole("button", { name: /^bg0\.png selected$/i }).closest("[data-reorder-card='true']") as HTMLElement;
+  pointerDragTo(sourceCard, targetCard);
+  await waitFor(() => {
+    const first = within(dialog).getByRole("button", { name: /^bg1\.png selected$/i });
+    const second = within(dialog).getByRole("button", { name: /^bg0\.png selected$/i });
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+  const firstInspectorAsset = await screen.findByRole("button", { name: "Change bg1.png" });
+  const secondInspectorAsset = screen.getByRole("button", { name: "Change bg0.png" });
+  expect(firstInspectorAsset.compareDocumentPosition(secondInspectorAsset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    const bgLayer = payload.config.layers.find((layer) => layer.kind === "bg");
+    expect(bgLayer?.items?.[0]?.mediaIds).toEqual(["bg1.png", "bg0.png"]);
   });
 });
 
@@ -833,7 +995,6 @@ it("edits foreground directly in inspector and invalidates only the edited foreg
   expect(readUndo()).toHaveLength(1);
   expect(readUndo()[0]?.op?.type).toBe("replace_layers");
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -862,8 +1023,6 @@ it("saves background motion with schema-valid values after Change Background", a
   fireEvent.change(within(modal).getByLabelText(/motion/i), { target: { value: "ken_burns" } });
   fireEvent.click(within(modal).getByRole("button", { name: "Save changes" }));
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
-
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -891,7 +1050,6 @@ it("edits background inspector controls and invalidates only background cache en
   expect(readUndo()).toHaveLength(3);
   expect(screen.getByText(/cache invalid 2\/3/i)).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -920,7 +1078,6 @@ it("persists schema-valid background motion when inspector selects subtle alias"
   fireEvent.change(screen.getByLabelText("Background motion"), { target: { value: "ken_burns_subtle" } });
   expect(readUndo()).toHaveLength(1);
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -942,7 +1099,6 @@ it("persists schema-valid foreground motion when inspector receives subtle alias
   fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "ken_burns_subtle" } });
   expect(readUndo()).toHaveLength(1);
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -1054,13 +1210,19 @@ it("dragging a timeline clip body recalculates sentence range from updated span"
   renderEditor();
   await screen.findByText("test01");
 
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  Object.defineProperty(audio, "duration", { configurable: true, value: 25 });
+  fireEvent.loadedMetadata(audio);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
   fireEvent.mouseDown(screen.getByRole("button", { name: "foreground.png over s1" }), { clientX: 0 });
   fireEvent.mouseMove(window, { clientX: 20 });
-  fireEvent.mouseUp(window);
+  fireEvent.mouseUp(window, { clientX: 20 });
 
   await waitFor(() => expect(screen.getByRole("button", { name: "foreground.png over s2" })).toBeInTheDocument());
-  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
-  await waitFor(() => expect(audio.currentTime).toBeGreaterThanOrEqual(5));
+  expect(audio.currentTime).toBe(0);
   const transcriptRows = Array.from(screen.getByTestId("transcript-list").querySelectorAll(".group"));
   expect(transcriptRows.some((row) => row.className.includes("bg-(--amber-bg)"))).toBe(false);
   rectSpy.mockRestore();
@@ -1216,7 +1378,6 @@ it("Apply in subtitles modal updates defaults, appends one operation, and closes
   expect(parsed.undo).toHaveLength(1);
   expect(parsed.undo[0]?.op?.type).toBe("subtitle_settings_update");
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -1261,23 +1422,7 @@ it("Cancel in subtitles modal closes without mutation", async () => {
 it("updates watermark config, shows preview watermark, and persists watermark operations", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({
-    uploadsResult: [{
-      mediaId: "logo.png",
-      media: {
-        id: "logo.png",
-        name: "logo.png",
-        kind: "image",
-        path: "uploads/logo.png",
-        thumb_path: "uploads/.thumbs/logo.jpg",
-        dimensions: { width: 1280, height: 720 },
-        duration: null,
-        size: 456789,
-        hash: "logo",
-        import_mode: "copy",
-        imported_at: "2026-05-26T00:00:00Z",
-        created_at: null,
-      },
-    }],
+    uploadsResult: [uploadedImageResult("watermark-media-1", "logo.png")],
   });
 
   renderEditor();
@@ -1304,8 +1449,35 @@ it("updates watermark config, shows preview watermark, and persists watermark op
   const parsed = JSON.parse(raw ?? "{}");
   const wmOps = (parsed.undo ?? []).filter((entry: { op?: { type?: string } }) => entry.op?.type === "watermark_update");
   expect(wmOps.length).toBeGreaterThanOrEqual(2);
-  expect(wmOps.some((entry: { op?: { after?: { mediaId?: string } } }) => entry.op?.after?.mediaId === "logo.png")).toBe(true);
-  expect(wmOps.at(-1)?.op?.after).toEqual(expect.objectContaining({ enabled: false, mediaId: "logo.png" }));
+  expect(wmOps.some((entry: { op?: { after?: { mediaId?: string } } }) => entry.op?.after?.mediaId === "watermark-media-1")).toBe(true);
+  expect(wmOps.at(-1)?.op?.after).toEqual(expect.objectContaining({ enabled: false, mediaId: "watermark-media-1" }));
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    expect(payload.config.media.some((entry) => entry.id === "watermark-media-1")).toBe(true);
+    expect(payload.config.watermark?.mediaId).toBe("watermark-media-1");
+  });
+});
+
+it("ignores video files selected through the watermark importer", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+
+  fireEvent.click(screen.getByRole("button", { name: "Watermark" }));
+  const dialog = await screen.findByRole("dialog");
+  const fileInput = dialog.querySelector("input[type='file']") as HTMLInputElement;
+  fireEvent.change(fileInput, {
+    target: { files: [new File([new Uint8Array([1, 2])], "loop.mp4", { type: "video/mp4" })] },
+  });
+
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining("/uploads"), expect.anything());
+  expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "false");
 });
 
 it("replaces the previous watermark asset when a new watermark is uploaded", async () => {
@@ -1373,9 +1545,9 @@ it("supports transcript search keyboard shortcuts and Cmd/Ctrl+F focus", async (
   renderEditor();
 
   const search = await screen.findByRole("searchbox", { name: /search transcript/i });
-  const saveButton = screen.getByRole("button", { name: /save project config/i });
-  saveButton.focus();
-  expect(saveButton).toHaveFocus();
+  const renderButton = screen.getByRole("button", { name: /render draft/i });
+  renderButton.focus();
+  expect(renderButton).toHaveFocus();
 
   fireEvent.keyDown(window, { key: "f", ctrlKey: true });
   expect(search).toHaveFocus();
@@ -1579,7 +1751,6 @@ it("merges transcript sentences, remaps clip anchors, and appends one operation-
   expect(parsed.undo).toHaveLength(1);
   expect(parsed.undo[0]?.op?.type).toBe("transcript_merge");
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCall = calls.find(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -1629,6 +1800,263 @@ it("imports media through POST /uploads and shows the imported asset in modal", 
     expect(calls.some(([input, init]) => String(input).endsWith("/uploads") && init?.method === "POST")).toBe(true);
   });
   expect((await screen.findAllByText("new-upload.jpg")).length).toBeGreaterThan(0);
+});
+
+it("autosaves assigned uploads with the stable upload media id in config media and layer items", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    uploadsResult: [uploadedImageResult("upload-media-1", "new-upload.jpg")],
+  });
+
+  renderEditor();
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
+
+  const dialog = await screen.findByRole("dialog", { name: /assign media to range/i });
+  const fileInput = dialog.querySelector("input[type='file']") as HTMLInputElement | null;
+  expect(fileInput).not.toBeNull();
+  fireEvent.change(fileInput!, {
+    target: { files: [new File([new Uint8Array([1, 2])], "new-upload.jpg", { type: "image/jpeg" })] },
+  });
+  await waitFor(() => expect(screen.getByRole("button", { name: "new-upload.jpg" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "new-upload.jpg" }));
+  expect(await screen.findByText("new-upload.jpg selected")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /add to project/i }));
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    expect(payload.config.media.some((entry) => entry.id === "upload-media-1" && entry.role === "foreground")).toBe(true);
+    const assignedItem = payload.config.layers
+      .filter((layer: { kind?: string }) => layer.kind === "fg")
+      .flatMap((layer: { items?: Array<{ mediaId?: string; sentences?: [number, number] }> }) => layer.items ?? [])
+      .find((item: { sentences?: [number, number] }) => item.sentences?.[0] === 5);
+    expect(assignedItem?.mediaId).toBe("upload-media-1");
+  });
+});
+
+it("autosaves background uploads with stable media ids in config media and playlist items", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    uploadsResult: [uploadedImageResult("upload-bg-1", "new-bg.jpg")],
+  });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const dialog = await screen.findByRole("dialog");
+  const fileInput = within(dialog).getByLabelText("Import from disk") as HTMLInputElement;
+  fireEvent.change(fileInput, {
+    target: { files: [new File([new Uint8Array([1, 2])], "new-bg.jpg", { type: "image/jpeg" })] },
+  });
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: /^new-bg\.jpg$/i })).toBeEnabled());
+  fireEvent.click(within(dialog).getByRole("button", { name: /^new-bg\.jpg$/i }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    expect(payload.config.media.some((entry) => entry.id === "upload-bg-1" && entry.role === "background")).toBe(true);
+    const bgLayer = payload.config.layers.find((layer) => layer.kind === "bg");
+    expect(bgLayer?.items?.[0]?.mediaIds).toContain("upload-bg-1");
+  });
+});
+
+it("chunks boundary-size background uploads before they cross the web proxy body limit", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    uploadsResultSequence: [
+      [],
+      [uploadedVideoResult("upload-boundary-video", "boundary.mp4")],
+    ],
+  });
+
+  renderEditor();
+  fireEvent.click(await screen.findByRole("button", { name: "Change Background" }));
+  const dialog = await screen.findByRole("dialog", { name: /change background/i });
+  const fileInput = within(dialog).getByLabelText("Import from disk") as HTMLInputElement;
+
+  fireEvent.change(fileInput, {
+    target: { files: [new File([new Uint8Array(10 * 1024 * 1024)], "boundary.mp4", { type: "video/mp4" })] },
+  });
+
+  await within(dialog).findByRole("button", { name: /^boundary\.mp4$/i });
+  const uploadCalls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(([input, init]) => {
+    return String(input).endsWith("/uploads") && init?.method === "POST";
+  });
+  expect(uploadCalls).toHaveLength(2);
+  const firstBody = uploadCalls[0]?.[1]?.body as FormData;
+  const secondBody = uploadCalls[1]?.[1]?.body as FormData;
+  expect(firstBody.get("chunk_index")).toBe("0");
+  expect(secondBody.get("chunk_index")).toBe("1");
+  expect((firstBody.get("files") as File).size).toBeLessThan(10 * 1024 * 1024);
+  expect((secondBody.get("files") as File).size).toBeLessThan(10 * 1024 * 1024);
+});
+
+it("loads uploaded video background thumbnails from saved config media", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const uploadedVideo = {
+    ...uploadedVideoResult("upload-video-bg-1", "uploaded-video.mp4").media,
+    role: "background",
+  } as (typeof TEST_PROJECT.media)[number];
+  mockTest01Fetch({
+    project: {
+      ...TEST_PROJECT,
+      media: [...TEST_PROJECT.media, uploadedVideo],
+      layers: TEST_PROJECT.layers.map((layer) => {
+        if (layer.kind !== "bg") return layer;
+        return {
+          ...layer,
+          items: layer.items.map((item) => ({ ...item, mediaId: "upload-video-bg-1" })),
+        };
+      }),
+    } as unknown as typeof TEST_PROJECT,
+  });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByRole("button", { name: /^uploaded-video\.mp4 selected$/i })).toBeInTheDocument();
+  expect(within(dialog).getByRole("img", { name: "uploaded-video.mp4" })).toHaveAttribute(
+    "src",
+    "/api/server/uploads/thumb?filename=uploaded-video.jpg",
+  );
+});
+
+it("autosaves PiP uploads with stable media ids in config media and layer items", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({
+    uploadsResult: [uploadedImageResult("upload-pip-1", "new-pip.png")],
+  });
+
+  renderEditor();
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
+
+  const dialog = await screen.findByRole("dialog", { name: /assign media to range/i });
+  fireEvent.click(within(dialog).getByRole("button", { name: /picture-in-picture/i }));
+  const fileInput = dialog.querySelector("input[type='file']") as HTMLInputElement | null;
+  expect(fileInput).not.toBeNull();
+  fireEvent.change(fileInput!, {
+    target: { files: [new File([new Uint8Array([1, 2])], "new-pip.png", { type: "image/png" })] },
+  });
+  await waitFor(() => expect(screen.getByRole("button", { name: "new-pip.png" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "new-pip.png" }));
+  expect(await screen.findByText("new-pip.png selected")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /add to project/i }));
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    expect(payload.config.media.some((entry) => entry.id === "upload-pip-1" && entry.role === "pip")).toBe(true);
+    const assignedItem = payload.config.layers
+      .filter((layer) => layer.kind === "pip")
+      .flatMap((layer) => layer.items ?? [])
+      .find((item) => item.sentences?.[0] === 5);
+    expect(assignedItem?.mediaId).toBe("upload-pip-1");
+  });
+});
+
+it("deleting an unreferenced uploaded asset removes it from the modal list and autosaves", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const orphanAsset = {
+    ...uploadedImageResult("orphan-upload-1", "orphan-logo.png").media,
+    role: "watermark",
+  } as (typeof TEST_PROJECT.media)[number];
+  mockTest01Fetch({
+    project: {
+      ...TEST_PROJECT,
+      media: [...TEST_PROJECT.media, orphanAsset],
+      watermark: null,
+    } as unknown as typeof TEST_PROJECT,
+  });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Watermark" }));
+
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByRole("button", { name: /^orphan-logo\.png$/i })).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: /delete orphan-logo\.png/i }));
+
+  await waitFor(() => {
+    expect(within(dialog).queryByRole("button", { name: /^orphan-logo\.png$/i })).not.toBeInTheDocument();
+  });
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    expect(payload.config.media.some((entry) => entry.id === "orphan-upload-1")).toBe(false);
+    expect(payload.config.watermark).toBeNull();
+  });
+});
+
+it("deleting a referenced uploaded asset clears all config references and autosaves", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const uploadedAsset = uploadedImageResult("shared-upload-1", "shared-upload.png").media as (typeof TEST_PROJECT.media)[number];
+  mockTest01Fetch({
+    project: {
+      ...TEST_PROJECT,
+      media: [...TEST_PROJECT.media, uploadedAsset],
+      watermark: { enabled: true, mediaId: "shared-upload-1", opacity: 85, posX: 9, posY: 11, scale: 0.08 },
+      layers: TEST_PROJECT.layers.map((layer) => {
+        if (layer.kind === "bg") {
+          return {
+            ...layer,
+            items: layer.items.map((item) => ({
+              ...item,
+              mediaIds: ["bg0.png", "shared-upload-1"],
+            })),
+          };
+        }
+        if (layer.kind === "fg") {
+          return {
+            ...layer,
+            items: [
+              ...layer.items,
+              {
+                id: "fg-shared-upload",
+                mediaId: "shared-upload-1",
+                sentences: [4, 4] as [number, number],
+                start: 20,
+                end: 25,
+                motion: { kind: "none", easing: "ease_in_out" },
+                transitions: { in: "fade", out: "cut" },
+                cache_status: "warm" as const,
+              },
+            ],
+          };
+        }
+        if (layer.kind === "pip") {
+          return {
+            ...layer,
+            items: [
+              ...layer.items,
+              {
+                id: "pip-shared-upload",
+                mediaId: "shared-upload-1",
+                sentences: [4, 4] as [number, number],
+                start: 20,
+                end: 25,
+                motion: { kind: "none", easing: "ease_in_out" },
+                transitions: { in: "fade", out: "cut" },
+                pip: { posX: 68, posY: 14, size: 30, radius: 12, opacity: 100 },
+                cache_status: "warm" as const,
+              },
+            ],
+          };
+        }
+        return layer;
+      }),
+    } as unknown as typeof TEST_PROJECT,
+  });
+
+  renderEditor();
+  await openAssignModalFromSentence(/5 00:20-00:25 Assign a new asset here/i);
+  fireEvent.click(screen.getByRole("button", { name: /delete shared-upload\.png/i }));
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    expect(payload.config.media.some((entry) => entry.id === "shared-upload-1")).toBe(false);
+    expect(payload.config.watermark).toBeNull();
+    expect(JSON.stringify(payload.config.layers)).not.toContain("shared-upload-1");
+  });
 });
 
 it("shows a failed upload error state in assign modal when image is smaller than 5x5", async () => {
@@ -1974,7 +2402,27 @@ it("writes browser autosave recovery state without PUT config sync", async () =>
   expect(putConfigCalls).toHaveLength(0);
 });
 
-it("explicit Save syncs config via PUT and clears committed operations", async () => {
+it("keeps local edits and pending operations when autosave PUT fails", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch({ configSaveError: true });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "foreground.png over s1" }));
+  fireEvent.change(screen.getByLabelText("Foreground motion"), { target: { value: "zoom_in" } });
+
+  await waitFor(() => {
+    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const putConfigCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
+    expect(putConfigCalls).toHaveLength(1);
+  });
+
+  expect(screen.getByLabelText("Foreground motion")).toHaveValue("zoom_in");
+  expect(readUndo()).toHaveLength(1);
+  expect(screen.queryByText(/save failed/i)).not.toBeInTheDocument();
+});
+
+it("autosave syncs config via PUT and clears committed operations", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch({ hasUnrenderedChanges: false });
   window.localStorage.setItem(
@@ -1989,8 +2437,6 @@ it("explicit Save syncs config via PUT and clears committed operations", async (
   renderEditor();
   await screen.findByText("test01");
 
-  fireEvent.click(screen.getByRole("button", { name: /save project config/i }));
-
   await waitFor(() => {
     const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
     const putConfigCalls = calls.filter(([input, init]) => String(input).includes(`/projects/${TEST_PROJECT_ID}/config`) && init?.method === "PUT");
@@ -2002,7 +2448,7 @@ it("explicit Save syncs config via PUT and clears committed operations", async (
   expect(putConfigCall).toBeDefined();
   const putBody = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
   expect(putBody.config.output.resolution).toBe("9:16");
-  expect(window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID))).toBeNull();
+  expect(readUndo()).toHaveLength(0);
 });
 
 it("reload replays operation log and restores recovery range, scroll, and resolution", async () => {

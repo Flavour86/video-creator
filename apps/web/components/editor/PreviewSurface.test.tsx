@@ -473,6 +473,38 @@ describe("PreviewSurface", () => {
     expect(decoders.every((node) => node.getAttribute("preload") === "metadata")).toBe(true);
   });
 
+  it("uses video metadata and upload paths for stable background video ids", async () => {
+    const layer: Layer = {
+      ...BG_VIDEO_LAYER,
+      items: [{
+        ...BG_VIDEO_LAYER.items[0]!,
+        mediaId: "upload-video-bg-1",
+        start: 2,
+        end: 8,
+      }],
+    };
+
+    renderSurface({
+      currentTime: 5,
+      layers: [layer],
+      media: [{
+        filename: "uploaded-bg.mp4",
+        import_mode: "copy",
+        imported_at: "2026-06-01T00:00:00.000Z",
+        kind: "video",
+        mediaId: "upload-video-bg-1",
+        path: "uploads/uploaded-bg.mp4",
+        size: 100,
+        thumb_url: "/uploads/thumb?filename=uploaded-bg.jpg",
+      }],
+    });
+
+    const decoder = await screen.findByTestId("preview-video-decoder") as HTMLVideoElement;
+    expect(decoder.src).toContain("/api/server/uploads/media-file");
+    expect(decoder.src).toContain("filename=uploaded-bg.mp4");
+    await waitFor(() => expect(decoder.currentTime).toBe(3));
+  });
+
   it("redraws continuously on requestAnimationFrame while playing and redraws on pause/seek edits", async () => {
     const { rerender, props } = renderSurface({ currentTime: 1, layers: [BG_LAYER], playing: true });
     expect(requestAnimationFrame).toHaveBeenCalled();

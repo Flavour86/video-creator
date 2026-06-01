@@ -1,4 +1,4 @@
-import { Film, FolderOpen, Save } from "lucide-react";
+import { Film, FolderOpen } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button, IconButton } from "@/components/ui";
 import type { EditorRenderJob } from "./types";
@@ -7,39 +7,32 @@ type EditorBarProps = {
   onHome: () => void;
   onRenderDraft: () => void;
   onRenderFinal: () => void;
-  onSave: () => void;
   projectName: string;
   projectId: string;
   renderJob: EditorRenderJob;
   renderDraftDisabled: boolean;
   renderFinalDisabled: boolean;
   saveStatus: "pending" | "saving" | "saved" | "failed";
-  saving: boolean;
 };
 
 export function EditorBar({
   onHome,
   onRenderDraft,
   onRenderFinal,
-  onSave,
   projectName,
   projectId,
   renderJob,
   renderDraftDisabled,
   renderFinalDisabled,
   saveStatus,
-  saving,
 }: EditorBarProps) {
   const t = useTranslations("pages.editor");
-  const saveLabel = saveStatus === "pending"
-    ? t("pending")
-    : saveStatus === "saving"
-      ? t("saving")
-      : saveStatus === "saved"
-        ? t("saved")
-        : saveStatus === "failed"
-          ? t("saveFailed")
-          : t("save");
+  const autosaveLabel = saveStatus === "saving"
+    ? t("saving")
+    : saveStatus === "saved"
+      ? t("saved")
+      : "";
+  const autosaveAriaLabel = autosaveLabel ? `Autosave ${autosaveLabel.toLowerCase()}` : "Autosave status";
   const renderDraftStateLabel = renderJob.running ? "queued/running" : renderDraftDisabled ? "disabled" : "ready";
   const renderFinalStateLabel = renderJob.running ? "queued/running" : renderFinalDisabled ? "disabled" : "ready";
   const draftProgress = Math.max(0, Math.min(100, Math.trunc(renderJob.progress)));
@@ -57,10 +50,13 @@ export function EditorBar({
         </div>
       </div>
       <div className="flex items-center justify-end gap-2">
-        <Button aria-label={`Save project config (${saveStatus})`} disabled={saving} onClick={onSave} size="extra-small" variant="default">
-          <Save aria-hidden="true" className="h-4 w-4" />
-          {saveLabel}
-        </Button>
+        <span
+          aria-label={autosaveAriaLabel}
+          aria-live="polite"
+          className="inline-flex h-(--space-8) min-w-[4.75rem] items-center justify-end text-[12px] font-semibold text-(--text-2)"
+        >
+          {autosaveLabel}
+        </span>
         <Button
           aria-label={`Render draft (${renderDraftStateLabel})`}
           disabled={renderJob.running || renderDraftDisabled}

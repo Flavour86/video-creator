@@ -2,14 +2,18 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
+import { moveIdRelativeTo, type ReorderPlacement } from "@/lib/media-order";
 import { buildFgItem, hasSentenceOverlap, nextZIndex } from "@/lib/layers";
+import { useReorderableAssetMotion } from "@/lib/use-reorderable-asset-motion";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 
 type MediaItem = {
   filename: string;
+  deletable?: boolean;
   kind: "image" | "video";
+  mediaId: string;
   role?: "foreground" | "pip";
   thumb_url: string;
   importing?: boolean;
@@ -32,6 +36,8 @@ type Props = {
   sentences: AlignedSentence[];
   layers: Layer[];
   onImport?: (files: FileList | null, role: "foreground" | "pip") => Promise<unknown> | unknown;
+  onDeleteMedia?: (mediaId: string) => void;
+  onReorderMedia?: (mediaIds: string[]) => void;
   onConfirm: (updatedLayers: Layer[], newLayerId: string, newItemId: string) => void;
   onClose: () => void;
 };
@@ -217,6 +223,8 @@ export function AssignModal({
   sentences,
   layers,
   onImport,
+  onDeleteMedia,
+  onReorderMedia,
   onConfirm,
   onClose,
 }: Props) {
@@ -240,6 +248,8 @@ export function AssignModal({
   const [submitError, setSubmitError] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const scopedMedia = mediaForCompositing(media, compositing);
+  const reorderMotion = useReorderableAssetMotion(scopedMedia.map((item) => item.mediaId), reorderMedia);
+  const selectedMediaItem = scopedMedia.find((item) => item.mediaId === selectedMedia);
 
   // Sync state when modal opens with new props
   useEffect(() => {
@@ -324,7 +334,7 @@ export function AssignModal({
 
   useEffect(() => {
     if (!selectedMedia) return;
-    if (scopedMedia.some((item) => item.filename === selectedMedia)) return;
+    if (scopedMedia.some((item) => item.mediaId === selectedMedia)) return;
     setSelectedMedia("");
   }, [scopedMedia, selectedMedia]);
 
@@ -468,6 +478,13 @@ export function AssignModal({
     onClose();
   }
 
+  function reorderMedia(sourceId: string, targetId: string, placement: ReorderPlacement) {
+    const currentOrder = scopedMedia.map((item) => item.mediaId);
+    const nextOrder = moveIdRelativeTo(currentOrder, sourceId, targetId, placement);
+    if (currentOrder.length === nextOrder.length && currentOrder.every((id, index) => id === nextOrder[index])) return;
+    onReorderMedia?.(nextOrder);
+  }
+
   return (
     <Dialog.Root onOpenChange={(o) => { if (!o) onClose(); }} open={open}>
       <Dialog.Portal>
@@ -494,7 +511,7 @@ export function AssignModal({
               <div className="flex min-w-0 items-center gap-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Asset</p>
                 <span className="font-mono text-[11px] text-(--text-3)">
-                  {selectedMedia ? `${selectedMedia} selected` : "No asset chosen"}
+                  {selectedMediaItem ? `${selectedMediaItem.filename} selected` : "No asset chosen"}
                 </span>
               </div>
               {onImport ? (
@@ -522,58 +539,89 @@ export function AssignModal({
             {scopedMedia.length === 0 ? (
               <p className="text-sm text-(--text-3)">No media added yet.</p>
             ) : (
-              <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto">
+              <div className="flex max-h-[320px] gap-2 overflow-x-auto overflow-y-hidden pb-1" data-reorder-rail="true">
                 {scopedMedia.map((item) => {
-                  const active = selectedMedia === item.filename;
+                  const active = selectedMedia === item.mediaId;
+                  const errorText = item.import_error?.startsWith("Config error")
+                    ? item.import_error
+                    : item.import_error
+                      ? `Import failed: ${item.import_error}`
+                      : "";
                   return (
-                    <button
-                      aria-label={`${item.filename}${active ? " selected" : ""}`}
-                      aria-pressed={active}
-                      className={`overflow-hidden rounded-md border p-1 text-left transition-colors ${
-                        active
-                          ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
-                          : item.import_error
-                            ? "border-(--red) bg-(--bg-2)"
-                          : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
-                      }`}
-                      disabled={item.importing || !!item.import_error}
-                      key={item.filename}
-                      onClick={() => setSelectedMedia(item.filename)}
-                      type="button"
+                    <div
+                      className="relative w-[150px] shrink-0 cursor-grab will-change-transform active:cursor-grabbing"
+                      data-media-id={item.mediaId}
+                      data-reorder-card="true"
+                      key={item.mediaId}
+                      ref={(node) => reorderMotion.registerNode(item.mediaId, node)}
+                      onClickCapture={reorderMotion.suppressClickAfterDrag}
+                      onPointerCancel={reorderMotion.cancelPointerDrag}
+                      onPointerDown={(event) => {
+                        if (item.importing || item.import_error) return;
+                        reorderMotion.beginPointerDrag(item.mediaId, event);
+                      }}
+                      onPointerMove={reorderMotion.movePointerDrag}
+                      onPointerUp={reorderMotion.endPointerDrag}
                     >
-                      <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
-                        {item.thumb_url ? (
-                          <img
-                            alt={item.filename}
-                            className="h-full w-full object-cover"
-                            src={`/api/server${item.thumb_url}`}
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))] text-xs text-white/60">
+                      <button
+                        aria-label={`${item.filename}${active ? " selected" : ""}`}
+                        aria-pressed={active}
+                        className={`w-full overflow-hidden rounded-md border p-1 text-left transition-colors ${
+                          active
+                            ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
+                            : item.import_error
+                              ? "border-(--red) bg-(--bg-2)"
+                            : "border-(--line) bg-(--bg-2) hover:bg-(--bg-3)"
+                        }`}
+                        disabled={item.importing || !!item.import_error}
+                        onClick={() => setSelectedMedia(item.mediaId)}
+                        type="button"
+                      >
+                        <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
+                          {item.thumb_url ? (
+                            <img
+                              alt={item.filename}
+                              className="h-full w-full object-cover"
+                              src={`/api/server${item.thumb_url}`}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))] text-xs text-white/60">
+                              {item.kind === "video" ? "MP4" : "IMG"}
+                            </div>
+                          )}
+                          <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
                             {item.kind === "video" ? "MP4" : "IMG"}
-                          </div>
-                        )}
-                        <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-white">
-                          {item.kind === "video" ? "MP4" : "IMG"}
-                        </span>
-                        {active ? (
-                          <span className="absolute right-1.5 top-1.5 rounded bg-(--amber) px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-(--bg-0)">
-                            Selected
                           </span>
+                          {active ? (
+                            <span className="absolute bottom-1.5 left-1.5 rounded bg-(--amber) px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase text-(--bg-0)">
+                              Selected
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
+                        {item.importing ? (
+                          <div className="truncate font-mono text-[10px] text-(--blue)">
+                            Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%
+                          </div>
                         ) : null}
-                      </div>
-                      <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
-                      {item.importing ? (
-                        <div className="truncate font-mono text-[10px] text-(--blue)">
-                          Importing {Math.max(0, Math.min(100, Math.round(item.import_progress ?? 0)))}%
-                        </div>
+                        {item.import_error ? (
+                          <div className="truncate font-mono text-[10px] text-(--red)">
+                            {errorText}
+                          </div>
+                        ) : null}
+                      </button>
+                      {item.deletable && onDeleteMedia ? (
+                        <button
+                          aria-label={`Delete ${item.filename}`}
+                          className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded bg-black/65 text-white transition hover:bg-(--red) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--amber)"
+                          data-reorder-delete="true"
+                          onClick={() => onDeleteMedia(item.mediaId)}
+                          type="button"
+                        >
+                          <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                        </button>
                       ) : null}
-                      {item.import_error ? (
-                        <div className="truncate font-mono text-[10px] text-(--red)">
-                          Import failed: {item.import_error}
-                        </div>
-                      ) : null}
-                    </button>
+                    </div>
                   );
                 })}
               </div>

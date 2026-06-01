@@ -20,6 +20,8 @@ export type EditorMediaItem = {
   importing?: boolean;
   import_progress?: number | null;
   import_error?: string | null;
+  config_error?: string | null;
+  deletable?: boolean;
 };
 
 export type EditorSelection = {
