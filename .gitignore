@@ -1,3 +1,7 @@
+# Skill junctions — created by scripts/link-skills.ps1, not managed by git
+.claude/skills/prototype-update-pipeline
+.claude/skills/bug-inspection
+
 # Node
 node_modules/
 .next/
