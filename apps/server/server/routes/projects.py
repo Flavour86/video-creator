@@ -51,6 +51,7 @@ from server.domain.project import (
     RecentProjectsPage,
     ensure_project_layout,
     load_project,
+    normalize_project_config,
 )
 from server.domain.timing import AlignmentResult
 from server.pipeline.cache import compute_alignment_hash
@@ -341,7 +342,7 @@ def _optional_str(value: object) -> str | None:
 
 
 def _write_valid_project_config(project_dir: Path, data: dict[str, Any]) -> str:
-    updated = Project.model_validate(_ensure_subtitles_layer_config(data))
+    updated = Project.model_validate(normalize_project_config(_ensure_subtitles_layer_config(data)))
     return save_config_snapshot(
         project_dir,
         updated.model_dump(mode="json", by_alias=True, exclude_none=False),
@@ -948,6 +949,10 @@ def _default_subtitles(burn_in: bool) -> dict[str, Any]:
             "position": "bottom",
             "max_chars_per_line": 42,
             "bg_style": "shadow",
+            "color": "#ffffff",
+            "bg_color": "#000000",
+            "bg_opacity": 62,
+            "bg_radius": 8,
         },
     }
 
@@ -1019,10 +1024,10 @@ async def get_project_config(project_id: str) -> ProjectConfigLoadResponse | JSO
     config = latest_config_for_project_path(project_dir)
     if config is None:
         config = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
-        config = _ensure_subtitles_layer_config(config)
+        config = normalize_project_config(_ensure_subtitles_layer_config(config))
         config_hash = save_config_snapshot(project_dir, config)
     else:
-        config = _ensure_subtitles_layer_config(config)
+        config = normalize_project_config(_ensure_subtitles_layer_config(config))
         config_hash = save_config_snapshot(project_dir, config)
     row = get_project_by_path(project_dir)
     return ProjectConfigLoadResponse(

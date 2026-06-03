@@ -140,6 +140,15 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
                         {
                             "id": "bg-playlist",
                             "mediaIds": ["media-bg-1"],
+                            "schedule": [
+                                {
+                                    "id": "seg-bg-1",
+                                    "mediaId": "media-bg-1",
+                                    "start": 0,
+                                    "end": 10,
+                                    "lockedDuration": False,
+                                }
+                            ],
                             "sentences": [1, 2],
                             "start": 0,
                             "end": 10,
@@ -160,6 +169,8 @@ def test_spec_media_playlist_cache_and_hash_fields_validate() -> None:
     assert project.media[0].id == "media-bg-1"
     bg_item = _item_root(project.layers[0].root.items[0])
     assert bg_item.media_ids == ["media-bg-1"]
+    assert bg_item.schedule[0].media_id == "media-bg-1"
+    assert bg_item.schedule[0].locked_duration is False
     assert bg_item.cache_status.value == "warm"
 
 
@@ -234,6 +245,10 @@ def test_editor_schema_accepts_task1_media_visual_subtitle_and_resolution_fields
                     "position": "bottom_low",
                     "max_chars_per_line": 80,
                     "bg_style": "pill",
+                    "color": "#ffcc00",
+                    "bg_color": "#101010",
+                    "bg_opacity": 62,
+                    "bg_radius": 8,
                 },
             },
         }
@@ -246,6 +261,40 @@ def test_editor_schema_accepts_task1_media_visual_subtitle_and_resolution_fields
     assert project.subtitles is not None
     assert project.subtitles.style.position.value == "bottom_low"
     assert project.subtitles.style.bg_style.value == "pill"
+    assert project.subtitles.style.color == "#ffcc00"
+    assert project.subtitles.style.bg_color == "#101010"
+    assert project.subtitles.style.bg_opacity == 62
+    assert project.subtitles.style.bg_radius == 8
+
+
+def test_project_schema_normalizes_legacy_subtitle_style_defaults() -> None:
+    project = Project.model_validate(
+        {
+            "version": 1,
+            "name": "legacy subtitle style",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": _phase1_output(),
+            "layers": [],
+            "subtitles": {
+                "burn_in": True,
+                "style": {
+                    "font": "Arial",
+                    "size": 36,
+                    "position": "bottom",
+                    "max_chars_per_line": 42,
+                    "bg_style": "shadow",
+                },
+            },
+        }
+    )
+
+    assert project.subtitles is not None
+    style = project.subtitles.style
+    assert style.color == "#ffffff"
+    assert style.bg_color == "#000000"
+    assert style.bg_opacity == 62
+    assert style.bg_radius == 8
 
 
 def test_editor_schema_rejects_out_of_range_pip_and_subtitle_values() -> None:
@@ -305,6 +354,20 @@ def test_editor_schema_declares_visual_media_reference_constraints() -> None:
     for item_name in ("ForegroundItem", "PipItem", "BackgroundItem"):
         all_of = defs[item_name]["allOf"]
         assert {"$ref": "#/$defs/VisualMediaRefConstraint"} in all_of
+
+    schedule = defs["BackgroundScheduleSegment"]
+    assert schedule["required"] == ["id", "mediaId", "start", "end", "lockedDuration"]
+
+    background_item_objects = [
+        part for part in defs["BackgroundItem"]["allOf"] if isinstance(part, dict) and "properties" in part
+    ]
+    assert any(
+        part["properties"].get("schedule") == {
+            "type": "array",
+            "items": {"$ref": "#/$defs/BackgroundScheduleSegment"},
+        }
+        for part in background_item_objects
+    )
 
 
 def test_visual_item_schema_requires_one_media_reference_mode() -> None:

@@ -2,12 +2,12 @@
 
 ## Phase 1: Shared Contracts
 
-- [ ] Task 1 (task-01): Extend project schema and generated types
+- [x] Task 1 (task-01): Extend project schema and generated types
   - Acceptance: `SubtitleStyle` has text color, background color, background opacity, and background radius fields with defaults; `BackgroundItem` accepts optional ordered `schedule[]`; existing configs without these fields still validate after normalization.
   - Verify: `rtk pnpm gen:types`, `rtk pnpm gen:py`, `rtk pnpm check:generated-schemas`, `rtk pnpm -F @vc/server test -- tests/test_project_schema.py tests/test_shared_api_schemas.py`, `rtk pnpm -F @vc/web test -- lib/hooks/useProject.test.ts`
   - Evidence: schema diff plus browser-loaded editor with an existing project config that still opens after normalization.
 
-- [ ] Checkpoint: Shared contract complete
+- [x] Checkpoint: Shared contract complete
   - Acceptance: Generated TS/Python schema outputs are current, and both web/server test suites can import the new fields without type/runtime errors.
 
 ## Phase 2: Backend Render Semantics

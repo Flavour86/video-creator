@@ -467,6 +467,10 @@ function normalizeSubtitlesSettings(value: SubtitlesSettings | null | undefined)
     burn_in: false,
     style: {
       bg_style: "shadow",
+      color: "#ffffff",
+      bg_color: "#000000",
+      bg_opacity: 62,
+      bg_radius: 8,
       font: "Arial",
       max_chars_per_line: 42,
       position: "bottom",
@@ -478,6 +482,10 @@ function normalizeSubtitlesSettings(value: SubtitlesSettings | null | undefined)
     burn_in: value.burn_in,
     style: {
       bg_style: value.style?.bg_style ?? fallback.style.bg_style,
+      color: value.style?.color ?? fallback.style.color,
+      bg_color: value.style?.bg_color ?? fallback.style.bg_color,
+      bg_opacity: value.style?.bg_opacity ?? fallback.style.bg_opacity,
+      bg_radius: value.style?.bg_radius ?? fallback.style.bg_radius,
       font: value.style?.font ?? fallback.style.font,
       max_chars_per_line: clampNumber(value.style?.max_chars_per_line ?? fallback.style.max_chars_per_line, 20, 80),
       position: value.style?.position ?? fallback.style.position,

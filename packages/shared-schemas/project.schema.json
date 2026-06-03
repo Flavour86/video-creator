@@ -626,10 +626,27 @@
           "additionalProperties": false,
           "required": ["crossfade"],
           "properties": {
-            "crossfade": { "type": "number", "minimum": 0 }
+            "crossfade": { "type": "number", "minimum": 0 },
+            "schedule": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/BackgroundScheduleSegment" }
+            }
           }
         }
       ]
+    },
+    "BackgroundScheduleSegment": {
+      "title": "BackgroundScheduleSegment",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mediaId", "start", "end", "lockedDuration"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "mediaId": { "type": "string", "minLength": 1 },
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "minimum": 0 },
+        "lockedDuration": { "type": "boolean" }
+      }
     },
     "SubtitlesItem": {
       "title": "SubtitlesItem",
@@ -701,7 +718,11 @@
         "size": { "type": "number", "minimum": 28, "maximum": 72 },
         "position": { "enum": ["bottom", "bottom_low", "top"] },
         "max_chars_per_line": { "type": "integer", "minimum": 20, "maximum": 80 },
-        "bg_style": { "enum": ["none", "pill", "block", "shadow"] }
+        "bg_style": { "enum": ["none", "pill", "block", "shadow"] },
+        "color": { "type": "string", "default": "#ffffff" },
+        "bg_color": { "type": "string", "default": "#000000" },
+        "bg_opacity": { "type": "number", "default": 62 },
+        "bg_radius": { "type": "number", "default": 8 }
       }
     },
     "SubtitlesSettings": {

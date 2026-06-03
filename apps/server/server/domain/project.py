@@ -40,7 +40,34 @@ __all__ = [
     "VersionedRuntimeStatus",
     "WhisperXStatus",
     "load_project",
+    "normalize_project_config",
 ]
+
+
+SUBTITLE_STYLE_DEFAULTS: dict[str, object] = {
+    "color": "#ffffff",
+    "bg_color": "#000000",
+    "bg_opacity": 62,
+    "bg_radius": 8,
+}
+
+
+def normalize_project_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Backfill schema defaults for legacy project configs before validation."""
+    subtitles = data.get("subtitles")
+    if not isinstance(subtitles, dict):
+        return data
+    style = subtitles.get("style")
+    if not isinstance(style, dict):
+        return data
+    if all(key in style for key in SUBTITLE_STYLE_DEFAULTS):
+        return data
+
+    normalized = dict(data)
+    normalized_subtitles = dict(subtitles)
+    normalized_subtitles["style"] = {**SUBTITLE_STYLE_DEFAULTS, **style}
+    normalized["subtitles"] = normalized_subtitles
+    return normalized
 
 
 def load_project(project_dir: Path) -> Project:
@@ -48,7 +75,7 @@ def load_project(project_dir: Path) -> Project:
     if not project_json.exists():
         raise FileNotFoundError(f"project.json not found in {project_dir}")
     data: dict[str, Any] = json.loads(project_json.read_text(encoding="utf-8"))
-    return Project.model_validate(data)
+    return Project.model_validate(normalize_project_config(data))
 
 
 def ensure_project_layout(project_dir: Path) -> None:

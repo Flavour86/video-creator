@@ -20,6 +20,10 @@ type PreviewSurfaceProps = Pick<EditorStateProps, "currentTime" | "duration" | "
 
 const FALLBACK_SUBTITLE_STYLE: NonNullable<Project["subtitles"]>["style"] = {
   bg_style: "shadow",
+  color: "#ffffff",
+  bg_color: "#000000",
+  bg_opacity: 62,
+  bg_radius: 8,
   font: "Arial",
   max_chars_per_line: 42,
   position: "bottom",

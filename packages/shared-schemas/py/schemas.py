@@ -582,11 +582,16 @@ class PipItem(VisualItemBase):
     pip: PipPlacement
 
 
-class BackgroundItem(VisualItemBase):
+class BackgroundScheduleSegment(BaseModel):
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
     )
-    crossfade: confloat(ge=0.0)
+    id: constr(min_length=1)
+    media_id: constr(min_length=1) = Field(..., alias='mediaId')
+    start: confloat(ge=0.0)
+    end: confloat(ge=0.0)
+    locked_duration: bool = Field(..., alias='lockedDuration')
 
 
 class SubtitlesItem(BaseModel):
@@ -633,17 +638,6 @@ class PipLayer(BaseModel):
     items: list[PipItem]
 
 
-class BackgroundLayer(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-        populate_by_name=True,
-    )
-    id: constr(min_length=1)
-    kind: Literal['bg']
-    name: str
-    items: list[BackgroundItem]
-
-
 class Position(Enum):
     bottom = 'bottom'
     bottom_low = 'bottom_low'
@@ -667,6 +661,10 @@ class SubtitleStyle(BaseModel):
     position: Position
     max_chars_per_line: conint(ge=20, le=80)
     bg_style: BgStyle
+    color: str | None = '#ffffff'
+    bg_color: str | None = '#000000'
+    bg_opacity: float | None = 62
+    bg_radius: float | None = 8
 
 
 class SubtitlesSettings(BaseModel):
@@ -770,9 +768,6 @@ class ProjectConfigSaveResponse(BaseModel):
     has_unrendered_changes: bool
 
 
-Layers = RootModel[SubtitlesLayer | ForegroundLayer | PipLayer | BackgroundLayer]
-
-
 class Transcript(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -781,6 +776,28 @@ class Transcript(BaseModel):
     kind: Kind
     path: str
     sentences: list[TranscriptSentenceCue] | None = Field(None, min_length=1)
+
+
+class BackgroundItem(VisualItemBase):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    crossfade: confloat(ge=0.0)
+    schedule: list[BackgroundScheduleSegment] | None = None
+
+
+class BackgroundLayer(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        populate_by_name=True,
+    )
+    id: constr(min_length=1)
+    kind: Literal['bg']
+    name: str
+    items: list[BackgroundItem]
+
+
+Layers = RootModel[SubtitlesLayer | ForegroundLayer | PipLayer | BackgroundLayer]
 
 
 class Project(BaseModel):

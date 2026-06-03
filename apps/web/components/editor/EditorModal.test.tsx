@@ -107,6 +107,10 @@ describe("EditorModal", () => {
       burn_in: true,
       style: {
         bg_style: "pill",
+        bg_color: "#000000",
+        bg_opacity: 62,
+        bg_radius: 8,
+        color: "#ffffff",
         font: "Helvetica Neue",
         max_chars_per_line: 32,
         position: "top",

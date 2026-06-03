@@ -60,6 +60,7 @@ export type PipItem = VisualItemBase &
 export type BackgroundItem = VisualItemBase &
   VisualMediaRefConstraint & {
     crossfade: number;
+    schedule?: BackgroundScheduleSegment[];
   };
 /**
  * This interface was referenced by `Project`'s JSON-Schema
@@ -388,6 +389,17 @@ export interface BackgroundLayer {
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema
+ * via the `definition` "BackgroundScheduleSegment".
+ */
+export interface BackgroundScheduleSegment {
+  id: string;
+  mediaId: string;
+  start: number;
+  end: number;
+  lockedDuration: boolean;
+}
+/**
+ * This interface was referenced by `Project`'s JSON-Schema
  * via the `definition` "SubtitlesSettings".
  */
 export interface SubtitlesSettings {
@@ -404,6 +416,10 @@ export interface SubtitleStyle {
   position: "bottom" | "bottom_low" | "top";
   max_chars_per_line: number;
   bg_style: "none" | "pill" | "block" | "shadow";
+  color?: string;
+  bg_color?: string;
+  bg_opacity?: number;
+  bg_radius?: number;
 }
 /**
  * This interface was referenced by `Project`'s JSON-Schema

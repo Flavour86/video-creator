@@ -127,6 +127,36 @@ it("setSubtitles falls back to defaults for null project data", () => {
   expect(result.current.subtitles).toEqual(DEFAULT_SUBTITLES);
 });
 
+it("setSubtitles normalizes legacy subtitle style defaults", () => {
+  const legacySubtitles = {
+    burn_in: true,
+    style: {
+      font: "Arial",
+      size: 36,
+      position: "bottom",
+      max_chars_per_line: 42,
+      bg_style: "shadow",
+    },
+  };
+
+  const { result } = renderHook(() => useProject());
+  act(() => result.current.setSubtitles(legacySubtitles as Parameters<typeof result.current.setSubtitles>[0]));
+  expect(result.current.subtitles).toEqual({
+    burn_in: true,
+    style: {
+      font: "Arial",
+      size: 36,
+      position: "bottom",
+      max_chars_per_line: 42,
+      bg_style: "shadow",
+      color: "#ffffff",
+      bg_color: "#000000",
+      bg_opacity: 62,
+      bg_radius: 8,
+    },
+  });
+});
+
 it("setWatermark updates watermark", () => {
   const { result } = renderHook(() => useProject());
   const watermark = { mediaId: "logo.png", posX: 100, posY: 100, scale: 0.08, opacity: 60 };

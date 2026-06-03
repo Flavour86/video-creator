@@ -36,6 +36,10 @@ export const DEFAULT_SUBTITLES: SubtitlesSettings = {
     position: "bottom",
     max_chars_per_line: 42,
     bg_style: "shadow",
+    color: "#ffffff",
+    bg_color: "#000000",
+    bg_opacity: 62,
+    bg_radius: 8,
   },
 };
 
@@ -61,7 +65,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
   setProjectId: (id) => set({ projectId: id }),
   setProjectPath: (path) => set({ projectPath: path }),
   setLayers: (layers) => set({ layers }),
-  setSubtitles: (subtitles) => set({ subtitles: subtitles ?? DEFAULT_SUBTITLES }),
+  setSubtitles: (subtitles) => set({ subtitles: normalizeSubtitlesSettings(subtitles) }),
   setWatermark: (watermark) => set({ watermark: watermark ?? null }),
   setSentences: (sentences) => set({ sentences }),
   setDuration: (duration) => set({ duration }),
@@ -89,6 +93,17 @@ export const useProject = create<ProjectStore>((set, get) => ({
     set({ watermark });
   },
 }));
+
+function normalizeSubtitlesSettings(subtitles: SubtitlesSettings | null | undefined): SubtitlesSettings {
+  if (!subtitles) return DEFAULT_SUBTITLES;
+  return {
+    burn_in: subtitles.burn_in,
+    style: {
+      ...DEFAULT_SUBTITLES.style,
+      ...subtitles.style,
+    },
+  };
+}
 
 async function saveConfigPatch(projectId: string, patch: Partial<Project>): Promise<void> {
   if (!projectId) return;

@@ -127,3 +127,21 @@ def test_shared_schemas_include_spec_render_contracts() -> None:
         "events",
     ):
         assert field_name in history_fields
+
+
+def test_shared_schemas_include_v11_project_contracts() -> None:
+    assert hasattr(schemas, "BackgroundScheduleSegment")
+    schedule_fields = schemas.BackgroundScheduleSegment.model_fields
+    for field_name in ("id", "media_id", "start", "end", "locked_duration"):
+        assert field_name in schedule_fields
+        assert schedule_fields[field_name].is_required()
+
+    background_fields = schemas.BackgroundItem.model_fields
+    assert "schedule" in background_fields
+    assert not background_fields["schedule"].is_required()
+
+    subtitle_fields = schemas.SubtitleStyle.model_fields
+    assert subtitle_fields["color"].default == "#ffffff"
+    assert subtitle_fields["bg_color"].default == "#000000"
+    assert subtitle_fields["bg_opacity"].default == 62
+    assert subtitle_fields["bg_radius"].default == 8

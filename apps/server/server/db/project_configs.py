@@ -11,8 +11,8 @@ from typing import Any, cast
 from pydantic import ValidationError
 
 from server.db.app_db import connection
-from server.db.projects import get_project_by_path, project_id_for_path
-from server.domain.project import Project
+from server.db.projects import get_project_by_path, project_id_for_path, project_path_for_id
+from server.domain.project import Project, normalize_project_config
 
 
 def config_hash(config: dict[str, Any]) -> str:
@@ -21,7 +21,7 @@ def config_hash(config: dict[str, Any]) -> str:
 
 
 def save_config_snapshot(project_dir: Path, config: dict[str, Any]) -> str:
-    validated = Project.model_validate(config)
+    validated = Project.model_validate(normalize_project_config(config))
     data = validated.model_dump(mode="json", by_alias=True, exclude_none=False)
     canonical_json = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     digest = config_hash(data)
@@ -119,15 +119,25 @@ def has_valid_config_for_project_id(project_id: str) -> bool:
             (project_id,),
         ).fetchone()
     if row is None:
-        return False
+        project_dir = project_path_for_id(project_id)
+        if project_dir is None:
+            return False
+        project_json = project_dir / "project.json"
+        if not project_json.exists():
+            return False
+        try:
+            loaded = json.loads(project_json.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            return False
+    else:
+        try:
+            loaded = json.loads(str(row["config_json"]))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return False
     try:
-        loaded = json.loads(str(row["config_json"]))
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return False
-    if not isinstance(loaded, dict):
-        return False
-    try:
-        Project.model_validate(loaded)
+        if not isinstance(loaded, dict):
+            return False
+        Project.model_validate(normalize_project_config(loaded))
     except ValidationError:
         return False
     return True
