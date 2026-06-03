@@ -55,7 +55,7 @@ from server.pipeline.render_progress import (
     publish_log,
     publish_progress,
 )
-from server.pipeline.srt import write_srt
+from server.pipeline.srt import alignment_with_sentence_text_overrides, write_srt
 
 
 @dataclass(frozen=True)
@@ -420,8 +420,9 @@ async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentRes
         cached_hash = hash_file.read_text(encoding="utf-8").strip()
         if cached_hash == current_hash:
             cached = AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
-            write_srt(project_dir, cached, max_line_chars=_subtitle_max_line_chars(project))
-            return cached
+            subtitle_alignment = _subtitle_alignment_for_project(cached, project)
+            write_srt(project_dir, subtitle_alignment, max_line_chars=_subtitle_max_line_chars(project))
+            return subtitle_alignment
 
     from server.pipeline.transcribe import align  # lazy import keeps unit tests light
 
@@ -433,9 +434,18 @@ async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentRes
     )
     vc_dir.mkdir(parents=True, exist_ok=True)
     alignment_file.write_text(result.model_dump_json(), encoding="utf-8")
-    write_srt(project_dir, result, max_line_chars=_subtitle_max_line_chars(project))
+    subtitle_alignment = _subtitle_alignment_for_project(result, project)
+    write_srt(project_dir, subtitle_alignment, max_line_chars=_subtitle_max_line_chars(project))
     hash_file.write_text(current_hash, encoding="utf-8")
-    return result
+    return subtitle_alignment
+
+
+def _subtitle_alignment_for_project(alignment: AlignmentResult, project: Project) -> AlignmentResult:
+    transcript = getattr(project, "transcript", None)
+    return alignment_with_sentence_text_overrides(
+        alignment,
+        getattr(transcript, "sentences", None),
+    )
 
 
 def _subtitle_max_line_chars(project: Project) -> int:

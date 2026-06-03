@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
 
@@ -25,6 +27,7 @@ OPENING_PUNCTUATION = "([{\u3010\u300a"
 @dataclass(frozen=True)
 class _Cue:
     words: list[AlignedWord]
+    preserve_end: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,54 @@ def generate_srt(alignment: AlignmentResult, *, max_line_chars: int = MAX_LINE_C
         for index, (cue, span) in enumerate(zip(cues, cue_spans, strict=True), start=1)
     ]
     return "\r\n\r\n".join(blocks) + ("\r\n" if blocks else "")
+
+
+def alignment_with_sentence_text_overrides(
+    alignment: AlignmentResult,
+    sentence_overrides: Iterable[object] | None,
+) -> AlignmentResult:
+    overrides = _sentence_text_overrides(sentence_overrides)
+    if not overrides:
+        return alignment
+
+    updated_sentences: list[AlignedSentence] = []
+    updated_words: list[AlignedWord] = []
+    words_by_sentence: dict[int, list[AlignedWord]] = {}
+    for word in alignment.words:
+        words_by_sentence.setdefault(word.sentence_index, []).append(word)
+
+    applied_indexes: set[int] = set()
+    for sentence in alignment.sentences:
+        text = overrides.get(sentence.index)
+        if text is None:
+            updated_sentences.append(sentence)
+            updated_words.extend(words_by_sentence.get(sentence.index, []))
+            continue
+
+        applied_indexes.add(sentence.index)
+        updated_sentences.append(sentence.model_copy(update={"text": text}))
+        updated_words.append(
+            AlignedWord(
+                sentence_index=sentence.index,
+                text=text,
+                start_s=sentence.start_s,
+                end_s=sentence.end_s,
+                confidence=sentence.confidence_avg,
+            )
+        )
+
+    if not applied_indexes:
+        return alignment
+
+    known_sentence_indexes = {sentence.index for sentence in alignment.sentences}
+    updated_words.extend(
+        word for word in alignment.words if word.sentence_index not in known_sentence_indexes
+    )
+    return AlignmentResult(
+        sentences=updated_sentences,
+        words=updated_words,
+        cache_hit=alignment.cache_hit,
+    )
 
 
 def write_srt(
@@ -194,10 +245,15 @@ def subtitle_stats(
 def _build_cues(alignment: AlignmentResult, *, max_line_chars: int) -> list[_Cue]:
     cues: list[_Cue] = []
     for sentence in alignment.sentences:
-        words = [
-            readable_word
+        sentence_words = [
+            word
             for word in alignment.words
             if word.sentence_index == sentence.index and word.text.strip()
+        ]
+        preserve_sentence_end = _is_sentence_span_text_word(sentence, sentence_words)
+        words = [
+            readable_word
+            for word in sentence_words
             for readable_word in _split_oversized_word(
                 word,
                 max_line_chars=max_line_chars,
@@ -206,7 +262,12 @@ def _build_cues(alignment: AlignmentResult, *, max_line_chars: int) -> list[_Cue
         start = 0
         while start < len(words):
             end = _best_chunk_end(words, start, max_line_chars=max_line_chars)
-            cues.append(_Cue(words=words[start:end]))
+            cues.append(
+                _Cue(
+                    words=words[start:end],
+                    preserve_end=preserve_sentence_end and end == len(words),
+                )
+            )
             start = end
     return cues
 
@@ -269,12 +330,16 @@ def _split_text_chunks(text: str, chunk_limit: int) -> list[str]:
 
 
 def _normalized_cue_spans(cues: list[_Cue]) -> list[tuple[float, float]]:
-    spans = [(cue.words[0].start_s, cue.words[-1].end_s) for cue in cues if cue.words]
+    spans = [
+        (cue.words[0].start_s, cue.words[-1].end_s, cue.preserve_end)
+        for cue in cues
+        if cue.words
+    ]
     normalized: list[tuple[float, float]] = []
-    for index, (start_s, end_s) in enumerate(spans):
+    for index, (start_s, end_s, preserve_end) in enumerate(spans):
         next_start = spans[index + 1][0] if index + 1 < len(spans) else None
         next_end = end_s
-        if next_start is not None and next_end < next_start:
+        if not preserve_end and next_start is not None and next_end < next_start:
             next_end = next_start
         if next_end <= start_s:
             if next_start is not None and next_start > start_s:
@@ -343,6 +408,49 @@ def _normalize_max_line_chars(value: int) -> int:
     if not isinstance(value, int):
         return MAX_LINE_CHARS
     return max(20, min(80, value))
+
+
+def _is_sentence_span_text_word(
+    sentence: AlignedSentence,
+    sentence_words: list[AlignedWord],
+) -> bool:
+    if len(sentence_words) != 1:
+        return False
+    word = sentence_words[0]
+    return (
+        word.text.strip() == sentence.text.strip()
+        and math.isclose(word.start_s, sentence.start_s, abs_tol=0.001)
+        and math.isclose(word.end_s, sentence.end_s, abs_tol=0.001)
+    )
+
+
+def _sentence_text_overrides(sentence_overrides: Iterable[object] | None) -> dict[int, str]:
+    if sentence_overrides is None:
+        return {}
+
+    overrides: dict[int, str] = {}
+    for cue in sentence_overrides:
+        raw_index = _cue_value(cue, "index")
+        raw_text = _cue_value(cue, "text")
+        if not isinstance(raw_text, str):
+            continue
+        text = raw_text.strip()
+        if not text:
+            continue
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            continue
+        if index < 1:
+            continue
+        overrides[index] = text
+    return overrides
+
+
+def _cue_value(cue: object, key: str) -> Any:
+    if isinstance(cue, Mapping):
+        return cue.get(key)
+    return getattr(cue, key, None)
 
 
 def _words_text(words: list[AlignedWord]) -> str:

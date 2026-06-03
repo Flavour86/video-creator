@@ -9,9 +9,11 @@ import httpx
 import pytest
 
 from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
+from server.domain.project import Project
 from server.main import app
 from server.pipeline import transcribe
 from server.pipeline.cache import alignment_language_for_text, compute_alignment_hash
+from server.pipeline.render import _ensure_alignment
 from server.pipeline.srt import write_transcript_corrected_srt_file
 from server.settings import settings
 
@@ -173,6 +175,64 @@ async def test_alignment_cache_hit_requires_existing_native_subtitles(tmp_path: 
 
     assert second.status_code == 404
     assert second.json()["error"]["code"] == "SUBTITLES_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_render_alignment_uses_transcript_sentence_overrides_for_srt(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    audio_path = tmp_path / "voice.wav"
+    transcript_path = tmp_path / "transcript.txt"
+    _write_wav(audio_path)
+    transcript_text = "Original transcript text."
+    transcript_path.write_text(transcript_text, encoding="utf-8")
+    alignment = _native_alignment("Original aligned text.")
+    vc_dir = tmp_path / ".vc"
+    vc_dir.mkdir()
+    (vc_dir / "alignment.json").write_text(alignment.model_dump_json(), encoding="utf-8")
+    language = alignment_language_for_text(transcript_text)
+    (vc_dir / "alignment.hash").write_text(
+        compute_alignment_hash(audio_path, transcript_text, language=language),
+        encoding="utf-8",
+    )
+
+    async def forbidden_align(*_args, **_kwargs) -> AlignmentResult:
+        raise AssertionError("cached render alignment should not call align")
+
+    monkeypatch.setattr(transcribe, "align", forbidden_align)
+    project = Project.model_validate(
+        {
+            "version": 1,
+            "name": "edited transcript render",
+            "audio": "voice.wav",
+            "transcript": {
+                "kind": "plain_text",
+                "path": "transcript.txt",
+                "sentences": [
+                    {
+                        "index": 1,
+                        "text": "Edited transcript text.",
+                        "start_s": 0.031,
+                        "end_s": 6.819,
+                        "confidence_avg": 0.95,
+                    }
+                ],
+            },
+            "output": {"preset": "draft"},
+            "layers": [],
+            "subtitles": None,
+            "watermark": None,
+        }
+    )
+
+    result = await _ensure_alignment(tmp_path, project)
+
+    rendered_srt = (tmp_path / "subtitles.srt").read_text(encoding="utf-8")
+    assert result.sentences[0].text == "Edited transcript text."
+    assert "Edited transcript text." in rendered_srt
+    assert "Original aligned text." not in rendered_srt
+    assert "00:00:00,031 --> 00:00:06,819" in rendered_srt
 
 
 @pytest.mark.asyncio

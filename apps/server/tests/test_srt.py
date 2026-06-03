@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
-from server.pipeline.srt import generate_srt, write_aligned_srt_file
+from server.pipeline.srt import alignment_with_sentence_text_overrides, generate_srt, write_aligned_srt_file
 
 
 def _alignment() -> AlignmentResult:
@@ -194,6 +194,28 @@ def test_generate_srt_respects_custom_max_chars_per_line() -> None:
     for block in blocks:
         assert all(len(line) <= 30 for line in block[2:])
         assert len(block[2:]) <= 2
+
+
+def test_generate_srt_prefers_transcript_sentence_override_text() -> None:
+    original = _alignment()
+    overridden = alignment_with_sentence_text_overrides(
+        original,
+        [
+            {
+                "index": 1,
+                "text": "Edited intro.",
+                "start_s": 0.0,
+                "end_s": 1.2,
+                "confidence_avg": 0.95,
+            }
+        ],
+    )
+
+    srt = generate_srt(overridden)
+    first_block = _blocks(srt)[0]
+    assert first_block[1] == "00:00:00,000 --> 00:00:01,200"
+    assert "Edited intro." in first_block[2]
+    assert "Short intro." not in srt
 
 
 def test_generate_srt_gap_fills_and_avoids_zero_duration_cues() -> None:

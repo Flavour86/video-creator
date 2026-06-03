@@ -17,12 +17,12 @@
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_srt.py`, `rtk pnpm -F @vc/web test:e2e -- render-correctness`
   - Evidence: render correctness evidence for subtitle text color and background modes in 16:9 and 9:16 previews.
 
-- [ ] Task 3 (task-03): Render edited transcript sentence text
+- [x] Task 3 (task-03): Render edited transcript sentence text
   - Acceptance: `Project.transcript.sentences[].text` is preferred for SRT/subtitle generation while preserving aligned start/end times; missing override payloads keep current behavior.
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_alignment_subtitles.py tests/test_srt.py`, `rtk pnpm -F @vc/web test -- lib/editor-operation-log/operation-log.test.ts`
   - Evidence: browser evidence showing edited transcript text in the transcript row and preview subtitle, plus generated subtitle/render test evidence.
 
-- [ ] Checkpoint: Backend subtitle and transcript behavior complete
+- [x] Checkpoint: Backend subtitle and transcript behavior complete
   - Acceptance: Subtitle render styling and edited transcript text are represented in config, SRT, and render paths without breaking older configs.
 
 ## Phase 3: Editor Persistence And Independent UI
