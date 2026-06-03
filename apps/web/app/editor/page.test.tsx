@@ -926,6 +926,56 @@ it("updates only background through Change Background modal and appends one oper
   expect(readUndo()).toHaveLength(0);
 });
 
+it("persists mixed background schedule from Change Background modal", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const mixedProject = {
+    ...TEST_PROJECT,
+    media: [
+      ...TEST_PROJECT.media,
+      {
+        id: "clip-bg.mp4",
+        name: "clip-bg.mp4",
+        kind: "video" as const,
+        role: "background" as const,
+        path: "media/clip-bg.mp4",
+        thumb_path: null,
+        duration: 4,
+        import_mode: "copy" as const,
+        imported_at: "2026-05-11T00:00:00Z",
+        created_at: "2026-05-11T00:00:00Z",
+      },
+    ],
+  } as typeof TEST_PROJECT;
+  mockTest01Fetch({ project: mixedProject });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const dialog = await screen.findByRole("dialog", { name: /change background/i });
+  fireEvent.click(within(dialog).getByRole("button", { name: /^clip-bg\.mp4$/i }));
+  fireEvent.click(within(dialog).getByRole("button", { name: /^bg1\.png$/i }));
+  expect(within(dialog).getAllByTestId(/background-coverage-row-/).map((row) => row.getAttribute("data-media-id"))).toEqual([
+    "bg0.png",
+    "clip-bg.mp4",
+    "bg1.png",
+  ]);
+  fireEvent.change(within(dialog).getByLabelText("End bg0.png"), { target: { value: "00:06" } });
+  fireEvent.blur(within(dialog).getByLabelText("End bg0.png"));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    const bgLayer = payload.config.layers.find((layer) => layer.kind === "bg");
+    expect(bgLayer?.items?.[0]?.mediaIds).toEqual(["bg0.png", "clip-bg.mp4", "bg1.png"]);
+    expect(bgLayer?.items?.[0]?.schedule).toEqual([
+      { id: "seg-bg0.png", mediaId: "bg0.png", start: 0, end: 6, lockedDuration: false },
+      { id: "seg-clip-bg.mp4", mediaId: "clip-bg.mp4", start: 6, end: 10, lockedDuration: true },
+      { id: "seg-bg1.png", mediaId: "bg1.png", start: 10, end: 25, lockedDuration: false },
+    ]);
+  });
+});
+
 it("uses dragged background modal order in the inspector asset list", async () => {
   _projectIdParam = TEST_PROJECT_ID;
   mockTest01Fetch();

@@ -66,6 +66,28 @@ const MEDIA = [
   },
 ];
 
+const CROWDED_MEDIA = [
+  ...MEDIA,
+  {
+    mediaId: "bg-extra-long-name.jpg",
+    filename: "a-very-long-background-name-that-must-truncate-in-the-coverage-grid.jpg",
+    kind: "image" as const,
+    thumb_url: "/thumb/bg-extra-long-name.jpg",
+    duration: null,
+    importing: false,
+    import_error: null,
+  },
+  {
+    mediaId: "clip-extra-long-name.mp4",
+    filename: "an-extremely-long-background-video-file-name-that-cannot-overflow-the-row-inputs.mp4",
+    kind: "video" as const,
+    thumb_url: "",
+    duration: 5,
+    importing: false,
+    import_error: null,
+  },
+];
+
 function renderModal(
   overrides: Partial<Parameters<typeof BgModal>[0]> = {},
 ) {
@@ -141,6 +163,10 @@ function mockCardRect(element: HTMLElement, left: number, width = 100) {
     toJSON: () => ({}),
   } as DOMRect;
   Object.defineProperty(element, "getBoundingClientRect", { configurable: true, value: () => rect });
+}
+
+function coverageRowIds(): Array<string | null> {
+  return screen.getAllByTestId(/background-coverage-row-/).map((row) => row.getAttribute("data-media-id"));
 }
 
 describe("BgModal", () => {
@@ -329,15 +355,41 @@ describe("BgModal", () => {
     expect(screen.queryByRole("button", { name: /delete bg-2\.jpg/i })).not.toBeInTheDocument();
   });
 
-  it("locks kind selection and marks opposite-kind cards as will-replace", () => {
-    renderModal();
+  it("allows mixed image/video selection and saves explicit schedule rows from time strings", () => {
+    const { onSave } = renderModal({ duration: 90 });
     fireEvent.click(screen.getByRole("button", { name: /^bg\.jpg$/i }));
     const videoCard = screen.getByRole("button", { name: /^clip-a\.mp4$/i });
-    expect(within(videoCard).getByText("Will replace")).toBeInTheDocument();
     fireEvent.click(videoCard);
-    expect(screen.getByText("1 selected · clips only")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^bg-2\.jpg$/i }));
+
+    expect(screen.getByText("3 selected · mixed schedule")).toBeInTheDocument();
+    expect(screen.queryByText(/Will replace/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/timeline item/i)).not.toBeInTheDocument();
+    expect(coverageRowIds()).toEqual(["bg.jpg", "clip-a.mp4", "bg-2.jpg"]);
     expect(screen.getByRole("button", { name: /^clip-a\.mp4 selected$/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /^bg\.jpg$/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /^bg\.jpg selected$/i })).toHaveAttribute("aria-pressed", "true");
+
+    expect(screen.getByLabelText("Start clip-a.mp4")).toBeDisabled();
+    expect(screen.getByLabelText("End clip-a.mp4")).toBeDisabled();
+    expect(screen.getByLabelText("Hold clip-a.mp4")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("End bg.jpg"), { target: { value: "01:10" } });
+    fireEvent.blur(screen.getByLabelText("End bg.jpg"));
+
+    expect(screen.getByLabelText("Start clip-a.mp4")).toHaveValue("01:10");
+    expect(screen.getByLabelText("End clip-a.mp4")).toHaveValue("01:14");
+    expect(screen.getByLabelText("Start bg-2.jpg")).toHaveValue("01:14");
+    fireEvent.click(screen.getByRole("button", { name: "Add background" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({
+        mediaIds: ["bg.jpg", "clip-a.mp4", "bg-2.jpg"],
+        schedule: [
+          { id: "seg-bg.jpg", mediaId: "bg.jpg", start: 0, end: 70, lockedDuration: false },
+          { id: "seg-clip-a.mp4", mediaId: "clip-a.mp4", start: 70, end: 74, lockedDuration: true },
+          { id: "seg-bg-2.jpg", mediaId: "bg-2.jpg", start: 74, end: 90, lockedDuration: false },
+        ],
+      })],
+    }));
   });
 
   it("shows invalid crossfade state and disables submit", () => {
@@ -434,6 +486,80 @@ describe("BgModal", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       items: [expect.objectContaining({ mediaIds: ["clip-b.mp4", "clip-a.mp4"] })],
     }));
+  });
+
+  it("keeps coverage rows synchronized with dragged asset order", async () => {
+    const { onSave } = renderModal({
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-scheduled",
+          mediaIds: ["bg.jpg", "clip-a.mp4", "bg-2.jpg"],
+          schedule: [
+            { id: "seg-bg", mediaId: "bg.jpg", start: 0, end: 4, lockedDuration: false },
+            { id: "seg-clip", mediaId: "clip-a.mp4", start: 4, end: 8, lockedDuration: true },
+            { id: "seg-bg-2", mediaId: "bg-2.jpg", start: 8, end: 10, lockedDuration: false },
+          ],
+          sentences: [1, 6],
+          start: 0,
+          end: 10,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      },
+    });
+
+    pointerDragTo(cardForButton(/^bg-2\.jpg selected$/i), cardForButton(/^bg\.jpg selected$/i));
+
+    await waitFor(() => expect(coverageRowIds()).toEqual(["bg-2.jpg", "bg.jpg", "clip-a.mp4"]));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({
+        mediaIds: ["bg-2.jpg", "bg.jpg", "clip-a.mp4"],
+        schedule: [
+          expect.objectContaining({ mediaId: "bg-2.jpg" }),
+          expect.objectContaining({ mediaId: "bg.jpg" }),
+          expect.objectContaining({ mediaId: "clip-a.mp4" }),
+        ],
+      })],
+    }));
+  });
+
+  it("keeps crowded coverage rows overflow-safe and truncates long names", () => {
+    renderModal({
+      duration: 120,
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-crowded",
+          mediaIds: CROWDED_MEDIA.map((item) => item.mediaId),
+          sentences: [1, 6],
+          start: 0,
+          end: 120,
+          motion: { kind: "none", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      },
+      media: CROWDED_MEDIA,
+    });
+
+    const grid = screen.getByTestId("background-coverage-grid");
+    expect(grid).toHaveAttribute("data-row-count", String(CROWDED_MEDIA.length));
+    expect(screen.getByTestId("background-coverage-name-bg-extra-long-name.jpg")).toHaveClass("truncate");
+    expect(screen.getByTestId("background-coverage-name-bg-extra-long-name.jpg")).toHaveAttribute(
+      "title",
+      "a-very-long-background-name-that-must-truncate-in-the-coverage-grid.jpg",
+    );
+    for (const input of within(grid).getAllByRole("textbox")) {
+      expect(input).toHaveClass("min-w-0");
+    }
   });
 
   it("marks asset cards as motion-ready for animated reorder feedback", () => {

@@ -57,7 +57,7 @@
   - Verify: `rtk pnpm -F @vc/web test -- lib/preview/resolveDisplay.test.ts components/editor/PreviewSurface.test.tsx lib/hooks/useProject.test.ts`
   - Evidence: preview screenshots at multiple playhead times proving scheduled background media switches according to explicit ranges.
 
-- [ ] Task 9 (task-09): Implement mixed background coverage modal
+- [x] Task 9 (task-09): Implement mixed background coverage modal
   - Acceptance: `BgModal` allows mixed image/video selection, shows ordered schedule rows, locks video durations, lets image rows edit `Start`, `End`, and `Hold` as time strings, removes separate timeline strip/status banner, supports drag reorder, synchronizes left asset order with coverage row order, truncates long names, and never overflows row inputs at five or more assets.
   - Verify: `rtk pnpm -F @vc/web test -- components/bg-modal/BgModal.test.tsx app/editor/page.test.tsx`
   - Evidence: `background-coverage-modal-clear-1920x1080` and `background-coverage-modal-clear-1080x1920`; crowded six-asset state; `01:10` time edit; drag-reordered state; long-name truncation state.
