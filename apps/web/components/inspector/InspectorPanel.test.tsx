@@ -26,6 +26,27 @@ const FG_LAYER = {
   items: [FG_ITEM],
 };
 
+const SCHEDULED_BG_LAYER = {
+  id: "layer-bg",
+  kind: "bg" as const,
+  name: "Background",
+  items: [{
+    id: "bg-scheduled",
+    mediaIds: ["bg-red.png", "bg-video.mp4", "bg-blue.png"],
+    schedule: [
+      { id: "seg-red", mediaId: "bg-red.png", start: 0, end: 30, lockedDuration: false },
+      { id: "seg-video", mediaId: "bg-video.mp4", start: 30, end: 34, lockedDuration: true },
+      { id: "seg-blue", mediaId: "bg-blue.png", start: 34, end: 90, lockedDuration: false },
+    ],
+    sentences: [1, 3] as [number, number],
+    start: 0,
+    end: 90,
+    motion: { kind: "none", easing: "linear" },
+    transitions: { in: "cut", out: "cut" },
+    crossfade: 0,
+  }],
+};
+
 const BASE_PROPS = {
   selectedLayerId: "layer-fg",
   selectedItemId: "item-fg",
@@ -101,5 +122,35 @@ describe("InspectorPanel", () => {
     render(<InspectorPanel {...BASE_PROPS} onOpenAssignEdit={onOpenAssignEdit} />);
     fireEvent.click(screen.getByAltText("photo.jpg"));
     expect(onOpenAssignEdit).toHaveBeenCalledWith("layer-fg", "item-fg", 1, 2);
+  });
+
+  it("shows ordered scheduled background ranges with locked native video duration", () => {
+    render(
+      <InspectorPanel
+        {...BASE_PROPS}
+        layers={[SCHEDULED_BG_LAYER]}
+        media={[
+          { filename: "bg-red.png", kind: "image", thumb_url: "/t/bg-red.jpg" },
+          { filename: "bg-video.mp4", kind: "video", thumb_url: "/t/bg-video.jpg", duration: 4 },
+          { filename: "bg-blue.png", kind: "image", thumb_url: "/t/bg-blue.jpg" },
+        ]}
+        selectedItemId="bg-scheduled"
+        selectedLayerId="layer-bg"
+      />,
+    );
+
+    expect(screen.getByText("Coverage schedule")).toBeInTheDocument();
+    const red = screen.getByTestId("inspector-background-schedule-row-bg-red.png");
+    const video = screen.getByTestId("inspector-background-schedule-row-bg-video.mp4");
+    const blue = screen.getByTestId("inspector-background-schedule-row-bg-blue.png");
+    expect(red).toHaveTextContent("bg-red.png");
+    expect(red).toHaveTextContent("00:00-00:30");
+    expect(red).toHaveTextContent("Image range");
+    expect(video).toHaveTextContent("bg-video.mp4");
+    expect(video).toHaveTextContent("00:30-00:34");
+    expect(video).toHaveTextContent("Video 00:04 locked");
+    expect(blue).toHaveTextContent("00:34-01:30");
+    expect(red.compareDocumentPosition(video) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(video.compareDocumentPosition(blue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

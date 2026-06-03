@@ -26,6 +26,22 @@ const BG_LAYER: Extract<Layer, { kind: "bg" }> = {
   }],
 };
 
+const SCHEDULED_BG_LAYER: Extract<Layer, { kind: "bg" }> = {
+  ...BG_LAYER,
+  items: [{
+    ...BG_LAYER.items[0]!,
+    mediaId: undefined,
+    mediaIds: ["bg-red.png", "bg-video.mp4", "bg-blue.png"],
+    schedule: [
+      { id: "seg-red", mediaId: "bg-red.png", start: 0, end: 30, lockedDuration: false },
+      { id: "seg-video", mediaId: "bg-video.mp4", start: 30, end: 34, lockedDuration: true },
+      { id: "seg-blue", mediaId: "bg-blue.png", start: 34, end: 90, lockedDuration: false },
+    ],
+    start: 0,
+    end: 90,
+  }],
+};
+
 const SUB_LAYER: Layer = { id: "sub-1", kind: "sub", name: "Subtitles", items: [] };
 
 it("renders the layer name label", () => {
@@ -62,6 +78,19 @@ it("renders mediaId label for bg layer", () => {
     />,
   );
   expect(screen.getByText("bg.jpg")).toBeInTheDocument();
+});
+
+it("labels scheduled background as one timed-ranges item", () => {
+  render(
+    <TimelineTrack
+      currentTime={0}
+      duration={90}
+      layer={SCHEDULED_BG_LAYER}
+    />,
+  );
+
+  expect(screen.getByText("timed ranges / 3 assets")).toBeInTheDocument();
+  expect(screen.queryByText("bg-red.png")).not.toBeInTheDocument();
 });
 
 it("renders playhead at correct position", () => {

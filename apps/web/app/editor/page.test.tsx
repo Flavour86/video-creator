@@ -904,7 +904,7 @@ it("updates only background through Change Background modal and appends one oper
   expect(pendingOps).toHaveLength(1);
   expect(pendingOps[0]?.op?.type).toBe("replace_layers");
 
-  expect(await screen.findByRole("button", { name: "auto / 2 assets" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "timed ranges / 2 assets" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "foreground.png over s1" })).toBeInTheDocument();
 
@@ -963,6 +963,8 @@ it("persists mixed background schedule from Change Background modal", async () =
   fireEvent.change(within(dialog).getByLabelText("End bg0.png"), { target: { value: "00:06" } });
   fireEvent.blur(within(dialog).getByLabelText("End bg0.png"));
   fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+  expect(await screen.findByRole("button", { name: "timed ranges / 3 assets" })).toBeInTheDocument();
 
   await waitFor(() => {
     const payload = latestConfigSavePayload();

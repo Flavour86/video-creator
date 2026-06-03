@@ -4,6 +4,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import { packRowsByTime } from "@/lib/layers";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+import type { BackgroundScheduleSegment } from "@vc/shared-schemas";
 import type { EditorSelection } from "./types";
 
 type TimelineProps = {
@@ -31,6 +32,7 @@ type TimelineClip = {
   mediaId: string;
   mediaIds?: string[];
   orphaned?: boolean;
+  schedule?: BackgroundScheduleSegment[];
   sentenceIndex?: number;
   sentences?: [number, number];
   start: number;
@@ -266,6 +268,7 @@ function useTimelineRows(layers: Layer[], duration: number, sentences: AlignedSe
           kind: layer.kind,
           mediaId: resolveMediaLabel(item) || "subtitle",
           mediaIds: item.mediaIds,
+          schedule: item.schedule,
           sentences: item.sentences,
           start: bounded.start,
           end: bounded.end,
@@ -529,8 +532,12 @@ function clipClass(kind: LayerKind, orphaned = false): string {
   return "border-[oklch(0.62_0.13_60)] bg-[linear-gradient(180deg,oklch(0.50_0.10_50),oklch(0.40_0.10_50))] text-[oklch(0.97_0.05_80)]";
 }
 
-function clipLabel(clip: Pick<TimelineClip, "kind" | "mediaId" | "mediaIds" | "sentences">): string {
+function clipLabel(clip: Pick<TimelineClip, "kind" | "mediaId" | "mediaIds" | "schedule" | "sentences">): string {
   if (clip.kind === "bg") {
+    const scheduleCount = clip.schedule?.length ?? 0;
+    if (scheduleCount > 0) {
+      return `timed ranges / ${scheduleCount} assets`;
+    }
     const playlistCount = clip.mediaIds?.length ?? 0;
     if (playlistCount > 1) {
       return `auto / ${playlistCount} assets`;
@@ -615,9 +622,12 @@ function synthesizeSubtitleClips(layerId: string, duration: number, cueCount: nu
 function synthesizeBackgroundClip(layerId: string, rawItems: unknown[], duration: number): TimelineClip[] {
   for (const item of rawItems) {
     if (typeof item !== "object" || item === null) continue;
-    const candidate = item as { id?: unknown; mediaId?: unknown; mediaIds?: unknown };
+    const candidate = item as { id?: unknown; mediaId?: unknown; mediaIds?: unknown; schedule?: unknown };
     const mediaIds = Array.isArray(candidate.mediaIds)
       ? candidate.mediaIds.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+      : [];
+    const schedule = Array.isArray(candidate.schedule)
+      ? candidate.schedule.filter(isBackgroundScheduleSegment)
       : [];
     const mediaId = typeof candidate.mediaId === "string" && candidate.mediaId.length > 0
       ? candidate.mediaId
@@ -630,6 +640,7 @@ function synthesizeBackgroundClip(layerId: string, rawItems: unknown[], duration
       layerId,
       mediaId,
       mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+      schedule: schedule.length > 0 ? schedule : undefined,
       start: 0,
     }];
   }
@@ -664,6 +675,7 @@ type TimelineSourceItem = {
   mediaId?: string;
   mediaIds?: string[];
   orphaned?: boolean;
+  schedule?: BackgroundScheduleSegment[];
   sentences?: [number, number];
   start: number;
 };
@@ -676,6 +688,18 @@ function isTimelineItem(item: unknown): item is TimelineSourceItem {
     start?: unknown;
   };
   return typeof candidate.id === "string" && typeof candidate.start === "number" && typeof candidate.end === "number";
+}
+
+function isBackgroundScheduleSegment(value: unknown): value is BackgroundScheduleSegment {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { end?: unknown; id?: unknown; lockedDuration?: unknown; mediaId?: unknown; start?: unknown };
+  return (
+    typeof candidate.id === "string"
+    && typeof candidate.mediaId === "string"
+    && typeof candidate.start === "number"
+    && typeof candidate.end === "number"
+    && typeof candidate.lockedDuration === "boolean"
+  );
 }
 
 function clampClipToDuration(start: number, end: number, duration: number): { start: number; end: number } {

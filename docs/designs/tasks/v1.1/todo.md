@@ -62,7 +62,7 @@
   - Verify: `rtk pnpm -F @vc/web test -- components/bg-modal/BgModal.test.tsx app/editor/page.test.tsx`
   - Evidence: `background-coverage-modal-clear-1920x1080` and `background-coverage-modal-clear-1080x1920`; crowded six-asset state; `01:10` time edit; drag-reordered state; long-name truncation state.
 
-- [ ] Task 10 (task-10): Show scheduled background ranges in inspector and timeline
+- [x] Task 10 (task-10): Show scheduled background ranges in inspector and timeline
   - Acceptance: Inspector shows ordered scheduled assets with native video duration and explicit image ranges; timeline remains one background lane with a timed-ranges label; preview/timeline selection remains stable after reordering.
   - Verify: `rtk pnpm -F @vc/web test -- components/inspector/InspectorPanel.test.tsx components/timeline/TimelineTrack.test.tsx app/editor/page.test.tsx`
   - Evidence: `background-coverage-editor-1920x1080` and `background-coverage-editor-1080x1920` screenshots showing inspector schedule rows and one background timeline item.

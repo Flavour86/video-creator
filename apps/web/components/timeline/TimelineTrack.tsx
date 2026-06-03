@@ -57,7 +57,10 @@ function BgBlock({
       {layer.items.map((item) => {
         const left = (item.start / duration) * 100;
         const width = ((item.end - item.start) / duration) * 100;
-        const mediaLabel = item.mediaId ?? (item.mediaIds && item.mediaIds.length > 1 ? `auto / ${item.mediaIds.length} assets` : item.mediaIds?.[0] ?? "background");
+        const scheduleCount = item.schedule?.length ?? 0;
+        const mediaLabel = scheduleCount > 0
+          ? `timed ranges / ${scheduleCount} assets`
+          : item.mediaId ?? (item.mediaIds && item.mediaIds.length > 1 ? `auto / ${item.mediaIds.length} assets` : item.mediaIds?.[0] ?? "background");
         const thumbMediaId = item.mediaId ?? item.mediaIds?.[0];
         const thumbUrl = projectPath
           && thumbMediaId

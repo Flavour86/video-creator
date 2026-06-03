@@ -1,9 +1,10 @@
 import { ImageIcon, PlusCircle, Trash, Type, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRef, type ReactNode } from "react";
-import type { Project } from "@vc/shared-schemas";
+import type { BackgroundScheduleSegment, Project } from "@vc/shared-schemas";
 import { Button, NumberInput, Select } from "@/components/ui";
 import { formatImageMeta, formatTimecode } from "@/lib/format";
+import { backgroundDeclaredMediaIdsForItem, formatBackgroundTime, normalizeBackgroundSchedule } from "@/lib/preview/backgroundSchedule";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { EditorMediaItem, EditorSelection } from "./types";
 
@@ -48,6 +49,7 @@ type VisualItem = {
   mediaId?: string;
   mediaIds?: string[];
   motion: { kind: string; easing: string };
+  schedule?: BackgroundScheduleSegment[];
   sentences: [number, number];
   start: number;
   transitions: { in: string; out: string };
@@ -164,6 +166,7 @@ export function Inspector({
   const selectedAssets = mediaForIds(media, itemMediaIds);
   const asset = selectedAssets[0] ?? null;
   const assetSrc = asset ? mediaSrc(projectPath, asset) : null;
+  const scheduleRows = isBackground ? backgroundScheduleRows(item, media) : [];
   const placement = isPip ? placementFromCoords(item.pip.posX, item.pip.posY) : "MC";
   const availableMotionOptions = isBackground ? backgroundMotionOptions : motionOptions;
   const replaceLabel = `Replace ${layer.kind === "bg" ? "background" : layer.kind === "pip" ? "PiP" : "foreground"} media`;
@@ -231,6 +234,24 @@ export function Inspector({
           </>
         ) : null}
       </section>
+
+      {isBackground && scheduleRows.length > 0 ? (
+        <Section title="Coverage schedule">
+          <div className="col-span-2 overflow-hidden rounded-md border border-(--line) bg-(--bg-2)">
+            {scheduleRows.map((row) => (
+              <div
+                className="grid grid-cols-[minmax(0,1fr)_86px_106px] items-center gap-2 border-b border-(--line-soft) px-2 py-1.5 text-[11px] last:border-b-0"
+                data-testid={`editor-background-schedule-row-${row.segment.mediaId}`}
+                key={row.segment.id}
+              >
+                <span className="truncate font-semibold text-(--text)">{row.segment.mediaId}</span>
+                <span className="font-mono text-(--text-2)">{formatBackgroundRange(row.segment)}</span>
+                <span className="truncate text-right text-(--text-3)">{row.kindLabel}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
 
       {isPip ? (
         <Section title="Placement">
@@ -602,6 +623,29 @@ function mediaForIds(media: EditorMediaItem[], mediaIds: string[]): EditorMediaI
   return mediaIds
     .map((id) => media.find((entry) => entry.filename === id || entry.mediaId === id))
     .filter((entry): entry is EditorMediaItem => !!entry);
+}
+
+function backgroundScheduleRows(item: VisualItem, media: EditorMediaItem[]): Array<{
+  kindLabel: string;
+  segment: BackgroundScheduleSegment;
+}> {
+  const schedule = normalizeBackgroundSchedule(item.schedule, backgroundDeclaredMediaIdsForItem(item));
+  return schedule.map((segment) => {
+    const asset = media.find((entry) => entry.filename === segment.mediaId || entry.mediaId === segment.mediaId);
+    const videoDuration = asset?.kind === "video" && Number.isFinite(asset.duration)
+      ? Number(asset.duration)
+      : segment.end - segment.start;
+    return {
+      segment,
+      kindLabel: segment.lockedDuration
+        ? `Video ${formatBackgroundTime(videoDuration)} locked`
+        : "Image range",
+    };
+  });
+}
+
+function formatBackgroundRange(segment: BackgroundScheduleSegment): string {
+  return `${formatBackgroundTime(segment.start)}-${formatBackgroundTime(segment.end)}`;
 }
 
 function assetButtonTitle(item: VisualItem): string {

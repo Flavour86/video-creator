@@ -377,6 +377,42 @@ describe("Inspector", () => {
     expect(onReplaceItemMedia).toHaveBeenCalledWith("bg-main", "bg-playlist", expect.anything(), 1);
   });
 
+  it("shows scheduled background coverage rows with native video duration", () => {
+    renderInspector({
+      layers: [
+        {
+          id: "bg-main",
+          kind: "bg",
+          name: "Background",
+          items: [
+            {
+              id: "bg-scheduled",
+              mediaIds: ["bg0.png", "clip.mp4", "bg1.png"],
+              schedule: [
+                { id: "seg-bg0", mediaId: "bg0.png", start: 0, end: 6, lockedDuration: false },
+                { id: "seg-clip", mediaId: "clip.mp4", start: 6, end: 10, lockedDuration: true },
+                { id: "seg-bg1", mediaId: "bg1.png", start: 10, end: 25, lockedDuration: false },
+              ],
+              sentences: [1, 3],
+              start: 0,
+              end: 25,
+              motion: { kind: "ken_burns", easing: "ease_in_out" },
+              transitions: { in: "cut", out: "cut" },
+              crossfade: 0.4,
+            },
+          ],
+        },
+      ],
+      selected: { layerId: "bg-main", itemId: "bg-scheduled" },
+    });
+
+    expect(screen.getByRole("heading", { name: "Coverage schedule" })).toBeInTheDocument();
+    expect(screen.getByTestId("editor-background-schedule-row-bg0.png")).toHaveTextContent("00:00-00:06");
+    expect(screen.getByTestId("editor-background-schedule-row-bg0.png")).toHaveTextContent("Image range");
+    expect(screen.getByTestId("editor-background-schedule-row-clip.mp4")).toHaveTextContent("Video 00:04 locked");
+    expect(screen.getByTestId("editor-background-schedule-row-bg1.png")).toHaveTextContent("00:10-00:25");
+  });
+
   it("removes background from inspector action", () => {
     const { onRemoveBackground } = renderInspector({
       selected: { layerId: "bg-main", itemId: "bg-1" },

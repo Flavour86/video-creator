@@ -2,13 +2,23 @@
 
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
+import { backgroundDeclaredMediaIdsForItem, formatBackgroundTime, normalizeBackgroundSchedule } from "@/lib/preview/backgroundSchedule";
+import type { BackgroundScheduleSegment } from "@vc/shared-schemas";
 import Image from "next/image";
 
-type MediaItem = { filename: string; kind: "image" | "video"; thumb_url: string };
+type MediaItem = {
+  duration?: number | null;
+  filename: string;
+  kind: "image" | "video";
+  mediaId?: string;
+  thumb_url: string;
+};
 
 type VisualItem = {
   id: string;
-  mediaId: string;
+  mediaId?: string;
+  mediaIds?: string[];
+  schedule?: BackgroundScheduleSegment[];
   anchor?: "sentences" | "time";
   from?: string;
   to?: string;
@@ -102,12 +112,14 @@ export function InspectorPanel({
       ? `s${fromIdx}–s${toIdx} · ${(toSent.end_s - fromSent.start_s).toFixed(1)}s`
       : `s${fromIdx}–s${toIdx}`;
 
-  const thumbFilename = item.mediaId.replace(/\.[^.]+$/, ".jpg");
+  const primaryMediaId = item.mediaId ?? item.mediaIds?.[0] ?? "background";
+  const thumbFilename = primaryMediaId.replace(/\.[^.]+$/, ".jpg");
   const thumbUrl = projectPath
     ? `/api/server/projects/thumb?project=${encodeURIComponent(projectPath)}&filename=${encodeURIComponent(thumbFilename)}`
     : undefined;
 
-  const mediaEntry = media.find((m) => m.filename === item.mediaId);
+  const mediaEntry = findMedia(media, primaryMediaId);
+  const scheduleRows = layer.kind === "bg" ? backgroundScheduleRows(item, media) : [];
 
   function updateMotion(kind: string) {
     onLayersChange(
@@ -178,7 +190,7 @@ export function InspectorPanel({
       >
         {thumbUrl && mediaEntry ? (
           <Image
-            alt={item.mediaId}
+            alt={primaryMediaId}
             className="h-20 w-full object-cover"
             height={80}
             src={thumbUrl}
@@ -186,7 +198,7 @@ export function InspectorPanel({
           />
         ) : (
           <div className="flex h-20 items-center justify-center bg-neutral-100 text-xs opacity-40">
-            {item.mediaId}
+            {primaryMediaId}
           </div>
         )}
       </button>
@@ -196,6 +208,25 @@ export function InspectorPanel({
 
       {/* Layer name */}
       <p className="text-xs opacity-40">{layer.name}</p>
+
+      {scheduleRows.length > 0 ? (
+        <section className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 p-2">
+          <p className="text-xs font-semibold uppercase tracking-widest opacity-40">Coverage schedule</p>
+          <div className="flex flex-col overflow-hidden rounded border border-neutral-200 bg-white">
+            {scheduleRows.map((row) => (
+              <div
+                className="grid grid-cols-[minmax(0,1fr)_82px_102px] items-center gap-2 border-b border-neutral-100 px-2 py-1.5 text-[11px] last:border-b-0"
+                data-testid={`inspector-background-schedule-row-${row.segment.mediaId}`}
+                key={row.segment.id}
+              >
+                <span className="truncate font-medium">{row.segment.mediaId}</span>
+                <span className="font-mono opacity-70">{formatBackgroundRange(row.segment)}</span>
+                <span className="truncate text-right opacity-60">{row.kindLabel}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Motion */}
       <label className="flex flex-col gap-1 text-xs">
@@ -276,4 +307,31 @@ export function InspectorPanel({
       </button>
     </div>
   );
+}
+
+function backgroundScheduleRows(item: VisualItem, media: MediaItem[]): Array<{
+  kindLabel: string;
+  segment: BackgroundScheduleSegment;
+}> {
+  const schedule = normalizeBackgroundSchedule(item.schedule, backgroundDeclaredMediaIdsForItem(item));
+  return schedule.map((segment) => {
+    const mediaEntry = findMedia(media, segment.mediaId);
+    const videoDuration = mediaEntry?.kind === "video" && Number.isFinite(mediaEntry.duration)
+      ? Number(mediaEntry.duration)
+      : segment.end - segment.start;
+    return {
+      segment,
+      kindLabel: segment.lockedDuration
+        ? `Video ${formatBackgroundTime(videoDuration)} locked`
+        : "Image range",
+    };
+  });
+}
+
+function formatBackgroundRange(segment: BackgroundScheduleSegment): string {
+  return `${formatBackgroundTime(segment.start)}-${formatBackgroundTime(segment.end)}`;
+}
+
+function findMedia(media: MediaItem[], mediaId: string): MediaItem | undefined {
+  return media.find((entry) => entry.filename === mediaId || entry.mediaId === mediaId);
 }

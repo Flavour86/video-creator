@@ -379,4 +379,31 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-row-bg")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "auto / 3 assets" })).toBeInTheDocument();
   });
+
+  it("labels scheduled background playlist as timed ranges", () => {
+    const scheduledBackground: Layer[] = [{
+      id: "bg-main",
+      kind: "bg",
+      name: "Background",
+      items: [{
+        id: "bg-scheduled",
+        mediaIds: ["bg0.png", "clip.mp4", "bg1.png"],
+        schedule: [
+          { id: "seg-bg0", mediaId: "bg0.png", start: 0, end: 6, lockedDuration: false },
+          { id: "seg-clip", mediaId: "clip.mp4", start: 6, end: 10, lockedDuration: true },
+          { id: "seg-bg1", mediaId: "bg1.png", start: 10, end: 25, lockedDuration: false },
+        ],
+        start: 0,
+        end: 25,
+      }],
+    } as unknown as Layer];
+    renderTimeline({
+      duration: 25,
+      layers: scheduledBackground,
+      selected: { layerId: "bg-main", itemId: "bg-scheduled" },
+      sentences: [],
+    });
+    expect(screen.getByRole("button", { name: "timed ranges / 3 assets" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "auto / 3 assets" })).not.toBeInTheDocument();
+  });
 });
