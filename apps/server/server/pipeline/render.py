@@ -421,7 +421,11 @@ async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentRes
         if cached_hash == current_hash:
             cached = AlignmentResult.model_validate_json(alignment_file.read_text(encoding="utf-8"))
             subtitle_alignment = _subtitle_alignment_for_project(cached, project)
-            write_srt(project_dir, subtitle_alignment, max_line_chars=_subtitle_max_line_chars(project))
+            write_srt(
+                project_dir,
+                subtitle_alignment,
+                max_line_chars=_subtitle_max_line_chars(project),
+            )
             return subtitle_alignment
 
     from server.pipeline.transcribe import align  # lazy import keeps unit tests light
@@ -440,7 +444,10 @@ async def _ensure_alignment(project_dir: Path, project: Project) -> AlignmentRes
     return subtitle_alignment
 
 
-def _subtitle_alignment_for_project(alignment: AlignmentResult, project: Project) -> AlignmentResult:
+def _subtitle_alignment_for_project(
+    alignment: AlignmentResult,
+    project: Project,
+) -> AlignmentResult:
     transcript = getattr(project, "transcript", None)
     return alignment_with_sentence_text_overrides(
         alignment,

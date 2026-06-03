@@ -27,7 +27,15 @@ export async function preparePage(page: Page, theme: ThemeMode = "dark"): Promis
     window.localStorage.setItem("vc.language", "en");
     const style = document.createElement("style");
     style.textContent = "*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}";
-    document.documentElement.appendChild(style);
+    const appendStyle = () => {
+      const target = document.documentElement ?? document.head ?? document.body;
+      if (!target) return false;
+      target.appendChild(style);
+      return true;
+    };
+    if (!appendStyle()) {
+      document.addEventListener("DOMContentLoaded", appendStyle, { once: true });
+    }
   }, { themeValue: theme });
 }
 

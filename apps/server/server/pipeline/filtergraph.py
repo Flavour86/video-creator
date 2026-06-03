@@ -245,7 +245,11 @@ def _expand_scheduled_background_item(
                 start_s=segment.start,
                 end_s=segment.end,
                 transition_in=(_transition_value(item, "in") or "cut") if index == 0 else "cut",
-                transition_out=(_transition_value(item, "out") or "cut") if index == len(ranges) - 1 else "cut",
+                transition_out=(
+                    (_transition_value(item, "out") or "cut")
+                    if index == len(ranges) - 1
+                    else "cut"
+                ),
             )
         )
     return expanded
@@ -669,7 +673,10 @@ def _item_media_ids(item: ClipRenderItem) -> list[str]:
     return [entry for entry in value if isinstance(entry, str) and entry]
 
 
-def _item_schedule_segments(item: ClipRenderItem, media_ids: list[str]) -> list[BackgroundScheduleRange]:
+def _item_schedule_segments(
+    item: ClipRenderItem,
+    media_ids: list[str],
+) -> list[BackgroundScheduleRange]:
     raw = _unwrap_root_model(item)
     value = raw.get("schedule") if isinstance(raw, Mapping) else getattr(raw, "schedule", None)
     if value is None:

@@ -82,10 +82,10 @@
   - Verify: `rtk pnpm -F @vc/web test:visual -- editor`, `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`
   - Evidence: visual test evidence for subtitles modal, watermark controls, transcript editing, and background coverage at desktop and portrait sizes.
 
-- [ ] Task 13 (task-13): Run integrated editor flow regression
+- [x] Task 13 (task-13): Run integrated editor flow regression
   - Acceptance: One real browser flow can edit subtitles, watermark, transcript text, and mixed background schedule, then autosave and render without losing config; no console errors beyond expected dev warnings.
   - Verify: `rtk pnpm test`, `rtk pnpm lint`, `rtk pnpm build`, `rtk pnpm -F @vc/web test`, `rtk pnpm -F @vc/server test`, `rtk pnpm -F @vc/web test:e2e -- render-correctness`
   - Evidence: end-to-end browser screenshots for final editor state, inspector, timeline, preview, and render output.
 
-- [ ] Checkpoint: Phase 4 readiness
+- [x] Checkpoint: Phase 4 readiness
   - Acceptance: All v1.1 implementation tasks are scoped, ordered, verifiable, and ready for Phase 4 execution by task id.
