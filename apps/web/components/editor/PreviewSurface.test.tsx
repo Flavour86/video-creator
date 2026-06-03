@@ -600,6 +600,27 @@ describe("PreviewSurface", () => {
     expect(drawnFilenames()).toContain("logo.mov");
   });
 
+  it("draws watermark with configured position, opacity, and scale", () => {
+    renderSurface({
+      watermark: {
+        mediaId: "logo.mov",
+        opacity: 42,
+        posX: 30,
+        posY: 70,
+        scale: 0.16,
+      },
+    });
+
+    const watermarkCall = drawImage.mock.calls.find((call) => filenameFromSource(call[0]) === "logo.mov");
+
+    expect(watermarkCall).toBeDefined();
+    expect(watermarkCall?.[1]).toBeCloseTo(483.84, 2);
+    expect(watermarkCall?.[2]).toBeCloseTo(635.04, 2);
+    expect(watermarkCall?.[3]).toBeCloseTo(307.2, 2);
+    expect(watermarkCall?.[4]).toBeCloseTo(172.8, 2);
+    expect((fakeContext as CanvasRenderingContext2D & { globalAlpha: number }).globalAlpha).toBeCloseTo(0.42, 2);
+  });
+
   it("falls back to uploaded image media when a watermark is not in project media", () => {
     const createdImages: HTMLImageElement[] = [];
     const imageFactory = vi.fn(function imageFactory() {

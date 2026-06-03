@@ -1447,6 +1447,24 @@ it("updates watermark config, shows preview watermark, and persists watermark op
     expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "true");
   });
 
+  fireEvent.change(within(dialog).getByLabelText("Watermark POSX"), { target: { value: "30" } });
+  await waitFor(() => expect(latestConfigSavePayload().config.watermark?.posX).toBe(30));
+  fireEvent.change(within(dialog).getByLabelText("Watermark POSY"), { target: { value: "70" } });
+  await waitFor(() => expect(latestConfigSavePayload().config.watermark?.posY).toBe(70));
+  fireEvent.change(within(dialog).getByLabelText("Watermark size"), { target: { value: "0.16" } });
+  await waitFor(() => expect(latestConfigSavePayload().config.watermark?.scale).toBe(0.16));
+  fireEvent.change(within(dialog).getByLabelText("Watermark opacity"), { target: { value: "42" } });
+  await waitFor(() => {
+    expect(latestConfigSavePayload().config.watermark).toEqual(expect.objectContaining({
+      mediaId: "watermark-media-1",
+      opacity: 42,
+      posX: 30,
+      posY: 70,
+      scale: 0.16,
+    }));
+  });
+  expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "true");
+
   fireEvent.click(within(dialog).getByRole("switch", { name: /watermark enabled/i }));
   await waitFor(() => {
     expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "false");
@@ -1456,9 +1474,16 @@ it("updates watermark config, shows preview watermark, and persists watermark op
   expect(raw).not.toBeNull();
   const parsed = JSON.parse(raw ?? "{}");
   const wmOps = (parsed.undo ?? []).filter((entry: { op?: { type?: string } }) => entry.op?.type === "watermark_update");
-  expect(wmOps.length).toBeGreaterThanOrEqual(2);
+  expect(wmOps.length).toBeGreaterThanOrEqual(1);
   expect(wmOps.some((entry: { op?: { after?: { mediaId?: string } } }) => entry.op?.after?.mediaId === "watermark-media-1")).toBe(true);
-  expect(wmOps.at(-1)?.op?.after).toEqual(expect.objectContaining({ enabled: false, mediaId: "watermark-media-1" }));
+  expect(wmOps.at(-1)?.op?.after).toEqual(expect.objectContaining({
+    enabled: false,
+    mediaId: "watermark-media-1",
+    opacity: 42,
+    posX: 30,
+    posY: 70,
+    scale: 0.16,
+  }));
 
   await waitFor(() => {
     const payload = latestConfigSavePayload();

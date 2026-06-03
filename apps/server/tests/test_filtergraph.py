@@ -452,6 +452,30 @@ def test_disabled_watermark_preserves_config_but_does_not_render_overlay(tmp_pat
     assert "[wm]" not in _filtergraph(command)
 
 
+def test_missing_watermark_media_does_not_render_overlay(tmp_path: Path) -> None:
+    project = _project(
+        [],
+        watermark={
+            "mediaId": "missing-logo.png",
+            "posX": 25,
+            "posY": 75,
+            "scale": 0.16,
+            "opacity": 42,
+        },
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [str(tmp_path / "voice.wav")]
+    assert "[wm]" not in _filtergraph(command)
+
+
 def test_filter_chain_order_is_black_bg_fg_pip_subtitles_watermark(tmp_path: Path) -> None:
     _write_media(tmp_path, "bg.jpg", b"bg")
     _write_media(tmp_path, "fg.jpg", b"fg")

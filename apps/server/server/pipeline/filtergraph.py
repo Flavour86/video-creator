@@ -568,7 +568,10 @@ def _watermark_path(project_dir: Path, project: Project) -> Path | None:
     project_path = project_dir / "media" / safe_name
     if project_path.is_file():
         return project_path
-    return uploads_root() / safe_name
+    uploads_path = uploads_root() / safe_name
+    if uploads_path.is_file():
+        return uploads_path
+    return None
 
 
 def _watermark_is_video(project: Project, watermark_path: Path) -> bool:

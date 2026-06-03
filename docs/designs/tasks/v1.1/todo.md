@@ -37,7 +37,7 @@
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx app/editor/page.test.tsx lib/hooks/useProject.test.ts`
   - Evidence: `subtitles-modal-color-bg-1920x1080`, `subtitles-modal-color-bg-1080x1920`, and `subtitles-modal-none-disabled-1920x1080` browser screenshots matching references.
 
-- [ ] Task 6 (task-06): Implement watermark position, opacity, and size controls
+- [x] Task 6 (task-06): Implement watermark position, opacity, and size controls
   - Acceptance: Watermark UI exposes position X/Y, opacity, and size/scale; preview updates immediately; applying writes `Project.watermark`; clearing or missing media does not crash preview/render.
   - Verify: `rtk pnpm -F @vc/web test -- components/watermark-panel/WatermarkPanel.test.tsx components/editor/PreviewSurface.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py`
   - Evidence: watermark modal/control screenshots for default, adjusted position/opacity/size, preview placement, and cleared watermark state.
