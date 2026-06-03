@@ -321,14 +321,6 @@ export function BgModal({
     () => selectedMedia.map((id) => mediaById.get(id)).filter((entry): entry is MediaItem => !!entry),
     [mediaById, selectedMedia],
   );
-  const selectedKinds = new Set(selectedAssets.map((asset) => asset.kind));
-  const selectedLabel = selectedKinds.size > 1
-    ? "mixed schedule"
-    : selectedKinds.has("video")
-      ? "clips only"
-      : selectedKinds.has("image")
-        ? "images only"
-        : "select media";
   const coverageSchedule = useMemo(
     () => buildCoverageSchedule(selectedMedia, mediaById, duration, state.schedule),
     [duration, mediaById, selectedMedia, state.schedule],
@@ -466,8 +458,8 @@ export function BgModal({
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Assets</p>
-                  <span className="font-mono text-[11px] text-(--text-3)">
-                    {selectedMedia.length} selected · {selectedLabel}
+                  <span className="font-mono text-[11px] text-(--text-3)" data-testid="background-selected-count">
+                    {selectedMedia.length} selected
                   </span>
                 </div>
               <button

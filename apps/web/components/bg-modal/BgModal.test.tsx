@@ -174,7 +174,7 @@ describe("BgModal", () => {
     renderModal();
     expect(screen.getByRole("heading", { name: "Add background" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^bg\.jpg$/i }));
-    expect(screen.getByText("1 selected · images only")).toBeInTheDocument();
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add background" })).toBeEnabled();
   });
 
@@ -223,7 +223,7 @@ describe("BgModal", () => {
     });
 
     expect(screen.queryByRole("button", { name: /video-2\.mp4/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/2 selected .* clips only/)).toBeInTheDocument();
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -251,7 +251,7 @@ describe("BgModal", () => {
       },
     });
     expect(screen.getByRole("heading", { name: "Change background" })).toBeInTheDocument();
-    expect(screen.getByText("1 selected · images only")).toBeInTheDocument();
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
   });
 
@@ -274,7 +274,7 @@ describe("BgModal", () => {
         }],
       },
     });
-    expect(screen.getByText("2 selected · images only")).toBeInTheDocument();
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^bg\.jpg selected$/i })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /^bg-2\.jpg selected$/i })).toHaveAttribute("aria-pressed", "true");
   });
@@ -362,7 +362,8 @@ describe("BgModal", () => {
     fireEvent.click(videoCard);
     fireEvent.click(screen.getByRole("button", { name: /^bg-2\.jpg$/i }));
 
-    expect(screen.getByText("3 selected · mixed schedule")).toBeInTheDocument();
+    expect(screen.getByText("3 selected")).toBeInTheDocument();
+    expect(screen.queryByText(/mixed|images only|clips only/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Will replace/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/timeline item/i)).not.toBeInTheDocument();
     expect(coverageRowIds()).toEqual(["bg.jpg", "clip-a.mp4", "bg-2.jpg"]);

@@ -7,6 +7,13 @@ const PROJECT_ID = "p_v11_flow";
 const RENDER_ID = "r-v11-final";
 const PROJECT_PATH = "E:/video-projects/v11-flow";
 const UPDATED_TRANSCRIPT_TEXT = "Integrated browser flow edited this transcript sentence.";
+const BUG_SWEEP_EVIDENCE_DIR = path.resolve(process.cwd(), "..", "..", "docs", "designs", "bugs", "v1.1", "evidence");
+const BUG_SWEEP_VIEWPORTS = [
+  { name: "1920x1080", portrait: false, viewport: { width: 1920, height: 1080 } },
+  { name: "1280x720", portrait: false, viewport: { width: 1280, height: 720 } },
+  { name: "1080x1920", portrait: true, viewport: { width: 1080, height: 1920 } },
+] as const;
+type BugSweepViewport = (typeof BUG_SWEEP_VIEWPORTS)[number];
 
 test.describe("v1.1 integrated editor flow", () => {
   test("edits v1.1 settings, autosaves, reloads, and opens render output", async ({ page }, testInfo) => {
@@ -64,6 +71,69 @@ test.describe("v1.1 integrated editor flow", () => {
     assertSavedConfigContainsV1_1Edits(api.savedProject());
     expect([...consoleErrors, ...failedResponses]).toEqual([]);
   });
+});
+
+test.describe("v1.1 bug inspection integrated evidence", () => {
+  test.describe.configure({ mode: "serial" });
+  test.skip(process.env.VC_BUG_SWEEP !== "1", "Set VC_BUG_SWEEP=1 to capture v1.1 bug-sweep integrated evidence.");
+
+  for (const target of BUG_SWEEP_VIEWPORTS) {
+    test.describe(target.name, () => {
+      test.use({ viewport: target.viewport });
+
+      test(`captures integrated regression ${target.name}`, async ({ page }) => {
+        test.setTimeout(120_000);
+
+        const consoleErrors: string[] = [];
+        const failedResponses: string[] = [];
+        page.on("console", (message) => {
+          if (message.type() === "error") {
+            consoleErrors.push(message.text());
+          }
+        });
+        page.on("pageerror", (error) => {
+          consoleErrors.push(error.message);
+        });
+        page.on("response", (response) => {
+          if (response.url().includes("/api/server/") && response.status() >= 400) {
+            failedResponses.push(`${response.status()} ${response.url()}`);
+          }
+        });
+
+        await preparePage(page, "dark");
+        await installMockWebSocket(page);
+        const api = await mockIntegratedEditorApi(page);
+
+        await page.goto(`/editor/${PROJECT_ID}`, { waitUntil: "networkidle" });
+        await expect(page.getByRole("heading", { name: "v1.1 Integrated Flow" })).toBeVisible();
+        if (target.portrait) {
+          await page.getByRole("radio", { name: "9:16" }).click();
+        }
+
+        await updateSubtitles(page);
+        await updateWatermark(page);
+        await updateTranscript(page);
+        await updateBackgroundSchedule(page);
+        await expect(page.getByLabel("Autosave saved")).toBeVisible();
+        assertSavedConfigContainsV1_1Edits(api.savedProject());
+
+        await page.reload({ waitUntil: "networkidle" });
+        await expect(page.getByRole("heading", { name: "v1.1 Integrated Flow" })).toBeVisible();
+        await expect(page.getByTestId("transcript-sentence-text-2")).toContainText(UPDATED_TRANSCRIPT_TEXT);
+        await expect(page.getByRole("button", { name: "timed ranges / 3 assets" })).toBeVisible();
+
+        await page.getByRole("button", { name: /Render final \(ready\)/ }).click();
+        await expect(page).toHaveURL(new RegExp(`/render/${PROJECT_ID}/${RENDER_ID}$`));
+        await expect(page.getByRole("heading", { name: /v1\.1 Integrated Flow \/ 1080p final render/i })).toBeVisible();
+        await expect(page.getByText("Final render ready")).toBeVisible();
+        await captureBugSweepEvidence(page, "integrated-flow", target);
+
+        expect(api.renderStarts()).toBe(1);
+        assertSavedConfigContainsV1_1Edits(api.savedProject());
+        expect([...consoleErrors, ...failedResponses]).toEqual([]);
+      });
+    });
+  }
 });
 
 async function updateSubtitles(page: Page): Promise<void> {
@@ -138,6 +208,11 @@ async function captureEvidence(target: Page | Locator, testInfo: TestInfo, filen
   const evidenceDir = testInfo.outputPath("task-13-evidence");
   await mkdir(evidenceDir, { recursive: true });
   await target.screenshot({ path: path.join(evidenceDir, filename) });
+}
+
+async function captureBugSweepEvidence(target: Page | Locator, feature: string, viewport: BugSweepViewport): Promise<void> {
+  await mkdir(BUG_SWEEP_EVIDENCE_DIR, { recursive: true });
+  await target.screenshot({ path: path.join(BUG_SWEEP_EVIDENCE_DIR, `${feature}-${viewport.name}.png`) });
 }
 
 async function installMockWebSocket(page: Page): Promise<void> {

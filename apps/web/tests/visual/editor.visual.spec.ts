@@ -15,6 +15,7 @@ import {
 import {
   EDITOR_VISUAL_CASES,
   V1_1_EDITOR_VISUAL_CASES,
+  V1_1_VISUAL_REFERENCE_PREFIX,
   type EditorVisualAction,
   type EditorVisualCaptureTarget as CaptureTarget,
   type EditorVisualCase,
@@ -29,9 +30,16 @@ const DEFAULT_SCENE_SEEK_SECONDS = 38.399;
 const INSPECTOR_SEPARATOR = "\u00B7";
 const INSPECTOR_SEPARATOR_PATTERN = /[\u00B7\u2022\u2219\u30FB]/g;
 const BUG_EVIDENCE_DIR = path.resolve(process.cwd(), "..", "..", "docs", "designs", "bugs", "evidences");
+const V1_1_BUG_SWEEP_EVIDENCE_DIR = path.resolve(process.cwd(), "..", "..", "docs", "designs", "bugs", "v1.1", "evidence");
 const LEGACY_VISUAL_REFERENCES_DIR = path.resolve(process.cwd(), "..", "..", "docs", "designs", "visuals");
+const BUG_SWEEP_VIEWPORTS = [
+  { name: "1920x1080", portrait: false, viewport: { width: 1920, height: 1080 } },
+  { name: "1280x720", portrait: false, viewport: { width: 1280, height: 720 } },
+  { name: "1080x1920", portrait: true, viewport: { width: 1080, height: 1920 } },
+] as const;
 
 type IgnoreRegion = { x: number; y: number; width: number; height: number };
+type BugSweepViewport = (typeof BUG_SWEEP_VIEWPORTS)[number];
 type EditorApiOverrides = {
   alignment?: object | (() => object);
   onConfigSave?: (config: object) => void;
@@ -87,6 +95,52 @@ test.describe("editor v1.1 visual parity", () => {
 
       test(`${visualCase.reference} parity`, async ({ page }) => {
         await compareEditorVisualCase(page, visualCase);
+      });
+    });
+  }
+});
+
+test.describe("v1.1 bug inspection evidence", () => {
+  test.describe.configure({ mode: "serial" });
+  test.skip(process.env.VC_BUG_SWEEP !== "1", "Set VC_BUG_SWEEP=1 to capture v1.1 bug-sweep evidence screenshots.");
+
+  for (const target of BUG_SWEEP_VIEWPORTS) {
+    test.describe(target.name, () => {
+      test.use({ deviceScaleFactor: 1, viewport: target.viewport });
+
+      test(`subtitle color/background controls ${target.name}`, async ({ page }) => {
+        test.setTimeout(90_000);
+        const monitor = monitorBugSweepPage(page);
+        await captureSubtitleControlsSweep(page, target);
+        expect(monitor.errors()).toEqual([]);
+      });
+
+      test(`autosave-only editor header ${target.name}`, async ({ page }) => {
+        test.setTimeout(90_000);
+        const monitor = monitorBugSweepPage(page);
+        await captureAutosaveHeaderSweep(page, target);
+        expect(monitor.errors()).toEqual([]);
+      });
+
+      test(`watermark controls ${target.name}`, async ({ page }) => {
+        test.setTimeout(90_000);
+        const monitor = monitorBugSweepPage(page);
+        await captureWatermarkControlsSweep(page, target);
+        expect(monitor.errors()).toEqual([]);
+      });
+
+      test(`transcript edit fixed height ${target.name}`, async ({ page }) => {
+        test.setTimeout(90_000);
+        const monitor = monitorBugSweepPage(page);
+        await captureTranscriptEditSweep(page, target);
+        expect(monitor.errors()).toEqual([]);
+      });
+
+      test(`background schedule ${target.name}`, async ({ page }) => {
+        test.setTimeout(90_000);
+        const monitor = monitorBugSweepPage(page);
+        await captureBackgroundScheduleSweep(page, target);
+        expect(monitor.errors()).toEqual([]);
       });
     });
   }
@@ -458,6 +512,271 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
   });
 }
 
+function bugSweepVisualCase(action: EditorVisualAction, name: string): EditorVisualCase {
+  return {
+    action,
+    capture: "page",
+    name,
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}${name}.png`,
+    theme: "dark",
+  };
+}
+
+function monitorBugSweepPage(page: Page): { errors: () => string[] } {
+  const consoleErrors: string[] = [];
+  const failedResponses: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push(message.text());
+    }
+  });
+  page.on("pageerror", (error) => {
+    consoleErrors.push(error.message);
+  });
+  page.on("response", (response) => {
+    if (response.url().includes("/api/server/") && response.status() >= 400) {
+      failedResponses.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  return {
+    errors: () => [...consoleErrors, ...failedResponses],
+  };
+}
+
+async function openBugSweepEditor(
+  page: Page,
+  visualCase: EditorVisualCase,
+  target: BugSweepViewport,
+  overrides: EditorApiOverrides = {},
+): Promise<void> {
+  const fixture = fixtureForVisualCase(visualCase);
+  const expectedProjectName = (fixture?.project as { name?: string } | undefined)?.name ?? "TokyoEssay";
+  await prepareVisualPage(page, visualCase.theme, visualCase);
+  await routeEditorApi(page, visualCase, overrides);
+  await page.goto(`/editor/${TEST_PROJECT_ID}`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: expectedProjectName }).waitFor();
+  await settleChrome(page);
+  if (target.portrait) {
+    await page.getByRole("radio", { name: "9:16" }).click();
+  }
+  await setReferencePlayback(page);
+}
+
+async function captureSubtitleControlsSweep(page: Page, target: BugSweepViewport): Promise<void> {
+  let activeProject: object = structuredClone(V1_SUBTITLE_PROJECT);
+  const visualCase = bugSweepVisualCase("v1-subtitles-modal-color-bg", "bug-sweep-subtitles");
+  await openBugSweepEditor(page, visualCase, target, {
+    onConfigSave: (config) => {
+      activeProject = config;
+    },
+    project: () => activeProject,
+  });
+
+  const modal = await openSubtitlesModal(page);
+  await expect(modal.getByLabel("Max chars / line")).toHaveCount(0);
+  await expect(modal.locator("#editor-sub-color")).toBeVisible();
+  await expect(modal.locator("#editor-sub-bg-color")).toBeVisible();
+  await setSubtitleBlockStyle(modal);
+  await expect(modal.getByLabel("Opacity", { exact: true })).toBeEnabled();
+  await expect(modal.getByLabel("Radius", { exact: true })).toBeEnabled();
+
+  await modal.getByRole("combobox", { exact: true, name: "Background" }).selectOption("none");
+  await expect(modal.locator("#editor-sub-bg-color")).toBeDisabled();
+  await expect(modal.getByLabel("Opacity", { exact: true })).toBeDisabled();
+  await expect(modal.getByLabel("Radius", { exact: true })).toBeDisabled();
+
+  await modal.getByRole("combobox", { exact: true, name: "Background" }).selectOption("shadow");
+  await expect(modal.locator("#editor-sub-bg-color")).toBeDisabled();
+  await expect(modal.getByLabel("Opacity", { exact: true })).toBeDisabled();
+  await expect(modal.getByLabel("Radius", { exact: true })).toBeDisabled();
+
+  await modal.getByRole("combobox", { exact: true, name: "Background" }).selectOption("pill");
+  await expect(modal.locator("#editor-sub-bg-color")).toBeEnabled();
+  await expect(modal.getByLabel("Opacity", { exact: true })).toBeEnabled();
+  await expect(modal.getByLabel("Radius", { exact: true })).toBeDisabled();
+
+  await setSubtitleBlockStyle(modal);
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByRole("button", { name: "Apply" }).click();
+  });
+  await expect(page.getByLabel("Autosave saved")).toBeVisible();
+
+  const reopened = await openSubtitlesModal(page);
+  await expect(reopened.locator("#editor-sub-color")).toHaveValue("#ffcc00");
+  await expect(reopened.locator("#editor-sub-bg-color")).toHaveValue("#112233");
+  await expect(reopened.getByLabel("Opacity", { exact: true })).toHaveValue("45");
+  await expect(reopened.getByLabel("Radius", { exact: true })).toHaveValue("14");
+  await captureBugSweepEvidence(page, "subtitles-controls", target);
+}
+
+async function captureAutosaveHeaderSweep(page: Page, target: BugSweepViewport): Promise<void> {
+  let activeProject: object = structuredClone(V1_SUBTITLE_PROJECT);
+  const savedProjects: object[] = [];
+  const visualCase = bugSweepVisualCase("v1-subtitles-modal-color-bg", "bug-sweep-autosave");
+  await openBugSweepEditor(page, visualCase, target, {
+    onConfigSave: (config) => {
+      activeProject = config;
+      savedProjects.push(config);
+    },
+    project: () => activeProject,
+  });
+
+  await expect(page.getByRole("button", { name: /^Save$/i })).toHaveCount(0);
+  await expect(page.getByLabel(/Autosave (status|saved)/i)).toBeVisible();
+
+  const modal = await openSubtitlesModal(page);
+  await modal.locator("#editor-sub-color").fill("#ffcc00");
+  await modal.locator("#editor-sub-bg-color").fill("#112233");
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByRole("button", { name: "Apply" }).click();
+  });
+  await expect(page.getByLabel("Autosave saved")).toBeVisible();
+  await expect.poll(() => savedProjects.length).toBeGreaterThan(0);
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Task 5 subtitle modal controls" }).waitFor();
+  const persisted = await openSubtitlesModal(page);
+  await expect(persisted.locator("#editor-sub-color")).toHaveValue("#ffcc00");
+  await expect(persisted.locator("#editor-sub-bg-color")).toHaveValue("#112233");
+  await persisted.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("button", { name: /Render final \(ready\)/i })).toBeEnabled();
+  await captureBugSweepEvidence(page, "autosave-header", target);
+}
+
+async function captureWatermarkControlsSweep(page: Page, target: BugSweepViewport): Promise<void> {
+  let activeProject: object = structuredClone(V1_WATERMARK_PROJECT);
+  const visualCase = bugSweepVisualCase("v1-watermark-modal", "bug-sweep-watermark");
+  await openBugSweepEditor(page, visualCase, target, {
+    onConfigSave: (config) => {
+      activeProject = config;
+    },
+    project: () => activeProject,
+  });
+
+  await page.getByTestId("editor-inspector").getByRole("button", { name: /^Watermark$/i }).click();
+  const modal = page.getByRole("dialog", { name: /^Watermark asset$/i });
+  await expect(modal).toBeVisible();
+  await expect(modal.getByRole("button", { name: /watermark-logo\.png selected/i })).toBeVisible();
+  await expect(modal.getByLabel("Watermark POSX")).toBeVisible();
+  await expect(modal.getByLabel("Watermark POSY")).toBeVisible();
+  await expect(modal.getByLabel("Watermark size")).toBeVisible();
+  await expect(modal.getByLabel("Watermark opacity")).toBeVisible();
+
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByLabel("Watermark POSX").fill("30");
+  });
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByLabel("Watermark POSY").fill("70");
+  });
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByLabel("Watermark size").fill("0.16");
+  });
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByLabel("Watermark opacity").fill("42");
+  });
+  await expect(page.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "true");
+  await captureBugSweepEvidence(page, "watermark-controls", target);
+
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByRole("switch", { name: "Watermark enabled" }).click();
+  });
+  await expect(page.getByTestId("preview-canvas")).toHaveAttribute("data-watermark-visible", "false");
+}
+
+async function captureTranscriptEditSweep(page: Page, target: BugSweepViewport): Promise<void> {
+  let activeProject: object = structuredClone(V1_TRANSCRIPT_PROJECT);
+  const visualCase = bugSweepVisualCase("v1-transcript-edit", "bug-sweep-transcript");
+  await openBugSweepEditor(page, visualCase, target, {
+    onConfigSave: (config) => {
+      activeProject = config;
+    },
+    project: () => activeProject,
+  });
+
+  await expect(page.getByRole("button", { name: /edit sentence 1/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /edit sentence 2/i })).toBeVisible();
+  const row2 = page.getByTestId("transcript-sentence-row-2");
+  const row3 = page.getByTestId("transcript-sentence-row-3");
+  const before = await row2.boundingBox();
+  await page.getByRole("button", { name: /edit sentence 2/i }).click();
+  const editor = page.getByRole("textbox", { name: /edit sentence 2 text/i });
+  await expect(editor).toBeVisible();
+  const editing = await row2.boundingBox();
+  const adjacent = await row3.boundingBox();
+  expect(before).not.toBeNull();
+  expect(editing).not.toBeNull();
+  expect(adjacent).not.toBeNull();
+  expect(Math.abs((editing?.height ?? 0) - (adjacent?.height ?? 0))).toBeLessThanOrEqual(1);
+
+  await editor.fill("Integrated browser flow edited this transcript sentence.");
+  await waitForConfigAutosave(page, async () => {
+    await page.getByRole("button", { name: /confirm sentence 2 edit/i }).click();
+  });
+  await expect(page.getByTestId("transcript-sentence-text-2")).toContainText("Integrated browser flow edited this transcript sentence.");
+  await expect(page.getByLabel("Autosave saved")).toBeVisible();
+
+  await page.getByRole("button", { name: /edit sentence 2/i }).click();
+  const whitespaceEditor = page.getByRole("textbox", { name: /edit sentence 2 text/i });
+  await whitespaceEditor.fill("   ");
+  await expect(page.getByRole("button", { name: /confirm sentence 2 edit/i })).toBeDisabled();
+  await page.getByRole("button", { name: /cancel sentence 2 edit/i }).click();
+  await expect(page.getByTestId("transcript-sentence-text-2")).toContainText("Integrated browser flow edited this transcript sentence.");
+  await captureBugSweepEvidence(page, "transcript-edit", target);
+}
+
+async function captureBackgroundScheduleSweep(page: Page, target: BugSweepViewport): Promise<void> {
+  let activeProject: object = structuredClone(V1_BACKGROUND_PROJECT);
+  const visualCase = bugSweepVisualCase("v1-background-coverage-modal", "bug-sweep-background");
+  await openBugSweepEditor(page, visualCase, target, {
+    onConfigSave: (config) => {
+      activeProject = config;
+    },
+    project: () => activeProject,
+  });
+
+  await page.getByRole("button", { name: /^Change Background$/i }).click();
+  const modal = page.getByRole("dialog", { name: /^Change background$/i });
+  await expect(modal).toBeVisible();
+  await expect(modal.getByTestId("background-selected-count")).toHaveText("3 selected");
+  await expect(modal.getByTestId("background-selected-count")).not.toContainText(/mixed|image|video/i);
+  await expect(modal.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "3");
+  await expect(modal.getByLabel("End bg-red.png")).toBeEnabled();
+  await expect(modal.getByLabel("Hold bg-red.png")).toBeEnabled();
+  await expect(modal.getByLabel("Start bg-video.mp4")).toBeDisabled();
+  await expect(modal.getByLabel("End bg-video.mp4")).toBeDisabled();
+  await expect(modal.getByLabel("Hold bg-video.mp4")).toBeDisabled();
+
+  await modal.getByLabel("End bg-red.png").fill("01:10");
+  await expect(modal.getByLabel("End bg-red.png")).toHaveValue("01:10");
+
+  await modal.getByRole("button", { name: /^bg-crowded-1\.png$/i }).click();
+  await modal.getByRole("button", { name: /^a-very-long-background-name-that-must-truncate-in-the-coverage-grid\.jpg$/i }).click();
+  await expect(modal.getByTestId("background-selected-count")).toHaveText("5 selected");
+  await expect(modal.getByTestId("background-selected-count")).not.toContainText(/mixed|image|video/i);
+  await expect(modal.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "5");
+  await expectRowsStayInsideCoverageGrid(modal, [
+    "bg-red.png",
+    "bg-video.mp4",
+    "bg-blue.png",
+    "bg-crowded-1.png",
+    "bg-extra-long-name.jpg",
+  ]);
+
+  const blueCard = modal.locator("[data-reorder-card][data-media-id='bg-blue.png']");
+  const redCard = modal.locator("[data-reorder-card][data-media-id='bg-red.png']");
+  await pointerDrag(page, blueCard, redCard);
+  await expect(modal.locator("[data-testid^='background-coverage-row-']").first()).toHaveAttribute("data-media-id", "bg-blue.png");
+  await captureBugSweepEvidence(page, "background-schedule", target);
+
+  await waitForConfigAutosave(page, async () => {
+    await modal.getByRole("button", { name: "Save changes" }).click();
+  });
+  await expect(page.getByLabel("Autosave saved")).toBeVisible();
+  await page.getByRole("button", { name: /timed ranges \/ 5 assets/i }).click();
+  await expect(page.getByTestId("editor-background-schedule-row-bg-video.mp4")).toContainText("Video 00:04 locked");
+  await expect(page.locator("[data-testid='timeline-row-bg'] [data-timeline-clip='true']")).toHaveCount(1);
+}
+
 
 async function runEditorVisualAction(page: Page, action: EditorVisualAction): Promise<void> {
   switch (action) {
@@ -639,7 +958,15 @@ async function prepareVisualPage(page: Page, theme: Theme, visualCase?: EditorVi
       );
       const style = document.createElement("style");
       style.textContent = "*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}";
-      document.documentElement.appendChild(style);
+      const appendStyle = () => {
+        const target = document.documentElement ?? document.head ?? document.body;
+        if (!target) return false;
+        target.appendChild(style);
+        return true;
+      };
+      if (!appendStyle()) {
+        document.addEventListener("DOMContentLoaded", appendStyle, { once: true });
+      }
     },
     { projectId: TEST_PROJECT_ID, selectedItem: selected, selectedRangeValue: selectedRange, themeValue: theme },
   );
@@ -1554,6 +1881,47 @@ async function captureEvidence(target: Page | Locator, filename: string): Promis
     return;
   }
   await target.screenshot({ path: outputPath });
+}
+
+async function captureBugSweepEvidence(target: Page | Locator, feature: string, targetViewport: BugSweepViewport): Promise<void> {
+  await fs.mkdir(V1_1_BUG_SWEEP_EVIDENCE_DIR, { recursive: true });
+  const outputPath = path.join(V1_1_BUG_SWEEP_EVIDENCE_DIR, `${feature}-${targetViewport.name}.png`);
+  if (isLocator(target)) {
+    await target.waitFor({ state: "visible" });
+    await target.screenshot({ path: outputPath });
+    return;
+  }
+  await target.screenshot({ path: outputPath });
+}
+
+async function expectRowsStayInsideCoverageGrid(modal: Locator, mediaIds: string[]): Promise<void> {
+  for (const mediaId of mediaIds) {
+    const row = modal.getByTestId(`background-coverage-row-${mediaId}`);
+    const rowBox = await row.boundingBox();
+    expect(rowBox).not.toBeNull();
+    const inputs = await row.locator("input").all();
+    expect(inputs).toHaveLength(3);
+    for (const input of inputs) {
+      const inputBox = await input.boundingBox();
+      expect(inputBox).not.toBeNull();
+      expect((inputBox?.x ?? 0) + (inputBox?.width ?? 0)).toBeLessThanOrEqual((rowBox?.x ?? 0) + (rowBox?.width ?? 0) + 1);
+    }
+  }
+}
+
+async function pointerDrag(page: Page, source: Locator, target: Locator): Promise<void> {
+  const sourceBox = await source.boundingBox();
+  const targetBox = await target.boundingBox();
+  expect(sourceBox).not.toBeNull();
+  expect(targetBox).not.toBeNull();
+  const sourceX = (sourceBox?.x ?? 0) + (sourceBox?.width ?? 0) / 2;
+  const sourceY = (sourceBox?.y ?? 0) + (sourceBox?.height ?? 0) / 2;
+  const targetX = (targetBox?.x ?? 0) + (targetBox?.width ?? 0) / 2;
+  const targetY = (targetBox?.y ?? 0) + (targetBox?.height ?? 0) / 2;
+  await page.mouse.move(sourceX, sourceY);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 12 });
+  await page.mouse.up();
 }
 
 async function instrumentPreviewVideoDrawing(page: Page): Promise<void> {
