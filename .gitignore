@@ -56,7 +56,8 @@ apps/web/tests/visual/artifacts/
 # project
 projects/
 docs/designs/audits
-docs/designs/visuals
+docs/designs/**/visuals
+docs/designs/**/evidences
 docs/designs/bugs*/
 uploads/
 setup-cache/

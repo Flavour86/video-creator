@@ -30,6 +30,7 @@ const Icon = ({ name, size = 16, className = "" }) => {
     eye: <g><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></g>,
     cut: <g><circle cx="5" cy="11" r="2" /><circle cx="11" cy="11" r="2" /><path d="M6.5 9.5 13 3M9.5 9.5 3 3" /></g>,
     save: <g><path d="M3 3h8.5L13 4.5V13H3z" /><path d="M5 3v3.5h6V3M5 13v-4h6v4" /></g>,
+    edit: <g><path d="M4 11.5 11.5 4l1.5 1.5L5.5 13H4z" /><path d="M10.5 5 12 6.5" /></g>,
     folderOpen: <g><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 7" /><path d="m2 7 1.2 6h10.5l1.3-6z" /></g>,
     keyboard: <g><rect x="1.5" y="4" width="13" height="8" rx="1" /><path d="M4 7h.5M6.5 7h.5M9 7h.5M11.5 7h.5M4 9.5h8" /></g>,
     cache: <g><ellipse cx="8" cy="4" rx="5" ry="1.8" /><path d="M3 4v8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V4" /><path d="M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8" /></g>,

@@ -44,8 +44,12 @@ const InspectorSub = ({ item, onPatch }) => (
 const InspectorBG = ({ item, onPatch, onDelete, onChangeAsset }) => {
   const mediaIds = item.mediaIds || (item.mediaId ? [item.mediaId] : []);
   const assets = mediaIds.map((id) => MEDIA_BY_ID[id]).filter(Boolean);
-  const lockedKind = assets[0]?.kind || "image";
   const m = assets[0];
+  const assetKinds = new Set(assets.map((mm) => mm.kind));
+  const playlistKind = assetKinds.size > 1 ? "mixed" : assets[0]?.kind || "image";
+  const schedule = item.schedule?.length
+    ? item.schedule
+    : mediaIds.map((id, index) => ({ id: `bg-fallback-${id}`, mediaId: id, start: index === 0 ? 0 : null, end: index === 0 ? item.end : null }));
   return (
     <>
       <div className="ins-section">
@@ -61,18 +65,22 @@ const InspectorBG = ({ item, onPatch, onDelete, onChangeAsset }) => {
         </button>
         }
         <button className="asset-stack playlist-click" onClick={onChangeAsset} title="Click to change background assets">
-          {assets.map((mm) => (
-            <div key={mm.id} className="asset-stack-row">
+          {schedule.map((seg) => {
+            const mm = MEDIA_BY_ID[seg.mediaId];
+            const range = seg.start != null && seg.end != null ? `${fmtTC(seg.start, false)}-${fmtTC(seg.end, false)}` : "unset range";
+            return (
+            <div key={seg.id || seg.mediaId} className="asset-stack-row">
               <div className="ins-thumb" style={{background: thumbGrad(mm.thumb)}}/>
               <div>
                 <div className="name">{mm.name}</div>
-                <div className="meta">{mm.kind === "video" ? mm.dur : `${mm.w}x${mm.h}`} / {mm.size}</div>
+                <div className="meta">{range} / {mm.kind === "video" ? `native ${mm.dur}` : "image range"}</div>
               </div>
               <span className="kind-pill">{mm.kind === "video" ? "MP4" : "IMG"}</span>
             </div>
-          ))}
+            );
+          })}
         </button>
-        <p className="hint">{assets.length} {lockedKind === "video" ? "video clips" : "images"} in playlist. Images split the full duration evenly. Videos play in sequence; short video leaves black fallback, long video is cut.</p>
+        <p className="hint">{schedule.length} timed ranges in {playlistKind} background. Video rows keep native length; image rows carry explicit start and end times.</p>
       </div>
       <div className="ins-section">
         <h4>Crossfade</h4>

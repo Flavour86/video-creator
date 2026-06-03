@@ -1,18 +1,57 @@
 // SubtitlesModal: edit global subtitle styling.
 
-const SubtitlesModal = ({ open, onClose, settings, onSave }) => {
+const SubtitlesModal = ({ open, onClose, settings, onSave, resolution }) => {
   const [s, setS] = React.useState(settings || {});
   React.useEffect(() => {if (open) setS(settings || {});}, [open, settings]);
   if (!open) return null;
+
+  const renderResolution = resolution || RESOLUTIONS["1080p"];
+  const shown = s.show ?? s.burnin ?? true;
   const upd = (k, v) => setS({ ...s, [k]: v });
+  const updShow = () => {
+    const next = !shown;
+    setS({ ...s, show: next, burnin: next });
+  };
+  const hexToRgb = (hex) => {
+    const clean = String(hex || "#000000").replace("#", "");
+    const n = parseInt(clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  };
+  const bgRgb = hexToRgb(s.bgColor || "#000000");
+  const bgOpacity = (s.bgOpacity ?? 62) / 100;
+  const bgMode = s.bg || "block";
+  const bgFillEnabled = bgMode === "block" || bgMode === "pill";
+  const bgRadiusEnabled = bgMode === "block";
+  const cueBackground = bgFillEnabled
+    ? `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, ${bgOpacity})`
+    : "transparent";
+  const cueRadius = bgMode === "pill" ? 999 : (s.bgRadius ?? 8);
+  const previewTargetWidth = renderResolution.aspect < 1 ? 300 : 892;
+  const previewScale = previewTargetWidth / renderResolution.w;
+  const previewFontSize = Math.max(11, Math.round((s.size || 42) * previewScale));
+  const previewLineHeight = Math.round(previewFontSize * 1.18);
+  const safeTop = Math.round(renderResolution.h * 0.09 * previewScale);
+  const safeBottom = Math.round((s.pos === "bottom_low" ? renderResolution.h * 0.055 : renderResolution.h * 0.04) * previewScale);
+  const cueMaxWidth = Math.round(renderResolution.w * 0.64 * previewScale);
+  const cueStyle = {
+    fontSize: previewFontSize,
+    lineHeight: `${previewLineHeight}px`,
+    color: s.color || "#ffffff",
+    backgroundColor: cueBackground,
+    borderRadius: cueRadius,
+    fontFamily: s.font || "Arial",
+    maxWidth: cueMaxWidth,
+    top: s.pos === "top" ? safeTop : "auto",
+    bottom: s.pos === "top" ? "auto" : safeBottom
+  };
 
   return (
     <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal subtitles-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <h2>Subtitles</h2>
-            <p>Subtitles are auto-generated from the transcript via WhisperX alignment. Style and burn-in below.</p>
+            <p>Subtitles are auto-generated from the transcript via WhisperX alignment. Use the switch to show or hide them.</p>
           </div>
           <button className="iconbtn" onClick={onClose}><Icon name="close" /></button>
         </div>
@@ -20,18 +59,18 @@ const SubtitlesModal = ({ open, onClose, settings, onSave }) => {
           <div className="field-row two">
             <div className="field">
               <label>Background</label>
-              <select value={s.bg} onChange={(e) => upd("bg", e.target.value)}>
-                <option value="none">None</option>
-                <option value="pill">Pill · 60% black</option>
-                <option value="block">Block · 80% black</option>
+              <select value={bgMode} onChange={(e) => upd("bg", e.target.value)}>
+                <option value="block">Block background</option>
+                <option value="pill">Pill background</option>
                 <option value="shadow">Drop shadow only</option>
+                <option value="none">None</option>
               </select>
             </div>
             <div className="field">
               <label>Position</label>
-              <select value={s.pos} onChange={(e) => upd("pos", e.target.value)}>
-                <option value="bottom">Bottom · safe zone</option>
-                <option value="bottom_low">Bottom · low</option>
+              <select value={s.pos || "bottom"} onChange={(e) => upd("pos", e.target.value)}>
+                <option value="bottom">Bottom - safe zone</option>
+                <option value="bottom_low">Bottom - low</option>
                 <option value="top">Top</option>
               </select>
             </div>
@@ -39,43 +78,67 @@ const SubtitlesModal = ({ open, onClose, settings, onSave }) => {
           <div className="field-row two">
             <div className="field">
               <label>Font</label>
-              <select value={s.font} onChange={(e) => upd("font", e.target.value)}>
-                <option>Inter</option><option>Söhne</option><option>Helvetica Neue</option><option>SF Pro</option>
+              <select value={s.font || "Arial"} onChange={(e) => upd("font", e.target.value)}>
+                <option>Arial</option><option>Inter</option><option>Helvetica Neue</option><option>SF Pro</option>
               </select>
             </div>
             <div className="field">
-              <label>Max chars / line</label>
-              <input type="number" min={20} max={80} value={s.maxChars || 42} onChange={(e) => upd("maxChars", +e.target.value)} style={{height: `31px`}} />
-            </div>
-          </div>
-          <div className="field-row two">
-            <div className="field">
-              <label>Size</label>
-              <div className="range-row">
-                <input type="range" min={28} max={72} value={s.size || 44} onChange={(e) => upd("size", +e.target.value)} style={{ flex: 1 }} />
-                <span className="hint size-hint">{s.size || 44}px @ 1080p</span>
+              <label>Color</label>
+              <div className="color-field">
+                <input type="color" value={s.color || "#ffffff"} onChange={(e) => upd("color", e.target.value)} />
+                <span>{s.color || "#ffffff"}</span>
               </div>
             </div>
-            <div className="field">
-              <label>Burn-in</label>
-              <label className="switch-row">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={!!s.burnin}
-                  className={"switch " + (s.burnin ? "on" : "")}
-                  onClick={() => upd("burnin", !s.burnin)}>
-                  <span className="knob" />
-                </button>
-              </label>
+          </div>
+          <div className="field">
+            <label>Size</label>
+            <div className="range-row">
+              <input type="range" min={28} max={72} value={s.size || 42} onChange={(e) => upd("size", +e.target.value)} style={{ flex: 1 }} />
+              <span className="num-val">{s.size || 42}px</span>
+            </div>
+          </div>
+          <label className="switch-row subtitle-switch">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!shown}
+              className={"switch " + (shown ? "on" : "")}
+              onClick={updShow}>
+              <span className="knob" />
+            </button>
+            <span className="switch-label">Show subtitles</span>
+          </label>
+          <div className={"subtitle-bg-controls " + (!bgFillEnabled ? "is-disabled" : "")} aria-disabled={!bgFillEnabled}>
+            <div className={"field " + (!bgFillEnabled ? "is-disabled" : "")}>
+              <label>Background color</label>
+              <div className="color-field">
+                <input type="color" value={s.bgColor || "#000000"} disabled={!bgFillEnabled} onChange={(e) => upd("bgColor", e.target.value)} />
+                <span>{s.bgColor || "#000000"}</span>
+              </div>
+            </div>
+            <div className={"field " + (!bgFillEnabled ? "is-disabled" : "")}>
+              <label>Opacity</label>
+              <div className="range-row">
+                <input type="range" min={0} max={100} value={s.bgOpacity ?? 62} disabled={!bgFillEnabled} onChange={(e) => upd("bgOpacity", +e.target.value)} style={{ flex: 1 }} />
+                <span className="num-val">{s.bgOpacity ?? 62}%</span>
+              </div>
+            </div>
+            <div className={"field " + (!bgRadiusEnabled ? "is-disabled" : "")}>
+              <label>Radius</label>
+              <div className="range-row">
+                <input type="range" min={0} max={32} value={s.bgRadius ?? 8} disabled={!bgRadiusEnabled} onChange={(e) => upd("bgRadius", +e.target.value)} style={{ flex: 1 }} />
+                <span className="num-val">{s.bgRadius ?? 8}px</span>
+              </div>
             </div>
           </div>
           <div className="sub-preview">
-            <div className="sp-frame">
-              <div className={"sp-cue " + (s.bg || "none")} style={{ fontSize: 14 * ((s.size || 44) / 44), top: s.pos === "top" ? 16 : "auto", bottom: s.pos === "bottom" ? 32 : s.pos === "bottom_low" ? 14 : "auto" }}>
-                Drop an image onto a sentence and the editor knows when it should appear.
-              </div>
-              <span className="sp-label">Preview · 16:9</span>
+            <div className="sp-frame" style={{ aspectRatio: `${renderResolution.w} / ${renderResolution.h}`, width: renderResolution.aspect < 1 ? "min(100%, 300px)" : undefined }}>
+              <span className="sp-label">Preview · {renderResolution.aspect < 1 ? "9:16" : "16:9"}</span>
+              {shown && (
+                <div className={"sp-cue " + bgMode} style={cueStyle}>
+                  This subtitle preview follows your style and stays inside the safe zone.
+                </div>
+              )}
             </div>
           </div>
         </div>

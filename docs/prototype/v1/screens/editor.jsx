@@ -11,7 +11,19 @@ const RESOLUTIONS = {
 
 // ───────── Transcript ─────────
 
-const Transcript = ({ sentences, selection, currentSentence, onSelect, onContext }) => {
+const Transcript = ({
+  sentences,
+  selection,
+  currentSentence,
+  onSelect,
+  onContext,
+  editingSentence,
+  sentenceDraft,
+  onStartEdit,
+  onDraftChange,
+  onCommitEdit,
+  onCancelEdit
+}) => {
   return (
     <div className="tcol">
       <div className="tx-search">
@@ -31,11 +43,13 @@ const Transcript = ({ sentences, selection, currentSentence, onSelect, onContext
           const isFirst = isSel && (i === 0 || !selection.includes(sentences[i - 1]?.idx));
           const isLast = isSel && (i === sentences.length - 1 || !selection.includes(sentences[i + 1]?.idx));
           const isNow = currentSentence === s.idx;
+          const isEditing = editingSentence === s.idx;
           const cls = ["sentence"];
           if (isSel) cls.push("sel");
           if (isFirst) cls.push("first");
           if (isLast) cls.push("last");
           if (isNow) cls.push("now");
+          if (isEditing) cls.push("editing");
           if (s.orphan) cls.push("orphan");
           return (
             <div key={s.idx} className={cls.join(" ")}
@@ -43,7 +57,36 @@ const Transcript = ({ sentences, selection, currentSentence, onSelect, onContext
             onContextMenu={(e) => {e.preventDefault();onContext(s.idx, e);}}>
               <span className="idx">{s.idx}</span>
               <span className="tc">{fmtTC(s.start, false)}–{fmtTC(s.end, false)}</span>
-              <span className="text">{s.text}</span>
+              <span className={"text " + (isEditing ? "sentence-edit-shell" : "")}>
+                {isEditing ?
+                <>
+                  <span className="sentence-edit-ghost">{s.text}</span>
+                  <textarea
+                    className="sentence-edit-input"
+                    value={sentenceDraft}
+                    autoFocus
+                    rows={1}
+                    aria-label={`Edit sentence ${s.idx}`}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onDraftChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        onCommitEdit(s.idx);
+                      }
+                      if (e.key === "Escape") onCancelEdit();
+                    }} />
+                </> :
+                s.text}
+              </span>
+              <span className="edit-actions" onClick={(e) => e.stopPropagation()}>
+                {isEditing ?
+                <>
+                  <button className="sentence-edit-btn" title="Save sentence" onClick={() => onCommitEdit(s.idx)}><Icon name="check" size={12} /></button>
+                  <button className="sentence-edit-btn" title="Cancel edit" onClick={onCancelEdit}><Icon name="x" size={12} /></button>
+                </> :
+                <button className="sentence-edit-btn" title="Edit sentence" onClick={() => onStartEdit(s.idx)}><Icon name="edit" size={12} /></button>}
+              </span>
             </div>);
 
         })}
@@ -52,51 +95,89 @@ const Transcript = ({ sentences, selection, currentSentence, onSelect, onContext
 
 };
 
-const WatermarkModal = ({ open, onClose, assetId, onSelect, enabled, onEnabledChange }) => {
+const WatermarkModal = ({ open, onClose, assetId, onSelect, enabled, onEnabledChange, settings, onSettingsChange }) => {
   const [uploadedName, setUploadedName] = React.useState(null);
+  const fileInputRef = React.useRef(null);
+  React.useEffect(() => {
+    if (open) setUploadedName(null);
+  }, [open, assetId]);
   if (!open) return null;
   const selected = MEDIA_BY_ID[assetId];
+  const wm = settings || { posX: 5, posY: 8, size: 8, opacity: 49 };
+  const setWm = (patch) => onSettingsChange({ ...wm, ...patch });
+  const defaultWatermarkName = selected?.id === "m3" ? "微信图片_20260518160409_43_138.jpg" : selected?.name;
+  const currentName = uploadedName || defaultWatermarkName || "No watermark selected";
+  const currentKind = uploadedName ? "image" : selected?.kind || "image";
+  const replaceFromDisk = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadedName(file.name);
+    if (selected) onSelect(selected.id);
+  };
   return (
     <div className="modal-back" onClick={onClose}>
-      <div className="modal narrow" onClick={(e) => e.stopPropagation()}>
+      <div className="modal narrow watermark-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <h2>Watermark asset</h2>
-            <p>Pick an image or video watermark. Video watermarks loop over the render.</p>
+            <p>Pick an image watermark for the render overlay.</p>
           </div>
           <button className="iconbtn" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="modal-body">
-          <label className="switch-row">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={!!enabled}
-              className={"switch " + (enabled ? "on" : "")}
-              onClick={() => onEnabledChange(!enabled)}>
-              <span className="knob" />
-            </button>
-            <span className="switch-label">{enabled ? "Watermark enabled" : "Watermark disabled"}</span>
-          </label>
-          <label className="upload-strip">
-            <input type="file" accept="image/*,video/*" onChange={(e) => setUploadedName(e.target.files?.[0]?.name || null)} />
-            <Icon name="upload" size={14}/>
-            <span>Upload image or video watermark...</span>
-            <em>{uploadedName || "PNG / JPG / MP4"}</em>
-          </label>
-          <div className="asset-grid">
-            {MEDIA.map((m) => (
-              <button key={m.id} className={"asset-card " + (m.id === assetId ? "on" : "")} onClick={() => onSelect(m.id)}>
-                <div className="thumb" style={{background: thumbGrad(m.thumb)}}>
-                  <span className="badge">{m.kind === "video" ? "MP4" : "IMG"}</span>
-                </div>
-                <div className="name">{m.name}</div>
+          <div className="wm-toolbar">
+            <label className="switch-row">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!enabled}
+                className={"switch " + (enabled ? "on" : "")}
+                onClick={() => onEnabledChange(!enabled)}>
+                <span className="knob" />
               </button>
-            ))}
+              <span className="switch-label">{enabled ? "Watermark enabled" : "Watermark disabled"}</span>
+            </label>
+            <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" onChange={replaceFromDisk} />
+            <button className="btn ghost" onClick={() => fileInputRef.current?.click()}>
+              <Icon name="folder" size={13} /> Import from disk...
+            </button>
           </div>
-          {selected &&
-          <p className="hint">Current watermark: {selected.name} / {selected.kind === "video" ? "video loop" : "image overlay"}.</p>
-          }
+          <div className="wm-single-row">
+            <div
+              className={"single-asset-card " + (enabled ? "on" : "")}
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}>
+              <div className="thumb wm-card-thumb">
+                <span className="badge">{currentKind === "video" ? "MP4" : "IMG"}</span>
+                <span className="wm-qr-preview" />
+              </div>
+              <div className="name">{currentName}</div>
+              <button className="asset-delete" title="Clear watermark" onClick={(e) => {e.stopPropagation();onEnabledChange(false);}}>
+                <Icon name="trash" size={12} />
+              </button>
+            </div>
+          </div>
+          <p className="hint wm-current">Current watermark: {currentName} / image overlay.</p>
+          <div className="watermark-form">
+            <div className="wm-axis-row">
+              <label>POSX</label>
+              <input type="number" min={0} max={100} value={wm.posX} onChange={(e) => setWm({ posX: +e.target.value })} />
+              <label>POSY</label>
+              <input type="number" min={0} max={100} value={wm.posY} onChange={(e) => setWm({ posY: +e.target.value })} />
+            </div>
+            <div className="wm-slider-row">
+              <label>Size</label>
+              <input type="range" min={4} max={30} value={wm.size} onChange={(e) => setWm({ size: +e.target.value })} />
+              <span className="num-val">{wm.size}%</span>
+            </div>
+            <div className="wm-slider-row">
+              <label>Opacity</label>
+              <input type="range" min={10} max={100} value={wm.opacity} onChange={(e) => setWm({ opacity: +e.target.value })} />
+              <span className="num-val">{wm.opacity}%</span>
+            </div>
+          </div>
         </div>
         <div className="modal-foot">
           <button className="btn primary" onClick={onClose}>Done</button>
@@ -108,7 +189,36 @@ const WatermarkModal = ({ open, onClose, assetId, onSelect, enabled, onEnabledCh
 
 // ───────── Preview ─────────
 
-const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, subtitleText, showWatermark, watermarkAsset }) => {
+const secondsFromDurationLabel = (dur) => {
+  const parts = String(dur || "00:00").split(":").map((p) => Number(p) || 0);
+  return parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] || 0;
+};
+
+const backgroundMediaForTime = (bgItem, time) => {
+  const explicitSchedule = (bgItem?.schedule || []).map((seg) => ({ ...seg, media: MEDIA_BY_ID[seg.mediaId] })).filter((seg) => seg.media);
+  if (explicitSchedule.length > 0) {
+    return explicitSchedule.find((seg) => time >= seg.start && time < seg.end)?.media || null;
+  }
+  const ids = bgItem?.mediaIds || (bgItem?.mediaId ? [bgItem.mediaId] : []);
+  const assets = ids.map((id) => MEDIA_BY_ID[id]).filter(Boolean);
+  if (assets.length === 0) return null;
+  const videoSeconds = assets.reduce((sum, media) => sum + (media.kind === "video" ? secondsFromDurationLabel(media.dur) : 0), 0);
+  const imageCount = assets.filter((media) => media.kind !== "video").length;
+  const imageSeconds = imageCount > 0 ? Math.max(8, (PROJECT_DURATION - videoSeconds) / imageCount) : 0;
+  const schedule = assets.map((media) => ({
+    media,
+    duration: media.kind === "video" ? Math.max(1, secondsFromDurationLabel(media.dur)) : imageSeconds
+  }));
+  const cycle = schedule.reduce((sum, item) => sum + item.duration, 0) || PROJECT_DURATION;
+  let cursor = ((time % cycle) + cycle) % cycle;
+  return schedule.find((item) => {
+    if (cursor <= item.duration) return true;
+    cursor -= item.duration;
+    return false;
+  })?.media || assets[0];
+};
+
+const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, subtitleText, showWatermark, watermarkAsset, watermarkSettings }) => {
   // Find the topmost active fullscreen item (PiP and BG are always on)
   const fgItem = (() => {
     for (const L of layers.filter((l) => l.kind === "fg")) {
@@ -123,7 +233,8 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
 
   const showFG = !!fgItem;
   const fgMedia = fgItem ? MEDIA_BY_ID[fgItem.item.mediaId] : null;
-  const bgMedia = bgItem ? MEDIA_BY_ID[bgItem.mediaId] : null;
+  const bgMedia = bgItem ? backgroundMediaForTime(bgItem, time) : null;
+  const watermarkPlacement = watermarkSettings || { posX: 5, posY: 8, size: 8, opacity: 49 };
 
   const isVertical = resolution.h > resolution.w;
   const canvasStyle = isVertical
@@ -154,8 +265,14 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
           })}
           <div className="subtitles">{subtitleText}</div>
           {showWatermark && watermarkAsset &&
-          <div className="watermark-asset">
-            <span>WaterMark</span>
+          <div className="watermark-asset" style={{
+            left: `${watermarkPlacement.posX}%`,
+            top: `${watermarkPlacement.posY}%`,
+            width: `${watermarkPlacement.size}%`,
+            opacity: watermarkPlacement.opacity / 100,
+            background: thumbGrad(watermarkAsset.thumb)
+          }}>
+            <span>{watermarkAsset.kind === "video" ? "MP4" : "IMG"}</span>
           </div>
           }
         </div>
@@ -237,8 +354,8 @@ const TimelineRow = ({ layer, selection, onSelect, onResize, onDelete, onClickHe
           const width = dur / PROJECT_DURATION * 100;
           const sel = selection?.layerId === layer.id && selection?.itemId === it.id;
           const m = MEDIA_BY_ID[it.mediaId];
-          const bgCount = it.mediaIds?.length || 1;
-          const label = layer.kind === "bg" ? (bgCount > 1 ? `auto / ${bgCount} assets` : `auto / ${m?.name || "background"}`) : m?.name || "item";
+          const bgCount = it.schedule?.length || it.mediaIds?.length || 1;
+          const label = layer.kind === "bg" ? (bgCount > 1 ? `${bgCount} timed ranges` : `auto / ${m?.name || "background"}`) : m?.name || "item";
           return (
             <Clip key={it.id} left={left} width={width} kind={layer.kind} label={label}
             selected={sel}
@@ -307,16 +424,31 @@ const EditorScreen = ({ go }) => {
   const [playing, setPlaying] = React.useState(false);
   const [selection, setSelection] = React.useState([6, 7]);
   const [layers, setLayers] = React.useState(INITIAL_LAYERS);
-  const [selItem, setSelItem] = React.useState({ layerId: "L-fg-1", itemId: "fg-002" });
+  const [selItem, setSelItem] = React.useState({ layerId: "L-bg", itemId: "bg-001" });
   const [modal, setModal] = React.useState(null); // {kind:"assign", range, edit?} | {kind:"subtitles"} | {kind:"watermark"} | {kind:"bg"}
   const [resolutionKey, setResolutionKey] = React.useState("1080p");
   const [showLayersMenu, setShowLayersMenu] = React.useState(false);
   const [contextMenu, setContextMenu] = React.useState(null); // {x,y,sentenceIdx}
-  const [subSettings, setSubSettings] = React.useState({ burnin: true, pos: "bottom", font: "Inter", size: 44, bg: "shadow", maxChars: 42 });
+  const [subSettings, setSubSettings] = React.useState({ burnin: true, show: true, pos: "bottom", font: "Arial", size: 42, color: "#ffffff", bg: "block", bgColor: "#000000", bgOpacity: 62, bgRadius: 8 });
   const [watermarkOn, setWatermarkOn] = React.useState(true);
   const [watermarkAssetId, setWatermarkAssetId] = React.useState("m3");
+  const [watermarkSettings, setWatermarkSettings] = React.useState({ posX: 5, posY: 8, size: 8, opacity: 49 });
   const [sentences, setSentences] = React.useState(() => [...SENTENCES]);
+  const [editingSentence, setEditingSentence] = React.useState(null);
+  const [sentenceDraft, setSentenceDraft] = React.useState("");
+  const [saveState, setSaveState] = React.useState("saved");
+  const autosaveTimer = React.useRef(null);
   const [draft, setDraft] = React.useState(null); // null | { progress: 0..100, stage, done?: boolean }
+
+  const markConfigChanged = React.useCallback(() => {
+    setSaveState("saving");
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => setSaveState("saved"), 650);
+  }, []);
+
+  React.useEffect(() => () => {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+  }, []);
 
   // Simulated draft render — drives the progress bar under the editor toolbar.
   React.useEffect(() => {
@@ -394,6 +526,31 @@ const EditorScreen = ({ go }) => {
     setContextMenu({ x: e.clientX, y: e.clientY, sentenceIdx: idx });
   };
 
+  const startSentenceEdit = (idx) => {
+    const sentence = sentences.find((s) => s.idx === idx);
+    setEditingSentence(idx);
+    setSentenceDraft(sentence?.text || "");
+    setSelection([idx]);
+    setTime(sentence?.start ?? 0);
+  };
+
+  const cancelSentenceEdit = () => {
+    setEditingSentence(null);
+    setSentenceDraft("");
+  };
+
+  const commitSentenceEdit = (idx) => {
+    const text = sentenceDraft.trim();
+    if (!text) return cancelSentenceEdit();
+    setSentences((current) => {
+      const next = current.map((s) => s.idx === idx ? { ...s, text } : s);
+      window.SENTENCES = next;
+      return next;
+    });
+    cancelSentenceEdit();
+    markConfigChanged();
+  };
+
   const sentenceRangeForTimes = (start, end) => {
     const overlapping = sentences.filter((s) => s.end > start && s.start < end);
     if (overlapping.length === 0) {
@@ -448,6 +605,7 @@ const EditorScreen = ({ go }) => {
     setLayers(newLayers);
     setSelection([lo]);
     setContextMenu(null);
+    markConfigChanged();
   };
 
   // ── layer mutations ──
@@ -455,6 +613,7 @@ const EditorScreen = ({ go }) => {
     setLayers((ls) => ls.map((L) => L.id !== layerId ? L : {
       ...L, items: L.items.map((it) => it.id !== itemId ? it : { ...it, ...patch })
     }));
+    markConfigChanged();
   };
 
   const deleteItem = (layerId, itemId) => {
@@ -465,6 +624,7 @@ const EditorScreen = ({ go }) => {
       return cleaned;
     });
     setSelItem(null);
+    markConfigChanged();
   };
 
   const resizeItem = (layerId, itemId, side, dPct) => {
@@ -477,6 +637,7 @@ const EditorScreen = ({ go }) => {
         return { ...it, start, end, sentences: sentenceRangeForTimes(start, end) };
       })
     }));
+    markConfigChanged();
   };
 
   const onAssignSubmit = (data) => {
@@ -496,6 +657,7 @@ const EditorScreen = ({ go }) => {
         })
       }));
       setSelItem({ layerId: data.editing.layerId, itemId: data.editing.itemId });
+      markConfigChanged();
       return;
     }
     const id = `${data.comp === "pip" ? "pip" : "fg"}-${Math.random().toString(36).slice(2, 7)}`;
@@ -533,6 +695,7 @@ const EditorScreen = ({ go }) => {
       return next;
     });
     setSelItem({ layerId: data.zTarget !== "__new__" ? data.zTarget : null, itemId: id });
+    markConfigChanged();
   };
 
   // ── BG add ──
@@ -541,15 +704,26 @@ const EditorScreen = ({ go }) => {
       const bg = ls.find((L) => L.kind === "bg");
       if (bg) return ls;
       const newBG = { id: "L-bg", kind: "bg", name: "Background", items: [{
-          id: "bg-001", mediaId: "m6", sentences: [1, sentences.length], start: 0, end: PROJECT_DURATION,
+          id: "bg-001", mediaId: "m2", mediaIds: ["m2", "m4", "m7", "m5"], sentences: [1, sentences.length], start: 0, end: PROJECT_DURATION,
+          schedule: [
+            { id: "bg-seg-m2-1", mediaId: "m2", start: 0, end: 12, lockedDuration: true },
+            { id: "bg-seg-m4-2", mediaId: "m4", start: 12, end: 180, lockedDuration: false },
+            { id: "bg-seg-m7-3", mediaId: "m7", start: 180, end: 188, lockedDuration: true },
+            { id: "bg-seg-m5-4", mediaId: "m5", start: 188, end: PROJECT_DURATION, lockedDuration: false },
+          ],
           motion: { kind: "ken_burns", easing: "linear" },
           transitions: { in: "cut", out: "cut" }, crossfade: 0.6
         }] };
       return [...ls, newBG];
     });
+    markConfigChanged();
   };
 
-  const removeBackground = () => setLayers((ls) => ls.filter((L) => L.kind !== "bg"));
+  const removeBackground = () => {
+    setLayers((ls) => ls.filter((L) => L.kind !== "bg"));
+    setSelItem(null);
+    markConfigChanged();
+  };
 
   const resolution = RESOLUTIONS[resolutionKey];
   const subtitleText = sentences[currentSentence - 1]?.text || "";
@@ -562,6 +736,26 @@ const EditorScreen = ({ go }) => {
     pip: layers.filter((L) => L.kind === "pip").length
   };
 
+  const saveSubSettings = (next) => {
+    setSubSettings(next);
+    markConfigChanged();
+  };
+
+  const changeWatermarkAsset = (id) => {
+    setWatermarkAssetId(id);
+    markConfigChanged();
+  };
+
+  const changeWatermarkEnabled = (next) => {
+    setWatermarkOn(next);
+    markConfigChanged();
+  };
+
+  const changeWatermarkSettings = (next) => {
+    setWatermarkSettings(next);
+    markConfigChanged();
+  };
+
   return (
     <div className="screen" data-screen-label="03 Editor" style={{ display: "flex", flexDirection: "column", overflow: "hidden", height: "100%" }}>
       <div className="editor" style={{ flex: 1, minHeight: 0 }}>
@@ -572,7 +766,7 @@ const EditorScreen = ({ go }) => {
           </div>
           <div className="center"></div>
           <div className="right">
-            <button className="btn"><Icon name="save" size={13} /> Save</button>
+            <span className={"save-state " + saveState}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : ""}</span>
             <button className="btn" onClick={startDraft} disabled={draft && !draft.done}>
               {draft && !draft.done ? `Drafting · ${Math.round(draft.progress)}%` : "Render Draft"}
             </button>
@@ -603,7 +797,13 @@ const EditorScreen = ({ go }) => {
             selection={selection}
             currentSentence={currentSentence}
             onSelect={onSentenceSelect}
-            onContext={onSentenceContext} />
+            onContext={onSentenceContext}
+            editingSentence={editingSentence}
+            sentenceDraft={sentenceDraft}
+            onStartEdit={startSentenceEdit}
+            onDraftChange={setSentenceDraft}
+            onCommitEdit={commitSentenceEdit}
+            onCancelEdit={cancelSentenceEdit} />
           
 
           <div className="center-pane">
@@ -615,7 +815,8 @@ const EditorScreen = ({ go }) => {
               resolution={resolution}
               subtitleText={subtitleText}
               showWatermark={watermarkOn}
-              watermarkAsset={watermarkAsset} />
+              watermarkAsset={watermarkAsset}
+              watermarkSettings={watermarkSettings} />
             
             {/* Preview controls strip */}
             <div className="preview-controls">
@@ -734,15 +935,16 @@ const EditorScreen = ({ go }) => {
             const exists = ls.find((L) => L.kind === "bg");
             if (exists) {
               return ls.map((L) => L.kind !== "bg" ? L : {
-                ...L, items: L.items.map((it) => ({ ...it, mediaIds: data.mediaIds, mediaId: data.mediaId, motion: data.motion, crossfade: data.crossfade }))
+                ...L, items: L.items.map((it) => ({ ...it, mediaIds: data.mediaIds, mediaId: data.mediaId, schedule: data.schedule, motion: data.motion, crossfade: data.crossfade }))
               });
             }
             const newBG = { id: "L-bg", kind: "bg", name: "Background", items: [{
                 id: "bg-001", mediaIds: data.mediaIds, mediaId: data.mediaId, sentences: [1, sentences.length], start: 0, end: PROJECT_DURATION,
-                motion: data.motion, transitions: { in: "cut", out: "cut" }, crossfade: data.crossfade
+                schedule: data.schedule, motion: data.motion, transitions: { in: "cut", out: "cut" }, crossfade: data.crossfade
               }] };
             return [...ls, newBG];
           });
+          markConfigChanged();
           setModal(null);
         }} />
 
@@ -750,15 +952,18 @@ const EditorScreen = ({ go }) => {
         open={modal?.kind === "watermark"}
         onClose={() => setModal(null)}
         assetId={watermarkAssetId}
-        onSelect={setWatermarkAssetId}
+        onSelect={changeWatermarkAsset}
         enabled={watermarkOn}
-        onEnabledChange={setWatermarkOn} />
+        onEnabledChange={changeWatermarkEnabled}
+        settings={watermarkSettings}
+        onSettingsChange={changeWatermarkSettings} />
       
       <SubtitlesModal
         open={modal?.kind === "subtitles"}
         onClose={() => setModal(null)}
         settings={subSettings}
-        onSave={setSubSettings} />
+        resolution={resolution}
+        onSave={saveSubSettings} />
       
     </div>);
 
