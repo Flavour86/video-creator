@@ -31,6 +31,10 @@ const DEFAULT_SUBTITLES = {
     position: "bottom" as const,
     max_chars_per_line: 42,
     bg_style: "shadow" as const,
+    color: "#ffffff",
+    bg_color: "#000000",
+    bg_opacity: 62,
+    bg_radius: 8,
   },
 };
 
@@ -95,10 +99,13 @@ describe("EditorModal", () => {
       subtitles: DEFAULT_SUBTITLES,
     });
 
-    fireEvent.change(screen.getByLabelText("Background"), { target: { value: "pill" } });
+    fireEvent.change(screen.getByLabelText("Background"), { target: { value: "block" } });
     fireEvent.change(screen.getByLabelText("Position"), { target: { value: "top" } });
     fireEvent.change(screen.getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
-    fireEvent.change(screen.getByLabelText("Max chars / line"), { target: { value: "32" } });
+    fireEvent.change(screen.getByLabelText("Color"), { target: { value: "#ffcc00" } });
+    fireEvent.change(screen.getByLabelText("Background color"), { target: { value: "#112233" } });
+    fireEvent.change(screen.getByLabelText("Opacity"), { target: { value: "45" } });
+    fireEvent.change(screen.getByLabelText("Radius"), { target: { value: "14" } });
     fireEvent.change(screen.getByLabelText("Size"), { target: { value: "40" } });
     fireEvent.click(screen.getByRole("switch", { name: "Show subtitles" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
@@ -106,13 +113,13 @@ describe("EditorModal", () => {
     expect(onApplySubtitles).toHaveBeenCalledWith({
       burn_in: true,
       style: {
-        bg_style: "pill",
-        bg_color: "#000000",
-        bg_opacity: 62,
-        bg_radius: 8,
-        color: "#ffffff",
+        bg_style: "block",
+        bg_color: "#112233",
+        bg_opacity: 45,
+        bg_radius: 14,
+        color: "#ffcc00",
         font: "Helvetica Neue",
-        max_chars_per_line: 32,
+        max_chars_per_line: 42,
         position: "top",
         size: 40,
       },
@@ -129,6 +136,71 @@ describe("EditorModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(onApplySubtitles).not.toHaveBeenCalled();
+  });
+
+  it("shows v1.1 color controls and hides legacy max chars", () => {
+    renderModal({
+      modal: "subtitles",
+      subtitles: DEFAULT_SUBTITLES,
+    });
+
+    expect(screen.queryByLabelText("Max chars / line")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Color")).toBeInTheDocument();
+    expect(screen.getByLabelText("Background color")).toBeInTheDocument();
+    expect(screen.getByLabelText("Opacity")).toBeInTheDocument();
+    expect(screen.getByLabelText("Radius")).toBeInTheDocument();
+  });
+
+  it("disables background rectangle controls by mode", () => {
+    renderModal({
+      modal: "subtitles",
+      subtitles: DEFAULT_SUBTITLES,
+    });
+
+    const background = screen.getByLabelText("Background");
+    const backgroundColor = screen.getByLabelText("Background color");
+    const opacity = screen.getByLabelText("Opacity");
+    const radius = screen.getByLabelText("Radius");
+
+    expect(backgroundColor).toBeDisabled();
+    expect(opacity).toBeDisabled();
+    expect(radius).toBeDisabled();
+
+    fireEvent.change(background, { target: { value: "none" } });
+    expect(backgroundColor).toBeDisabled();
+    expect(opacity).toBeDisabled();
+    expect(radius).toBeDisabled();
+
+    fireEvent.change(background, { target: { value: "pill" } });
+    expect(backgroundColor).toBeEnabled();
+    expect(opacity).toBeEnabled();
+    expect(radius).toBeDisabled();
+
+    fireEvent.change(background, { target: { value: "block" } });
+    expect(backgroundColor).toBeEnabled();
+    expect(opacity).toBeEnabled();
+    expect(radius).toBeEnabled();
+  });
+
+  it("updates subtitle live preview from color and background controls", () => {
+    renderModal({
+      modal: "subtitles",
+      subtitles: {
+        ...DEFAULT_SUBTITLES,
+        burn_in: true,
+        style: { ...DEFAULT_SUBTITLES.style, bg_style: "block" },
+      },
+    });
+
+    fireEvent.change(screen.getByLabelText("Color"), { target: { value: "#ffcc00" } });
+    fireEvent.change(screen.getByLabelText("Background color"), { target: { value: "#112233" } });
+    fireEvent.change(screen.getByLabelText("Opacity"), { target: { value: "45" } });
+    fireEvent.change(screen.getByLabelText("Radius"), { target: { value: "14" } });
+
+    const cue = screen.getByTestId("subtitles-preview-cue");
+    expect(cue).toHaveStyle({ color: "#ffcc00" });
+    expect(cue).toHaveStyle({ backgroundColor: "rgba(17, 34, 51, 0.45)" });
+    expect(Number.parseFloat(cue.style.borderRadius)).toBeCloseTo(14 * (720 / 1920), 2);
   });
 
   it("uses current preview resolution for subtitles live preview", () => {

@@ -1362,10 +1362,14 @@ it("Apply in subtitles modal updates defaults, appends one operation, and closes
   fireEvent.click(screen.getByRole("button", { name: "Subtitles" }));
 
   const modal = await screen.findByRole("dialog");
-  fireEvent.change(within(modal).getByLabelText("Background"), { target: { value: "pill" } });
+  fireEvent.change(within(modal).getByLabelText("Background"), { target: { value: "block" } });
   fireEvent.change(within(modal).getByLabelText("Position"), { target: { value: "top" } });
   fireEvent.change(within(modal).getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
-  fireEvent.change(within(modal).getByLabelText("Max chars / line"), { target: { value: "30" } });
+  expect(within(modal).queryByLabelText("Max chars / line")).not.toBeInTheDocument();
+  fireEvent.change(within(modal).getByLabelText("Color"), { target: { value: "#ffcc00" } });
+  fireEvent.change(within(modal).getByLabelText("Background color"), { target: { value: "#112233" } });
+  fireEvent.change(within(modal).getByLabelText("Opacity"), { target: { value: "45" } });
+  fireEvent.change(within(modal).getByLabelText("Radius"), { target: { value: "14" } });
   fireEvent.change(within(modal).getByLabelText("Size"), { target: { value: "40" } });
   fireEvent.click(within(modal).getByRole("switch", { name: "Show subtitles" }));
   fireEvent.click(within(modal).getByRole("button", { name: "Apply" }));
@@ -1386,13 +1390,13 @@ it("Apply in subtitles modal updates defaults, appends one operation, and closes
     expect(payload.config.subtitles).toEqual({
       burn_in: true,
       style: {
-        bg_style: "pill",
-        bg_color: "#000000",
-        bg_opacity: 62,
-        bg_radius: 8,
-        color: "#ffffff",
+        bg_style: "block",
+        bg_color: "#112233",
+        bg_opacity: 45,
+        bg_radius: 14,
+        color: "#ffcc00",
         font: "Helvetica Neue",
-        max_chars_per_line: 30,
+        max_chars_per_line: 42,
         position: "top",
         size: 40,
       },

@@ -32,7 +32,7 @@
   - Verify: `rtk pnpm -F @vc/web test -- app/editor/page.test.tsx components/editor/EditorBar.test.tsx lib/editor-operation-log/operation-log.test.ts`
   - Evidence: editor header screenshots for empty, `Saving`, and `Saved`; no Save button visible.
 
-- [ ] Task 5 (task-05): Implement subtitle modal color and background controls
+- [x] Task 5 (task-05): Implement subtitle modal color and background controls
   - Acceptance: Modal removes visible `Max chars / line`, shows `Color`, `Background color`, `Opacity`, and `Radius`; disabled states match `None`, `Drop shadow only`, `Pill background`, and `Block background`; preview updates live; Apply persists settings.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/EditorModal.test.tsx app/editor/page.test.tsx lib/hooks/useProject.test.ts`
   - Evidence: `subtitles-modal-color-bg-1920x1080`, `subtitles-modal-color-bg-1080x1920`, and `subtitles-modal-none-disabled-1920x1080` browser screenshots matching references.

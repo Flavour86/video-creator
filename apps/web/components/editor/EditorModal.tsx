@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Button, Field, NumberInput, Select } from "@/components/ui";
+import { Button, Field, NumberInput, Select, TextInput } from "@/components/ui";
 import type { SubtitlesSettings } from "@/lib/hooks/useProject";
 import type { EditorMediaItem, EditorModal as EditorModalKind } from "./types";
 
@@ -151,6 +151,8 @@ function SubtitlesFields({
   const frameWidth = measuredFrameWidth ?? metrics.frameWidth;
   const previewScale = frameWidth / metrics.renderWidth;
   const cueStyle = subtitlePreviewCueStyle(value, previewScale, metrics);
+  const backgroundRectangleEnabled = value.style.bg_style === "pill" || value.style.bg_style === "block";
+  const backgroundRadiusEnabled = value.style.bg_style === "block";
 
   useEffect(() => {
     setMeasuredFrameWidth(null);
@@ -208,18 +210,12 @@ function SubtitlesFields({
             <option value="SF Pro">SF Pro</option>
           </Select>
         </Field>
-        <Field htmlFor="editor-sub-max-chars" label={t("maxChars")}>
-          <NumberInput
-            id="editor-sub-max-chars"
-            max={80}
-            min={20}
-            onChange={(event) => {
-              const next = clampNumber(Number(event.target.value), 20, 80);
-              onChange({ ...value, style: { ...value.style, max_chars_per_line: next } });
-            }}
-            value={value.style.max_chars_per_line}
-          />
-        </Field>
+        <ColorField
+          id="editor-sub-color"
+          label={t("color")}
+          onChange={(color) => onChange({ ...value, style: { ...value.style, color } })}
+          value={value.style.color}
+        />
       </div>
       <Field htmlFor="editor-sub-size" label="Size">
         <div className="flex items-center gap-3">
@@ -254,6 +250,49 @@ function SubtitlesFields({
         </button>
         {t("burnIn")}
       </label>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <ColorField
+          disabled={!backgroundRectangleEnabled}
+          id="editor-sub-bg-color"
+          label={t("backgroundColor")}
+          onChange={(bgColor) => onChange({ ...value, style: { ...value.style, bg_color: bgColor } })}
+          value={value.style.bg_color}
+        />
+        <Field
+          className={!backgroundRectangleEnabled ? "opacity-60" : undefined}
+          htmlFor="editor-sub-bg-opacity"
+          label={t("opacity")}
+        >
+          <NumberInput
+            disabled={!backgroundRectangleEnabled}
+            id="editor-sub-bg-opacity"
+            max={100}
+            min={0}
+            onChange={(event) => {
+              const next = clampNumber(Number(event.target.value), 0, 100);
+              onChange({ ...value, style: { ...value.style, bg_opacity: next } });
+            }}
+            value={value.style.bg_opacity}
+          />
+        </Field>
+        <Field
+          className={!backgroundRadiusEnabled ? "opacity-60" : undefined}
+          htmlFor="editor-sub-bg-radius"
+          label={t("radius")}
+        >
+          <NumberInput
+            disabled={!backgroundRadiusEnabled}
+            id="editor-sub-bg-radius"
+            max={48}
+            min={0}
+            onChange={(event) => {
+              const next = clampNumber(Number(event.target.value), 0, 48);
+              onChange({ ...value, style: { ...value.style, bg_radius: next } });
+            }}
+            value={value.style.bg_radius}
+          />
+        </Field>
+      </div>
       <div className="w-full">
         <div
           className={`relative mx-auto overflow-hidden rounded-md border border-(--line) bg-(--bg-2) ${metrics.aspectClass}`}
@@ -289,6 +328,44 @@ function SubtitlesFields({
   );
 }
 
+function ColorField({
+  disabled = false,
+  id,
+  label,
+  onChange,
+  value,
+}: {
+  disabled?: boolean;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const normalized = normalizeHexColor(value);
+  return (
+    <Field className={disabled ? "opacity-60" : undefined} htmlFor={id} label={label}>
+      <div className="flex items-center gap-2">
+        <input
+          aria-label={`${label} swatch`}
+          className="h-(--space-10) w-(--space-10) shrink-0 rounded-(--r) border border-(--line) bg-(--bg-1) p-1 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled}
+          onChange={(event) => onChange(normalizeHexColor(event.target.value, normalized))}
+          type="color"
+          value={normalized}
+        />
+        <TextInput
+          disabled={disabled}
+          id={id}
+          maxLength={7}
+          onChange={(event) => onChange(normalizeHexColor(event.target.value, normalized))}
+          spellCheck={false}
+          value={normalized}
+        />
+      </div>
+    </Field>
+  );
+}
+
 function subtitlePreviewCueStyle(
   value: SubtitlesSettings,
   previewScale: number,
@@ -296,12 +373,13 @@ function subtitlePreviewCueStyle(
 ): CSSProperties {
   const positionMargin = SUBTITLE_POSITION_MARGINS[value.style.position] * previewScale;
   const sideSafe = metrics.renderWidth * SUBTITLE_SIDE_SAFE_RATIO * previewScale;
-  const backgroundStyle = subtitlePreviewBackgroundStyle(value.style.bg_style, previewScale);
+  const backgroundStyle = subtitlePreviewBackgroundStyle(value.style, previewScale);
   const positionStyle = value.style.position === "top" ? { top: positionMargin } : { bottom: positionMargin };
 
   return {
     ...positionStyle,
     ...backgroundStyle,
+    color: normalizeHexColor(value.style.color),
     fontFamily: value.style.font,
     fontSize: value.style.size * previewScale,
     left: "50%",
@@ -313,24 +391,24 @@ function subtitlePreviewCueStyle(
 }
 
 function subtitlePreviewBackgroundStyle(
-  bgStyle: SubtitlesSettings["style"]["bg_style"],
+  style: SubtitlesSettings["style"],
   previewScale: number,
 ): CSSProperties {
-  if (bgStyle === "pill") {
+  if (style.bg_style === "pill") {
     return {
-      backgroundColor: "rgb(0 0 0 / 0.6)",
+      backgroundColor: colorWithOpacity(style.bg_color, style.bg_opacity),
       borderRadius: 9999,
       padding: `${10 * previewScale}px ${22 * previewScale}px`,
     };
   }
-  if (bgStyle === "block") {
+  if (style.bg_style === "block") {
     return {
-      backgroundColor: "rgb(0 0 0 / 0.8)",
-      borderRadius: 8 * previewScale,
+      backgroundColor: colorWithOpacity(style.bg_color, style.bg_opacity),
+      borderRadius: clampNumber(style.bg_radius, 0, 48) * previewScale,
       padding: `${10 * previewScale}px ${18 * previewScale}px`,
     };
   }
-  if (bgStyle === "shadow") {
+  if (style.bg_style === "shadow") {
     return {
       filter: `drop-shadow(0 ${2 * previewScale}px ${8 * previewScale}px rgb(0 0 0 / 0.9))`,
     };
@@ -492,6 +570,28 @@ function normalizeSubtitlesSettings(value: SubtitlesSettings | null | undefined)
       size: clampNumber(value.style?.size ?? fallback.style.size, 28, 72),
     },
   };
+}
+
+function colorWithOpacity(color: string, opacity: number): string {
+  const { b, g, r } = hexToRgb(normalizeHexColor(color));
+  const alpha = clampNumber(opacity, 0, 100) / 100;
+  return `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(2))})`;
+}
+
+function hexToRgb(color: string): { b: number; g: number; r: number } {
+  const value = normalizeHexColor(color).slice(1);
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16),
+  };
+}
+
+function normalizeHexColor(value: string | null | undefined, fallback = "#ffffff"): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toLowerCase();
+  return fallback;
 }
 
 function clampNumber(value: number, min: number, max: number): number {
