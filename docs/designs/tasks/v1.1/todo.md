@@ -27,7 +27,7 @@
 
 ## Phase 3: Editor Persistence And Independent UI
 
-- [ ] Task 4 (task-04): Implement autosave-only editor header
+- [x] Task 4 (task-04): Implement autosave-only editor header
   - Acceptance: The editor header has no manual Save button; status shows only empty, `Saving`, or `Saved`; config mutations queue non-overlapping autosaves and keep recovery state on failure.
   - Verify: `rtk pnpm -F @vc/web test -- app/editor/page.test.tsx components/editor/EditorBar.test.tsx lib/editor-operation-log/operation-log.test.ts`
   - Evidence: editor header screenshots for empty, `Saving`, and `Saved`; no Save button visible.
