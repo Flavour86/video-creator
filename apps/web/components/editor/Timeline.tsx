@@ -83,7 +83,7 @@ export function Timeline({
 }: TimelineProps) {
   const t = useTranslations("pages.editor");
   const dragStateRef = useRef<DragState | null>(null);
-  const dragPreviewTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const dragPreviewTimeoutRef = useRef<number | null>(null);
   const playheadDraggingRef = useRef(false);
   const waveformRef = useRef<HTMLButtonElement | null>(null);
   const rows = useTimelineRows(layers, duration, sentences);

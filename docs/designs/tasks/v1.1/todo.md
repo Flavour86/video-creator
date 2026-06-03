@@ -12,7 +12,7 @@
 
 ## Phase 2: Backend Render Semantics
 
-- [ ] Task 2 (task-02): Render subtitle style color and background fields
+- [x] Task 2 (task-02): Render subtitle style color and background fields
   - Acceptance: Render force style derives subtitle text color from `style.color`, uses configured background color/opacity where ASS supports it, preserves hidden `max_chars_per_line`, and safely falls back for unsupported rounded radius.
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_srt.py`, `rtk pnpm -F @vc/web test:e2e -- render-correctness`
   - Evidence: render correctness evidence for subtitle text color and background modes in 16:9 and 9:16 previews.

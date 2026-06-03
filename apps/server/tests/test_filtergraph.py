@@ -308,6 +308,10 @@ def test_subtitle_style_fields_are_mapped_to_force_style(tmp_path: Path) -> None
                 "position": "top",
                 "max_chars_per_line": 30,
                 "bg_style": "block",
+                "color": "#ffcc00",
+                "bg_color": "#102030",
+                "bg_opacity": 62,
+                "bg_radius": 14,
             },
         },
     )
@@ -323,7 +327,11 @@ def test_subtitle_style_fields_are_mapped_to_force_style(tmp_path: Path) -> None
     filtergraph = _filtergraph(command)
     assert "Fontname=Helvetica Neue,Fontsize=36" in filtergraph
     assert "Alignment=8,MarginV=40" in filtergraph
+    assert "PrimaryColour=&H0000CCFF" in filtergraph
+    assert "OutlineColour=&H61302010" in filtergraph
+    assert "BackColour=&H61302010" in filtergraph
     assert "BorderStyle=4,Outline=0,Shadow=0" in filtergraph
+    assert "Radius" not in filtergraph
 
 
 def test_subtitle_burn_in_false_skips_subtitles_filter(tmp_path: Path) -> None:

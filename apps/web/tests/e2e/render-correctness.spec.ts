@@ -22,6 +22,7 @@ const SUBTITLE_FORCE_STYLE = [
   "Fontsize=36",
   "PrimaryColour=&H00FFFFFF",
   "OutlineColour=&H00000000",
+  "BackColour=&H00000000",
   "BorderStyle=1",
   "Outline=2",
   "Shadow=1",

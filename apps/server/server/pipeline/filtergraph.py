@@ -463,15 +463,24 @@ def _subtitle_force_style(project: Project) -> str:
     size = _subtitle_style_float(style, "size", 28.0)
     position = _subtitle_style_str(style, "position", "bottom")
     bg_style = _subtitle_style_str(style, "bg_style", "shadow")
+    text_color = _subtitle_style_str(style, "color", "#ffffff")
+    bg_color = _subtitle_style_str(style, "bg_color", "#000000")
+    bg_opacity = _subtitle_style_opacity(style, "bg_opacity", 62.0)
     alignment, margin_v = _subtitle_position_style(position)
     border_style, outline, shadow = _subtitle_background_style(bg_style)
+    background_ass_color = (
+        _ass_color(bg_color, alpha=_ass_alpha_from_opacity(bg_opacity))
+        if bg_style in {"block", "pill"}
+        else _ass_color("#000000")
+    )
 
     return ",".join(
         [
             f"Fontname={font}",
             f"Fontsize={_fmt(size)}",
-            "PrimaryColour=&H00FFFFFF",
-            "OutlineColour=&H00000000",
+            f"PrimaryColour={_ass_color(text_color)}",
+            f"OutlineColour={background_ass_color}",
+            f"BackColour={background_ass_color}",
             f"BorderStyle={border_style}",
             f"Outline={outline}",
             f"Shadow={shadow}",
@@ -503,6 +512,31 @@ def _subtitle_style_float(style: object | None, key: str, fallback: float) -> fl
     if not isinstance(value, int | float):
         return fallback
     return max(1.0, float(value))
+
+
+def _subtitle_style_opacity(style: object | None, key: str, fallback: float) -> float:
+    value = _subtitle_style_value(style, key)
+    if not isinstance(value, int | float):
+        return fallback
+    return max(0.0, min(100.0, float(value)))
+
+
+def _ass_color(hex_color: str, *, alpha: int = 0) -> str:
+    color = hex_color.strip().removeprefix("#")
+    if len(color) != 6:
+        color = "ffffff"
+    try:
+        red = int(color[0:2], 16)
+        green = int(color[2:4], 16)
+        blue = int(color[4:6], 16)
+    except ValueError:
+        red, green, blue = 255, 255, 255
+    safe_alpha = max(0, min(255, alpha))
+    return f"&H{safe_alpha:02X}{blue:02X}{green:02X}{red:02X}"
+
+
+def _ass_alpha_from_opacity(opacity: float) -> int:
+    return round(255 * (1 - max(0.0, min(100.0, opacity)) / 100))
 
 
 def _subtitle_position_style(position: str) -> tuple[int, int]:

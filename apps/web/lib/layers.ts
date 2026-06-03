@@ -51,8 +51,8 @@ export function normalizeBackgroundPlaylists(layers: Layer[]): { changed: boolea
     if (mediaIds.length === 0) return layer;
 
     const first = sortedItems[0];
-    const last = sortedItems[sortedItems.length - 1] ?? first;
     if (!first) return layer;
+    const last = sortedItems[sortedItems.length - 1] ?? first;
 
     const item: VisualItem = {
       ...first,
