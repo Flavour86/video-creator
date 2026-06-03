@@ -112,6 +112,25 @@ describe("editor operation log", () => {
     expect(editorOperationStorageKey("p_demo")).toBe("vc.editor.operations.p_demo");
   });
 
+  it("recovers transcript text edits from operation log entries", () => {
+    const before = {
+      kind: "plain_text",
+      path: "transcript.txt",
+      sentences: [{ confidence_avg: 0.95, end_s: 5, index: 1, start_s: 0, text: "Original sentence." }],
+    } as EditorWorkingState["transcript"];
+    const after = {
+      ...before,
+      sentences: [{ confidence_avg: 0.95, end_s: 5, index: 1, start_s: 0, text: "Edited sentence." }],
+    } as EditorWorkingState["transcript"];
+    appendOperation("p_demo", { type: "transcript_text_update", before, after });
+
+    const recovered = recoverWorkingState("p_demo", { ...BASE_STATE, transcript: before });
+    expect((recovered.transcript as { sentences?: Array<{ text?: string }> }).sentences?.[0]?.text).toBe("Edited sentence.");
+
+    const undone = undoLast("p_demo", recovered).state;
+    expect((undone.transcript as { sentences?: Array<{ text?: string }> }).sentences?.[0]?.text).toBe("Original sentence.");
+  });
+
   it("recovers unsaved working state by replaying operations", () => {
     appendOperation("p_demo", {
       index: 0,

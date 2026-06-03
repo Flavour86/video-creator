@@ -847,6 +847,34 @@ function EditorContent() {
     setPlaying(false);
   }, [seekTo]);
 
+  const updateSentenceText = useCallback((index: number, text: string) => {
+    if (!project) return;
+    const nextText = text.trim();
+    if (!nextText) return;
+    const currentSentence = sentences.find((sentence) => sentence.index === index);
+    if (!currentSentence || currentSentence.text.trim() === nextText) return;
+    const nextSentences = sentences.map((sentence) => sentence.index === index ? { ...sentence, text: nextText } : sentence);
+    const nextTranscriptSentences = nextSentences.length > 0
+      ? (nextSentences as [TranscriptSentenceCue, ...TranscriptSentenceCue[]])
+      : undefined;
+    const nextTranscript: Project["transcript"] = {
+      ...project.transcript,
+      sentences: nextTranscriptSentences,
+    };
+    const nextProject = { ...project, transcript: nextTranscript };
+    setSentences(nextSentences);
+    setProject(nextProject);
+    if (projectId) {
+      appendOperation(projectId, {
+        type: "transcript_text_update",
+        before: project.transcript,
+        after: nextTranscript,
+      });
+    }
+    setHasUnrenderedChanges(true);
+    setSaveStatus("pending");
+  }, [project, projectId, sentences]);
+
   const mergeSentenceWithNext = useCallback((range: [number, number]) => {
     if (!project) return;
     const mergeResult = mergeSentences(sentences, range);
@@ -1116,6 +1144,7 @@ function EditorContent() {
           onSeek={seekTranscriptSentence}
           onScrollPositionChange={onTranscriptScroll}
           onSelectRange={setSelectedSentenceRange}
+          onUpdateSentenceText={updateSentenceText}
           query={query}
           scrollContainerRef={transcriptScrollRef}
           searchInputRef={searchInputRef}

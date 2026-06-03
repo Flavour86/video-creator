@@ -24,6 +24,7 @@ export type EditorOperation =
       after: { layers: Layer[]; transcript: Project["transcript"] };
     }
   | { type: "transcript_timing_update"; before: Project["transcript"]; after: Project["transcript"] }
+  | { type: "transcript_text_update"; before: Project["transcript"]; after: Project["transcript"] }
   | { type: "global_config_update"; before: Project["output"]; after: Project["output"] }
   | { type: "subtitle_settings_update"; before: Project["subtitles"]; after: Project["subtitles"] }
   | { type: "watermark_update"; before: Project["watermark"]; after: Project["watermark"] };
@@ -232,6 +233,7 @@ export function invertOperation(op: EditorOperation): EditorOperation {
   if (op.type === "replace_layers") return { ...op, before: op.after, after: op.before };
   if (op.type === "transcript_merge") return { ...op, before: op.after, after: op.before };
   if (op.type === "transcript_timing_update") return { ...op, before: op.after, after: op.before };
+  if (op.type === "transcript_text_update") return { ...op, before: op.after, after: op.before };
   if (op.type === "global_config_update") return { ...op, before: op.after, after: op.before };
   if (op.type === "subtitle_settings_update") return { ...op, before: op.after, after: op.before };
   return { ...op, before: op.after, after: op.before };
@@ -247,6 +249,7 @@ export function applyOperation(state: EditorWorkingState, op: EditorOperation): 
     };
   }
   if (op.type === "transcript_timing_update") return { ...state, transcript: op.after };
+  if (op.type === "transcript_text_update") return { ...state, transcript: op.after };
   if (op.type === "global_config_update") return { ...state, output: op.after };
   if (op.type === "subtitle_settings_update") return { ...state, subtitles: op.after };
   if (op.type === "watermark_update") return { ...state, watermark: op.after };
@@ -255,7 +258,7 @@ export function applyOperation(state: EditorWorkingState, op: EditorOperation): 
 
 function applyLayerOperation(
   layers: Layer[],
-  op: Exclude<EditorOperation, { type: "replace_layers" | "transcript_merge" | "transcript_timing_update" | "global_config_update" | "subtitle_settings_update" | "watermark_update" }>,
+  op: Exclude<EditorOperation, { type: "replace_layers" | "transcript_merge" | "transcript_timing_update" | "transcript_text_update" | "global_config_update" | "subtitle_settings_update" | "watermark_update" }>,
 ): Layer[] {
   return layers.map((layer) => {
     if (layer.id !== op.layerId || layer.kind === "sub") return layer;

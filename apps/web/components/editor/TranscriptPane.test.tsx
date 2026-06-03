@@ -26,6 +26,7 @@ function renderPane(overrides: Partial<ComponentProps<typeof TranscriptPane>> = 
     onSearchKeyDown: vi.fn(),
     onSeek: vi.fn(),
     onSelectRange: vi.fn(),
+    onUpdateSentenceText: vi.fn(),
     query: "",
     searchInputRef: { current: null },
     selectedRange: null,
@@ -114,6 +115,32 @@ describe("TranscriptPane", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /assign media to range/i }));
 
     expect(props.onAssignRange).toHaveBeenCalledWith([1, 3]);
+  });
+
+  it("edits one row in a fixed-height textarea with confirm, cancel, and empty draft handling", () => {
+    const props = renderPane();
+    const sentence = screen.getByRole("button", { name: /2 00:05-00:10 Low confidence sentence/i });
+    const row = sentence.parentElement;
+    expect(row).toHaveStyle({ height: "40px" });
+    expect(screen.getAllByRole("button", { name: /edit sentence/i })).toHaveLength(sentences.length);
+
+    fireEvent.click(screen.getByRole("button", { name: /edit sentence 2/i }));
+    const editor = screen.getByRole("textbox", { name: /edit sentence 2 text/i });
+    expect(editor).toHaveValue("Low confidence sentence.");
+    expect(editor).toHaveStyle({ height: "24px" });
+
+    fireEvent.change(editor, { target: { value: "Cancelled sentence." } });
+    fireEvent.click(screen.getByRole("button", { name: /cancel sentence 2 edit/i }));
+    expect(props.onUpdateSentenceText).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /2 00:05-00:10 Low confidence sentence/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit sentence 2/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: /edit sentence 2 text/i }), { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: /confirm sentence 2 edit/i })).toBeDisabled();
+
+    fireEvent.change(screen.getByRole("textbox", { name: /edit sentence 2 text/i }), { target: { value: "Updated transcript sentence." } });
+    fireEvent.click(screen.getByRole("button", { name: /confirm sentence 2 edit/i }));
+    expect(props.onUpdateSentenceText).toHaveBeenCalledWith(2, "Updated transcript sentence.");
   });
 
   it("renders a 500-sentence transcript window within the frame budget", () => {

@@ -516,6 +516,7 @@ function latestConfigSavePayload() {
     config: {
       layers: Array<{ kind?: string; items?: Array<{ mediaId?: string; mediaIds?: string[]; sentences?: [number, number] }> }>;
       media: Array<{ id?: string; kind?: string; name?: string; role?: string }>;
+      transcript?: { sentences?: Array<{ index?: number; text?: string }> };
       watermark?: { mediaId?: string } | null;
     };
   };
@@ -1791,6 +1792,25 @@ it("merges transcript sentences, remaps clip anchors, and appends one operation-
     const payload = JSON.parse(String(putConfigCall?.[1]?.body ?? "{}"));
     expect(Array.isArray(payload.config?.transcript?.sentences)).toBe(true);
     expect(payload.config?.transcript?.sentences).toHaveLength(4);
+  });
+});
+
+it("edits transcript sentence text and autosaves the transcript payload", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+
+  fireEvent.click(await screen.findByRole("button", { name: /edit sentence 2/i }));
+  fireEvent.change(screen.getByRole("textbox", { name: /edit sentence 2 text/i }), { target: { value: "Updated PiP narration." } });
+  fireEvent.click(screen.getByRole("button", { name: /confirm sentence 2 edit/i }));
+
+  expect(await screen.findByRole("button", { name: /2 00:05-00:10 Updated PiP narration/i })).toBeInTheDocument();
+  expect(readUndo().at(-1)?.op?.type).toBe("transcript_text_update");
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    expect(payload.config.transcript?.sentences?.[1]?.text).toBe("Updated PiP narration.");
   });
 });
 

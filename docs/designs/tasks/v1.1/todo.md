@@ -42,12 +42,12 @@
   - Verify: `rtk pnpm -F @vc/web test -- components/watermark-panel/WatermarkPanel.test.tsx components/editor/PreviewSurface.test.tsx app/editor/page.test.tsx`, `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py`
   - Evidence: watermark modal/control screenshots for default, adjusted position/opacity/size, preview placement, and cleared watermark state.
 
-- [ ] Task 7 (task-07): Implement transcript row textarea editing with fixed height
+- [x] Task 7 (task-07): Implement transcript row textarea editing with fixed height
   - Acceptance: Every sentence row has a right edit icon; edit mode uses a textarea that covers the full normal sentence text element; regular and editing row heights match at desktop and portrait widths; confirm/cancel/empty draft behavior works; commit schedules autosave.
   - Verify: `rtk pnpm -F @vc/web test -- components/editor/TranscriptPane.test.tsx app/editor/page.test.tsx lib/editor-operation-log/operation-log.test.ts`
   - Evidence: `transcript-edit-height-parity-1920x1080` and `transcript-edit-height-parity-1080x1920` screenshots, plus DOM measurement evidence that textarea and text rects match.
 
-- [ ] Checkpoint: Independent editor UI complete
+- [x] Checkpoint: Independent editor UI complete
   - Acceptance: Autosave, subtitles, watermark, and transcript editing work independently and persist through the existing project config flow.
 
 ## Phase 4: Mixed Background Scheduling

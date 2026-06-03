@@ -325,6 +325,10 @@
       "cancelRender": "Cancel",
       "lowConfidence": "low conf",
       "orphanSentence": "orphan",
+      "editSentence": "Edit sentence {index}",
+      "editSentenceText": "Edit sentence {index} text",
+      "confirmSentenceEdit": "Confirm sentence {index} edit",
+      "cancelSentenceEdit": "Cancel sentence {index} edit",
       "menu": {
         "assignRange": "Assign media to range...",
         "playFromHere": "Play from here",
