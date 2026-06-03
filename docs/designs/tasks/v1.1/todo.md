@@ -77,7 +77,7 @@
 
 ## Phase 5: Visual Parity And Integration
 
-- [ ] Task 12 (task-12): Add v1.1 visual parity and screenshot inventory coverage
+- [x] Task 12 (task-12): Add v1.1 visual parity and screenshot inventory coverage
   - Acceptance: Visual test manifest and screenshot inventory include all v1.1 canonical references; changed surfaces compare against `docs/designs/tasks/v1.1/visuals/`; dynamic content tolerances are documented.
   - Verify: `rtk pnpm -F @vc/web test:visual -- editor`, `rtk pnpm -F @vc/web test -- tests/visual/screenshot-inventory.test.ts`
   - Evidence: visual test evidence for subtitles modal, watermark controls, transcript editing, and background coverage at desktop and portrait sizes.

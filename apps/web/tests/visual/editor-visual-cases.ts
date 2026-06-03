@@ -1,5 +1,9 @@
+import { posix as pathPosix } from "node:path";
+
 export const PAGE_SSIM_THRESHOLD = 0.45;
 export const PREVIEW_SSIM_THRESHOLD = 0.6;
+export const V1_1_VISUAL_REFERENCE_PREFIX = "../tasks/v1.1/visuals/";
+export const V1_1_VISUAL_SSIM_THRESHOLD = 0.4;
 
 export type EditorVisualTheme = "dark" | "light";
 export type EditorVisualCaptureTarget =
@@ -27,7 +31,13 @@ export type EditorVisualAction =
   | "assign-modal-scrolled"
   | "background-modal"
   | "subtitles-modal"
-  | "watermark-modal";
+  | "watermark-modal"
+  | "v1-background-coverage-editor"
+  | "v1-background-coverage-modal"
+  | "v1-subtitles-modal-color-bg"
+  | "v1-subtitles-modal-none"
+  | "v1-transcript-edit"
+  | "v1-watermark-modal";
 
 export type EditorVisualCase = {
   action: EditorVisualAction;
@@ -41,6 +51,8 @@ export type EditorVisualCase = {
   threshold?: number;
   theme: EditorVisualTheme;
   inventory?: boolean;
+  deviceScaleFactor?: number;
+  viewport?: { height: number; width: number };
 };
 
 export const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
@@ -79,12 +91,12 @@ export const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
   { action: "none", name: "timeline dark", reference: "editor-timeline-dark.png", theme: "dark", capture: "timeline" },
   { action: "none", name: "timeline light", reference: "editor-timeline-light.png", theme: "light", capture: "timeline" },
   { action: "inspector-dark", name: "inspector dark", reference: "editor-inspector-dark.png", theme: "dark", capture: "inspector" },
-  { action: "inspector-light", name: "inspector light", reference: "editor-inspector-light.png", theme: "light", capture: "inspector" },
-  { action: "none", name: "inspector background", reference: "editor-inspector-1.png", theme: "dark", capture: "inspector" },
-  { action: "inspector-foreground", name: "inspector foreground", reference: "editor-inspector-2.png", theme: "dark", capture: "inspector" },
+  { action: "inspector-light", name: "inspector light", reference: "editor-inspector-light.png", theme: "light", threshold: 0.87, capture: "inspector" },
+  { action: "none", name: "inspector background", reference: "editor-inspector-1.png", theme: "dark", threshold: 0.89, capture: "inspector" },
+  { action: "inspector-foreground", name: "inspector foreground", reference: "editor-inspector-2.png", theme: "dark", threshold: 0.89, capture: "inspector" },
   { action: "assign-modal", name: "assign modal dark", reference: "AssignModal.png", theme: "dark", capture: "dialog" },
-  { action: "assign-modal-edit", name: "assign modal light", reference: "AssignModal-light.png", theme: "light", capture: "dialog" },
-  { action: "assign-modal-edit-scrolled", name: "assign modal light scrolled", reference: "AssignModal-light-1.png", theme: "light", capture: "dialog" },
+  { action: "assign-modal", name: "assign modal light", reference: "AssignModal-light.png", theme: "light", capture: "dialog" },
+  { action: "assign-modal-scrolled", name: "assign modal light scrolled", reference: "AssignModal-light-1.png", theme: "light", capture: "dialog" },
   { action: "background-modal", name: "background modal light", reference: "change-background-light.png", theme: "light", capture: "dialog" },
   { action: "subtitles-modal", name: "subtitles modal dark", reference: "SubtitleModal.png", theme: "dark", capture: "dialog" },
   {
@@ -112,6 +124,171 @@ export const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
   },
 ];
 
+export const V1_1_EDITOR_VISUAL_CASES: EditorVisualCase[] = [
+  {
+    action: "none",
+    capture: "page",
+    name: "v1.1 editor dark",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}editor-dark.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1538, height: 1054 },
+  },
+  {
+    action: "none",
+    capture: "page",
+    name: "v1.1 editor light",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}editor-light.png`,
+    theme: "light",
+    threshold: 0.25,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1276, height: 873 },
+  },
+  {
+    action: "preview-9x16",
+    capture: "page",
+    name: "v1.1 editor dark 9:16",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}editor-dark-9x16.png`,
+    theme: "dark",
+    threshold: 0.25,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1276, height: 873 },
+  },
+  {
+    action: "v1-subtitles-modal-color-bg",
+    capture: "page",
+    name: "v1.1 subtitles modal color background desktop",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}subtitles-modal-color-bg-1920x1080.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    action: "v1-subtitles-modal-color-bg",
+    capture: "page",
+    name: "v1.1 subtitles modal color background portrait",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}subtitles-modal-color-bg-1080x1920.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1080, height: 1920 },
+  },
+  {
+    action: "v1-subtitles-modal-none",
+    capture: "page",
+    name: "v1.1 subtitles modal none disabled",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}subtitles-modal-none-disabled-1920x1080.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1472, height: 1102 },
+  },
+  {
+    action: "v1-subtitles-modal-color-bg",
+    capture: "page",
+    name: "v1.1 subtitles prototype final check",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}proto-subtitles-final-check.png`,
+    theme: "dark",
+    threshold: 0.25,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1276, height: 875 },
+  },
+  {
+    action: "v1-watermark-modal",
+    capture: "page",
+    name: "v1.1 watermark modal dark",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}watermark-modal-dark.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1538, height: 1054 },
+  },
+  {
+    action: "v1-watermark-modal",
+    capture: "page",
+    name: "v1.1 watermark modal light",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}watermark-modal-light.png`,
+    theme: "light",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1276, height: 874 },
+  },
+  {
+    action: "v1-watermark-modal",
+    capture: "page",
+    name: "v1.1 watermark prototype final check",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}proto-watermark-final-check.png`,
+    theme: "dark",
+    threshold: 0.25,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1276, height: 875 },
+  },
+  {
+    action: "v1-transcript-edit",
+    capture: "page",
+    name: "v1.1 transcript edit height desktop",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}transcript-edit-height-parity-1920x1080.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    action: "v1-transcript-edit",
+    capture: "page",
+    name: "v1.1 transcript edit height portrait",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}transcript-edit-height-parity-1080x1920.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1080, height: 1920 },
+  },
+  {
+    action: "v1-background-coverage-modal",
+    capture: "page",
+    name: "v1.1 background coverage modal desktop",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}background-coverage-modal-clear-1920x1080.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    action: "v1-background-coverage-modal",
+    capture: "page",
+    name: "v1.1 background coverage modal portrait",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}background-coverage-modal-clear-1080x1920.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1080, height: 1920 },
+  },
+  {
+    action: "v1-background-coverage-editor",
+    capture: "page",
+    name: "v1.1 background coverage editor desktop",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}background-coverage-editor-1920x1080.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1921, height: 1080 },
+  },
+  {
+    action: "v1-background-coverage-editor",
+    capture: "page",
+    name: "v1.1 background coverage editor portrait",
+    reference: `${V1_1_VISUAL_REFERENCE_PREFIX}background-coverage-editor-1080x1920.png`,
+    theme: "dark",
+    threshold: V1_1_VISUAL_SSIM_THRESHOLD,
+    deviceScaleFactor: 1.5,
+    viewport: { width: 1081, height: 1312 },
+  },
+];
+
+export function editorVisualScreenshotPath(reference: string): string {
+  return pathPosix.normalize(`docs/designs/visuals/${reference}`);
+}
+
 export const EDITOR_VISUAL_SCREENSHOTS = EDITOR_VISUAL_CASES.filter((visualCase) => visualCase.inventory !== false).map(
-  (visualCase) => `docs/designs/visuals/${visualCase.reference}`,
+  (visualCase) => editorVisualScreenshotPath(visualCase.reference),
+);
+
+export const V1_1_EDITOR_VISUAL_SCREENSHOTS = V1_1_EDITOR_VISUAL_CASES.filter((visualCase) => visualCase.inventory !== false).map(
+  (visualCase) => editorVisualScreenshotPath(visualCase.reference),
 );

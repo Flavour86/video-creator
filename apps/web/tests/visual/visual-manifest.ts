@@ -7,6 +7,25 @@ export type VisualManifestEntry = {
   status: VisualCoverageStatus;
 };
 
+const v1_1EditorScreenshots = [
+  "background-coverage-editor-1080x1920.png",
+  "background-coverage-editor-1920x1080.png",
+  "background-coverage-modal-clear-1080x1920.png",
+  "background-coverage-modal-clear-1920x1080.png",
+  "editor-dark-9x16.png",
+  "editor-dark.png",
+  "editor-light.png",
+  "proto-subtitles-final-check.png",
+  "proto-watermark-final-check.png",
+  "subtitles-modal-color-bg-1080x1920.png",
+  "subtitles-modal-color-bg-1920x1080.png",
+  "subtitles-modal-none-disabled-1920x1080.png",
+  "transcript-edit-height-parity-1080x1920.png",
+  "transcript-edit-height-parity-1920x1080.png",
+  "watermark-modal-dark.png",
+  "watermark-modal-light.png",
+].map((screenshot) => `docs/designs/tasks/v1.1/visuals/${screenshot}`);
+
 export const visualManifest: VisualManifestEntry[] = [
   { screenshot: "docs/designs/visuals/shell-dark.png", owner: "frontend-global", status: "implemented" },
   { screenshot: "docs/designs/visuals/shell-light.png", owner: "frontend-global", status: "implemented" },
@@ -44,6 +63,11 @@ export const visualManifest: VisualManifestEntry[] = [
   { screenshot: "docs/designs/visuals/AssignModal-light-1.png", owner: "editor", status: "implemented" },
   { screenshot: "docs/designs/visuals/change-background-light.png", owner: "editor", status: "implemented" },
   { screenshot: "docs/designs/visuals/SubtitleModal.png", owner: "editor", status: "implemented" },
+  ...v1_1EditorScreenshots.map((screenshot) => ({
+    screenshot,
+    owner: "editor" as const,
+    status: "implemented" as const,
+  })),
 
   { screenshot: "docs/designs/visuals/render-dark.png", owner: "render", status: "implemented" },
   { screenshot: "docs/designs/visuals/render-light.png", owner: "render", status: "implemented" },

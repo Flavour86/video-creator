@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -13,6 +14,7 @@ import {
 } from "./visual-test-utils";
 import {
   EDITOR_VISUAL_CASES,
+  V1_1_EDITOR_VISUAL_CASES,
   type EditorVisualAction,
   type EditorVisualCaptureTarget as CaptureTarget,
   type EditorVisualCase,
@@ -27,6 +29,7 @@ const DEFAULT_SCENE_SEEK_SECONDS = 38.399;
 const INSPECTOR_SEPARATOR = "\u00B7";
 const INSPECTOR_SEPARATOR_PATTERN = /[\u00B7\u2022\u2219\u30FB]/g;
 const BUG_EVIDENCE_DIR = path.resolve(process.cwd(), "..", "..", "docs", "designs", "bugs", "evidences");
+const LEGACY_VISUAL_REFERENCES_DIR = path.resolve(process.cwd(), "..", "..", "docs", "designs", "visuals");
 
 type IgnoreRegion = { x: number; y: number; width: number; height: number };
 type EditorApiOverrides = {
@@ -34,6 +37,10 @@ type EditorApiOverrides = {
   onConfigSave?: (config: object) => void;
   project?: object | (() => object);
 };
+
+function visualReferenceExistsSync(reference: string): boolean {
+  return fsSync.existsSync(path.join(LEGACY_VISUAL_REFERENCES_DIR, reference));
+}
 
 test.describe("editor visual parity", () => {
   test.describe.configure({ mode: "serial" });
@@ -50,7 +57,7 @@ test.describe("editor strict timeline bug visual parity", () => {
   test.describe.configure({ mode: "serial" });
   test.use({ deviceScaleFactor: EDITOR_DEVICE_SCALE_FACTOR, viewport: { width: 1841, height: 1016 } });
 
-  for (const visualCase of EDITOR_VISUAL_CASES.filter((entry) => entry.reference.includes("bug-27-1"))) {
+  for (const visualCase of EDITOR_VISUAL_CASES.filter((entry) => entry.reference.includes("bug-27-1") && visualReferenceExistsSync(entry.reference))) {
     test(`${visualCase.reference} parity`, async ({ page }) => {
       await compareEditorVisualCase(page, visualCase);
     });
@@ -61,9 +68,26 @@ test.describe("editor strict modal bug visual parity", () => {
   test.describe.configure({ mode: "serial" });
   test.use({ deviceScaleFactor: EDITOR_DEVICE_SCALE_FACTOR, viewport: { width: 1841, height: 1016 } });
 
-  for (const visualCase of EDITOR_VISUAL_CASES.filter((entry) => entry.reference.includes("bug-28-1"))) {
+  for (const visualCase of EDITOR_VISUAL_CASES.filter((entry) => entry.reference.includes("bug-28-1") && visualReferenceExistsSync(entry.reference))) {
     test(`${visualCase.reference} parity`, async ({ page }) => {
       await compareEditorVisualCase(page, visualCase);
+    });
+  }
+});
+
+test.describe("editor v1.1 visual parity", () => {
+  test.describe.configure({ mode: "serial" });
+
+  for (const visualCase of V1_1_EDITOR_VISUAL_CASES) {
+    test.describe(visualCase.name, () => {
+      test.use({
+        deviceScaleFactor: visualCase.deviceScaleFactor ?? 1,
+        viewport: visualCase.viewport ?? EDITOR_VIEWPORT,
+      });
+
+      test(`${visualCase.reference} parity`, async ({ page }) => {
+        await compareEditorVisualCase(page, visualCase);
+      });
     });
   }
 });
@@ -366,10 +390,12 @@ async function waitForConfigAutosave(page: Page, action: () => Promise<void>): P
 }
 
 async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase): Promise<void> {
-  await prepareVisualPage(page, visualCase.theme);
+  const fixture = fixtureForVisualCase(visualCase);
+  const expectedProjectName = (fixture?.project as { name?: string } | undefined)?.name ?? "TokyoEssay";
+  await prepareVisualPage(page, visualCase.theme, visualCase);
   await routeEditorApi(page, visualCase);
   await page.goto(`/editor/${TEST_PROJECT_ID}`, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "TokyoEssay" }).waitFor();
+  await page.getByRole("heading", { name: expectedProjectName }).waitFor();
   await settleChrome(page);
   await setReferencePlayback(page);
 
@@ -521,6 +547,41 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
       await page.getByRole("button", { name: /^Watermark$/i }).click();
       await page.getByRole("heading", { name: /^Watermark asset$/i }).waitFor();
       return;
+    case "v1-subtitles-modal-color-bg": {
+      const modal = await openSubtitlesModal(page);
+      await setSubtitleBlockStyle(modal);
+      return;
+    }
+    case "v1-subtitles-modal-none": {
+      const modal = await openSubtitlesModal(page);
+      await modal.getByRole("combobox", { exact: true, name: "Background" }).selectOption("none");
+      await expect(modal.getByLabel("Opacity", { exact: true })).toBeDisabled();
+      await expect(modal.getByLabel("Radius", { exact: true })).toBeDisabled();
+      return;
+    }
+    case "v1-watermark-modal": {
+      await page.getByTestId("editor-inspector").getByRole("button", { name: /^Watermark$/i }).click();
+      const modal = page.getByRole("dialog", { name: /^Watermark asset$/i });
+      await expect(modal.getByLabel("Watermark POSX")).toBeVisible();
+      await expect(modal.getByLabel("Watermark POSY")).toBeVisible();
+      await expect(modal.getByLabel("Watermark size")).toBeVisible();
+      await expect(modal.getByLabel("Watermark opacity")).toBeVisible();
+      return;
+    }
+    case "v1-transcript-edit":
+      await page.getByRole("button", { name: /edit sentence 2/i }).click();
+      await expect(page.getByRole("textbox", { name: /edit sentence 2 text/i })).toBeVisible();
+      return;
+    case "v1-background-coverage-modal":
+      await page.getByRole("button", { name: /^Change Background$/i }).click();
+      await expect(page.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "3");
+      return;
+    case "v1-background-coverage-editor":
+      await page.getByRole("button", { name: "timed ranges / 3 assets" }).click();
+      await expect(page.getByTestId("editor-background-schedule-row-bg-red.png")).toContainText("00:00-00:30");
+      await expect(page.getByTestId("editor-background-schedule-row-bg-video.mp4")).toContainText("Video 00:04 locked");
+      await expect(page.locator("[data-testid='timeline-row-bg'] [data-timeline-clip='true']")).toHaveCount(1);
+      return;
     default: {
       const _exhaustive: never = action;
       return _exhaustive;
@@ -558,9 +619,11 @@ async function waitForInspectorHeading(page: Page, expected: string): Promise<vo
     .toBe(expectedNormalized);
 }
 
-async function prepareVisualPage(page: Page, theme: Theme): Promise<void> {
+async function prepareVisualPage(page: Page, theme: Theme, visualCase?: EditorVisualCase): Promise<void> {
+  const selected = isV1_1VisualCase(visualCase) ? null : { itemId: "pip-001", layerId: "L-pip-1" };
+  const selectedRange = isV1_1VisualCase(visualCase) ? null : [6, 7];
   await page.addInitScript(
-    ({ projectId, themeValue }) => {
+    ({ projectId, selectedItem, selectedRangeValue, themeValue }) => {
       window.localStorage.setItem("vc.theme", themeValue);
       window.localStorage.setItem("vc.language", "en");
       window.localStorage.setItem(`vc.editor.operations.${projectId}`, JSON.stringify({ redo: [], undo: [], version: 1 }));
@@ -568,8 +631,8 @@ async function prepareVisualPage(page: Page, theme: Theme): Promise<void> {
         `vc.editor.recovery.${projectId}`,
         JSON.stringify({
           resolution: "1080p",
-          selected: { itemId: "pip-001", layerId: "L-pip-1" },
-          selectedRange: [6, 7],
+          selected: selectedItem,
+          selectedRange: selectedRangeValue,
           transcriptScrollTop: 0,
           version: 1,
         }),
@@ -578,13 +641,14 @@ async function prepareVisualPage(page: Page, theme: Theme): Promise<void> {
       style.textContent = "*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}";
       document.documentElement.appendChild(style);
     },
-    { projectId: TEST_PROJECT_ID, themeValue: theme },
+    { projectId: TEST_PROJECT_ID, selectedItem: selected, selectedRangeValue: selectedRange, themeValue: theme },
   );
 }
 
 async function routeEditorApi(page: Page, visualCase: EditorVisualCase, overrides: EditorApiOverrides = {}): Promise<void> {
   const usesPackedTimelineFixture = visualCase.reference.includes("bug-27-1")
     || visualCase.reference.startsWith("editor-timeline-");
+  const fixture = fixtureForVisualCase(visualCase);
 
   await page.route("**/_next/image**", async (route) => {
     const request = route.request();
@@ -612,12 +676,12 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase, override
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/alignment` && method === "GET") {
-      const alignment = overrideValue(overrides.alignment) ?? (usesPackedTimelineFixture ? BUG_27_ALIGNMENT : TEST_ALIGNMENT);
+      const alignment = overrideValue(overrides.alignment) ?? fixture?.alignment ?? (usesPackedTimelineFixture ? BUG_27_ALIGNMENT : TEST_ALIGNMENT);
       await route.fulfill({ json: alignment });
       return;
     }
     if (pathname === `/api/server/projects/${TEST_PROJECT_ID}/config` && method === "GET") {
-      const project = overrideValue(overrides.project) ?? (usesPackedTimelineFixture ? BUG_27_PROJECT : TEST_PROJECT);
+      const project = overrideValue(overrides.project) ?? fixture?.project ?? (usesPackedTimelineFixture ? BUG_27_PROJECT : TEST_PROJECT);
       await route.fulfill({
         json: {
           config: project,
@@ -649,7 +713,7 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase, override
       return;
     }
     if (pathname.includes(`/api/server/projects/${TEST_PROJECT_ID}/render-cache`) && method === "GET") {
-      const totalCount = usesPackedTimelineFixture ? 24 : 6;
+      const totalCount = fixture?.renderCacheTotal ?? (usesPackedTimelineFixture ? 24 : 6);
       await route.fulfill({ json: { cached_count: totalCount, state: "warm", total_count: totalCount } });
       return;
     }
@@ -694,6 +758,43 @@ async function routeEditorApi(page: Page, visualCase: EditorVisualCase, override
 
 function overrideValue<T>(value: T | (() => T) | undefined): T | undefined {
   return typeof value === "function" ? (value as () => T)() : value;
+}
+
+function isV1_1VisualCase(visualCase?: EditorVisualCase): boolean {
+  return visualCase?.reference.startsWith("../tasks/v1.1/visuals/") ?? false;
+}
+
+function fixtureForVisualCase(visualCase: EditorVisualCase): { alignment: object; project: object; renderCacheTotal?: number } | null {
+  switch (visualCase.action) {
+    case "v1-subtitles-modal-color-bg":
+    case "v1-subtitles-modal-none":
+      return { alignment: V1_SUBTITLE_ALIGNMENT, project: V1_SUBTITLE_PROJECT, renderCacheTotal: 0 };
+    case "v1-watermark-modal":
+      return { alignment: V1_WATERMARK_ALIGNMENT, project: V1_WATERMARK_PROJECT, renderCacheTotal: 0 };
+    case "v1-transcript-edit":
+      return { alignment: V1_TRANSCRIPT_ALIGNMENT, project: V1_TRANSCRIPT_PROJECT, renderCacheTotal: 0 };
+    case "v1-background-coverage-editor":
+    case "v1-background-coverage-modal":
+      return { alignment: V1_BACKGROUND_ALIGNMENT, project: V1_BACKGROUND_PROJECT, renderCacheTotal: 3 };
+    default:
+      return null;
+  }
+}
+
+async function openSubtitlesModal(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: /^Subtitles$/i }).click();
+  const modal = page.getByRole("dialog", { name: /^Subtitles$/i });
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+async function setSubtitleBlockStyle(modal: Locator): Promise<void> {
+  await modal.getByRole("combobox", { exact: true, name: "Background" }).selectOption("block");
+  await modal.getByRole("textbox", { exact: true, name: "Color" }).fill("#ffcc00");
+  await modal.getByRole("textbox", { exact: true, name: "Background color" }).fill("#112233");
+  await modal.getByLabel("Opacity", { exact: true }).fill("45");
+  await modal.getByLabel("Radius", { exact: true }).fill("14");
+  await expect(modal.getByTestId("subtitles-preview-cue")).toHaveCSS("color", "rgb(255, 204, 0)");
 }
 
 async function settleChrome(page: Page): Promise<void> {
@@ -759,7 +860,7 @@ async function openAssignEditModal(page: Page): Promise<void> {
   await waitForInspectorHeading(page, inspectorHeading("PiP", 3));
   const inspector = page.getByTestId("editor-layout-grid").locator("aside").nth(1);
   await inspector.getByRole("button", { name: /callout-map\.png/i }).first().click();
-  await page.getByRole("heading", { name: /Edit media to range/i }).first().waitFor();
+  await page.getByRole("heading", { name: /Assign media|Edit media/i }).first().waitFor();
 }
 
 async function mockDraftRenderSocket(page: Page): Promise<void> {
@@ -843,6 +944,175 @@ const BUG_27_ALIGNMENT = {
     end_s: index === TEST_ALIGNMENT.sentences.length - 1 ? 942 : (index * 45) + 40,
   })),
 };
+
+const V1_SUBTITLE_ALIGNMENT = {
+  cache_hit: true,
+  sentences: [{ confidence_avg: 0.97, end_s: 4, index: 1, start_s: 0, text: "Task five subtitle modal evidence." }],
+  words: [],
+};
+
+const V1_SUBTITLE_PROJECT = {
+  audio: "voice.wav",
+  layers: [
+    { id: "subtitles", items: [{ auto: true, id: "sub-auto", label: "Auto subtitles", style: "default" }], kind: "sub", name: "Subtitles" },
+  ],
+  media: [],
+  name: "Task 5 subtitle modal controls",
+  output: { fps: 30, height: 1080, preset: "draft", resolution: "1080p", width: 1920 },
+  subtitles: {
+    burn_in: true,
+    style: {
+      bg_color: "#000000",
+      bg_opacity: 62,
+      bg_radius: 8,
+      bg_style: "block",
+      color: "#ffffff",
+      font: "Arial",
+      max_chars_per_line: 42,
+      position: "bottom",
+      size: 42,
+    },
+  },
+  transcript: { kind: "plain_text", path: "transcript.txt", sentences: V1_SUBTITLE_ALIGNMENT.sentences },
+  version: 1,
+  watermark: null,
+};
+
+const V1_WATERMARK_ID = "watermark-logo.png";
+const V1_WATERMARK_ALIGNMENT = {
+  cache_hit: true,
+  sentences: [{ confidence_avg: 0.97, end_s: 4, index: 1, start_s: 0, text: "Task six watermark controls evidence." }],
+  words: [],
+};
+
+const V1_WATERMARK_PROJECT = {
+  audio: "voice.wav",
+  layers: [],
+  media: [v1MediaAsset(V1_WATERMARK_ID, V1_WATERMARK_ID, "watermark_image", "watermark")],
+  name: "Task 6 watermark controls",
+  output: { fps: 30, height: 1080, preset: "draft", resolution: "1080p", width: 1920 },
+  subtitles: null,
+  transcript: { kind: "plain_text", path: "transcript.txt", sentences: V1_WATERMARK_ALIGNMENT.sentences },
+  version: 1,
+  watermark: {
+    enabled: true,
+    mediaId: V1_WATERMARK_ID,
+    opacity: 85,
+    posX: 9,
+    posY: 11,
+    scale: 0.08,
+  },
+};
+
+const V1_TRANSCRIPT_ALIGNMENT = {
+  cache_hit: true,
+  sentences: [
+    { confidence_avg: 0.96, end_s: 5, index: 1, start_s: 0, text: "Opening line for transcript editing." },
+    { confidence_avg: 0.94, end_s: 10, index: 2, start_s: 5, text: "This sentence is edited in place." },
+    { confidence_avg: 0.93, end_s: 15, index: 3, start_s: 10, text: "The following row keeps the same height." },
+    { confidence_avg: 0.91, end_s: 20, index: 4, start_s: 15, text: "Final evidence sentence." },
+  ],
+  words: [],
+};
+
+const V1_TRANSCRIPT_PROJECT = {
+  audio: "voice.wav",
+  layers: [],
+  media: [],
+  name: "Task 7 transcript edit",
+  output: { fps: 30, height: 1080, preset: "draft", resolution: "1080p", width: 1920 },
+  subtitles: null,
+  transcript: { kind: "plain_text", path: "transcript.txt", sentences: V1_TRANSCRIPT_ALIGNMENT.sentences },
+  version: 1,
+  watermark: null,
+};
+
+const V1_BACKGROUND_ALIGNMENT = {
+  cache_hit: true,
+  sentences: [
+    { confidence_avg: 0.96, end_s: 30, index: 1, start_s: 0, text: "Opening background range." },
+    { confidence_avg: 0.95, end_s: 60, index: 2, start_s: 30, text: "Locked video background range." },
+    { confidence_avg: 0.94, end_s: 90, index: 3, start_s: 60, text: "Final background range." },
+  ],
+  words: [],
+};
+
+const V1_BACKGROUND_MEDIA = [
+  { duration: null, id: "bg-red.png", kind: "image" as const, name: "bg-red.png" },
+  { duration: 4, id: "bg-video.mp4", kind: "video" as const, name: "bg-video.mp4" },
+  { duration: null, id: "bg-blue.png", kind: "image" as const, name: "bg-blue.png" },
+  { duration: null, id: "bg-crowded-1.png", kind: "image" as const, name: "bg-crowded-1.png" },
+  {
+    duration: null,
+    id: "bg-extra-long-name.jpg",
+    kind: "image" as const,
+    name: "a-very-long-background-name-that-must-truncate-in-the-coverage-grid.jpg",
+  },
+  {
+    duration: 5,
+    id: "clip-extra-long-name.mp4",
+    kind: "video" as const,
+    name: "an-extremely-long-background-video-file-name-that-cannot-overflow-the-row-inputs.mp4",
+  },
+];
+
+const V1_BACKGROUND_PROJECT = {
+  audio: "voice.wav",
+  layers: [
+    { id: "subtitles", items: [{ auto: true, id: "sub-auto", label: "Auto subtitles", style: "default" }], kind: "sub", name: "Subtitles" },
+    {
+      id: "bg-main",
+      items: [{
+        crossfade: 0,
+        end: 90,
+        id: "bg-scheduled",
+        mediaIds: ["bg-red.png", "bg-video.mp4", "bg-blue.png"],
+        motion: { easing: "linear", kind: "none" },
+        schedule: [
+          { end: 30, id: "seg-bg-red.png", lockedDuration: false, mediaId: "bg-red.png", start: 0 },
+          { end: 34, id: "seg-bg-video.mp4", lockedDuration: true, mediaId: "bg-video.mp4", start: 30 },
+          { end: 90, id: "seg-bg-blue.png", lockedDuration: false, mediaId: "bg-blue.png", start: 34 },
+        ],
+        sentences: [1, 3] as [number, number],
+        start: 0,
+        transitions: { in: "cut", out: "cut" },
+      }],
+      kind: "bg",
+      name: "Background",
+    },
+  ],
+  media: V1_BACKGROUND_MEDIA.map((asset) => v1MediaAsset(asset.id, asset.name, asset.kind, "background", asset.duration)),
+  name: "Task 10 scheduled editor",
+  output: { fps: 30, height: 1080, preset: "draft", resolution: "1080p", width: 1920 },
+  subtitles: null,
+  transcript: { kind: "plain_text", path: "transcript.txt", sentences: V1_BACKGROUND_ALIGNMENT.sentences },
+  version: 1,
+  watermark: null,
+};
+
+function v1MediaAsset(
+  id: string,
+  name: string,
+  kind: "image" | "video" | "watermark_image",
+  role: "background" | "watermark",
+  duration: number | null = null,
+) {
+  return {
+    created_at: "2026-06-03T00:00:00.000Z",
+    dimensions: { height: 1080, width: 1920 },
+    duration,
+    hash: `hash-${id}`,
+    id,
+    import_mode: "copy",
+    imported_at: "2026-06-03T00:00:00.000Z",
+    kind,
+    name,
+    path: `media/${id}`,
+    role,
+    size: kind === "video" ? 4_800_000 : 800_000,
+    thumb_path: `uploads/thumb/${id}.svg`,
+  };
+}
 
 const TEST_PROJECT = {
   audio: "voice.mp3",
@@ -1411,6 +1681,13 @@ function buildMediaSvg(filename: string): Buffer {
 }
 
 function gradientForMedia(filename: string): [string, string] {
+  if (filename.includes("bg-red")) return ["#d45136", "#d45136"];
+  if (filename.includes("bg-video")) return ["#202020", "#202020"];
+  if (filename.includes("bg-blue")) return ["#2b6fd6", "#2b6fd6"];
+  if (filename.includes("bg-crowded")) return ["#2f9e61", "#2f9e61"];
+  if (filename.includes("bg-extra-long-name")) return ["#8d5cc8", "#8d5cc8"];
+  if (filename.includes("clip-extra-long-name")) return ["#a9712f", "#a9712f"];
+  if (filename.includes("watermark-logo")) return ["#ffcc00", "#ffcc00"];
   if (filename.includes("callout-map")) return ["#0f4f6f", "#126487"];
   if (filename.includes("quote-card")) return ["#6a5032", "#826239"];
   if (filename.includes("crowd-cross")) return ["#5a2b2b", "#7a3f35"];
