@@ -4,6 +4,7 @@ import type { Project } from "@vc/shared-schemas";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { IconButton } from "@/components/ui";
 import { formatTimecode } from "@/lib/format";
+import { backgroundMediaIdsForItem } from "@/lib/preview/backgroundSchedule";
 import { resolveDisplay } from "@/lib/preview/resolveDisplay";
 import type { EditorMediaItem, EditorStateProps } from "./types";
 
@@ -79,7 +80,13 @@ export function PreviewSurface({
     for (const layer of layers) {
       if (layer.kind === "sub") continue;
       for (const item of layer.items) {
-        const mediaIds = item.mediaIds && item.mediaIds.length > 0 ? item.mediaIds : item.mediaId ? [item.mediaId] : [];
+        const mediaIds = layer.kind === "bg"
+          ? backgroundMediaIdsForItem(item)
+          : item.mediaIds && item.mediaIds.length > 0
+            ? item.mediaIds
+            : item.mediaId
+              ? [item.mediaId]
+              : [];
         if (item.end < windowStart || item.start > windowEnd) continue;
         for (const mediaId of mediaIds) {
           if (isVideoMedia(mediaId, media)) ids.add(mediaId);
@@ -162,6 +169,7 @@ export function PreviewSurface({
     const watermarkVisible = Boolean(watermark && watermark.enabled !== false);
     const drawOrder: string[] = ["black"];
     const metadata = {
+      activeBackgrounds: backgrounds.map((background) => background.mediaId),
       drawOrder,
       hasBackground: backgrounds.length > 0,
       hasForeground: resolvedDisplay.fg.length > 0,
@@ -639,6 +647,7 @@ function drawRoundedRectPath(
 function applyCanvasMetadata(
   canvas: HTMLCanvasElement,
   metadata: {
+    activeBackgrounds: string[];
     drawOrder: string[];
     hasBackground: boolean;
     hasForeground: boolean;
@@ -651,6 +660,7 @@ function applyCanvasMetadata(
     watermarkVisible: boolean;
   },
 ): void {
+  canvas.dataset.activeBackgrounds = metadata.activeBackgrounds.join(",");
   canvas.dataset.drawOrder = metadata.drawOrder.join(">");
   canvas.dataset.hasBackground = metadata.hasBackground ? "true" : "false";
   canvas.dataset.hasForeground = metadata.hasForeground ? "true" : "false";

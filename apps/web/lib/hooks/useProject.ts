@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Project, ProjectConfigLoadResponse } from "@vc/shared-schemas";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
+import { normalizeBackgroundLayerSchedules } from "@/lib/preview/backgroundSchedule";
 
 type ProjectStore = {
   projectId: string;
@@ -64,7 +65,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
 
   setProjectId: (id) => set({ projectId: id }),
   setProjectPath: (path) => set({ projectPath: path }),
-  setLayers: (layers) => set({ layers }),
+  setLayers: (layers) => set({ layers: normalizeBackgroundLayerSchedules(layers) }),
   setSubtitles: (subtitles) => set({ subtitles: normalizeSubtitlesSettings(subtitles) }),
   setWatermark: (watermark) => set({ watermark: watermark ?? null }),
   setSentences: (sentences) => set({ sentences }),
@@ -74,8 +75,9 @@ export const useProject = create<ProjectStore>((set, get) => ({
   saveLayers: async (layers) => {
     const { projectId } = get();
     if (!projectId) return;
-    await saveConfigPatch(projectId, { layers: layers as Project["layers"] });
-    set({ layers });
+    const normalizedLayers = normalizeBackgroundLayerSchedules(layers);
+    await saveConfigPatch(projectId, { layers: normalizedLayers as Project["layers"] });
+    set({ layers: normalizedLayers });
   },
 
   saveSubtitles: async (burnIn) => {

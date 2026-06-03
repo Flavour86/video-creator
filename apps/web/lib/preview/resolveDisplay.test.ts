@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveDisplay } from "./resolveDisplay";
 import type { Layer } from "./resolveDisplay";
+import { formatBackgroundTime, normalizeBackgroundSchedule, parseBackgroundTime } from "./backgroundSchedule";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 
 const BG_LAYER: Layer = {
@@ -92,6 +93,58 @@ describe("resolveDisplay", () => {
     expect(resolveDisplay([layer], [], 2).bg?.mediaId).toBe("one.jpg");
     expect(resolveDisplay([layer], [], 12).bg?.mediaId).toBe("two.jpg");
     expect(resolveDisplay([layer], [], 22).bg?.mediaId).toBe("three.jpg");
+  });
+
+  it("parses and formats explicit background schedule time inputs", () => {
+    expect(parseBackgroundTime("01:10")).toBe(70);
+    expect(parseBackgroundTime("01:02:03")).toBe(3723);
+    expect(parseBackgroundTime("12.5")).toBe(12.5);
+    expect(parseBackgroundTime("1:99")).toBeNull();
+    expect(parseBackgroundTime("-1")).toBeNull();
+
+    expect(formatBackgroundTime(70)).toBe("01:10");
+    expect(formatBackgroundTime(3723)).toBe("01:02:03");
+  });
+
+  it("normalizes schedule rows against mediaIds order and drops invalid rows", () => {
+    expect(normalizeBackgroundSchedule([
+      { id: "seg-two", mediaId: "two.jpg", start: 5, end: 10, lockedDuration: true },
+      { id: "seg-missing", mediaId: "missing.jpg", start: 10, end: 20, lockedDuration: false },
+      { id: "seg-one", mediaId: "one.jpg", start: 0, end: 5, lockedDuration: false },
+      { id: "seg-bad", mediaId: "three.jpg", start: 20, end: 20, lockedDuration: false },
+    ], ["one.jpg", "two.jpg", "three.jpg"])).toEqual([
+      { id: "seg-one", mediaId: "one.jpg", start: 0, end: 5, lockedDuration: false },
+      { id: "seg-two", mediaId: "two.jpg", start: 5, end: 10, lockedDuration: true },
+    ]);
+  });
+
+  it("uses explicit background schedule ranges instead of even playlist split", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [
+        {
+          id: base.id,
+          mediaIds: ["one.jpg", "two.jpg", "three.jpg"],
+          schedule: [
+            { id: "seg-one", mediaId: "one.jpg", start: 0, end: 3, lockedDuration: false },
+            { id: "seg-two", mediaId: "two.jpg", start: 3, end: 8, lockedDuration: false },
+            { id: "seg-three", mediaId: "three.jpg", start: 8, end: 30, lockedDuration: false },
+          ],
+          sentences: base.sentences,
+          start: 0,
+          end: 30,
+          motion: base.motion,
+          transitions: base.transitions,
+          crossfade: base.crossfade,
+        },
+      ],
+    };
+
+    expect(resolveDisplay([layer], [], 2).bg?.mediaId).toBe("one.jpg");
+    expect(resolveDisplay([layer], [], 4).bg?.mediaId).toBe("two.jpg");
+    expect(resolveDisplay([layer], [], 4).bg?.sourceTime).toBe(1);
+    expect(resolveDisplay([layer], [], 20).bg?.mediaId).toBe("three.jpg");
   });
 
   it("uses media durations for video background playlists and falls back to black after a short playlist", () => {

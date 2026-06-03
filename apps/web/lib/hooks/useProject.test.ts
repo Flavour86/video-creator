@@ -108,6 +108,40 @@ it("setLayers updates layers", () => {
   expect(result.current.layers[0].kind).toBe("bg");
 });
 
+it("setLayers normalizes background mediaIds and schedule rows", () => {
+  const scheduledLayer: Layer = {
+    id: "bg-scheduled",
+    kind: "bg",
+    name: "Background",
+    items: [{
+      id: "bg-scheduled-item",
+      mediaIds: ["one.jpg", "two.jpg", "three.jpg"],
+      schedule: [
+        { id: "seg-two", mediaId: "two.jpg", start: 5, end: 10, lockedDuration: true },
+        { id: "seg-missing", mediaId: "missing.jpg", start: 10, end: 20, lockedDuration: false },
+        { id: "seg-one", mediaId: "one.jpg", start: 0, end: 5, lockedDuration: false },
+      ],
+      start: 0,
+      end: 20,
+      sentences: [1, 3],
+      motion: { kind: "none", easing: "linear" },
+      transitions: { in: "cut", out: "cut" },
+      crossfade: 0,
+    }],
+  };
+
+  const { result } = renderHook(() => useProject());
+  act(() => result.current.setLayers([scheduledLayer]));
+
+  expect(result.current.layers[0]?.items[0]).toMatchObject({
+    mediaIds: ["one.jpg", "two.jpg", "three.jpg"],
+    schedule: [
+      { id: "seg-one", mediaId: "one.jpg", start: 0, end: 5, lockedDuration: false },
+      { id: "seg-two", mediaId: "two.jpg", start: 5, end: 10, lockedDuration: true },
+    ],
+  });
+});
+
 it("setSentences updates sentences", () => {
   const { result } = renderHook(() => useProject());
   const s = { index: 1, text: "Hi.", start_s: 0, end_s: 1, confidence_avg: 0.9 };

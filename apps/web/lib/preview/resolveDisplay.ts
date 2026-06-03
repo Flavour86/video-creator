@@ -1,4 +1,6 @@
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
+import type { BackgroundScheduleSegment } from "@vc/shared-schemas";
+import { backgroundDeclaredMediaIdsForItem, normalizeBackgroundSchedule } from "./backgroundSchedule";
 
 // ── Layer shape (mirrors project.json schema) ────────────────────────────────
 
@@ -22,7 +24,7 @@ type BaseItem = {
   orphan_reason?: string | null;
 };
 
-type BgItem = BaseItem & { crossfade: number };
+type BgItem = BaseItem & { crossfade: number; schedule?: BackgroundScheduleSegment[] };
 
 type PipItem = BaseItem & {
   pip: PipPlacement;
@@ -127,6 +129,9 @@ function backgroundMediaAtTime(
   currentTime: number,
   mediaIndex: ReadonlyMap<string, ResolveMediaInfo>,
 ): Array<{ mediaId: string; opacity: number; sourceTime: number }> {
+  const scheduled = scheduledBackgroundMediaAtTime(item, currentTime);
+  if (scheduled !== null) return scheduled;
+
   const playlist = item.mediaIds?.filter(Boolean) ?? [];
   const mediaIds = playlist.length > 0 ? playlist : item.mediaId ? [item.mediaId] : [];
   if (mediaIds.length === 0) return [];
@@ -148,6 +153,21 @@ function backgroundMediaAtTime(
       mediaId: entry.mediaId,
       opacity: opacityForWindow(entry, currentTime),
       sourceTime: currentTime - entry.start,
+    }));
+}
+
+function scheduledBackgroundMediaAtTime(
+  item: BgItem,
+  currentTime: number,
+): Array<{ mediaId: string; opacity: number; sourceTime: number }> | null {
+  const schedule = normalizeBackgroundSchedule(item.schedule, backgroundDeclaredMediaIdsForItem(item));
+  if (schedule.length === 0) return null;
+  return schedule
+    .filter((segment) => segment.start <= currentTime && currentTime < segment.end)
+    .map((segment) => ({
+      mediaId: segment.mediaId,
+      opacity: transitionOpacity(item, currentTime),
+      sourceTime: currentTime - segment.start,
     }));
 }
 

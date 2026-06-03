@@ -52,7 +52,7 @@
 
 ## Phase 4: Mixed Background Scheduling
 
-- [ ] Task 8 (task-08): Add frontend schedule helpers and preview resolution
+- [x] Task 8 (task-08): Add frontend schedule helpers and preview resolution
   - Acceptance: Frontend state can normalize `mediaIds + schedule`, parse/format `mm:ss`, `hh:mm:ss`, and seconds inputs, resolve active background media by schedule, and preserve fallback behavior for unscheduled backgrounds.
   - Verify: `rtk pnpm -F @vc/web test -- lib/preview/resolveDisplay.test.ts components/editor/PreviewSurface.test.tsx lib/hooks/useProject.test.ts`
   - Evidence: preview screenshots at multiple playhead times proving scheduled background media switches according to explicit ranges.
