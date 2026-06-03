@@ -27,6 +27,13 @@ class PlaylistChildSource(Protocol):
 
 
 @dataclass(frozen=True)
+class BackgroundScheduleRange:
+    media_id: str
+    start: float
+    end: float
+
+
+@dataclass(frozen=True)
 class PresetConfig:
     resolution: str
     fps: int
@@ -165,9 +172,12 @@ def _expand_background_playlist_item(
     item: ClipRenderItem,
 ) -> list[ClipRenderItem]:
     media_ids = _item_media_ids(item)
+    media_index = _project_media_index(project)
+    schedule = _item_schedule_segments(item, media_ids)
+    if schedule:
+        return _expand_scheduled_background_item(item, schedule, media_index)
     if len(media_ids) == 0:
         return [item]
-    media_index = _project_media_index(project)
     if len(media_ids) == 1:
         media_id = media_ids[0]
         media = media_index.get(media_id)
@@ -204,6 +214,41 @@ def _expand_background_playlist_item(
     if first_is_video and has_video_duration:
         return _expand_video_playlist_item(item, media_ids, media_index)
     return _expand_even_playlist_item(item, media_ids)
+
+
+def _expand_scheduled_background_item(
+    item: ClipRenderItem,
+    schedule: list[BackgroundScheduleRange],
+    media_index: Mapping[str, object],
+) -> list[ClipRenderItem]:
+    parent_start_s = _item_float(item, "start")
+    parent_end_s = _item_float(item, "end")
+    ranges: list[BackgroundScheduleRange] = []
+    for segment in schedule:
+        start_s = max(parent_start_s, segment.start)
+        end_s = min(parent_end_s, segment.end)
+        media = media_index.get(segment.media_id)
+        media_duration = _media_duration(media)
+        if _media_is_video(media, segment.media_id) and media_duration and media_duration > 0:
+            end_s = min(end_s, start_s + media_duration)
+        if end_s <= start_s:
+            continue
+        ranges.append(BackgroundScheduleRange(media_id=segment.media_id, start=start_s, end=end_s))
+
+    expanded: list[ClipRenderItem] = []
+    for index, segment in enumerate(ranges):
+        expanded.append(
+            _playlist_child_item(
+                item,
+                media_id=segment.media_id,
+                index=index,
+                start_s=segment.start,
+                end_s=segment.end,
+                transition_in=(_transition_value(item, "in") or "cut") if index == 0 else "cut",
+                transition_out=(_transition_value(item, "out") or "cut") if index == len(ranges) - 1 else "cut",
+            )
+        )
+    return expanded
 
 
 def _expand_even_playlist_item(item: ClipRenderItem, media_ids: list[str]) -> list[ClipRenderItem]:
@@ -303,6 +348,7 @@ def _playlist_child_item(
         }
     child.pop("mediaIds", None)
     child.pop("media_ids", None)
+    child.pop("schedule", None)
     child["mediaId"] = media_id
     child["id"] = f"{child.get('id', 'bg-playlist')}-{index + 1}"
     child["start"] = start_s
@@ -621,6 +667,48 @@ def _item_media_ids(item: ClipRenderItem) -> list[str]:
     if not isinstance(value, list):
         raise TypeError("Visual item mediaIds must be a list.")
     return [entry for entry in value if isinstance(entry, str) and entry]
+
+
+def _item_schedule_segments(item: ClipRenderItem, media_ids: list[str]) -> list[BackgroundScheduleRange]:
+    raw = _unwrap_root_model(item)
+    value = raw.get("schedule") if isinstance(raw, Mapping) else getattr(raw, "schedule", None)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise TypeError("Background item schedule must be a list.")
+    allowed_ids = set(media_ids) if media_ids else None
+    segments: list[BackgroundScheduleRange] = []
+    for segment in value:
+        media_id = _schedule_str(segment, "media_id")
+        if not media_id or (allowed_ids is not None and media_id not in allowed_ids):
+            continue
+        start_s = _schedule_float(segment, "start")
+        end_s = _schedule_float(segment, "end")
+        if end_s <= start_s:
+            continue
+        segments.append(BackgroundScheduleRange(media_id=media_id, start=start_s, end=end_s))
+    return segments
+
+
+def _schedule_str(segment: object, name: str) -> str:
+    if isinstance(segment, Mapping):
+        value = segment.get(name)
+        if value is None and name == "media_id":
+            value = segment.get("mediaId")
+    else:
+        value = getattr(segment, name)
+    if isinstance(value, Enum):
+        return str(value.value)
+    if not isinstance(value, str):
+        raise TypeError(f"Background schedule {name} must be a string.")
+    return value
+
+
+def _schedule_float(segment: object, name: str) -> float:
+    value = segment.get(name) if isinstance(segment, Mapping) else getattr(segment, name)
+    if not isinstance(value, int | float):
+        raise TypeError(f"Background schedule {name} must be numeric.")
+    return float(value)
 
 
 def _item_has_media_id(item: ClipRenderItem) -> bool:

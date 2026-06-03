@@ -803,6 +803,90 @@ def test_background_video_playlist_crossfade_overlaps_by_configured_duration(
     assert "[v1][clip2]overlay=enable='between(t,3,6)':eof_action=pass[v2]" in filtergraph
 
 
+def test_scheduled_background_expands_ranges_and_clamps_video_duration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("server.pipeline.clip_render._probe_media_duration_s", lambda path: 30.0)
+    bg_red = _write_media(tmp_path, "bg-red.jpg", b"red")
+    bg_video = _write_media(tmp_path, "bg-video.mp4", b"video")
+    bg_blue = _write_media(tmp_path, "bg-blue.jpg", b"blue")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-scheduled",
+                        "mediaIds": ["bg-red.jpg", "bg-video.mp4", "bg-blue.jpg"],
+                        "schedule": [
+                            {"id": "seg-red", "mediaId": "bg-red.jpg", "start": 0.0, "end": 30.0, "lockedDuration": False},
+                            {"id": "seg-video", "mediaId": "bg-video.mp4", "start": 30.0, "end": 40.0, "lockedDuration": True},
+                            {"id": "seg-blue", "mediaId": "bg-blue.jpg", "start": 40.0, "end": 90.0, "lockedDuration": False},
+                        ],
+                        "sentences": [1, 3],
+                        "start": 0.0,
+                        "end": 90.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 0.0,
+                    }
+                ],
+            ),
+        ],
+        media=[
+            {
+                "id": "bg-red.jpg",
+                "name": "bg-red.jpg",
+                "kind": "image",
+                "path": "media/bg-red.jpg",
+                "duration": None,
+                "import_mode": "copy",
+                "imported_at": "2026-06-03T00:00:00Z",
+            },
+            {
+                "id": "bg-video.mp4",
+                "name": "bg-video.mp4",
+                "kind": "video",
+                "path": "media/bg-video.mp4",
+                "duration": 4.0,
+                "import_mode": "copy",
+                "imported_at": "2026-06-03T00:00:00Z",
+            },
+            {
+                "id": "bg-blue.jpg",
+                "name": "bg-blue.jpg",
+                "kind": "image",
+                "path": "media/bg-blue.jpg",
+                "duration": None,
+                "import_mode": "copy",
+                "imported_at": "2026-06-03T00:00:00Z",
+            },
+        ],
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(duration_s=90.0),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, bg_red, 30.0, crossfade_s=0.0)),
+        str(_expected_clip(tmp_path, bg_video, 4.0, crossfade_s=0.0)),
+        str(_expected_clip(tmp_path, bg_blue, 50.0, crossfade_s=0.0)),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "color=black:s=1280x720:r=30:d=90[bg]" in filtergraph
+    assert "[bg][clip1]overlay=enable='between(t,0,30)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,30,34)':eof_action=pass[v2]" in filtergraph
+    assert "[v2][clip3]overlay=enable='between(t,40,90)':eof_action=pass[v3]" in filtergraph
+    assert "between(t,34,40)" not in filtergraph
+
+
 def test_filtergraph_build_for_50_layers_meets_target(tmp_path: Path) -> None:
     media_dir = tmp_path / "media"
     media_dir.mkdir()

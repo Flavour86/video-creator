@@ -67,12 +67,12 @@
   - Verify: `rtk pnpm -F @vc/web test -- components/inspector/InspectorPanel.test.tsx components/timeline/TimelineTrack.test.tsx app/editor/page.test.tsx`
   - Evidence: `background-coverage-editor-1920x1080` and `background-coverage-editor-1080x1920` screenshots showing inspector schedule rows and one background timeline item.
 
-- [ ] Task 11 (task-11): Expand scheduled backgrounds in server render
+- [x] Task 11 (task-11): Expand scheduled backgrounds in server render
   - Acceptance: `filtergraph.py` expands scheduled image and video segments from `BackgroundItem.schedule`; images loop for their range; videos clamp to schedule/native duration; unscheduled backgrounds keep current fallback; cache invalidates when schedule/order/motion/easing/crossfade changes.
   - Verify: `rtk pnpm -F @vc/server test -- tests/test_filtergraph.py tests/test_clip_cache.py tests/test_project_schema.py`, `rtk pnpm -F @vc/web test:e2e -- render-correctness`
   - Evidence: render correctness evidence for image-to-video and video-to-image background boundaries in 16:9 and 9:16 output.
 
-- [ ] Checkpoint: Mixed background schedule complete
+- [x] Checkpoint: Mixed background schedule complete
   - Acceptance: Mixed image/video backgrounds can be edited, previewed, inspected, persisted, and rendered from one ordered scheduled background item.
 
 ## Phase 5: Visual Parity And Integration

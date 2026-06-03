@@ -99,12 +99,14 @@ function sameSchedule(left: BackgroundScheduleSegment[] | undefined, right: Back
   const rightSchedule = right ?? [];
   return leftSchedule.length === rightSchedule.length && leftSchedule.every((segment, index) => {
     const other = rightSchedule[index];
-    return Boolean(other) &&
+    if (!other) return false;
+    return (
       segment.id === other.id &&
       segment.mediaId === other.mediaId &&
       segment.start === other.start &&
       segment.end === other.end &&
-      segment.lockedDuration === other.lockedDuration;
+      segment.lockedDuration === other.lockedDuration
+    );
   });
 }
 

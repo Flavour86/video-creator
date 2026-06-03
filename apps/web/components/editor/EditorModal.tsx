@@ -214,7 +214,7 @@ function SubtitlesFields({
           id="editor-sub-color"
           label={t("color")}
           onChange={(color) => onChange({ ...value, style: { ...value.style, color } })}
-          value={value.style.color}
+          value={value.style.color ?? "#ffffff"}
         />
       </div>
       <Field htmlFor="editor-sub-size" label="Size">
@@ -256,7 +256,7 @@ function SubtitlesFields({
           id="editor-sub-bg-color"
           label={t("backgroundColor")}
           onChange={(bgColor) => onChange({ ...value, style: { ...value.style, bg_color: bgColor } })}
-          value={value.style.bg_color}
+          value={value.style.bg_color ?? "#000000"}
         />
         <Field
           className={!backgroundRectangleEnabled ? "opacity-60" : undefined}
@@ -272,7 +272,7 @@ function SubtitlesFields({
               const next = clampNumber(Number(event.target.value), 0, 100);
               onChange({ ...value, style: { ...value.style, bg_opacity: next } });
             }}
-            value={value.style.bg_opacity}
+            value={value.style.bg_opacity ?? 62}
           />
         </Field>
         <Field
@@ -289,7 +289,7 @@ function SubtitlesFields({
               const next = clampNumber(Number(event.target.value), 0, 48);
               onChange({ ...value, style: { ...value.style, bg_radius: next } });
             }}
-            value={value.style.bg_radius}
+            value={value.style.bg_radius ?? 8}
           />
         </Field>
       </div>
@@ -404,7 +404,7 @@ function subtitlePreviewBackgroundStyle(
   if (style.bg_style === "block") {
     return {
       backgroundColor: colorWithOpacity(style.bg_color, style.bg_opacity),
-      borderRadius: clampNumber(style.bg_radius, 0, 48) * previewScale,
+      borderRadius: clampNumber(style.bg_radius ?? 8, 0, 48) * previewScale,
       padding: `${10 * previewScale}px ${18 * previewScale}px`,
     };
   }
@@ -572,9 +572,9 @@ function normalizeSubtitlesSettings(value: SubtitlesSettings | null | undefined)
   };
 }
 
-function colorWithOpacity(color: string, opacity: number): string {
+function colorWithOpacity(color: string | null | undefined, opacity: number | null | undefined): string {
   const { b, g, r } = hexToRgb(normalizeHexColor(color));
-  const alpha = clampNumber(opacity, 0, 100) / 100;
+  const alpha = clampNumber(opacity ?? 62, 0, 100) / 100;
   return `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(2))})`;
 }
 
