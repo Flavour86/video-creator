@@ -226,9 +226,12 @@ export function TranscriptPane({
           const emptyDraft = sentenceDraft.trim().length === 0;
           const orphan = sentence.end_s <= sentence.start_s;
           const rowRange: [number, number] = selected && selectedRange ? [selectedRange[0], selectedRange[1]] : [sentence.index, sentence.index];
+          const fixedVirtualRow = shouldVirtualize;
           return (
             <div
-              className={`group relative grid h-10 w-full grid-cols-[minmax(0,1fr)_64px] items-stretch border-l-2 text-[13px] leading-[1.5] text-(--text-2) hover:bg-(--bg-2) ${
+              className={`group relative grid w-full cursor-pointer grid-cols-[32px_90px_minmax(0,1fr)_48px] gap-2 border-l-2 pl-0 pr-3 text-left text-[13px] leading-[1.5] text-(--text-2) transition-colors hover:bg-(--bg-2) hover:text-(--text) ${
+                fixedVirtualRow ? "h-10 items-center py-0" : "items-baseline py-[7px]"
+              } ${
                 selected
                   ? "border-l-(--amber) bg-(--amber-bg) text-(--text)"
                   : current
@@ -250,16 +253,22 @@ export function TranscriptPane({
                   activeMatchRef.current = node;
                 }
               }}
-              style={{ height: TRANSCRIPT_ROW_HEIGHT_PX }}
             >
               {editing ? (
-                <div className="grid h-full w-full grid-cols-[32px_90px_minmax(0,1fr)] items-center gap-2 pl-0 pr-1">
-                  <SentenceIndexLabel orphan={orphan} selected={selected} value={sentence.index} />
-                  <SentenceTimeLabel orphan={orphan} selected={selected} start={sentence.start_s} end={sentence.end_s} />
+                <>
+                  <SentenceIndexLabel orphan={orphan} selected={selected || current} value={sentence.index} />
+                  <SentenceTimeLabel orphan={orphan} selected={selected || current} start={sentence.start_s} end={sentence.end_s} />
+                  <span
+                    className={`relative block min-w-0 ${fixedVirtualRow ? "h-6 leading-[24px]" : "text-pretty whitespace-pre-wrap break-words"}`}
+                    data-testid={`transcript-sentence-edit-shell-${sentence.index}`}
+                  >
+                    <span aria-hidden="true" className={`block invisible text-transparent ${fixedVirtualRow ? "h-6 truncate" : "whitespace-pre-wrap break-words"}`}>
+                      {sentenceDraft || " "}
+                    </span>
                   <textarea
                     aria-label={t("editSentenceText", { index: sentence.index })}
                     autoFocus
-                    className="min-h-0 w-full resize-none overflow-hidden rounded border border-(--amber-line) bg-(--bg-0) px-2 py-0 text-[13px] leading-[24px] text-(--text) outline-none focus-visible:border-(--amber)"
+                    className="absolute inset-0 h-full min-h-full w-full resize-none overflow-hidden rounded-[var(--r-sm)] bg-(--bg-1) px-2 py-[3px] text-[13px] leading-[1.5] text-(--text) outline outline-1 -outline-offset-1 outline-(--amber-line) focus-visible:outline-(--amber)"
                     data-testid={`transcript-sentence-editor-${sentence.index}`}
                     onChange={(event) => setSentenceDraft(event.target.value)}
                     onKeyDown={(event) => {
@@ -273,13 +282,13 @@ export function TranscriptPane({
                       }
                     }}
                     rows={1}
-                    style={{ height: 24 }}
                     value={sentenceDraft}
                   />
-                </div>
+                  </span>
+                </>
               ) : (
                 <button
-                  className="grid h-full w-full grid-cols-[32px_90px_minmax(0,1fr)] items-center gap-2 pl-0 pr-1 text-left"
+                  className="contents text-left"
                   onClick={(event) => {
                     const range: [number, number] = event.shiftKey
                       ? normalizeRange(selectedRange?.[0] ?? activeRange[0], sentence.index)
@@ -303,24 +312,23 @@ export function TranscriptPane({
                   }}
                   type="button"
                 >
-                  <SentenceIndexLabel orphan={orphan} selected={selected} value={sentence.index} />
-                  <SentenceTimeLabel orphan={orphan} selected={selected} start={sentence.start_s} end={sentence.end_s} />
+                  <SentenceIndexLabel orphan={orphan} selected={selected || current} value={sentence.index} />
+                  <SentenceTimeLabel orphan={orphan} selected={selected || current} start={sentence.start_s} end={sentence.end_s} />
                   <span
-                    className="block h-6 min-w-0 truncate leading-[24px]"
+                    className={fixedVirtualRow ? "block h-6 min-w-0 truncate leading-[24px]" : "block min-w-0 text-pretty break-words"}
                     data-testid={`transcript-sentence-text-${sentence.index}`}
-                    style={{ height: 24 }}
                   >
                     {highlight(displayText, query)}
                     {orphan ? <span className="ml-2 font-mono text-[10px] uppercase text-(--red)">{t("orphanSentence")}</span> : null}
                   </span>
                 </button>
               )}
-              <div className="flex h-full items-center justify-end gap-1 pr-2">
+              <div className="flex w-12 min-w-12 items-center justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100">
                 {editing ? (
                   <>
                     <button
                       aria-label={t("confirmSentenceEdit", { index: sentence.index })}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded border border-(--line) bg-(--bg-2) text-(--text-2) hover:bg-(--bg-3) disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-grid h-[22px] w-[22px] place-items-center rounded-[var(--r-sm)] border border-transparent text-(--text-3) hover:border-(--line) hover:bg-(--bg-3) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={emptyDraft}
                       onClick={() => confirmSentenceEdit(sentence.index)}
                       title={t("confirmSentenceEdit", { index: sentence.index })}
@@ -330,7 +338,7 @@ export function TranscriptPane({
                     </button>
                     <button
                       aria-label={t("cancelSentenceEdit", { index: sentence.index })}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded border border-(--line) bg-(--bg-2) text-(--text-2) hover:bg-(--bg-3)"
+                      className="inline-grid h-[22px] w-[22px] place-items-center rounded-[var(--r-sm)] border border-transparent text-(--text-3) hover:border-(--line) hover:bg-(--bg-3) hover:text-(--text)"
                       onClick={cancelSentenceEdit}
                       title={t("cancelSentenceEdit", { index: sentence.index })}
                       type="button"
@@ -341,7 +349,7 @@ export function TranscriptPane({
                 ) : (
                   <button
                     aria-label={t("editSentence", { index: sentence.index })}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-(--text-3) hover:border-(--line) hover:bg-(--bg-3) hover:text-(--text)"
+                    className="inline-grid h-[22px] w-[22px] place-items-center rounded-[var(--r-sm)] border border-transparent text-(--text-3) hover:border-(--line) hover:bg-(--bg-3) hover:text-(--text)"
                     onClick={() => beginSentenceEdit(sentence)}
                     title={t("editSentence", { index: sentence.index })}
                     type="button"

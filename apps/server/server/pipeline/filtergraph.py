@@ -236,19 +236,35 @@ def _expand_scheduled_background_item(
         ranges.append(BackgroundScheduleRange(media_id=segment.media_id, start=start_s, end=end_s))
 
     expanded: list[ClipRenderItem] = []
+    crossfade_s = _item_crossfade(item)
     for index, segment in enumerate(ranges):
+        segment_duration_s = segment.end - segment.start
+        segment_crossfade_s = min(crossfade_s, segment_duration_s / 2)
+        previous = ranges[index - 1] if index > 0 else None
+        next_segment = ranges[index + 1] if index < len(ranges) - 1 else None
+        has_adjacent_previous = previous is not None and abs(previous.end - segment.start) < 0.001
+        has_adjacent_next = next_segment is not None and abs(segment.end - next_segment.start) < 0.001
+        item_start_s = (
+            max(parent_start_s, segment.start - segment_crossfade_s)
+            if index > 0 and has_adjacent_previous and segment_crossfade_s > 0
+            else segment.start
+        )
         expanded.append(
             _playlist_child_item(
                 item,
                 media_id=segment.media_id,
                 index=index,
-                start_s=segment.start,
+                start_s=item_start_s,
                 end_s=segment.end,
-                transition_in=(_transition_value(item, "in") or "cut") if index == 0 else "cut",
+                transition_in=(
+                    "fade"
+                    if index > 0 and has_adjacent_previous and segment_crossfade_s > 0
+                    else (_transition_value(item, "in") or "cut") if index == 0 else "cut"
+                ),
                 transition_out=(
                     (_transition_value(item, "out") or "cut")
                     if index == len(ranges) - 1
-                    else "cut"
+                    else "fade" if has_adjacent_next and segment_crossfade_s > 0 else "cut"
                 ),
             )
         )

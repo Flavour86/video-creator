@@ -988,10 +988,11 @@ it("uses dragged background modal order in the inspector asset list", async () =
 
   const dialog = await screen.findByRole("dialog", { name: /change background/i });
   fireEvent.click(within(dialog).getByRole("button", { name: /^bg1\.png$/i }));
-  const sourceCard = within(dialog).getByRole("button", { name: /^bg1\.png selected$/i }).closest("[data-reorder-card='true']") as HTMLElement;
-  const targetCard = within(dialog).getByRole("button", { name: /^bg0\.png selected$/i }).closest("[data-reorder-card='true']") as HTMLElement;
-  pointerDragTo(sourceCard, targetCard);
+  const sourceRow = within(dialog).getByTestId("background-coverage-row-bg1.png");
+  const targetRow = within(dialog).getByTestId("background-coverage-row-bg0.png");
+  pointerDragTo(sourceRow, targetRow);
   await waitFor(() => {
+    expect(within(dialog).getAllByTestId(/background-coverage-row-/).map((row) => row.getAttribute("data-media-id"))).toEqual(["bg1.png", "bg0.png"]);
     const first = within(dialog).getByRole("button", { name: /^bg1\.png selected$/i });
     const second = within(dialog).getByRole("button", { name: /^bg0\.png selected$/i });
     expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

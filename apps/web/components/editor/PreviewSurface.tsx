@@ -201,6 +201,8 @@ export function PreviewSurface({
           drawCover(context, source, {
             canvasHeight,
             canvasWidth,
+            motionKind: background.motion.kind,
+            motionProgress: background.motionProgress,
             opacity: clamp(background.opacity, 0, 1),
           });
         }
@@ -458,7 +460,7 @@ function drawContain(
 function drawCover(
   context: CanvasRenderingContext2D,
   source: HTMLImageElement | HTMLVideoElement,
-  options: { canvasHeight: number; canvasWidth: number; opacity: number },
+  options: { canvasHeight: number; canvasWidth: number; motionKind?: string; motionProgress?: number; opacity: number },
 ): void {
   const dimensions = sourceDimensions(source, options.canvasWidth, options.canvasHeight);
   const frameAspect = options.canvasWidth / options.canvasHeight;
@@ -474,15 +476,23 @@ function drawCover(
     sourceHeight = dimensions.width / frameAspect;
     sourceY = (dimensions.height - sourceHeight) / 2;
   }
+  const motionCrop = backgroundMotionCrop({
+    progress: options.motionProgress ?? 0,
+    sourceHeight,
+    sourceWidth,
+    sourceX,
+    sourceY,
+    kind: options.motionKind ?? "none",
+  });
   context.save();
   context.globalAlpha = clamp(options.opacity, 0, 1);
   try {
     context.drawImage(
       source,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
+      motionCrop.x,
+      motionCrop.y,
+      motionCrop.width,
+      motionCrop.height,
       0,
       0,
       options.canvasWidth,
@@ -492,6 +502,49 @@ function drawCover(
     // Ignore draw errors while image/video resources are still becoming drawable.
   }
   context.restore();
+}
+
+function backgroundMotionCrop({
+  kind,
+  progress,
+  sourceHeight,
+  sourceWidth,
+  sourceX,
+  sourceY,
+}: {
+  kind: string;
+  progress: number;
+  sourceHeight: number;
+  sourceWidth: number;
+  sourceX: number;
+  sourceY: number;
+}): { height: number; width: number; x: number; y: number } {
+  if (kind === "none" || kind === "static") {
+    return { height: sourceHeight, width: sourceWidth, x: sourceX, y: sourceY };
+  }
+  const normalized = clamp(progress, 0, 1);
+  const zoom = backgroundMotionZoom(kind, normalized);
+  const width = sourceWidth / zoom;
+  const height = sourceHeight / zoom;
+  const xTravel = Math.max(0, sourceWidth - width);
+  const yTravel = Math.max(0, sourceHeight - height);
+  let x = sourceX + xTravel / 2;
+  let y = sourceY + yTravel / 2;
+
+  if (kind === "pan_left") {
+    x = sourceX + xTravel * normalized;
+  } else if (kind === "pan_right") {
+    x = sourceX + xTravel * (1 - normalized);
+  }
+
+  return { height, width, x, y };
+}
+
+function backgroundMotionZoom(kind: string, progress: number): number {
+  if (kind === "ken_burns_strong") return 1 + 0.18 * progress;
+  if (kind === "zoom_out") return 1.12 - 0.12 * progress;
+  if (kind === "pan_left" || kind === "pan_right") return 1.08;
+  return 1 + 0.08 * progress;
 }
 
 function drawPip(

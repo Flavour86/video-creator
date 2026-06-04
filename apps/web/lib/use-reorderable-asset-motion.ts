@@ -3,13 +3,19 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import type { ReorderPlacement } from "@/lib/media-order";
 
 type ItemLayout = {
+  bottom: number;
+  height: number;
   id: string;
   left: number;
   right: number;
+  top: number;
   width: number;
 };
 
+type ReorderAxis = "x" | "y";
+
 type ActiveDrag = {
+  axis: ReorderAxis;
   dragging: boolean;
   id: string;
   lastX: number;
@@ -37,6 +43,7 @@ const OVERLAP_REORDER_RATIO = 0.4;
 export function useReorderableAssetMotion(
   ids: readonly string[],
   onReorder?: (sourceId: string, targetId: string, placement: ReorderPlacement) => void,
+  axis: ReorderAxis = "x",
 ) {
   const nodesRef = useRef(new Map<string, HTMLElement>());
   const activeRef = useRef<ActiveDrag | null>(null);
@@ -90,6 +97,7 @@ export function useReorderableAssetMotion(
 
     activeRef.current = {
       dragging: false,
+      axis,
       id,
       lastX: startX,
       lastY: startY,
@@ -101,7 +109,7 @@ export function useReorderableAssetMotion(
       startY,
       sourceIndex,
     };
-  }, [ids]);
+  }, [axis, ids]);
 
   const movePointerDrag = useCallback((event: PointerEvent<HTMLElement>) => {
     const active = activeRef.current;
@@ -109,17 +117,19 @@ export function useReorderableAssetMotion(
     const clientX = dragCoordinate(event.clientX);
     const clientY = dragCoordinate(event.clientY);
     const dx = Math.round(clientX - active.startX);
+    const dy = Math.round(clientY - active.startY);
+    const offset = active.axis === "x" ? dx : dy;
     active.lastX = clientX;
     active.lastY = clientY;
     if (!active.dragging) {
-      if (Math.abs(dx) < DRAG_START_DISTANCE) return;
+      if (Math.abs(offset) < DRAG_START_DISTANCE) return;
       active.dragging = true;
       beginLiveMotion(active.node);
       safelySetPointerCapture(active.node, active.pointerId);
     }
     event.preventDefault();
-    active.node.style.transform = `translate3d(${dx}px, 0px, 0) scale(${DRAG_SCALE})`;
-    applyPreviewMotion(active, previewIndexForOffset(active, dx), nodesRef.current);
+    active.node.style.transform = transformForAxis(active.axis, offset, DRAG_SCALE);
+    applyPreviewMotion(active, previewIndexForOffset(active, offset), nodesRef.current);
   }, []);
 
   const endPointerDrag = useCallback((event: PointerEvent<HTMLElement>) => {
@@ -143,7 +153,7 @@ export function useReorderableAssetMotion(
       shiftedIds: shiftedIdsForPreview(active),
       sourceId: active.id,
     };
-    settleDroppedSource(active.node, finalOffsetForPreview(active));
+    settleDroppedSource(active.node, finalOffsetForPreview(active), active.axis);
     dropCommitTimerRef.current = window.setTimeout(() => {
       dropCommitTimerRef.current = null;
       pendingCommitCleanupRef.current = commitCleanup;
@@ -205,12 +215,39 @@ function captureLayouts(ids: readonly string[], nodes: Map<string, HTMLElement>)
     if (!node) return [];
     const rect = node.getBoundingClientRect();
     const width = rect.width || rect.right - rect.left;
-    return [{ id, left: rect.left, right: rect.right, width }];
+    const height = rect.height || rect.bottom - rect.top;
+    return [{ bottom: rect.bottom, height, id, left: rect.left, right: rect.right, top: rect.top, width }];
   });
 }
 
 function dragCoordinate(value: number | undefined): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function endForAxis(layout: ItemLayout, axis: ReorderAxis): number {
+  return axis === "x" ? layout.right : layout.bottom;
+}
+
+function sizeForAxis(layout: ItemLayout, axis: ReorderAxis): number {
+  return axis === "x" ? layout.width : layout.height;
+}
+
+function startForAxis(layout: ItemLayout, axis: ReorderAxis): number {
+  return axis === "x" ? layout.left : layout.top;
+}
+
+function transformForAxis(axis: ReorderAxis, offset: number, scale: number): string {
+  const rounded = Math.round(offset);
+  return axis === "x"
+    ? `translate3d(${rounded}px, 0px, 0) scale(${scale})`
+    : `translate3d(0px, ${rounded}px, 0) scale(${scale})`;
+}
+
+function translateForAxis(axis: ReorderAxis, offset: number): string {
+  const rounded = Math.round(offset);
+  return axis === "x"
+    ? `translate3d(${rounded}px, 0px, 0)`
+    : `translate3d(0px, ${rounded}px, 0)`;
 }
 
 function endLiveMotion(node: HTMLElement, settleTimerRef: { current: number | null }): void {
@@ -220,7 +257,7 @@ function endLiveMotion(node: HTMLElement, settleTimerRef: { current: number | nu
   node.style.filter = "";
   node.style.boxShadow = "";
   node.style.transition = `transform 180ms ${DRAG_EASING}, filter 160ms ${DRAG_EASING}, box-shadow 160ms ${DRAG_EASING}`;
-  node.style.transform = "translate3d(0px, 0px, 0) scale(1)";
+  node.style.transform = transformForAxis("x", 0, 1);
   settleTimerRef.current = window.setTimeout(() => {
     delete node.dataset.dragSettling;
     node.style.zIndex = "";
@@ -230,33 +267,36 @@ function endLiveMotion(node: HTMLElement, settleTimerRef: { current: number | nu
   }, 190);
 }
 
-function settleDroppedSource(node: HTMLElement, finalOffset: number): void {
+function settleDroppedSource(node: HTMLElement, finalOffset: number, axis: ReorderAxis): void {
   delete node.dataset.dragActive;
   node.dataset.dragDropSettling = "true";
   node.style.pointerEvents = "";
   node.style.filter = "";
   node.style.boxShadow = "";
   node.style.transition = `transform ${DROP_COMMIT_MS}ms ${DRAG_EASING}, filter 160ms ${DRAG_EASING}, box-shadow 160ms ${DRAG_EASING}`;
-  node.style.transform = `translate3d(${Math.round(finalOffset)}px, 0px, 0) scale(1)`;
+  node.style.transform = transformForAxis(axis, finalOffset, 1);
 }
 
 function previewIndexForOffset(active: ActiveDrag, dx: number): number {
   const source = active.layouts[active.sourceIndex];
-  if (!source || active.sourceIndex < 0 || source.width <= 0) return active.sourceIndex;
-  const activeLeft = source.left + dx;
-  const activeRight = source.right + dx;
+  const sourceSize = source ? sizeForAxis(source, active.axis) : 0;
+  if (!source || active.sourceIndex < 0 || sourceSize <= 0) return active.sourceIndex;
+  const activeStart = startForAxis(source, active.axis) + dx;
+  const activeEnd = endForAxis(source, active.axis) + dx;
   let previewIndex = active.sourceIndex;
 
   if (dx > 0) {
     for (let index = active.sourceIndex + 1; index < active.layouts.length; index += 1) {
       const target = active.layouts[index];
-      if (!target || target.width <= 0 || activeRight < target.left + target.width * OVERLAP_REORDER_RATIO) break;
+      const targetSize = target ? sizeForAxis(target, active.axis) : 0;
+      if (!target || targetSize <= 0 || activeEnd < startForAxis(target, active.axis) + targetSize * OVERLAP_REORDER_RATIO) break;
       previewIndex = index;
     }
   } else if (dx < 0) {
     for (let index = active.sourceIndex - 1; index >= 0; index -= 1) {
       const target = active.layouts[index];
-      if (!target || target.width <= 0 || activeLeft > target.right - target.width * OVERLAP_REORDER_RATIO) break;
+      const targetSize = target ? sizeForAxis(target, active.axis) : 0;
+      if (!target || targetSize <= 0 || activeStart > endForAxis(target, active.axis) - targetSize * OVERLAP_REORDER_RATIO) break;
       previewIndex = index;
     }
   }
@@ -272,27 +312,27 @@ function applyPreviewMotion(active: ActiveDrag, previewIndex: number, nodes: Map
     if (!layout || index === active.sourceIndex) continue;
     const node = nodes.get(layout.id);
     if (!node) continue;
-    const shiftX = shiftForPreview(active.layouts, active.sourceIndex, previewIndex, index);
+    const shiftX = shiftForPreview(active.layouts, active.sourceIndex, previewIndex, index, active.axis);
     if (shiftX === 0) {
       clearShiftMotion(node, false);
       continue;
     }
     node.dataset.dragShifted = "true";
     node.style.transition = `transform 160ms ${DRAG_EASING}`;
-    node.style.transform = `translate3d(${Math.round(shiftX)}px, 0px, 0)`;
+    node.style.transform = translateForAxis(active.axis, shiftX);
   }
 }
 
-function shiftForPreview(layouts: ItemLayout[], sourceIndex: number, previewIndex: number, itemIndex: number): number {
+function shiftForPreview(layouts: ItemLayout[], sourceIndex: number, previewIndex: number, itemIndex: number, axis: ReorderAxis): number {
   const layout = layouts[itemIndex];
   if (!layout) return 0;
   if (previewIndex > sourceIndex && itemIndex > sourceIndex && itemIndex <= previewIndex) {
     const previous = layouts[itemIndex - 1];
-    return previous ? previous.left - layout.left : 0;
+    return previous ? startForAxis(previous, axis) - startForAxis(layout, axis) : 0;
   }
   if (previewIndex < sourceIndex && itemIndex >= previewIndex && itemIndex < sourceIndex) {
     const next = layouts[itemIndex + 1];
-    return next ? next.left - layout.left : 0;
+    return next ? startForAxis(next, axis) - startForAxis(layout, axis) : 0;
   }
   return 0;
 }
@@ -310,12 +350,12 @@ function finalOffsetForPreview(active: ActiveDrag): number {
   const source = active.layouts[active.sourceIndex];
   const target = active.layouts[active.previewIndex];
   if (!source || !target) return 0;
-  return target.left - source.left;
+  return startForAxis(target, active.axis) - startForAxis(source, active.axis);
 }
 
 function shiftedIdsForPreview(active: ActiveDrag): string[] {
   return active.layouts
-    .filter((layout, index) => layout.id !== active.id && shiftForPreview(active.layouts, active.sourceIndex, active.previewIndex, index) !== 0)
+    .filter((layout, index) => layout.id !== active.id && shiftForPreview(active.layouts, active.sourceIndex, active.previewIndex, index, active.axis) !== 0)
     .map((layout) => layout.id);
 }
 

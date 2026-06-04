@@ -46,9 +46,17 @@ export type PipPlacement = {
   opacity: number;
 };
 
+type BackgroundDisplay = {
+  mediaId: string;
+  motion: Motion;
+  motionProgress: number;
+  opacity: number;
+  sourceTime: number;
+};
+
 export type DisplaySpec = {
-  bg?: { mediaId: string; opacity: number; sourceTime: number };
-  backgrounds: Array<{ mediaId: string; opacity: number; sourceTime: number }>;
+  bg?: BackgroundDisplay;
+  backgrounds: BackgroundDisplay[];
   fg: Array<{ mediaId: string; compositing: "fullscreen"; opacity: number; sourceTime: number; translateX: number }>;
   pip: Array<{ mediaId: string; placement: PipPlacement; opacity: number; sourceTime: number; translateX: number }>;
   watermark?: { mediaId: string; posX: number; posY: number; scale: number; opacity: number };
@@ -128,8 +136,8 @@ function backgroundMediaAtTime(
   item: BgItem,
   currentTime: number,
   mediaIndex: ReadonlyMap<string, ResolveMediaInfo>,
-): Array<{ mediaId: string; opacity: number; sourceTime: number }> {
-  const scheduled = scheduledBackgroundMediaAtTime(item, currentTime);
+): BackgroundDisplay[] {
+  const scheduled = scheduledBackgroundMediaAtTime(item, currentTime, mediaIndex);
   if (scheduled !== null) return scheduled;
 
   const playlist = item.mediaIds?.filter(Boolean) ?? [];
@@ -140,7 +148,7 @@ function backgroundMediaAtTime(
     const duration = isVideoMedia(mediaId, mediaIndex) ? mediaDuration(mediaId, mediaIndex) : null;
     const end = duration === null ? item.end : Math.min(item.end, item.start + duration);
     return item.start <= currentTime && currentTime < end
-      ? [{ mediaId, opacity: transitionOpacity({ ...item, end }, currentTime), sourceTime: currentTime - item.start }]
+      ? [backgroundDisplay(item, mediaId, transitionOpacity({ ...item, end }, currentTime), currentTime - item.start, item.start, end, currentTime)]
       : [];
   }
   const useVideoDurations = mediaIds.some((mediaId) => isVideoMedia(mediaId, mediaIndex) && mediaDuration(mediaId, mediaIndex) !== null);
@@ -149,26 +157,19 @@ function backgroundMediaAtTime(
     : imagePlaylistEntries(item, mediaIds);
   return entries
     .filter((entry) => entry.start <= currentTime && currentTime < entry.end)
-    .map((entry) => ({
-      mediaId: entry.mediaId,
-      opacity: opacityForWindow(entry, currentTime),
-      sourceTime: currentTime - entry.start,
-    }));
+    .map((entry) => backgroundDisplay(item, entry.mediaId, opacityForWindow(entry, currentTime), currentTime - entry.start, entry.start, entry.end, currentTime));
 }
 
 function scheduledBackgroundMediaAtTime(
   item: BgItem,
   currentTime: number,
-): Array<{ mediaId: string; opacity: number; sourceTime: number }> | null {
+  mediaIndex: ReadonlyMap<string, ResolveMediaInfo>,
+): BackgroundDisplay[] | null {
   const schedule = normalizeBackgroundSchedule(item.schedule, backgroundDeclaredMediaIdsForItem(item));
   if (schedule.length === 0) return null;
-  return schedule
-    .filter((segment) => segment.start <= currentTime && currentTime < segment.end)
-    .map((segment) => ({
-      mediaId: segment.mediaId,
-      opacity: transitionOpacity(item, currentTime),
-      sourceTime: currentTime - segment.start,
-    }));
+  return scheduledPlaylistEntries(item, schedule, mediaIndex)
+    .filter((entry) => entry.start <= currentTime && currentTime < entry.end)
+    .map((entry) => backgroundDisplay(item, entry.mediaId, opacityForWindow(entry, currentTime), currentTime - entry.start, entry.start, entry.end, currentTime));
 }
 
 type PlaylistEntry = {
@@ -230,6 +231,72 @@ function videoPlaylistEntries(
     cursor = index < mediaIds.length - 1 && entryFade > 0 ? entryEnd - entryFade : entryEnd;
   }
   return entries;
+}
+
+function scheduledPlaylistEntries(
+  item: BgItem,
+  schedule: BackgroundScheduleSegment[],
+  mediaIndex: ReadonlyMap<string, ResolveMediaInfo>,
+): PlaylistEntry[] {
+  const parentStart = item.start;
+  const parentEnd = item.end;
+  const fade = bgCrossfade(item);
+  const ranges = schedule
+    .map((segment) => {
+      const start = Math.max(parentStart, segment.start);
+      const duration = mediaDuration(segment.mediaId, mediaIndex);
+      const scheduledEnd = Math.min(parentEnd, segment.end);
+      const end = isVideoMedia(segment.mediaId, mediaIndex) && duration !== null
+        ? Math.min(scheduledEnd, start + duration)
+        : scheduledEnd;
+      return { end, mediaId: segment.mediaId, start };
+    })
+    .filter((entry) => entry.end > entry.start);
+
+  return ranges.map((range, index) => {
+    const entryFade = Math.min(fade, (range.end - range.start) / 2);
+    const previous = ranges[index - 1];
+    const next = ranges[index + 1];
+    const hasAdjacentPrevious = previous ? Math.abs(previous.end - range.start) < 0.001 : false;
+    const hasAdjacentNext = next ? Math.abs(range.end - next.start) < 0.001 : false;
+    return {
+      end: range.end,
+      fade: entryFade,
+      mediaId: range.mediaId,
+      start: index > 0 && hasAdjacentPrevious && entryFade > 0 ? Math.max(parentStart, range.start - entryFade) : range.start,
+      transitionIn: index > 0 && hasAdjacentPrevious && entryFade > 0 ? "fade" : "cut",
+      transitionOut: index < ranges.length - 1 && hasAdjacentNext && entryFade > 0 ? "fade" : "cut",
+    };
+  });
+}
+
+function backgroundDisplay(
+  item: BgItem,
+  mediaId: string,
+  opacity: number,
+  sourceTime: number,
+  start: number,
+  end: number,
+  currentTime: number,
+): BackgroundDisplay {
+  return {
+    mediaId,
+    motion: item.motion,
+    motionProgress: easedProgress(item.motion.easing, start, end, currentTime),
+    opacity,
+    sourceTime,
+  };
+}
+
+function easedProgress(easing: string, start: number, end: number, currentTime: number): number {
+  const duration = Math.max(end - start, 0.001);
+  const progress = clamp((currentTime - start) / duration, 0, 1);
+  if (easing === "ease_in") return progress * progress;
+  if (easing === "ease_out") return 1 - (1 - progress) * (1 - progress);
+  if (easing === "ease_in_out") {
+    return progress < 0.5 ? 2 * progress * progress : 1 - ((-2 * progress + 2) ** 2) / 2;
+  }
+  return progress;
 }
 
 function opacityForWindow(entry: PlaylistEntry, currentTime: number): number {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
@@ -87,12 +87,32 @@ export function Timeline({
   const dragStateRef = useRef<DragState | null>(null);
   const dragPreviewTimeoutRef = useRef<number | null>(null);
   const playheadDraggingRef = useRef(false);
+  const trackScrollRef = useRef<HTMLDivElement | null>(null);
   const waveformRef = useRef<HTMLButtonElement | null>(null);
   const rows = useTimelineRows(layers, duration, sentences);
   const clipCount = rows
     .filter((row) => row.kind !== "sub")
     .reduce((total, row) => total + row.clips.length, 0);
   const playheadPercent = Math.min(100, Math.max(0, (currentTime / Math.max(duration, 1)) * 100));
+  const [scrollbarGutterPx, setScrollbarGutterPx] = useState(0);
+  const timelineRightGutterPx = TRACK_RIGHT_PADDING_PX + scrollbarGutterPx;
+
+  useEffect(() => {
+    const node = trackScrollRef.current;
+    if (!node) return;
+    const measureScrollbarGutter = () => {
+      const next = Math.max(0, node.offsetWidth - node.clientWidth);
+      setScrollbarGutterPx((current) => (Math.abs(current - next) < 0.5 ? current : next));
+    };
+    measureScrollbarGutter();
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measureScrollbarGutter);
+    resizeObserver?.observe(node);
+    window.addEventListener("resize", measureScrollbarGutter);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureScrollbarGutter);
+    };
+  }, [rows.length]);
 
   useEffect(() => {
     function onMouseMove(event: MouseEvent) {
@@ -164,7 +184,7 @@ export function Timeline({
       <button
         className="relative mx-[10px] h-[22px] border-b border-l border-(--line-soft)"
         onClick={(event) => onSeek(timeFromEvent(event, duration))}
-        style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${TRACK_RIGHT_PADDING_PX}px` }}
+        style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${timelineRightGutterPx}px` }}
         type="button"
       >
         {Array.from({ length: 16 }, (_, index) => (
@@ -182,7 +202,7 @@ export function Timeline({
         className="relative mx-[10px] h-[55px] overflow-hidden border-b border-l border-(--line-soft)"
         onClick={(event) => onSeek(timeFromEvent(event, duration))}
         ref={waveformRef}
-        style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${TRACK_RIGHT_PADDING_PX}px` }}
+        style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${timelineRightGutterPx}px` }}
         type="button"
       >
         <div className="absolute inset-x-0 bottom-0 top-0 flex items-center" data-testid="timeline-waveform">
@@ -202,7 +222,12 @@ export function Timeline({
         </div>
       </button>
 
-      <div className="relative max-h-[221px] overflow-x-hidden overflow-y-auto pr-[10px]">
+      <div
+        className="relative max-h-[221px] overflow-x-hidden overflow-y-auto"
+        data-testid="timeline-scroll-body"
+        ref={trackScrollRef}
+        style={{ paddingRight: `${TRACK_RIGHT_PADDING_PX}px` }}
+      >
         {rows.map((row) => (
           <TrackRow
             duration={duration}
@@ -225,7 +250,7 @@ export function Timeline({
       <div
         aria-hidden="true"
         className="pointer-events-none absolute bottom-0 top-[33px] z-40 w-px bg-(--amber)"
-        style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${TRACK_RIGHT_PADDING_PX}px) * ${playheadPercent} / 100)` }}
+        style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${timelineRightGutterPx}px) * ${playheadPercent} / 100)` }}
       />
       <button
         aria-label="Playhead"
@@ -239,7 +264,7 @@ export function Timeline({
           onSeek(timeFromClientX(event.clientX, waveformRef.current, duration));
         }}
         role="slider"
-        style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${TRACK_RIGHT_PADDING_PX}px) * ${playheadPercent} / 100)` }}
+        style={{ left: `calc(${LABEL_COLUMN_WIDTH_PX}px + (100% - ${LABEL_COLUMN_WIDTH_PX}px - ${timelineRightGutterPx}px) * ${playheadPercent} / 100)` }}
         type="button"
       >
         <span className="absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[7px] border-x-transparent border-t-(--amber)" />

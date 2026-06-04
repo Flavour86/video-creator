@@ -121,13 +121,15 @@ describe("TranscriptPane", () => {
     const props = renderPane();
     const sentence = screen.getByRole("button", { name: /2 00:05-00:10 Low confidence sentence/i });
     const row = sentence.parentElement;
-    expect(row).toHaveStyle({ height: "40px" });
+    expect(row).toHaveClass("grid-cols-[32px_90px_minmax(0,1fr)_48px]");
+    expect(row).not.toHaveClass("h-10");
     expect(screen.getAllByRole("button", { name: /edit sentence/i })).toHaveLength(sentences.length);
 
     fireEvent.click(screen.getByRole("button", { name: /edit sentence 2/i }));
+    expect(screen.getByTestId("transcript-sentence-edit-shell-2")).toHaveTextContent("Low confidence sentence.");
     const editor = screen.getByRole("textbox", { name: /edit sentence 2 text/i });
     expect(editor).toHaveValue("Low confidence sentence.");
-    expect(editor).toHaveStyle({ height: "24px" });
+    expect(editor).toHaveClass("absolute", "inset-0", "min-h-full", "px-2", "py-[3px]");
 
     fireEvent.change(editor, { target: { value: "Cancelled sentence." } });
     fireEvent.click(screen.getByRole("button", { name: /cancel sentence 2 edit/i }));

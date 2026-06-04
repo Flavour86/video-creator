@@ -721,6 +721,8 @@ async function captureTranscriptEditSweep(page: Page, target: BugSweepViewport):
   await expect(page.getByRole("button", { name: /confirm sentence 2 edit/i })).toBeDisabled();
   await page.getByRole("button", { name: /cancel sentence 2 edit/i }).click();
   await expect(page.getByTestId("transcript-sentence-text-2")).toContainText("Integrated browser flow edited this transcript sentence.");
+  await page.getByRole("button", { name: /edit sentence 2/i }).click();
+  await expect(page.getByRole("textbox", { name: /edit sentence 2 text/i })).toHaveValue("Integrated browser flow edited this transcript sentence.");
   await captureBugSweepEvidence(page, "transcript-edit", target);
 }
 
@@ -739,10 +741,12 @@ async function captureBackgroundScheduleSweep(page: Page, target: BugSweepViewpo
   await expect(modal).toBeVisible();
   await expect(modal.getByTestId("background-selected-count")).toHaveText("3 selected");
   await expect(modal.getByTestId("background-selected-count")).not.toContainText(/mixed|image|video/i);
+  await expect(modal.getByTestId("background-asset-grid")).toHaveAttribute("data-asset-count", String(V1_BACKGROUND_MEDIA.length));
+  await expect(modal.getByTestId("background-asset-grid")).toHaveClass(/overflow-y-auto/);
   await expect(modal.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "3");
   await expect(modal.getByLabel("End bg-red.png")).toBeEnabled();
   await expect(modal.getByLabel("Hold bg-red.png")).toBeEnabled();
-  await expect(modal.getByLabel("Start bg-video.mp4")).toBeDisabled();
+  await expect(modal.getByLabel("Start bg-video.mp4")).toBeEnabled();
   await expect(modal.getByLabel("End bg-video.mp4")).toBeDisabled();
   await expect(modal.getByLabel("Hold bg-video.mp4")).toBeDisabled();
 
@@ -754,6 +758,11 @@ async function captureBackgroundScheduleSweep(page: Page, target: BugSweepViewpo
   await expect(modal.getByTestId("background-selected-count")).toHaveText("5 selected");
   await expect(modal.getByTestId("background-selected-count")).not.toContainText(/mixed|image|video/i);
   await expect(modal.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "5");
+  await modal.getByLabel("Start bg-video.mp4").fill("01:15");
+  await expect(modal.getByLabel("Start bg-video.mp4")).toHaveValue("01:15");
+  await expect(modal.getByLabel("End bg-video.mp4")).toHaveValue("01:19");
+  await expect(modal.getByLabel("Hold bg-video.mp4")).toHaveValue("00:04");
+  await expect(modal.getByLabel("Start bg-blue.png")).toHaveValue("01:19");
   await expectRowsStayInsideCoverageGrid(modal, [
     "bg-red.png",
     "bg-video.mp4",
@@ -762,9 +771,9 @@ async function captureBackgroundScheduleSweep(page: Page, target: BugSweepViewpo
     "bg-extra-long-name.jpg",
   ]);
 
-  const blueCard = modal.locator("[data-reorder-card][data-media-id='bg-blue.png']");
-  const redCard = modal.locator("[data-reorder-card][data-media-id='bg-red.png']");
-  await pointerDrag(page, blueCard, redCard);
+  const blueRow = modal.getByTestId("background-coverage-row-bg-blue.png");
+  const redRow = modal.getByTestId("background-coverage-row-bg-red.png");
+  await pointerDrag(page, blueRow, redRow);
   await expect(modal.locator("[data-testid^='background-coverage-row-']").first()).toHaveAttribute("data-media-id", "bg-blue.png");
   await captureBugSweepEvidence(page, "background-schedule", target);
 
@@ -773,7 +782,7 @@ async function captureBackgroundScheduleSweep(page: Page, target: BugSweepViewpo
   });
   await expect(page.getByLabel("Autosave saved")).toBeVisible();
   await page.getByRole("button", { name: /timed ranges \/ 5 assets/i }).click();
-  await expect(page.getByTestId("editor-background-schedule-row-bg-video.mp4")).toContainText("Video 00:04 locked");
+  await expect(page.getByRole("heading", { name: /^Coverage schedule$/i })).toHaveCount(0);
   await expect(page.locator("[data-testid='timeline-row-bg'] [data-timeline-clip='true']")).toHaveCount(1);
 }
 
@@ -897,8 +906,7 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
       return;
     case "v1-background-coverage-editor":
       await page.getByRole("button", { name: "timed ranges / 3 assets" }).click();
-      await expect(page.getByTestId("editor-background-schedule-row-bg-red.png")).toContainText("00:00-00:30");
-      await expect(page.getByTestId("editor-background-schedule-row-bg-video.mp4")).toContainText("Video 00:04 locked");
+      await expect(page.getByRole("heading", { name: /^Coverage schedule$/i })).toHaveCount(0);
       await expect(page.locator("[data-testid='timeline-row-bg'] [data-timeline-clip='true']")).toHaveCount(1);
       return;
     default: {

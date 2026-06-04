@@ -124,7 +124,7 @@ describe("InspectorPanel", () => {
     expect(onOpenAssignEdit).toHaveBeenCalledWith("layer-fg", "item-fg", 1, 2);
   });
 
-  it("shows ordered scheduled background ranges with locked native video duration", () => {
+  it("omits ordered scheduled background ranges", () => {
     render(
       <InspectorPanel
         {...BASE_PROPS}
@@ -139,18 +139,8 @@ describe("InspectorPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Coverage schedule")).toBeInTheDocument();
-    const red = screen.getByTestId("inspector-background-schedule-row-bg-red.png");
-    const video = screen.getByTestId("inspector-background-schedule-row-bg-video.mp4");
-    const blue = screen.getByTestId("inspector-background-schedule-row-bg-blue.png");
-    expect(red).toHaveTextContent("bg-red.png");
-    expect(red).toHaveTextContent("00:00-00:30");
-    expect(red).toHaveTextContent("Image range");
-    expect(video).toHaveTextContent("bg-video.mp4");
-    expect(video).toHaveTextContent("00:30-00:34");
-    expect(video).toHaveTextContent("Video 00:04 locked");
-    expect(blue).toHaveTextContent("00:34-01:30");
-    expect(red.compareDocumentPosition(video) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(video.compareDocumentPosition(blue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("Coverage schedule")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("inspector-background-schedule-row-bg-red.png")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Motion")).toBeInTheDocument();
   });
 });

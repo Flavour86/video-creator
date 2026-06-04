@@ -366,6 +366,39 @@ describe("PreviewSurface", () => {
     expect(drawnFilenames().at(-1)).toBe("bg-c.png");
   });
 
+  it("draws scheduled background crossfades with configured motion crop", () => {
+    vi.stubGlobal("Image", vi.fn(function imageFactory() {
+      const image = document.createElement("img");
+      Object.defineProperty(image, "complete", { configurable: true, value: true });
+      Object.defineProperty(image, "naturalWidth", { configurable: true, value: 1920 });
+      Object.defineProperty(image, "naturalHeight", { configurable: true, value: 1080 });
+      return image;
+    }));
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...BG_LAYER.items[0]!,
+        mediaId: undefined,
+        mediaIds: ["bg-a.png", "bg-b.png"],
+        schedule: [
+          { id: "seg-a", mediaId: "bg-a.png", start: 0, end: 5, lockedDuration: false },
+          { id: "seg-b", mediaId: "bg-b.png", start: 5, end: 10, lockedDuration: false },
+        ],
+        start: 0,
+        end: 10,
+        motion: { kind: "ken_burns", easing: "ease_in" },
+        crossfade: 1,
+      }],
+    };
+
+    renderSurface({ currentTime: 4.5, layers: [layer] });
+
+    expect(drawnFilenames().slice(0, 2)).toEqual(["bg-a.png", "bg-b.png"]);
+    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-active-backgrounds", "bg-a.png,bg-b.png");
+    const secondBackgroundDraw = drawImage.mock.calls.find((call) => filenameFromSource(call[0]) === "bg-b.png");
+    expect(secondBackgroundDraw?.[3]).toBeLessThan(1920);
+  });
+
   it("uses uploaded media URLs for newly imported background assets", () => {
     const createdImages: HTMLImageElement[] = [];
     const imageFactory = vi.fn(function imageFactory() {

@@ -191,7 +191,12 @@ function buildCoverageSchedule(
   const previousById = new Map((previousSchedule ?? []).map((segment) => [segment.mediaId, segment]));
   const lockedDurationTotal = selected.reduce((total, asset) => total + (lockedVideoDuration(asset) ?? 0), 0);
   const imageCount = selected.filter((asset) => asset.kind === "image").length;
-  const fallbackImageDuration = imageCount > 0 ? Math.max((totalDuration - lockedDurationTotal) / imageCount, 0) : 0;
+  const remainingImageDuration = totalDuration - lockedDurationTotal;
+  const fallbackImageDuration = imageCount > 0
+    ? remainingImageDuration > 0
+      ? remainingImageDuration / imageCount
+      : defaultImageSegmentDuration(totalDuration, selected.length)
+    : 0;
   const segments: BackgroundScheduleSegment[] = [];
   let cursor = 0;
 
@@ -199,8 +204,21 @@ function buildCoverageSchedule(
     const previous = previousById.get(asset.mediaId);
     const lockedDuration = lockedVideoDuration(asset);
     const hold = lockedDuration ?? previousSegmentDuration(previous) ?? fallbackImageDuration;
-    const start = cursor;
-    const end = start + Math.max(hold, 0);
+    const previousStart = previous?.start;
+    const hasExplicitLockedStart = lockedDuration !== null
+      && typeof previousStart === "number"
+      && Number.isFinite(previousStart);
+    const rawStart = hasExplicitLockedStart ? previousStart : cursor;
+    const start = clampLockedStart(rawStart, totalDuration, lockedDuration !== null);
+    if (hasExplicitLockedStart && start < cursor) {
+      const previousSegment = segments.at(-1);
+      const previousAsset = previousSegment ? mediaById.get(previousSegment.mediaId) : null;
+      if (previousSegment && previousAsset?.kind === "image") {
+        previousSegment.end = Math.max(previousSegment.start, start);
+      }
+      cursor = start;
+    }
+    const end = coverageEndForHold(start, hold, totalDuration, lockedDuration !== null);
     segments.push({
       id: previous?.id ?? `seg-${asset.mediaId}`,
       mediaId: asset.mediaId,
@@ -216,7 +234,7 @@ function buildCoverageSchedule(
   if (last && lastAsset?.kind === "image" && totalDuration > last.start) {
     last.end = totalDuration;
   }
-  return segments.filter((segment) => segment.end > segment.start);
+  return segments;
 }
 
 function updateCoverageScheduleField(
@@ -234,7 +252,12 @@ function updateCoverageScheduleField(
     schedule,
   );
   const targetIndex = current.findIndex((segment) => segment.mediaId === mediaId);
-  if (targetIndex < 0 || current[targetIndex]?.lockedDuration) return current;
+  if (targetIndex < 0) return current;
+  if (current[targetIndex]?.lockedDuration) {
+    return field === "start"
+      ? updateLockedCoverageStart(current, mediaById, duration, targetIndex, seconds)
+      : current;
+  }
   const target = current[targetIndex]!;
   let pinnedMediaId = mediaId;
   let pinnedDuration = previousSegmentDuration(target) ?? 0;
@@ -262,13 +285,64 @@ function updateCoverageScheduleField(
   let cursor = 0;
   const adjusted = current.map((segment) => {
     const asset = mediaById.get(segment.mediaId);
-    const hold = lockedVideoDuration(asset) ?? (segment.mediaId === pinnedMediaId ? pinnedDuration : fallbackImageDuration);
-    const start = cursor;
-    const end = start + Math.max(hold, 0);
+    const lockedDuration = lockedVideoDuration(asset);
+    const hold = lockedDuration ?? (segment.mediaId === pinnedMediaId ? pinnedDuration : fallbackImageDuration);
+    const start = clampLockedStart(cursor, duration, lockedDuration !== null);
+    const end = coverageEndForHold(start, hold, duration, lockedDuration !== null);
     cursor = end;
     return { ...segment, start, end };
   });
   return buildCoverageSchedule(adjusted.map((segment) => segment.mediaId), mediaById, duration, adjusted);
+}
+
+function updateLockedCoverageStart(
+  schedule: BackgroundScheduleSegment[],
+  mediaById: ReadonlyMap<string, MediaItem>,
+  duration: number,
+  targetIndex: number,
+  seconds: number,
+): BackgroundScheduleSegment[] {
+  const target = schedule[targetIndex];
+  if (!target) return schedule;
+  const targetHold = lockedVideoDuration(mediaById.get(target.mediaId)) ?? previousSegmentDuration(target) ?? 0;
+  const targetStart = Math.min(Math.max(0, seconds), Math.max(0, duration));
+  const targetEnd = coverageEndForHold(targetStart, targetHold, duration, true);
+  let cursor = 0;
+  const adjusted = schedule.map((segment, index) => {
+    const asset = mediaById.get(segment.mediaId);
+    const lockedDuration = lockedVideoDuration(asset);
+    const fallbackDuration = asset?.kind === "image"
+      ? previousSegmentDuration(segment) ?? defaultImageSegmentDuration(duration, schedule.length)
+      : 0;
+    const hold = lockedDuration ?? fallbackDuration;
+
+    if (index < targetIndex) {
+      const start = cursor;
+      let end = coverageEndForHold(start, hold, duration, lockedDuration !== null);
+      if (index === targetIndex - 1 && lockedDuration === null) {
+        end = Math.max(start, targetStart);
+      }
+      cursor = end;
+      return { ...segment, end, lockedDuration: lockedDuration !== null, start };
+    }
+
+    if (index === targetIndex) {
+      cursor = targetEnd;
+      return { ...segment, end: targetEnd, lockedDuration: true, start: targetStart };
+    }
+
+    const start = clampLockedStart(cursor, duration, lockedDuration !== null);
+    const end = coverageEndForHold(start, hold, duration, lockedDuration !== null);
+    cursor = end;
+    return { ...segment, end, lockedDuration: lockedDuration !== null, start };
+  });
+
+  const last = adjusted.at(-1);
+  const lastAsset = last ? mediaById.get(last.mediaId) : null;
+  if (last && lastAsset?.kind === "image" && duration > last.start) {
+    last.end = Math.max(last.end, duration);
+  }
+  return adjusted;
 }
 
 function lockedVideoDuration(asset: MediaItem | undefined): number | null {
@@ -277,10 +351,26 @@ function lockedVideoDuration(asset: MediaItem | undefined): number | null {
     : null;
 }
 
+function clampLockedStart(start: number, totalDuration: number, lockedDuration: boolean): number {
+  if (!lockedDuration) return start;
+  return Math.min(Math.max(0, start), Math.max(0, totalDuration));
+}
+
+function coverageEndForHold(start: number, hold: number, totalDuration: number, lockedDuration: boolean): number {
+  const end = start + Math.max(0, hold);
+  return lockedDuration ? Math.min(Math.max(0, totalDuration), end) : end;
+}
+
 function previousSegmentDuration(segment: BackgroundScheduleSegment | undefined): number | null {
   if (!segment) return null;
   const value = segment.end - segment.start;
   return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function defaultImageSegmentDuration(totalDuration: number, selectedCount: number): number {
+  const evenSlot = selectedCount > 0 ? totalDuration / selectedCount : 0;
+  const fallback = Number.isFinite(evenSlot) && evenSlot > 0 ? evenSlot : 30;
+  return Math.max(1, Math.min(30, fallback));
 }
 
 function withBackgroundCacheStatus(
@@ -311,7 +401,6 @@ export function BgModal({
   const crossfade = Number.parseFloat(state.crossfadeInput);
   const isCrossfadeValid = Number.isFinite(crossfade) && crossfade >= 0 && crossfade <= 2;
   const availableMedia = useMemo(() => media.filter((entry) => !isFailedPendingUpload(entry)), [media]);
-  const reorderMotion = useReorderableAssetMotion(availableMedia.map((entry) => entry.mediaId), reorderMedia);
   const mediaById = useMemo(() => mediaMapFromList(availableMedia), [availableMedia]);
   const selectedMedia = useMemo(
     () => state.selectedMedia.filter((id) => mediaById.has(id)),
@@ -325,6 +414,16 @@ export function BgModal({
     () => buildCoverageSchedule(selectedMedia, mediaById, duration, state.schedule),
     [duration, mediaById, selectedMedia, state.schedule],
   );
+  const visibleMedia = useMemo(() => {
+    if (selectedMedia.length <= 1) return availableMedia;
+    const selectedSet = new Set(selectedMedia);
+    const orderedSelected = selectedMedia
+      .map((id) => mediaById.get(id))
+      .filter((entry): entry is MediaItem => Boolean(entry));
+    const unselected = availableMedia.filter((entry) => !selectedSet.has(entry.mediaId));
+    return [...orderedSelected, ...unselected];
+  }, [availableMedia, mediaById, selectedMedia]);
+  const coverageReorderMotion = useReorderableAssetMotion(selectedMedia, reorderCoverageMedia, "y");
 
   useEffect(() => {
     if (!open) return;
@@ -406,30 +505,49 @@ export function BgModal({
   function updateCoverageField(mediaId: string, field: "end" | "hold" | "start", value: string) {
     const seconds = parseBackgroundTime(value);
     if (seconds === null) return;
+    setState((current) => {
+      const currentSchedule = buildCoverageSchedule(current.selectedMedia, mediaById, duration, current.schedule);
+      return {
+        ...current,
+        schedule: updateCoverageScheduleField(currentSchedule, mediaById, duration, mediaId, field, seconds),
+        scheduleDirty: true,
+      };
+    });
+  }
+
+  function extendCoverageToEnd(mediaId: string) {
+    setState((current) => {
+      const currentSchedule = buildCoverageSchedule(current.selectedMedia, mediaById, duration, current.schedule);
+      return {
+        ...current,
+        schedule: updateCoverageScheduleField(currentSchedule, mediaById, duration, mediaId, "end", duration),
+        scheduleDirty: true,
+      };
+    });
+  }
+
+  function fillCoverage() {
     setState((current) => ({
       ...current,
-      schedule: updateCoverageScheduleField(coverageSchedule, mediaById, duration, mediaId, field, seconds),
+      schedule: buildCoverageSchedule(selectedMedia, mediaById, duration, undefined),
       scheduleDirty: true,
     }));
   }
 
-  function reorderMedia(sourceId: string, targetId: string, placement: ReorderPlacement) {
-    const currentOrder = availableMedia.map((item) => item.mediaId);
-    const nextOrder = moveIdRelativeTo(currentOrder, sourceId, targetId, placement);
-    if (sameOrderedList(currentOrder, nextOrder)) return;
-    onReorderMedia?.(nextOrder);
-    setState((current) => {
-      const selected = new Set(current.selectedMedia);
-      const nextSelectedMedia = nextOrder.filter((id) => selected.has(id));
-      return sameOrderedList(current.selectedMedia, nextSelectedMedia)
-        ? current
-        : {
-            ...current,
-            schedule: buildCoverageSchedule(nextSelectedMedia, mediaById, duration, current.schedule),
-            scheduleDirty: true,
-            selectedMedia: nextSelectedMedia,
-          };
-    });
+  function reorderCoverageMedia(sourceId: string, targetId: string, placement: ReorderPlacement) {
+    const nextSelectedMedia = moveIdRelativeTo(selectedMedia, sourceId, targetId, placement);
+    if (sameOrderedList(selectedMedia, nextSelectedMedia)) return;
+    const selectedSet = new Set(nextSelectedMedia);
+    onReorderMedia?.([
+      ...nextSelectedMedia,
+      ...availableMedia.map((item) => item.mediaId).filter((id) => !selectedSet.has(id)),
+    ]);
+    setState((current) => ({
+      ...current,
+      schedule: buildCoverageSchedule(nextSelectedMedia, mediaById, duration, current.schedule),
+      scheduleDirty: true,
+      selectedMedia: nextSelectedMedia,
+    }));
   }
 
   if (!open) return null;
@@ -438,14 +556,14 @@ export function BgModal({
     <Dialog.Root onOpenChange={(next) => { if (!next) onClose(); }} open={open}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-(--line) bg-(--bg-1) text-(--text) shadow-(--shadow-2)">
-          <header className="flex items-start gap-4 border-b border-(--line-soft) px-6 py-4">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(720px,calc(100vh-40px))] max-h-[calc(100vh-40px)] w-[min(900px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-(--line) bg-(--bg-1) text-(--text) shadow-[0_30px_80px_rgba(0,0,0,0.55)] max-[860px]:w-[min(640px,calc(100vw-28px))]">
+          <header className="flex min-h-[84px] items-start gap-3 border-b border-(--line-soft) px-6 py-4">
             <div className="min-w-0 flex-1">
-              <Dialog.Title className="text-[18px] font-semibold tracking-normal">
+              <Dialog.Title className="text-[18px] font-semibold leading-[27px] tracking-normal">
                 {isEdit ? "Change background" : "Add background"}
               </Dialog.Title>
-              <Dialog.Description className="mt-1 text-[13px] text-(--text-3)">
-                The background spans the entire video and shows whenever no foreground is active.
+              <Dialog.Description className="mt-0 max-w-[420px] text-[13px] leading-[19.5px] text-(--text-3)">
+                Build a timed background plan from images and footage.
               </Dialog.Description>
             </div>
             <button aria-label="Close" className="rounded p-1 text-(--text-3) hover:text-(--text)" onClick={onClose} type="button">
@@ -453,24 +571,25 @@ export function BgModal({
             </button>
           </header>
 
-          <div className="flex flex-col gap-6 overflow-y-auto px-6 py-5">
-            <section>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">Assets</p>
-                  <span className="font-mono text-[11px] text-(--text-3)" data-testid="background-selected-count">
-                    {selectedMedia.length} selected
-                  </span>
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(260px,320px)_minmax(0,1fr)] gap-5 overflow-hidden px-6 py-5 max-[860px]:grid-cols-1 max-[860px]:overflow-auto">
+            <section className="flex min-h-0 min-w-0 flex-col gap-[18px]">
+              <div>
+                <div className="mb-[11px] flex min-h-[30px] items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <p className="text-[11px] font-semibold uppercase leading-[16.5px] tracking-[0.02em] text-(--text-3)">Assets</p>
+                    <span className="font-mono text-[11px] font-medium leading-4 text-(--text-3)" data-testid="background-selected-count">
+                      {selectedMedia.length} selected
+                    </span>
+                  </div>
+                  <button
+                    className="inline-flex min-h-[30px] items-center gap-2 rounded border border-(--line) bg-(--bg-2) px-2.5 text-xs font-semibold leading-4 text-(--text-2) hover:bg-(--bg-3)"
+                    onClick={() => fileInputRef.current?.click()}
+                    type="button"
+                  >
+                    <Folder aria-hidden="true" className="h-3.5 w-3.5" />
+                    Import from disk...
+                  </button>
                 </div>
-              <button
-                className="inline-flex items-center gap-2 rounded border border-(--line) bg-(--bg-2) px-2.5 py-1.5 text-xs font-semibold text-(--text-2) hover:bg-(--bg-3)"
-                onClick={() => fileInputRef.current?.click()}
-                type="button"
-              >
-                <Folder aria-hidden="true" className="h-3.5 w-3.5" />
-                Import from disk...
-              </button>
-              </div>
             <input
               aria-label="Import from disk"
               className="hidden"
@@ -485,30 +604,25 @@ export function BgModal({
             {availableMedia.length === 0 ? (
               <p className="text-sm text-(--text-3)">No media added yet.</p>
             ) : (
-              <div className="flex max-h-[260px] gap-2 overflow-x-auto overflow-y-hidden pb-1" data-reorder-rail="true">
-                {availableMedia.map((item) => {
+              <div
+                className="grid max-h-[310px] min-h-0 grid-cols-2 gap-2 overflow-y-auto pr-1"
+                data-asset-count={visibleMedia.length}
+                data-reorder-rail="true"
+                data-testid="background-asset-grid"
+              >
+                {visibleMedia.map((item) => {
                   const active = selectedMedia.includes(item.mediaId);
                   const hasError = Boolean(item.import_error);
                   return (
                     <div
-                      className="relative w-[118px] shrink-0 cursor-grab will-change-transform active:cursor-grabbing"
+                      className="relative h-[95px] min-w-0"
                       data-media-id={item.mediaId}
-                      data-reorder-card="true"
                       key={item.mediaId}
-                      ref={(node) => reorderMotion.registerNode(item.mediaId, node)}
-                      onClickCapture={reorderMotion.suppressClickAfterDrag}
-                      onPointerCancel={reorderMotion.cancelPointerDrag}
-                      onPointerDown={(event) => {
-                        if (hasError) return;
-                        reorderMotion.beginPointerDrag(item.mediaId, event);
-                      }}
-                      onPointerMove={reorderMotion.movePointerDrag}
-                      onPointerUp={reorderMotion.endPointerDrag}
                     >
                       <button
                         aria-label={`${item.filename}${active ? " selected" : ""}`}
                         aria-pressed={active}
-                        className={`relative w-full overflow-hidden rounded-md border p-1 text-left transition-colors ${
+                        className={`relative flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-md border p-1 text-left transition-colors ${
                           active
                             ? "border-(--amber) bg-(--bg-3) shadow-[0_0_0_3px_var(--amber-bg)]"
                             : hasError
@@ -518,7 +632,7 @@ export function BgModal({
                         onClick={() => toggleMedia(item.mediaId)}
                         type="button"
                       >
-                        <div className="relative aspect-video overflow-hidden rounded-sm bg-(--bg-3)">
+                        <div className="relative h-[61px] overflow-hidden rounded-sm bg-(--bg-3)">
                           {item.thumb_url ? (
                             <img
                               alt={item.filename}
@@ -537,7 +651,9 @@ export function BgModal({
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1.5 truncate text-[12px] text-(--text)">{item.filename}</div>
+                        <div className="min-w-0 truncate text-[11px] font-semibold leading-[14px] text-(--text)" title={item.filename}>
+                          {item.filename}
+                        </div>
                         {item.import_error ? (
                           <div className="truncate font-mono text-[10px] text-(--red)">{item.import_error}</div>
                         ) : null}
@@ -546,7 +662,7 @@ export function BgModal({
                       {item.deletable && onDeleteMedia ? (
                         <button
                           aria-label={`Delete ${item.filename}`}
-                          className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded bg-black/65 text-white transition hover:bg-(--red) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--amber)"
+                          className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded bg-black/65 text-white transition hover:bg-(--red) focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--amber)"
                           data-reorder-delete="true"
                           onClick={() => onDeleteMedia(item.mediaId)}
                           type="button"
@@ -559,78 +675,11 @@ export function BgModal({
                 })}
               </div>
             )}
-              {selectedAssets.length > 0 ? (
-                <section aria-label="Background coverage" className="mt-4">
-                  <div
-                    className="grid gap-1 rounded-md border border-(--line-soft) bg-(--bg-2) p-2"
-                    data-row-count={selectedAssets.length}
-                    data-testid="background-coverage-grid"
-                  >
-                    <div className="grid grid-cols-[minmax(0,1.45fr)_minmax(64px,0.55fr)_minmax(64px,0.55fr)_minmax(64px,0.55fr)] gap-2 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">
-                      <span>Asset</span>
-                      <span>Start</span>
-                      <span>End</span>
-                      <span>Hold</span>
-                    </div>
-                    {selectedAssets.map((asset) => {
-                      const segment = coverageSchedule.find((entry) => entry.mediaId === asset.mediaId);
-                      if (!segment) return null;
-                      const locked = segment.lockedDuration;
-                      const hold = Math.max(0, segment.end - segment.start);
-                      return (
-                        <div
-                          className="grid min-w-0 grid-cols-[minmax(0,1.45fr)_minmax(64px,0.55fr)_minmax(64px,0.55fr)_minmax(64px,0.55fr)] items-center gap-2 rounded border border-(--line-soft) bg-(--bg-1) px-2 py-1.5"
-                          data-media-id={asset.mediaId}
-                          data-testid={`background-coverage-row-${asset.mediaId}`}
-                          key={asset.mediaId}
-                        >
-                          <div className="min-w-0">
-                            <div
-                              className="truncate text-[12px] font-medium text-(--text)"
-                              data-testid={`background-coverage-name-${asset.mediaId}`}
-                              title={asset.filename}
-                            >
-                              {asset.filename}
-                            </div>
-                            <div className="truncate font-mono text-[10px] text-(--text-3)">
-                              {asset.kind === "video" ? `locked ${formatBackgroundTime(hold)}` : "editable image range"}
-                            </div>
-                          </div>
-                          <input
-                            aria-label={`Start ${asset.filename}`}
-                            className="min-w-0 rounded border border-(--line) bg-(--bg-0) px-1.5 py-1 font-mono text-[11px] text-(--text) disabled:opacity-60"
-                            disabled={locked}
-                            onChange={(event) => updateCoverageField(asset.mediaId, "start", event.currentTarget.value)}
-                            type="text"
-                            value={formatBackgroundTime(segment.start)}
-                          />
-                          <input
-                            aria-label={`End ${asset.filename}`}
-                            className="min-w-0 rounded border border-(--line) bg-(--bg-0) px-1.5 py-1 font-mono text-[11px] text-(--text) disabled:opacity-60"
-                            disabled={locked}
-                            onChange={(event) => updateCoverageField(asset.mediaId, "end", event.currentTarget.value)}
-                            type="text"
-                            value={formatBackgroundTime(segment.end)}
-                          />
-                          <input
-                            aria-label={`Hold ${asset.filename}`}
-                            className="min-w-0 rounded border border-(--line) bg-(--bg-0) px-1.5 py-1 font-mono text-[11px] text-(--text) disabled:opacity-60"
-                            disabled={locked}
-                            onChange={(event) => updateCoverageField(asset.mediaId, "hold", event.currentTarget.value)}
-                            type="text"
-                            value={formatBackgroundTime(hold)}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-            </section>
+              </div>
 
           <section className="grid grid-cols-2 gap-4">
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">
+              <span className="text-[11px] font-semibold uppercase leading-[14.3px] tracking-[0.02em] text-(--text-3)">
                 Motion
               </span>
               <select
@@ -646,7 +695,7 @@ export function BgModal({
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)">
+              <span className="text-[11px] font-semibold uppercase leading-[14.3px] tracking-[0.02em] text-(--text-3)">
                 Easing
               </span>
               <select
@@ -663,7 +712,7 @@ export function BgModal({
             </label>
           </section>
           <section>
-            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-3)" htmlFor="background-crossfade">
+            <label className="mb-2 block text-[11px] font-semibold uppercase leading-[14.3px] tracking-[0.02em] text-(--text-3)" htmlFor="background-crossfade">
               Crossfade between cycles
             </label>
             <div className="flex items-center gap-3">
@@ -691,18 +740,135 @@ export function BgModal({
               Crossfade must be between 0 and 2 seconds.
             </p>
           ) : null}
+            </section>
+
+            <section className="flex min-h-0 min-w-0 flex-col gap-[14px] max-[860px]:min-h-[360px]">
+              <div className="flex min-h-[34px] items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold leading-[18px] text-(--text)">Coverage plan</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-(--text-3)">
+                    {selectedAssets.filter((asset) => asset.kind === "image").length} image ranges / {coverageSchedule.length} total / drag rows to reorder
+                  </p>
+                </div>
+                <button
+                  className="inline-flex min-h-8 items-center rounded border border-transparent bg-transparent px-4 text-sm font-semibold leading-5 text-(--text-2) hover:bg-(--bg-3)"
+                  onClick={fillCoverage}
+                  type="button"
+                >
+                  Auto fill
+                </button>
+              </div>
+
+              <div
+                aria-label="Background coverage"
+                className="flex min-h-0 flex-col gap-2 overflow-auto pr-0.5"
+                data-row-count={selectedAssets.length}
+                data-testid="background-coverage-grid"
+              >
+                {selectedAssets.map((asset) => {
+                  const segment = coverageSchedule.find((entry) => entry.mediaId === asset.mediaId);
+                  if (!segment) return null;
+                  const locked = segment.lockedDuration;
+                  const hold = Math.max(0, segment.end - segment.start);
+                  const isVideo = asset.kind === "video";
+                  const nativeVideoDuration = lockedVideoDuration(asset);
+                  return (
+                    <div
+                      aria-label={`Coverage row ${asset.filename}`}
+                      className={`grid min-h-[76px] min-w-0 cursor-grab grid-cols-[46px_minmax(0,1fr)] items-center gap-[9px] rounded-[7px] border bg-(--bg-2) p-2 will-change-transform active:cursor-grabbing ${
+                        isVideo ? "border-[rgba(96,165,250,0.34)]" : "border-[rgba(245,158,11,0.32)]"
+                      }`}
+                      data-media-id={asset.mediaId}
+                      data-reorder-card="true"
+                      data-testid={`background-coverage-row-${asset.mediaId}`}
+                      key={asset.mediaId}
+                      ref={(node) => coverageReorderMotion.registerNode(asset.mediaId, node)}
+                      onClickCapture={coverageReorderMotion.suppressClickAfterDrag}
+                      onPointerCancel={coverageReorderMotion.cancelPointerDrag}
+                      onPointerDown={(event) => coverageReorderMotion.beginPointerDrag(asset.mediaId, event)}
+                      onPointerMove={coverageReorderMotion.movePointerDrag}
+                      onPointerUp={coverageReorderMotion.endPointerDrag}
+                    >
+                      <div className="relative h-[38px] w-[46px] overflow-hidden rounded bg-(--bg-3) shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]">
+                        {asset.thumb_url ? (
+                          <img alt="" aria-hidden="true" className="h-full w-full object-cover" src={`/api/server${asset.thumb_url}`} />
+                        ) : (
+                          <div className="h-full w-full bg-[linear-gradient(135deg,oklch(0.34_0.07_270),oklch(0.48_0.12_55))]" />
+                        )}
+                        <span className="absolute left-1 top-1 rounded bg-black/65 px-[5px] py-px font-mono text-[9px] font-semibold leading-3 text-white">
+                          {isVideo ? "MP4" : "IMG"}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 flex-col gap-[7px]">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
+                          <strong
+                            className="min-w-0 flex-1 truncate text-[12px] font-semibold leading-4 text-(--text)"
+                            data-testid={`background-coverage-name-${asset.mediaId}`}
+                            title={asset.filename}
+                          >
+                            {asset.filename}
+                          </strong>
+                          <span className="inline-flex min-w-max items-center gap-2">
+                            <em className="font-mono text-[10px] not-italic text-(--text-3)">
+                              {isVideo && nativeVideoDuration !== null
+                                ? `native ${formatBackgroundTime(nativeVideoDuration)}`
+                                : `${formatBackgroundTime(segment.start)}-${formatBackgroundTime(segment.end)}`}
+                            </em>
+                            {!isVideo ? (
+                              <button
+                                className="inline-flex h-6 min-w-14 items-center justify-center rounded border border-transparent bg-transparent px-[7px] text-[11px] font-semibold text-(--text-2) hover:bg-(--bg-3)"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  extendCoverageToEnd(asset.mediaId);
+                                }}
+                                type="button"
+                              >
+                                Extend
+                              </button>
+                            ) : null}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[repeat(3,minmax(74px,1fr))] gap-[7px]">
+                          <TimeField
+                            disabled={false}
+                            label="Start"
+                            name={asset.filename}
+                            onChange={(value) => updateCoverageField(asset.mediaId, "start", value)}
+                            value={formatBackgroundTime(segment.start)}
+                          />
+                          <TimeField
+                            disabled={locked}
+                            label="End"
+                            name={asset.filename}
+                            onChange={(value) => updateCoverageField(asset.mediaId, "end", value)}
+                            value={formatBackgroundTime(segment.end)}
+                          />
+                          <TimeField
+                            disabled={locked}
+                            label="Hold"
+                            name={asset.filename}
+                            onChange={(value) => updateCoverageField(asset.mediaId, "hold", value)}
+                            value={formatBackgroundTime(hold)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           </div>
 
-          <footer className="flex justify-end gap-3 border-t border-(--line-soft) bg-(--bg-2) px-6 py-4">
+          <footer className="flex min-h-[65px] justify-end gap-3 border-t border-(--line-soft) bg-(--bg-2) px-6 py-4">
             <button
-              className="rounded px-3 py-1.5 text-sm text-(--text-2) hover:text-(--text)"
+              className="min-h-8 rounded px-4 text-sm font-semibold leading-5 text-(--text-2) hover:text-(--text)"
               onClick={onClose}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="rounded bg-(--text) px-4 py-1.5 text-sm font-semibold text-(--bg-0) disabled:opacity-40"
+              className="min-h-8 min-w-[127px] rounded bg-(--text) px-4 text-sm font-semibold leading-5 text-(--bg-0) disabled:opacity-40"
               disabled={selectedMedia.length === 0 || !isCrossfadeValid}
               onClick={handleSave}
               type="button"
@@ -713,5 +879,34 @@ export function BgModal({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function TimeField({
+  disabled,
+  label,
+  name,
+  onChange,
+  value,
+}: {
+  disabled: boolean;
+  label: "End" | "Hold" | "Start";
+  name: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[5px] whitespace-nowrap text-[10px] leading-3 text-(--text-3)">
+      <span>{label}</span>
+      <input
+        aria-label={`${label} ${name}`}
+        className="h-6 min-w-0 rounded border border-(--line) bg-(--bg-1) px-[5px] font-mono text-[10.5px] leading-3 text-(--text) disabled:opacity-[0.54]"
+        disabled={disabled}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        title="Use mm:ss, hh:mm:ss, or seconds"
+        type="text"
+        value={value}
+      />
+    </label>
   );
 }

@@ -205,7 +205,7 @@ describe("resolveDisplay", () => {
     };
     const media = [{ filename: "uploaded-video.mp4", kind: "video", mediaId: "upload-video-bg-1", duration: 4 }];
 
-    expect(resolveDisplay([layer], [], 5, { media }).bg).toEqual({
+    expect(resolveDisplay([layer], [], 5, { media }).bg).toMatchObject({
       mediaId: "upload-video-bg-1",
       opacity: 1,
       sourceTime: 3,
@@ -232,6 +232,35 @@ describe("resolveDisplay", () => {
     expect(spec.backgrounds.map((entry) => entry.mediaId)).toEqual(["one.jpg", "two.jpg"]);
     expect(spec.backgrounds[0].opacity).toBeCloseTo(0.5);
     expect(spec.backgrounds[1].opacity).toBeCloseTo(0.5);
+  });
+
+  it("returns scheduled background overlap opacity and parent motion metadata", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: undefined,
+        mediaIds: ["one.jpg", "two.jpg"],
+        schedule: [
+          { id: "seg-one", mediaId: "one.jpg", start: 0, end: 5, lockedDuration: false },
+          { id: "seg-two", mediaId: "two.jpg", start: 5, end: 10, lockedDuration: false },
+        ],
+        start: 0,
+        end: 10,
+        motion: { kind: "ken_burns", easing: "ease_in" },
+        crossfade: 1,
+      }],
+    };
+
+    const spec = resolveDisplay([layer], [], 4.5);
+
+    expect(spec.backgrounds.map((entry) => entry.mediaId)).toEqual(["one.jpg", "two.jpg"]);
+    expect(spec.backgrounds[0].opacity).toBeCloseTo(0.5);
+    expect(spec.backgrounds[1].opacity).toBeCloseTo(0.5);
+    expect(spec.backgrounds[1].motion).toEqual({ kind: "ken_burns", easing: "ease_in" });
+    expect(spec.backgrounds[1].motionProgress).toBeGreaterThan(0);
+    expect(spec.backgrounds[1].motionProgress).toBeLessThan(1);
   });
 
   it("includes fg item when currentTime is within its range", () => {

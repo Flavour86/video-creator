@@ -377,7 +377,7 @@ describe("Inspector", () => {
     expect(onReplaceItemMedia).toHaveBeenCalledWith("bg-main", "bg-playlist", expect.anything(), 1);
   });
 
-  it("shows scheduled background coverage rows with native video duration", () => {
+  it("omits scheduled background coverage rows from the inspector", () => {
     renderInspector({
       layers: [
         {
@@ -406,11 +406,9 @@ describe("Inspector", () => {
       selected: { layerId: "bg-main", itemId: "bg-scheduled" },
     });
 
-    expect(screen.getByRole("heading", { name: "Coverage schedule" })).toBeInTheDocument();
-    expect(screen.getByTestId("editor-background-schedule-row-bg0.png")).toHaveTextContent("00:00-00:06");
-    expect(screen.getByTestId("editor-background-schedule-row-bg0.png")).toHaveTextContent("Image range");
-    expect(screen.getByTestId("editor-background-schedule-row-clip.mp4")).toHaveTextContent("Video 00:04 locked");
-    expect(screen.getByTestId("editor-background-schedule-row-bg1.png")).toHaveTextContent("00:10-00:25");
+    expect(screen.queryByRole("heading", { name: "Coverage schedule" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("editor-background-schedule-row-bg0.png")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Motion" })).toBeInTheDocument();
   });
 
   it("removes background from inspector action", () => {

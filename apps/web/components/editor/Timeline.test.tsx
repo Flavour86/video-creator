@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -137,6 +137,26 @@ describe("Timeline", () => {
     expect(screen.getByText(/5 clips/i)).toBeInTheDocument();
     expect(screen.getByText(/cache 4\/4/i)).toBeInTheDocument();
     expect(screen.getByTestId("timeline-waveform")).toHaveClass("inset-x-0");
+  });
+
+  it("reserves the measured vertical scrollbar gutter for waveform and playhead alignment", async () => {
+    const offsetWidth = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function getOffsetWidth() {
+      return this.getAttribute("data-testid") === "timeline-scroll-body" ? 500 : 0;
+    });
+    const clientWidth = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function getClientWidth() {
+      return this.getAttribute("data-testid") === "timeline-scroll-body" ? 480 : 0;
+    });
+    try {
+      renderTimeline({ currentTime: 10, duration: 20 });
+      const waveformButton = screen.getByTestId("timeline-waveform").closest("button") as HTMLButtonElement;
+      const playhead = screen.getByRole("slider", { name: /playhead/i });
+
+      await waitFor(() => expect(waveformButton).toHaveStyle({ marginRight: "30px" }));
+      expect(playhead.style.left).toContain("30px");
+    } finally {
+      offsetWidth.mockRestore();
+      clientWidth.mockRestore();
+    }
   });
 
   it("packs overlapping PiP clips into separate rows and keeps non-overlap FG clips in one row", () => {
