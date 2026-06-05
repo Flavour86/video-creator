@@ -111,10 +111,12 @@ describe("resolveDisplay", () => {
       { id: "seg-two", mediaId: "two.jpg", start: 5, end: 10, lockedDuration: true },
       { id: "seg-missing", mediaId: "missing.jpg", start: 10, end: 20, lockedDuration: false },
       { id: "seg-one", mediaId: "one.jpg", start: 0, end: 5, lockedDuration: false },
-      { id: "seg-bad", mediaId: "three.jpg", start: 20, end: 20, lockedDuration: false },
+      { id: "seg-zero", mediaId: "three.jpg", start: 20, end: 20, lockedDuration: false },
+      { id: "seg-bad", mediaId: "three.jpg", start: 22, end: 20, lockedDuration: false },
     ], ["one.jpg", "two.jpg", "three.jpg"])).toEqual([
       { id: "seg-one", mediaId: "one.jpg", start: 0, end: 5, lockedDuration: false },
       { id: "seg-two", mediaId: "two.jpg", start: 5, end: 10, lockedDuration: true },
+      { id: "seg-zero", mediaId: "three.jpg", start: 20, end: 20, lockedDuration: false },
     ]);
   });
 
@@ -145,6 +147,66 @@ describe("resolveDisplay", () => {
     expect(resolveDisplay([layer], [], 4).bg?.mediaId).toBe("two.jpg");
     expect(resolveDisplay([layer], [], 4).bg?.sourceTime).toBe(1);
     expect(resolveDisplay([layer], [], 20).bg?.mediaId).toBe("three.jpg");
+  });
+
+  it("does not fall back to a playlist inside a manual background schedule gap", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: undefined,
+        mediaIds: ["one.jpg", "two.jpg", "three.jpg"],
+        schedule: [
+          { id: "seg-one", mediaId: "one.jpg", start: 0, end: 3, lockedDuration: false },
+          { id: "seg-three", mediaId: "three.jpg", start: 8, end: 12, lockedDuration: false },
+        ],
+        start: 0,
+        end: 30,
+      }],
+    };
+
+    expect(resolveDisplay([layer], [], 2).bg?.mediaId).toBe("one.jpg");
+    expect(resolveDisplay([layer], [], 5).bg).toBeUndefined();
+    expect(resolveDisplay([layer], [], 10).bg?.mediaId).toBe("three.jpg");
+  });
+
+  it("treats a zero-duration background schedule as manual no-background intent", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: undefined,
+        mediaIds: ["one.jpg", "two.jpg"],
+        schedule: [
+          { id: "seg-zero", mediaId: "one.jpg", start: 0, end: 0, lockedDuration: false },
+        ],
+        start: 0,
+        end: 30,
+      }],
+    };
+
+    expect(resolveDisplay([layer], [], 2).bg).toBeUndefined();
+    expect(resolveDisplay([layer], [], 2).backgrounds).toEqual([]);
+  });
+
+  it("treats an empty explicit background schedule as manual no-background intent", () => {
+    const base = BG_LAYER.items[0]!;
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...base,
+        mediaId: undefined,
+        mediaIds: ["one.jpg", "two.jpg"],
+        schedule: [],
+        start: 0,
+        end: 30,
+      }],
+    };
+
+    expect(resolveDisplay([layer], [], 2).bg).toBeUndefined();
+    expect(resolveDisplay([layer], [], 2).backgrounds).toEqual([]);
   });
 
   it("uses media durations for video background playlists and falls back to black after a short playlist", () => {

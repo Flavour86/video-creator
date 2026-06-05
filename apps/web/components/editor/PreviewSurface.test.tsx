@@ -366,6 +366,79 @@ describe("PreviewSurface", () => {
     expect(drawnFilenames().at(-1)).toBe("bg-c.png");
   });
 
+  it("draws no background for a zero-duration manual background schedule", () => {
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...BG_LAYER.items[0]!,
+        mediaId: undefined,
+        mediaIds: ["bg-a.png", "bg-b.png"],
+        schedule: [
+          { id: "seg-zero", mediaId: "bg-a.png", start: 0, end: 0, lockedDuration: false },
+        ],
+        start: 0,
+        end: 20,
+      }],
+    };
+
+    renderSurface({ currentTime: 4, layers: [layer] });
+
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-has-background", "false");
+    expect(canvas).toHaveAttribute("data-active-backgrounds", "");
+  });
+
+  it("draws no background in a manual background schedule gap", () => {
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...BG_LAYER.items[0]!,
+        mediaId: undefined,
+        mediaIds: ["bg-a.png", "bg-b.png"],
+        schedule: [
+          { id: "seg-a", mediaId: "bg-a.png", start: 0, end: 3, lockedDuration: false },
+          { id: "seg-b", mediaId: "bg-b.png", start: 8, end: 12, lockedDuration: false },
+        ],
+        start: 0,
+        end: 20,
+      }],
+    };
+
+    renderSurface({ currentTime: 5, layers: [layer] });
+
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-has-background", "false");
+    expect(canvas).toHaveAttribute("data-active-backgrounds", "");
+  });
+
+  it("keeps legacy no-schedule background playlist fallback", () => {
+    vi.stubGlobal("Image", vi.fn(function imageFactory() {
+      const image = document.createElement("img");
+      Object.defineProperty(image, "complete", { configurable: true, value: true });
+      Object.defineProperty(image, "naturalWidth", { configurable: true, value: 1920 });
+      Object.defineProperty(image, "naturalHeight", { configurable: true, value: 1080 });
+      return image;
+    }));
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...BG_LAYER.items[0]!,
+        mediaId: undefined,
+        mediaIds: ["bg-a.png", "bg-b.png"],
+        start: 0,
+        end: 20,
+        crossfade: 0,
+      }],
+    };
+
+    renderSurface({ currentTime: 12, layers: [layer] });
+
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-has-background", "true");
+    expect(canvas).toHaveAttribute("data-active-backgrounds", "bg-b.png");
+    expect(drawnFilenames().at(-1)).toBe("bg-b.png");
+  });
+
   it("draws scheduled background crossfades with configured motion crop", () => {
     vi.stubGlobal("Image", vi.fn(function imageFactory() {
       const image = document.createElement("img");

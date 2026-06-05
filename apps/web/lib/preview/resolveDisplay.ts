@@ -1,6 +1,6 @@
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { BackgroundScheduleSegment } from "@vc/shared-schemas";
-import { backgroundDeclaredMediaIdsForItem, normalizeBackgroundSchedule } from "./backgroundSchedule";
+import { backgroundDeclaredMediaIdsForItem, hasBackgroundSchedule, normalizeBackgroundSchedule } from "./backgroundSchedule";
 
 // ── Layer shape (mirrors project.json schema) ────────────────────────────────
 
@@ -166,7 +166,7 @@ function scheduledBackgroundMediaAtTime(
   mediaIndex: ReadonlyMap<string, ResolveMediaInfo>,
 ): BackgroundDisplay[] | null {
   const schedule = normalizeBackgroundSchedule(item.schedule, backgroundDeclaredMediaIdsForItem(item));
-  if (schedule.length === 0) return null;
+  if (!hasBackgroundSchedule(item) && schedule.length === 0) return null;
   return scheduledPlaylistEntries(item, schedule, mediaIndex)
     .filter((entry) => entry.start <= currentTime && currentTime < entry.end)
     .map((entry) => backgroundDisplay(item, entry.mediaId, opacityForWindow(entry, currentTime), currentTime - entry.start, entry.start, entry.end, currentTime));

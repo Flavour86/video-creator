@@ -71,6 +71,10 @@ export function normalizeBackgroundSchedule(
     });
 }
 
+export function hasBackgroundSchedule(item: BackgroundScheduleItem): boolean {
+  return Array.isArray(item.schedule);
+}
+
 export function backgroundDeclaredMediaIdsForItem(item: BackgroundScheduleItem): string[] {
   const playlist = normalizeMediaIds(item.mediaIds ?? []);
   if (playlist.length > 0) return playlist;
@@ -98,7 +102,7 @@ export function normalizeBackgroundLayerSchedules(layers: Layer[]): Layer[] {
           ...item,
           ...(item.mediaIds ? { mediaIds } : {}),
         };
-        if (schedule.length > 0) {
+        if (hasBackgroundSchedule(item)) {
           return { ...normalizedItem, schedule };
         }
         const { schedule: _schedule, ...withoutSchedule } = normalizedItem;
@@ -114,7 +118,7 @@ function normalizeBackgroundScheduleSegment(segment: ScheduleInput | null | unde
   if (!mediaId) return null;
   const start = coerceScheduleTime(segment.start);
   const end = coerceScheduleTime(segment.end);
-  if (start === null || end === null || end <= start) return null;
+  if (start === null || end === null || end < start) return null;
   return {
     id: typeof segment.id === "string" && segment.id.trim() ? segment.id.trim() : `bg-seg-${mediaId}-${index + 1}`,
     mediaId,
