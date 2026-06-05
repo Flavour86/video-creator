@@ -606,7 +606,7 @@ function drawSubtitle(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
-  const normalizedMaxChars = clamp(Math.round(style.max_chars_per_line), 12, 80);
+  const normalizedMaxChars = clamp(Math.round(style.max_chars_per_line), 20, 80);
   const fontSize = clamp(Math.round(style.size * 0.58), 16, 42);
   const lineHeight = Math.round(fontSize * 1.24);
   const maxTextWidth = canvasWidth * 0.84;

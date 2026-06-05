@@ -107,6 +107,7 @@ describe("EditorModal", () => {
     fireEvent.change(screen.getByLabelText("Opacity"), { target: { value: "45" } });
     fireEvent.change(screen.getByLabelText("Radius"), { target: { value: "14" } });
     fireEvent.change(screen.getByLabelText("Size"), { target: { value: "40" } });
+    fireEvent.change(screen.getByLabelText("Max characters per line"), { target: { value: "20" } });
     fireEvent.click(screen.getByRole("switch", { name: "Show subtitles" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
@@ -119,7 +120,7 @@ describe("EditorModal", () => {
         bg_radius: 14,
         color: "#ffcc00",
         font: "Helvetica Neue",
-        max_chars_per_line: 42,
+        max_chars_per_line: 20,
         position: "top",
         size: 40,
       },
@@ -138,17 +139,48 @@ describe("EditorModal", () => {
     expect(onApplySubtitles).not.toHaveBeenCalled();
   });
 
-  it("shows v1.1 color controls and hides legacy max chars", () => {
+  it("loads max characters per line with the subtitle controls", () => {
     renderModal({
       modal: "subtitles",
-      subtitles: DEFAULT_SUBTITLES,
+      subtitles: {
+        ...DEFAULT_SUBTITLES,
+        style: {
+          ...DEFAULT_SUBTITLES.style,
+          max_chars_per_line: 64,
+        },
+      },
     });
 
-    expect(screen.queryByLabelText("Max chars / line")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Max characters per line")).toHaveValue(64);
     expect(screen.getByLabelText("Color")).toBeInTheDocument();
     expect(screen.getByLabelText("Background color")).toBeInTheDocument();
     expect(screen.getByLabelText("Opacity")).toBeInTheDocument();
     expect(screen.getByLabelText("Radius")).toBeInTheDocument();
+  });
+
+  it("clamps max characters per line and updates the live preview wrapping", () => {
+    renderModal({
+      modal: "subtitles",
+      subtitles: {
+        ...DEFAULT_SUBTITLES,
+        burn_in: true,
+      },
+    });
+
+    const maxChars = screen.getByLabelText("Max characters per line");
+    const cue = screen.getByTestId("subtitles-preview-cue");
+    expect(maxChars).toHaveValue(42);
+    expect(cue.firstElementChild).toHaveTextContent("This subtitle preview follows your style");
+
+    fireEvent.change(maxChars, { target: { value: "10" } });
+
+    expect(maxChars).toHaveValue(20);
+    expect(cue.firstElementChild).toHaveTextContent("This subtitle");
+
+    fireEvent.change(maxChars, { target: { value: "100" } });
+
+    expect(maxChars).toHaveValue(80);
+    expect(cue.firstElementChild).toHaveTextContent("This subtitle preview follows your style and stays inside the safe zone.");
   });
 
   it("disables background rectangle controls by mode", () => {

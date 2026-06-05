@@ -423,7 +423,7 @@
         "backgroundColor": "Background color",
         "opacity": "Opacity",
         "radius": "Radius",
-        "maxChars": "Max chars / line",
+        "maxChars": "Max characters per line",
         "burnIn": "Show subtitles",
         "previewText": "Subtitle preview over current frame",
         "asset": "Asset",

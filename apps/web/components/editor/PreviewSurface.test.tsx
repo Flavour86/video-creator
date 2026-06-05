@@ -720,6 +720,25 @@ describe("PreviewSurface", () => {
     expect(screen.getByTestId("preview-subtitle-live")).toHaveTextContent("Capitalism begins here.");
   });
 
+  it("normalizes subtitle wrapping to the 20 character lower bound", () => {
+    renderSurface({
+      currentTime: 1,
+      layers: [BG_LAYER],
+      subtitles: {
+        ...SUBTITLES_ON,
+        style: {
+          ...SUBTITLES_ON.style,
+          max_chars_per_line: 12,
+        },
+      },
+    });
+
+    const drawnText = fillText.mock.calls.map(([text]) => String(text));
+    expect(drawnText).toContain("Capitalism begins");
+    expect(drawnText).toContain("here.");
+    expect(drawnText).not.toContain("Capitalism");
+  });
+
   it("toggles watermark visibility from config", () => {
     const { rerender, props } = renderSurface({ layers: [BG_LAYER], watermark: null });
     const canvas = screen.getByTestId("preview-canvas");

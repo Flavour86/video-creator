@@ -217,24 +217,41 @@ function SubtitlesFields({
           value={value.style.color ?? "#ffffff"}
         />
       </div>
-      <Field htmlFor="editor-sub-size" label="Size">
-        <div className="flex items-center gap-3">
-          <input
-            className="h-2 w-full accent-(--amber)"
-            id="editor-sub-size"
-            max={72}
-            min={28}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
+        <Field htmlFor="editor-sub-size" label="Size">
+          <div className="flex items-center gap-3">
+            <input
+              className="h-2 w-full accent-(--amber)"
+              id="editor-sub-size"
+              max={72}
+              min={28}
+              onChange={(event) => {
+                const next = clampNumber(Number(event.target.value), 28, 72);
+                onChange({ ...value, style: { ...value.style, size: next } });
+              }}
+              step={1}
+              type="range"
+              value={value.style.size}
+            />
+            <span className="font-mono text-[11px] text-(--text-3)">{value.style.size}px</span>
+          </div>
+        </Field>
+        <Field htmlFor="editor-sub-max-chars" label={t("maxChars")}>
+          <NumberInput
+            id="editor-sub-max-chars"
+            max={80}
+            min={20}
             onChange={(event) => {
-              const next = clampNumber(Number(event.target.value), 28, 72);
-              onChange({ ...value, style: { ...value.style, size: next } });
+              const raw = event.target.value.trim();
+              if (!raw) return;
+              const next = clampNumber(Number(raw), 20, 80);
+              onChange({ ...value, style: { ...value.style, max_chars_per_line: next } });
             }}
             step={1}
-            type="range"
-            value={value.style.size}
+            value={value.style.max_chars_per_line}
           />
-          <span className="font-mono text-[11px] text-(--text-3)">{value.style.size}px</span>
-        </div>
-      </Field>
+        </Field>
+      </div>
       <label className="flex items-center gap-3 text-sm text-(--text-2)">
         <button
           aria-checked={value.burn_in}

@@ -1529,16 +1529,27 @@ it("Apply in subtitles modal updates defaults, appends one operation, and closes
   fireEvent.change(within(modal).getByLabelText("Background"), { target: { value: "block" } });
   fireEvent.change(within(modal).getByLabelText("Position"), { target: { value: "top" } });
   fireEvent.change(within(modal).getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
-  expect(within(modal).queryByLabelText("Max chars / line")).not.toBeInTheDocument();
+  const maxChars = within(modal).getByLabelText("Max characters per line");
+  expect(maxChars).toHaveValue(42);
   fireEvent.change(within(modal).getByLabelText("Color"), { target: { value: "#ffcc00" } });
   fireEvent.change(within(modal).getByLabelText("Background color"), { target: { value: "#112233" } });
   fireEvent.change(within(modal).getByLabelText("Opacity"), { target: { value: "45" } });
   fireEvent.change(within(modal).getByLabelText("Radius"), { target: { value: "14" } });
   fireEvent.change(within(modal).getByLabelText("Size"), { target: { value: "40" } });
+  fireEvent.change(maxChars, { target: { value: "20" } });
   fireEvent.click(within(modal).getByRole("switch", { name: "Show subtitles" }));
+
+  (testCanvasContext.fillText as unknown as ReturnType<typeof vi.fn>).mockClear();
   fireEvent.click(within(modal).getByRole("button", { name: "Apply" }));
 
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  await waitFor(() => {
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-subtitle-visible", "true");
+    const drawnText = (testCanvasContext.fillText as unknown as ReturnType<typeof vi.fn>).mock.calls.map(([text]) => String(text));
+    expect(drawnText).toContain("Capitalism begins");
+    expect(drawnText).toContain("here.");
+  });
 
   const raw = window.localStorage.getItem(editorOperationStorageKey(TEST_PROJECT_ID));
   expect(raw).not.toBeNull();
@@ -1560,7 +1571,7 @@ it("Apply in subtitles modal updates defaults, appends one operation, and closes
         bg_radius: 14,
         color: "#ffcc00",
         font: "Helvetica Neue",
-        max_chars_per_line: 42,
+        max_chars_per_line: 20,
         position: "top",
         size: 40,
       },
@@ -1578,6 +1589,7 @@ it("Cancel in subtitles modal closes without mutation", async () => {
 
   const modal = await screen.findByRole("dialog");
   fireEvent.change(within(modal).getByLabelText("Font"), { target: { value: "SF Pro" } });
+  fireEvent.change(within(modal).getByLabelText("Max characters per line"), { target: { value: "20" } });
   fireEvent.click(within(modal).getByRole("button", { name: "Cancel" }));
 
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -1589,6 +1601,10 @@ it("Cancel in subtitles modal closes without mutation", async () => {
   } else {
     expect(raw).toBeNull();
   }
+
+  fireEvent.click(screen.getByRole("button", { name: "Subtitles" }));
+  const restoredModal = await screen.findByRole("dialog");
+  expect(within(restoredModal).getByLabelText("Max characters per line")).toHaveValue(42);
 });
 
 it("updates watermark config, shows preview watermark, and persists watermark operations", async () => {
