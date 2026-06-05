@@ -514,7 +514,7 @@ function latestConfigSavePayload() {
   expect(putConfigCall).toBeDefined();
   return JSON.parse(String(putConfigCall?.[1]?.body ?? "{}")) as {
     config: {
-      layers: Array<{ kind?: string; items?: Array<{ mediaId?: string; mediaIds?: string[]; sentences?: [number, number] }> }>;
+      layers: Array<{ kind?: string; items?: Array<{ mediaId?: string; mediaIds?: string[]; schedule?: Array<Record<string, unknown>>; sentences?: [number, number] }> }>;
       media: Array<{ id?: string; kind?: string; name?: string; role?: string }>;
       transcript?: { sentences?: Array<{ index?: number; text?: string }> };
       watermark?: { mediaId?: string } | null;
@@ -975,6 +975,116 @@ it("persists mixed background schedule from Change Background modal", async () =
       { id: "seg-clip-bg.mp4", mediaId: "clip-bg.mp4", start: 0, end: 0, lockedDuration: true },
       { id: "seg-bg1.png", mediaId: "bg1.png", start: 0, end: 0, lockedDuration: false },
     ]);
+  });
+});
+
+it("undoes, redoes, and autosaves manual background schedules including zero rows", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  mockTest01Fetch();
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const dialog = await screen.findByRole("dialog", { name: /change background/i });
+  fireEvent.click(within(dialog).getByRole("button", { name: /^bg1\.png$/i }));
+  fireEvent.change(within(dialog).getByLabelText("End bg0.png"), { target: { value: "00:06" } });
+
+  vi.useFakeTimers();
+  try {
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    expect(screen.getByRole("button", { name: "timed ranges / 2 assets" })).toBeInTheDocument();
+    expect(readUndo()).toHaveLength(1);
+
+    fireEvent.keyDown(window, { ctrlKey: true, key: "z" });
+    expect(screen.getByRole("button", { name: "bg0.png over s1" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { ctrlKey: true, key: "z", shiftKey: true });
+    expect(screen.getByRole("button", { name: "timed ranges / 2 assets" })).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(80);
+      await Promise.resolve();
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+
+  await waitFor(() => {
+    const payload = latestConfigSavePayload();
+    const bgLayer = payload.config.layers.find((layer) => layer.kind === "bg");
+    expect(bgLayer?.items?.[0]?.mediaIds).toEqual(["bg0.png", "bg1.png"]);
+    expect(bgLayer?.items?.[0]?.schedule).toEqual([
+      { id: "seg-bg0.png", mediaId: "bg0.png", start: 0, end: 6, lockedDuration: false },
+      { id: "seg-bg1.png", mediaId: "bg1.png", start: 0, end: 0, lockedDuration: false },
+    ]);
+  });
+  expect(readUndo()).toHaveLength(0);
+});
+
+it("reloads manual background schedule order and keeps preview gaps black", async () => {
+  _projectIdParam = TEST_PROJECT_ID;
+  const manualBackgroundProject = {
+    ...TEST_PROJECT,
+    layers: TEST_PROJECT.layers.map((layer) => {
+      if (layer.kind !== "bg") return layer;
+      return {
+        ...layer,
+        items: [{
+          id: "bg-manual",
+          mediaIds: ["bg2.png", "bg0.png", "bg1.png"],
+          sentences: [1, 5] as [number, number],
+          start: 0,
+          end: 25,
+          motion: { kind: "ken_burns", easing: "ease_in_out" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0.6,
+          cache_status: "warm" as const,
+          schedule: [
+            { id: "manual-zero-first", mediaId: "bg2.png", start: 0, end: 0, lockedDuration: false },
+            { id: "manual-scheduled", mediaId: "bg0.png", start: 10, end: 15, lockedDuration: false },
+            { id: "manual-zero-last", mediaId: "bg1.png", start: 20, end: 20, lockedDuration: false },
+          ],
+        }],
+      };
+    }),
+  } as typeof TEST_PROJECT;
+  mockTest01Fetch({ project: manualBackgroundProject });
+
+  renderEditor();
+  await screen.findByText("test01");
+  fireEvent.click(screen.getByRole("button", { name: "Change Background" }));
+
+  const dialog = await screen.findByRole("dialog", { name: /change background/i });
+  expect(within(dialog).getAllByTestId(/background-coverage-row-/).map((row) => row.getAttribute("data-media-id"))).toEqual([
+    "bg2.png",
+    "bg0.png",
+    "bg1.png",
+  ]);
+  expect(within(dialog).getByLabelText("Start bg2.png")).toHaveValue("00:00");
+  expect(within(dialog).getByLabelText("End bg2.png")).toHaveValue("00:00");
+  expect(within(dialog).getByLabelText("Start bg0.png")).toHaveValue("00:10");
+  expect(within(dialog).getByLabelText("End bg0.png")).toHaveValue("00:15");
+  expect(within(dialog).getByLabelText("Start bg1.png")).toHaveValue("00:20");
+  expect(within(dialog).getByLabelText("End bg1.png")).toHaveValue("00:20");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+  const audio = screen.getByTestId("editor-audio") as HTMLAudioElement;
+  fireEvent.click(screen.getByRole("button", { name: /3 00:10-00:15 Capitalism changes incentives/i }));
+  await waitFor(() => expect(audio.currentTime).toBe(10));
+  await waitFor(() => {
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-has-background", "true");
+    expect(canvas).toHaveAttribute("data-active-backgrounds", "bg0.png");
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: /2 00:05-00:10 A product demo uses PiP/i }));
+  await waitFor(() => expect(audio.currentTime).toBe(5));
+  await waitFor(() => {
+    const canvas = screen.getByTestId("preview-canvas");
+    expect(canvas).toHaveAttribute("data-has-background", "false");
+    expect(canvas).toHaveAttribute("data-active-backgrounds", "");
   });
 });
 
