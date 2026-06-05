@@ -388,7 +388,7 @@ function uploadFilenameForAsset(asset: EditorMediaItem): string {
 }
 
 function formatPreviewTimecode(seconds: number): string {
-  return formatTimecode(seconds, { ms: true }).replace(/^00:/, "");
+  return formatTimecode(seconds).replace(/^00:/, "");
 }
 
 function isVideoMedia(mediaId: string, media: EditorMediaItem[]): boolean {

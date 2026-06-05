@@ -4,6 +4,7 @@ import type { Project } from "@vc/shared-schemas";
 import type { ComponentProps, ImgHTMLAttributes } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "@/lib/i18n/messages/en.json";
+import { formatTimecode } from "@/lib/format";
 import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { Layer } from "@/lib/preview/resolveDisplay";
 import { PreviewSurface } from "./PreviewSurface";
@@ -859,8 +860,9 @@ describe("PreviewSurface", () => {
     expect(props.onPrevious).toHaveBeenCalledTimes(1);
     expect(props.onTogglePlay).toHaveBeenCalledTimes(1);
     expect(props.onNext).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("00:12.500")).toBeInTheDocument();
-    expect(screen.getByText("00:30.000")).toBeInTheDocument();
+    expect(screen.getByText("00:12")).toBeInTheDocument();
+    expect(screen.getByText("00:30")).toBeInTheDocument();
+    expect(screen.queryByText(/\.\d{3}/)).not.toBeInTheDocument();
 
     rerender(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -868,6 +870,24 @@ describe("PreviewSurface", () => {
       </NextIntlClientProvider>,
     );
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+  });
+
+  it("truncates preview transport timecodes without changing non-transport time formatting", () => {
+    const { rerender, props } = renderSurface({ currentTime: 3.987, duration: 30.999 });
+
+    expect(screen.getByText("00:03")).toBeInTheDocument();
+    expect(screen.getByText("00:30")).toBeInTheDocument();
+    expect(screen.queryByText(/\.\d{3}/)).not.toBeInTheDocument();
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PreviewSurface {...props} currentTime={3602.999} duration={3661.5} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("01:00:02")).toBeInTheDocument();
+    expect(screen.getByText("01:01:01")).toBeInTheDocument();
+    expect(screen.queryByText(/\.\d{3}/)).not.toBeInTheDocument();
+    expect(formatTimecode(12.5, { ms: true })).toBe("00:00:12.500");
   });
 
   it("switches framing class for 9:16 and keeps 1080p/720p in 16:9", () => {

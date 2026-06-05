@@ -619,7 +619,7 @@ it("uses the loaded voice duration for the timeline when subtitles end early", a
   Object.defineProperty(audio, "duration", { configurable: true, value: 300 });
   fireEvent.loadedMetadata(audio);
 
-  expect(await screen.findByText("05:00.000")).toBeInTheDocument();
+  expect(await screen.findByText("05:00")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "PIP.png over s2" })).toBeInTheDocument();
 });
 
