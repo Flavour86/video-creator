@@ -254,8 +254,12 @@ def _expand_scheduled_background_item(
         segment_crossfade_s = min(crossfade_s, segment_duration_s / 2)
         previous = ranges[index - 1] if index > 0 else None
         next_segment = ranges[index + 1] if index < len(ranges) - 1 else None
-        has_adjacent_previous = previous is not None and abs(previous.end - segment.start) < 0.001
-        has_adjacent_next = next_segment is not None and abs(segment.end - next_segment.start) < 0.001
+        has_adjacent_previous = (
+            previous is not None and abs(previous.end - segment.start) < 0.001
+        )
+        has_adjacent_next = (
+            next_segment is not None and abs(segment.end - next_segment.start) < 0.001
+        )
         item_start_s = (
             max(parent_start_s, segment.start - segment_crossfade_s)
             if index > 0 and has_adjacent_previous and segment_crossfade_s > 0
