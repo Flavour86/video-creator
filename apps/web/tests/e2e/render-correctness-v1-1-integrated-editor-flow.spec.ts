@@ -180,7 +180,10 @@ async function updateBackgroundSchedule(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^Change Background$/i }).click();
   const modal = page.getByRole("dialog", { name: /^Change background$/i });
   await expect(modal.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "3");
-  await modal.getByLabel("End bg-red.png").fill("00:02");
+  const redEnd = modal.getByLabel("End bg-red.png");
+  await redEnd.fill("00:02");
+  await expect(redEnd).toHaveValue("00:02");
+  await redEnd.blur();
   await waitForAutosave(page, async () => {
     await modal.getByRole("button", { name: "Save changes" }).click();
   });
@@ -367,8 +370,8 @@ function assertSavedConfigContainsV1_1Edits(project: typeof INTEGRATED_PROJECT):
   expect(background?.items[0]?.mediaIds).toEqual(["bg-red.png", "bg-video.mp4", "bg-blue.png"]);
   expect(background?.items[0]?.schedule).toEqual([
     { end: 2, id: "seg-bg-red.png", lockedDuration: false, mediaId: "bg-red.png", start: 0 },
-    { end: 6, id: "seg-bg-video.mp4", lockedDuration: true, mediaId: "bg-video.mp4", start: 2 },
-    { end: 12, id: "seg-bg-blue.png", lockedDuration: false, mediaId: "bg-blue.png", start: 6 },
+    { end: 8, id: "seg-bg-video.mp4", lockedDuration: true, mediaId: "bg-video.mp4", start: 4 },
+    { end: 12, id: "seg-bg-blue.png", lockedDuration: false, mediaId: "bg-blue.png", start: 8 },
   ]);
 }
 
