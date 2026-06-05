@@ -78,6 +78,7 @@ function initialState(existing?: BgLayer) {
     motionKind: normalizeMotionKind(existingItem?.motion?.kind),
     schedule: existingItem?.schedule ?? [],
     scheduleDirty: false,
+    scheduleExplicit: Array.isArray(existingItem?.schedule),
     selectedMedia,
   };
 }
@@ -179,65 +180,38 @@ function mediaMapFromList(media: MediaItem[]): Map<string, MediaItem> {
   return new Map(media.map((entry) => [entry.mediaId, entry]));
 }
 
-function buildCoverageSchedule(
+function buildManualSchedule(
   mediaIds: string[],
   mediaById: ReadonlyMap<string, MediaItem>,
-  duration: number,
   previousSchedule: BackgroundScheduleSegment[] | undefined,
 ): BackgroundScheduleSegment[] {
-  const selected = mediaIds.map((mediaId) => mediaById.get(mediaId)).filter((entry): entry is MediaItem => Boolean(entry));
-  if (selected.length === 0) return [];
-  const totalDuration = Math.max(0, duration);
   const previousById = new Map((previousSchedule ?? []).map((segment) => [segment.mediaId, segment]));
-  const lockedDurationTotal = selected.reduce((total, asset) => total + (lockedVideoDuration(asset) ?? 0), 0);
-  const imageCount = selected.filter((asset) => asset.kind === "image").length;
-  const remainingImageDuration = totalDuration - lockedDurationTotal;
-  const fallbackImageDuration = imageCount > 0
-    ? remainingImageDuration > 0
-      ? remainingImageDuration / imageCount
-      : defaultImageSegmentDuration(totalDuration, selected.length)
-    : 0;
-  const segments: BackgroundScheduleSegment[] = [];
-  let cursor = 0;
-
-  for (const asset of selected) {
-    const previous = previousById.get(asset.mediaId);
-    const lockedDuration = lockedVideoDuration(asset);
-    const hold = lockedDuration ?? previousSegmentDuration(previous) ?? fallbackImageDuration;
-    const previousStart = previous?.start;
-    const hasExplicitLockedStart = lockedDuration !== null
-      && typeof previousStart === "number"
-      && Number.isFinite(previousStart);
-    const rawStart = hasExplicitLockedStart ? previousStart : cursor;
-    const start = clampLockedStart(rawStart, totalDuration, lockedDuration !== null);
-    if (hasExplicitLockedStart && start < cursor) {
-      const previousSegment = segments.at(-1);
-      const previousAsset = previousSegment ? mediaById.get(previousSegment.mediaId) : null;
-      if (previousSegment && previousAsset?.kind === "image") {
-        previousSegment.end = Math.max(previousSegment.start, start);
-      }
-      cursor = start;
-    }
-    const end = coverageEndForHold(start, hold, totalDuration, lockedDuration !== null);
-    segments.push({
-      id: previous?.id ?? `seg-${asset.mediaId}`,
-      mediaId: asset.mediaId,
-      start,
-      end,
-      lockedDuration: lockedDuration !== null,
+  return mediaIds
+    .map((mediaId) => mediaById.get(mediaId))
+    .filter((entry): entry is MediaItem => Boolean(entry))
+    .map((asset) => {
+      const previous = previousById.get(asset.mediaId);
+      if (previous) return sanitizeManualSegment(previous);
+      return {
+        id: `seg-${asset.mediaId}`,
+        mediaId: asset.mediaId,
+        start: 0,
+        end: 0,
+        lockedDuration: lockedVideoDuration(asset) !== null,
+      };
     });
-    cursor = end;
-  }
-
-  const last = segments.at(-1);
-  const lastAsset = last ? mediaById.get(last.mediaId) : null;
-  if (last && lastAsset?.kind === "image" && totalDuration > last.start) {
-    last.end = totalDuration;
-  }
-  return segments;
 }
 
-function updateCoverageScheduleField(
+function sanitizeManualSegment(segment: BackgroundScheduleSegment): BackgroundScheduleSegment {
+  const start = Math.max(0, segment.start);
+  return {
+    ...segment,
+    start,
+    end: Math.max(start, segment.end),
+  };
+}
+
+function updateManualScheduleField(
   schedule: BackgroundScheduleSegment[],
   mediaById: ReadonlyMap<string, MediaItem>,
   duration: number,
@@ -245,132 +219,35 @@ function updateCoverageScheduleField(
   field: "end" | "hold" | "start",
   seconds: number,
 ): BackgroundScheduleSegment[] {
-  const current = buildCoverageSchedule(
-    schedule.map((segment) => segment.mediaId),
-    mediaById,
-    duration,
-    schedule,
-  );
-  const targetIndex = current.findIndex((segment) => segment.mediaId === mediaId);
-  if (targetIndex < 0) return current;
-  if (current[targetIndex]?.lockedDuration) {
-    return field === "start"
-      ? updateLockedCoverageStart(current, mediaById, duration, targetIndex, seconds)
-      : current;
-  }
-  const target = current[targetIndex]!;
-  let pinnedMediaId = mediaId;
-  let pinnedDuration = previousSegmentDuration(target) ?? 0;
-  if (field === "end") {
-    pinnedDuration = Math.max(0, seconds - target.start);
-  } else if (field === "hold") {
-    pinnedDuration = Math.max(0, seconds);
-  } else if (targetIndex > 0) {
-    const previous = current[targetIndex - 1];
-    if (previous && !previous.lockedDuration) {
-      pinnedMediaId = previous.mediaId;
-      pinnedDuration = Math.max(0, seconds - previous.start);
-    }
-  }
-  const lockedDurationTotal = current.reduce((total, segment) => {
-    const asset = mediaById.get(segment.mediaId);
-    return total + (lockedVideoDuration(asset) ?? 0);
-  }, 0);
-  const imageIds = current
-    .filter((segment) => mediaById.get(segment.mediaId)?.kind === "image")
-    .map((segment) => segment.mediaId);
-  const otherImageIds = imageIds.filter((id) => id !== pinnedMediaId);
-  const remainingForOtherImages = Math.max(0, duration - lockedDurationTotal - pinnedDuration);
-  const fallbackImageDuration = otherImageIds.length > 0 ? remainingForOtherImages / otherImageIds.length : 0;
-  let cursor = 0;
-  const adjusted = current.map((segment) => {
+  return schedule.map((segment) => {
+    if (segment.mediaId !== mediaId) return segment;
     const asset = mediaById.get(segment.mediaId);
     const lockedDuration = lockedVideoDuration(asset);
-    const hold = lockedDuration ?? (segment.mediaId === pinnedMediaId ? pinnedDuration : fallbackImageDuration);
-    const start = clampLockedStart(cursor, duration, lockedDuration !== null);
-    const end = coverageEndForHold(start, hold, duration, lockedDuration !== null);
-    cursor = end;
-    return { ...segment, start, end };
-  });
-  return buildCoverageSchedule(adjusted.map((segment) => segment.mediaId), mediaById, duration, adjusted);
-}
-
-function updateLockedCoverageStart(
-  schedule: BackgroundScheduleSegment[],
-  mediaById: ReadonlyMap<string, MediaItem>,
-  duration: number,
-  targetIndex: number,
-  seconds: number,
-): BackgroundScheduleSegment[] {
-  const target = schedule[targetIndex];
-  if (!target) return schedule;
-  const targetHold = lockedVideoDuration(mediaById.get(target.mediaId)) ?? previousSegmentDuration(target) ?? 0;
-  const targetStart = Math.min(Math.max(0, seconds), Math.max(0, duration));
-  const targetEnd = coverageEndForHold(targetStart, targetHold, duration, true);
-  let cursor = 0;
-  const adjusted = schedule.map((segment, index) => {
-    const asset = mediaById.get(segment.mediaId);
-    const lockedDuration = lockedVideoDuration(asset);
-    const fallbackDuration = asset?.kind === "image"
-      ? previousSegmentDuration(segment) ?? defaultImageSegmentDuration(duration, schedule.length)
-      : 0;
-    const hold = lockedDuration ?? fallbackDuration;
-
-    if (index < targetIndex) {
-      const start = cursor;
-      let end = coverageEndForHold(start, hold, duration, lockedDuration !== null);
-      if (index === targetIndex - 1 && lockedDuration === null) {
-        end = Math.max(start, targetStart);
-      }
-      cursor = end;
-      return { ...segment, end, lockedDuration: lockedDuration !== null, start };
+    if (lockedDuration !== null) {
+      if (field !== "start") return segment;
+      const start = Math.min(Math.max(0, seconds), Math.max(0, duration));
+      return {
+        ...segment,
+        start,
+        end: Math.min(Math.max(0, duration), start + lockedDuration),
+        lockedDuration: true,
+      };
     }
-
-    if (index === targetIndex) {
-      cursor = targetEnd;
-      return { ...segment, end: targetEnd, lockedDuration: true, start: targetStart };
+    if (field === "start") {
+      const start = Math.max(0, seconds);
+      return { ...segment, start, end: Math.max(start, segment.end) };
     }
-
-    const start = clampLockedStart(cursor, duration, lockedDuration !== null);
-    const end = coverageEndForHold(start, hold, duration, lockedDuration !== null);
-    cursor = end;
-    return { ...segment, end, lockedDuration: lockedDuration !== null, start };
+    if (field === "end") {
+      return { ...segment, end: Math.max(segment.start, seconds) };
+    }
+    return { ...segment, end: segment.start + Math.max(0, seconds) };
   });
-
-  const last = adjusted.at(-1);
-  const lastAsset = last ? mediaById.get(last.mediaId) : null;
-  if (last && lastAsset?.kind === "image" && duration > last.start) {
-    last.end = Math.max(last.end, duration);
-  }
-  return adjusted;
 }
 
 function lockedVideoDuration(asset: MediaItem | undefined): number | null {
   return asset?.kind === "video" && typeof asset.duration === "number" && Number.isFinite(asset.duration) && asset.duration > 0
     ? asset.duration
     : null;
-}
-
-function clampLockedStart(start: number, totalDuration: number, lockedDuration: boolean): number {
-  if (!lockedDuration) return start;
-  return Math.min(Math.max(0, start), Math.max(0, totalDuration));
-}
-
-function coverageEndForHold(start: number, hold: number, totalDuration: number, lockedDuration: boolean): number {
-  const end = start + Math.max(0, hold);
-  return lockedDuration ? Math.min(Math.max(0, totalDuration), end) : end;
-}
-
-function previousSegmentDuration(segment: BackgroundScheduleSegment | undefined): number | null {
-  if (!segment) return null;
-  const value = segment.end - segment.start;
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function defaultImageSegmentDuration(totalDuration: number, selectedCount: number): number {
-  const evenSlot = selectedCount > 0 ? totalDuration / selectedCount : 0;
-  const fallback = Number.isFinite(evenSlot) && evenSlot > 0 ? evenSlot : 30;
-  return Math.max(1, Math.min(30, fallback));
 }
 
 function withBackgroundCacheStatus(
@@ -411,8 +288,8 @@ export function BgModal({
     [mediaById, selectedMedia],
   );
   const coverageSchedule = useMemo(
-    () => buildCoverageSchedule(selectedMedia, mediaById, duration, state.schedule),
-    [duration, mediaById, selectedMedia, state.schedule],
+    () => buildManualSchedule(selectedMedia, mediaById, state.schedule),
+    [mediaById, selectedMedia, state.schedule],
   );
   const visibleMedia = useMemo(() => {
     if (selectedMedia.length <= 1) return availableMedia;
@@ -438,18 +315,17 @@ export function BgModal({
         ? current
         : {
             ...current,
-            schedule: buildCoverageSchedule(nextSelected, mediaById, duration, current.schedule),
+            schedule: buildManualSchedule(nextSelected, mediaById, current.schedule),
             selectedMedia: nextSelected,
           };
     });
-  }, [duration, mediaById, open]);
+  }, [mediaById, open]);
 
-  function buildPlaylistItem(selectedMedia: string[], crossfadeSeconds: number, schedule: BackgroundScheduleSegment[]): BgLayer["items"][number] {
+  function buildPlaylistItem(selectedMedia: string[], crossfadeSeconds: number, schedule: BackgroundScheduleSegment[] | undefined): BgLayer["items"][number] {
     const existingItem = existing?.items[0];
     const nextItem = {
       id: existingItem?.id ?? `bg-${Date.now()}`,
       mediaIds: selectedMedia,
-      schedule,
       sentences: [1, Math.max(totalSentences, 1)] as [number, number],
       start: 0,
       end: duration,
@@ -457,19 +333,21 @@ export function BgModal({
       transitions: { in: "cut", out: "cut" },
       crossfade: crossfadeSeconds,
     } as BgLayer["items"][number];
+    if (schedule) nextItem.schedule = schedule;
     return withBackgroundCacheStatus(existingItem, nextItem);
   }
 
   function handleSave() {
     if (selectedMedia.length === 0 || !isCrossfadeValid) return;
-    const nextSchedule = buildCoverageSchedule(selectedMedia, mediaById, duration, coverageSchedule);
-    const scheduleForUnchangedCheck = state.scheduleDirty ? nextSchedule : null;
+    const nextSchedule = buildManualSchedule(selectedMedia, mediaById, coverageSchedule);
+    const includeSchedule = state.scheduleDirty || state.scheduleExplicit;
+    const scheduleForUnchangedCheck = includeSchedule ? nextSchedule : null;
     if (existing && isBackgroundPlaylistUnchanged(existing, selectedMedia, state.motionKind, state.easing, crossfade, duration, totalSentences, scheduleForUnchangedCheck)) {
       onSave(existing);
       onClose();
       return;
     }
-    const nextItems = [buildPlaylistItem(selectedMedia, crossfade, nextSchedule)];
+    const nextItems = [buildPlaylistItem(selectedMedia, crossfade, includeSchedule ? nextSchedule : undefined)];
     if (nextItems.length === 0) return;
     const layer: BgLayer = {
       id: existing?.id ?? "bg-main",
@@ -495,7 +373,7 @@ export function BgModal({
       }
       return {
         ...current,
-        schedule: buildCoverageSchedule(nextSelectedMedia, mediaById, duration, undefined),
+        schedule: buildManualSchedule(nextSelectedMedia, mediaById, current.schedule),
         scheduleDirty: true,
         selectedMedia: nextSelectedMedia,
       };
@@ -506,10 +384,10 @@ export function BgModal({
     const seconds = parseBackgroundTime(value);
     if (seconds === null) return;
     setState((current) => {
-      const currentSchedule = buildCoverageSchedule(current.selectedMedia, mediaById, duration, current.schedule);
+      const currentSchedule = buildManualSchedule(current.selectedMedia, mediaById, current.schedule);
       return {
         ...current,
-        schedule: updateCoverageScheduleField(currentSchedule, mediaById, duration, mediaId, field, seconds),
+        schedule: updateManualScheduleField(currentSchedule, mediaById, duration, mediaId, field, seconds),
         scheduleDirty: true,
       };
     });
@@ -517,21 +395,13 @@ export function BgModal({
 
   function extendCoverageToEnd(mediaId: string) {
     setState((current) => {
-      const currentSchedule = buildCoverageSchedule(current.selectedMedia, mediaById, duration, current.schedule);
+      const currentSchedule = buildManualSchedule(current.selectedMedia, mediaById, current.schedule);
       return {
         ...current,
-        schedule: updateCoverageScheduleField(currentSchedule, mediaById, duration, mediaId, "end", duration),
+        schedule: updateManualScheduleField(currentSchedule, mediaById, duration, mediaId, "end", duration),
         scheduleDirty: true,
       };
     });
-  }
-
-  function fillCoverage() {
-    setState((current) => ({
-      ...current,
-      schedule: buildCoverageSchedule(selectedMedia, mediaById, duration, undefined),
-      scheduleDirty: true,
-    }));
   }
 
   function reorderCoverageMedia(sourceId: string, targetId: string, placement: ReorderPlacement) {
@@ -544,7 +414,7 @@ export function BgModal({
     ]);
     setState((current) => ({
       ...current,
-      schedule: buildCoverageSchedule(nextSelectedMedia, mediaById, duration, current.schedule),
+      schedule: buildManualSchedule(nextSelectedMedia, mediaById, current.schedule),
       scheduleDirty: true,
       selectedMedia: nextSelectedMedia,
     }));
@@ -750,13 +620,6 @@ export function BgModal({
                     {selectedAssets.filter((asset) => asset.kind === "image").length} image ranges / {coverageSchedule.length} total / drag rows to reorder
                   </p>
                 </div>
-                <button
-                  className="inline-flex min-h-8 items-center rounded border border-transparent bg-transparent px-4 text-sm font-semibold leading-5 text-(--text-2) hover:bg-(--bg-3)"
-                  onClick={fillCoverage}
-                  type="button"
-                >
-                  Auto fill
-                </button>
               </div>
 
               <div
@@ -768,10 +631,10 @@ export function BgModal({
                 {selectedAssets.map((asset) => {
                   const segment = coverageSchedule.find((entry) => entry.mediaId === asset.mediaId);
                   if (!segment) return null;
-                  const locked = segment.lockedDuration;
-                  const hold = Math.max(0, segment.end - segment.start);
                   const isVideo = asset.kind === "video";
                   const nativeVideoDuration = lockedVideoDuration(asset);
+                  const locked = nativeVideoDuration !== null;
+                  const hold = Math.max(0, segment.end - segment.start);
                   return (
                     <div
                       aria-label={`Coverage row ${asset.filename}`}

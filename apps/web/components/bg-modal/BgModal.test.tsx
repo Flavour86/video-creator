@@ -154,6 +154,14 @@ function coverageRowIds(): Array<string | null> {
   return screen.getAllByTestId(/background-coverage-row-/).map((row) => row.getAttribute("data-media-id"));
 }
 
+function coverageValues(filename: string): { end: string; hold: string; start: string } {
+  return {
+    end: (screen.getByLabelText(`End ${filename}`) as HTMLInputElement).value,
+    hold: (screen.getByLabelText(`Hold ${filename}`) as HTMLInputElement).value,
+    start: (screen.getByLabelText(`Start ${filename}`) as HTMLInputElement).value,
+  };
+}
+
 function selectedAssetIds(): Array<string | null> {
   return screen
     .getAllByRole("button")
@@ -165,8 +173,10 @@ describe("BgModal", () => {
   it("renders create mode and selected metadata", () => {
     renderModal();
     expect(screen.getByRole("heading", { name: "Add background" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Auto fill" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^bg\.jpg$/i }));
     expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
     expect(screen.getByRole("button", { name: "Add background" })).toBeEnabled();
   });
 
@@ -347,7 +357,7 @@ describe("BgModal", () => {
     expect(screen.queryByRole("button", { name: /delete bg-2\.jpg/i })).not.toBeInTheDocument();
   });
 
-  it("allows mixed image/video selection and saves explicit schedule rows from time strings", () => {
+  it("keeps newly selected image and video rows unscheduled until edited", () => {
     const { onSave } = renderModal({ duration: 90 });
     fireEvent.click(screen.getByRole("button", { name: /^bg\.jpg$/i }));
     const videoCard = screen.getByRole("button", { name: /^clip-a\.mp4$/i });
@@ -363,23 +373,149 @@ describe("BgModal", () => {
     expect(screen.getByRole("button", { name: /^bg\.jpg selected$/i })).toHaveAttribute("aria-pressed", "true");
 
     expect(screen.getByLabelText("Start clip-a.mp4")).toBeEnabled();
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
+    expect(coverageValues("clip-a.mp4")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
+    expect(coverageValues("bg-2.jpg")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
     expect(screen.getByLabelText("End clip-a.mp4")).toBeDisabled();
     expect(screen.getByLabelText("Hold clip-a.mp4")).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("End bg.jpg"), { target: { value: "01:10" } });
-    fireEvent.blur(screen.getByLabelText("End bg.jpg"));
-
-    expect(screen.getByLabelText("Start clip-a.mp4")).toHaveValue("01:10");
-    expect(screen.getByLabelText("End clip-a.mp4")).toHaveValue("01:14");
-    expect(screen.getByLabelText("Start bg-2.jpg")).toHaveValue("01:14");
     fireEvent.click(screen.getByRole("button", { name: "Add background" }));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       items: [expect.objectContaining({
         mediaIds: ["bg.jpg", "clip-a.mp4", "bg-2.jpg"],
         schedule: [
-          { id: "seg-bg.jpg", mediaId: "bg.jpg", start: 0, end: 70, lockedDuration: false },
-          { id: "seg-clip-a.mp4", mediaId: "clip-a.mp4", start: 70, end: 74, lockedDuration: true },
-          { id: "seg-bg-2.jpg", mediaId: "bg-2.jpg", start: 74, end: 90, lockedDuration: false },
+          { id: "seg-bg.jpg", mediaId: "bg.jpg", start: 0, end: 0, lockedDuration: false },
+          { id: "seg-clip-a.mp4", mediaId: "clip-a.mp4", start: 0, end: 0, lockedDuration: true },
+          { id: "seg-bg-2.jpg", mediaId: "bg-2.jpg", start: 0, end: 0, lockedDuration: false },
+        ],
+      })],
+    }));
+  });
+
+  it("preserves existing row values when selecting another asset", () => {
+    const { onSave } = renderModal({
+      duration: 90,
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-scheduled",
+          mediaIds: ["bg.jpg"],
+          schedule: [
+            { id: "seg-bg", mediaId: "bg.jpg", start: 5, end: 12, lockedDuration: false },
+          ],
+          sentences: [1, 6],
+          start: 0,
+          end: 90,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^bg-2\.jpg$/i }));
+
+    expect(coverageRowIds()).toEqual(["bg.jpg", "bg-2.jpg"]);
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:05", end: "00:12", hold: "00:07" });
+    expect(coverageValues("bg-2.jpg")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({
+        mediaIds: ["bg.jpg", "bg-2.jpg"],
+        schedule: [
+          { id: "seg-bg", mediaId: "bg.jpg", start: 5, end: 12, lockedDuration: false },
+          { id: "seg-bg-2.jpg", mediaId: "bg-2.jpg", start: 0, end: 0, lockedDuration: false },
+        ],
+      })],
+    }));
+  });
+
+  it("preserves remaining row values when deselecting an asset", () => {
+    const { onSave } = renderModal({
+      duration: 90,
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-scheduled",
+          mediaIds: ["bg.jpg", "bg-2.jpg", "clip-a.mp4"],
+          schedule: [
+            { id: "seg-bg", mediaId: "bg.jpg", start: 5, end: 12, lockedDuration: false },
+            { id: "seg-bg-2", mediaId: "bg-2.jpg", start: 20, end: 31, lockedDuration: false },
+            { id: "seg-clip", mediaId: "clip-a.mp4", start: 40, end: 44, lockedDuration: true },
+          ],
+          sentences: [1, 6],
+          start: 0,
+          end: 90,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^bg-2\.jpg selected$/i }));
+
+    expect(coverageRowIds()).toEqual(["bg.jpg", "clip-a.mp4"]);
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:05", end: "00:12", hold: "00:07" });
+    expect(coverageValues("clip-a.mp4")).toEqual({ start: "00:40", end: "00:44", hold: "00:04" });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({
+        mediaIds: ["bg.jpg", "clip-a.mp4"],
+        schedule: [
+          { id: "seg-bg", mediaId: "bg.jpg", start: 5, end: 12, lockedDuration: false },
+          { id: "seg-clip", mediaId: "clip-a.mp4", start: 40, end: 44, lockedDuration: true },
+        ],
+      })],
+    }));
+  });
+
+  it("updates one image row without mutating other rows", () => {
+    const { onSave } = renderModal({
+      duration: 90,
+      existing: {
+        id: "bg-main",
+        kind: "bg",
+        name: "Background",
+        items: [{
+          id: "bg-scheduled",
+          mediaIds: ["bg.jpg", "bg-2.jpg", "clip-a.mp4"],
+          schedule: [
+            { id: "seg-bg", mediaId: "bg.jpg", start: 5, end: 12, lockedDuration: false },
+            { id: "seg-bg-2", mediaId: "bg-2.jpg", start: 20, end: 31, lockedDuration: false },
+            { id: "seg-clip", mediaId: "clip-a.mp4", start: 40, end: 44, lockedDuration: true },
+          ],
+          sentences: [1, 6],
+          start: 0,
+          end: 90,
+          motion: { kind: "ken_burns", easing: "linear" },
+          transitions: { in: "cut", out: "cut" },
+          crossfade: 0,
+        }],
+      },
+    });
+
+    fireEvent.change(screen.getByLabelText("End bg.jpg"), { target: { value: "00:15" } });
+    fireEvent.blur(screen.getByLabelText("End bg.jpg"));
+
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:05", end: "00:15", hold: "00:10" });
+    expect(coverageValues("bg-2.jpg")).toEqual({ start: "00:20", end: "00:31", hold: "00:11" });
+    expect(coverageValues("clip-a.mp4")).toEqual({ start: "00:40", end: "00:44", hold: "00:04" });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({
+        mediaIds: ["bg.jpg", "bg-2.jpg", "clip-a.mp4"],
+        schedule: [
+          { id: "seg-bg", mediaId: "bg.jpg", start: 5, end: 15, lockedDuration: false },
+          { id: "seg-bg-2", mediaId: "bg-2.jpg", start: 20, end: 31, lockedDuration: false },
+          { id: "seg-clip", mediaId: "clip-a.mp4", start: 40, end: 44, lockedDuration: true },
         ],
       })],
     }));
@@ -417,7 +553,7 @@ describe("BgModal", () => {
     expect(screen.getByLabelText("Hold clip-a.mp4")).toHaveValue("00:04");
     expect(screen.getByLabelText("End clip-a.mp4")).toBeDisabled();
     expect(screen.getByLabelText("Hold clip-a.mp4")).toBeDisabled();
-    expect(screen.getByLabelText("Start bg.jpg")).toHaveValue("00:16");
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:04", end: "01:30", hold: "01:26" });
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -426,13 +562,13 @@ describe("BgModal", () => {
         mediaIds: ["clip-a.mp4", "bg.jpg"],
         schedule: [
           { id: "seg-clip-a.mp4", mediaId: "clip-a.mp4", start: 12, end: 16, lockedDuration: true },
-          { id: "seg-bg.jpg", mediaId: "bg.jpg", start: 16, end: 90, lockedDuration: false },
+          { id: "seg-bg.jpg", mediaId: "bg.jpg", start: 4, end: 90, lockedDuration: false },
         ],
       })],
     }));
   });
 
-  it("caps a long video row at the project duration and keeps shorter videos at start plus native duration", () => {
+  it("starts new video rows at zero and derives locked end from native duration after Start edits", () => {
     const longVideoMedia = MEDIA.map((item) => (
       item.mediaId === "clip-a.mp4" ? { ...item, duration: 1222 } : item
     ));
@@ -441,10 +577,16 @@ describe("BgModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /^bg\.jpg$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^clip-a\.mp4$/i }));
 
-    expect(screen.getByLabelText("Start clip-a.mp4")).toHaveValue("00:30");
-    expect(screen.getByLabelText("End clip-a.mp4")).toHaveValue("05:00");
-    expect(screen.getByLabelText("Hold clip-a.mp4")).toHaveValue("04:30");
+    expect(coverageValues("clip-a.mp4")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
+    expect(screen.getByLabelText("End clip-a.mp4")).toBeDisabled();
+    expect(screen.getByLabelText("Hold clip-a.mp4")).toBeDisabled();
     expect(screen.getByText("native 20:22")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Start clip-a.mp4"), { target: { value: "00:30" } });
+    fireEvent.blur(screen.getByLabelText("Start clip-a.mp4"));
+
+    expect(coverageValues("clip-a.mp4")).toEqual({ start: "00:30", end: "05:00", hold: "04:30" });
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
 
     fireEvent.click(screen.getByRole("button", { name: "Add background" }));
 
@@ -452,7 +594,7 @@ describe("BgModal", () => {
       items: [expect.objectContaining({
         mediaIds: ["bg.jpg", "clip-a.mp4"],
         schedule: [
-          { id: "seg-bg.jpg", mediaId: "bg.jpg", start: 0, end: 30, lockedDuration: false },
+          { id: "seg-bg.jpg", mediaId: "bg.jpg", start: 0, end: 0, lockedDuration: false },
           { id: "seg-clip-a.mp4", mediaId: "clip-a.mp4", start: 30, end: 300, lockedDuration: true },
         ],
       })],
@@ -472,6 +614,9 @@ describe("BgModal", () => {
     expect(screen.getByText("3 selected")).toBeInTheDocument();
     expect(screen.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "3");
     expect(coverageRowIds()).toEqual(["bg.jpg", "clip-a.mp4", "bg-2.jpg"]);
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
+    expect(coverageValues("clip-a.mp4")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
+    expect(coverageValues("bg-2.jpg")).toEqual({ start: "00:00", end: "00:00", hold: "00:00" });
     expect(screen.getByLabelText("Start bg.jpg")).toBeEnabled();
     expect(screen.getByLabelText("Start clip-a.mp4")).toBeEnabled();
     expect(screen.getByLabelText("Start bg-2.jpg")).toBeEnabled();
@@ -548,7 +693,7 @@ describe("BgModal", () => {
     expect(layer.items[0].mediaId).toBeUndefined();
   });
 
-  it("drag-sorts coverage plan rows and saves the synchronized asset order", async () => {
+  it("drag-sorts coverage plan rows without mutating row ranges", async () => {
     const { onSave } = renderModal({
       existing: {
         id: "bg-main",
@@ -589,14 +734,17 @@ describe("BgModal", () => {
 
     await waitFor(() => expect(coverageRowIds()).toEqual(["bg-2.jpg", "bg.jpg", "clip-a.mp4"]));
     expect(selectedAssetIds()).toEqual(["bg-2.jpg", "bg.jpg", "clip-a.mp4"]);
+    expect(coverageValues("bg-2.jpg")).toEqual({ start: "00:08", end: "00:10", hold: "00:02" });
+    expect(coverageValues("bg.jpg")).toEqual({ start: "00:00", end: "00:04", hold: "00:04" });
+    expect(coverageValues("clip-a.mp4")).toEqual({ start: "00:04", end: "00:08", hold: "00:04" });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       items: [expect.objectContaining({
         mediaIds: ["bg-2.jpg", "bg.jpg", "clip-a.mp4"],
         schedule: [
-          expect.objectContaining({ end: 2, mediaId: "bg-2.jpg", start: 0 }),
-          expect.objectContaining({ end: 4, mediaId: "bg.jpg", start: 2 }),
+          expect.objectContaining({ end: 10, mediaId: "bg-2.jpg", start: 8 }),
+          expect.objectContaining({ end: 4, mediaId: "bg.jpg", start: 0 }),
           expect.objectContaining({ end: 8, mediaId: "clip-a.mp4", start: 4 }),
         ],
       })],

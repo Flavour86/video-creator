@@ -972,8 +972,8 @@ it("persists mixed background schedule from Change Background modal", async () =
     expect(bgLayer?.items?.[0]?.mediaIds).toEqual(["bg0.png", "clip-bg.mp4", "bg1.png"]);
     expect(bgLayer?.items?.[0]?.schedule).toEqual([
       { id: "seg-bg0.png", mediaId: "bg0.png", start: 0, end: 6, lockedDuration: false },
-      { id: "seg-clip-bg.mp4", mediaId: "clip-bg.mp4", start: 6, end: 10, lockedDuration: true },
-      { id: "seg-bg1.png", mediaId: "bg1.png", start: 10, end: 25, lockedDuration: false },
+      { id: "seg-clip-bg.mp4", mediaId: "clip-bg.mp4", start: 0, end: 0, lockedDuration: true },
+      { id: "seg-bg1.png", mediaId: "bg1.png", start: 0, end: 0, lockedDuration: false },
     ]);
   });
 });
