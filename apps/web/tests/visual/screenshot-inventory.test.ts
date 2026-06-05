@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { EDITOR_VISUAL_SCREENSHOTS, V1_1_EDITOR_VISUAL_SCREENSHOTS } from "./editor-visual-cases";
+import {
+  EDITOR_VISUAL_SCREENSHOTS,
+  V1_1_EDITOR_VISUAL_SCREENSHOTS,
+  V1_2_EDITOR_VISUAL_CASES,
+  V1_2_EDITOR_VISUAL_SCREENSHOTS,
+  V1_2_VISUAL_SSIM_THRESHOLD,
+} from "./editor-visual-cases";
 import { RENDER_STATE_CASES, RENDER_VISUAL_SCREENSHOTS, type RenderVisualState } from "./render-visual-cases";
 import { visualManifest, type VisualOwner } from "./visual-manifest";
 
@@ -12,6 +18,7 @@ const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(THIS_DIR, "../../../..");
 const VISUAL_REF_PATTERN = /visuals\/([A-Za-z0-9_.-]+\.png)/g;
 const V1_1_VISUAL_REF_PATTERN = /docs\/designs\/tasks\/v1\.1\/visuals\/([A-Za-z0-9_.-]+\.png)/g;
+const V1_2_VISUAL_REF_PATTERN = /visuals\/([A-Za-z0-9_.-]+\.png)/g;
 
 const splitSpecs = [
   { path: "docs/designs/tasks/global-frontend/SPEC_FRONTEND_GLOBAL.md", expectedOwner: "frontend-global" as VisualOwner },
@@ -44,6 +51,18 @@ function collectV1_1ScreenshotRefs(): string[] {
   return [...refs];
 }
 
+function collectV1_2ScreenshotRefs(): string[] {
+  const specPath = path.join(REPO_ROOT, "docs/designs/tasks/v1.2/spec.md");
+  const source = fs.readFileSync(specPath, "utf8");
+  const refs = new Set<string>();
+
+  for (const match of source.matchAll(V1_2_VISUAL_REF_PATTERN)) {
+    refs.add(`docs/designs/tasks/v1.2/visuals/${match[1]}`);
+  }
+
+  return [...refs];
+}
+
 function v1_1VisualReferenceWindows(): string[] {
   const specPath = path.join(REPO_ROOT, "docs/designs/tasks/v1.1/spec.md");
   const lines = fs.readFileSync(specPath, "utf8").split("\n");
@@ -53,6 +72,22 @@ function v1_1VisualReferenceWindows(): string[] {
       windows.push(lines.slice(index, index + 6).join("\n"));
     }
     V1_1_VISUAL_REF_PATTERN.lastIndex = 0;
+  });
+  return windows;
+}
+
+function v1_2VisualReferenceWindows(): string[] {
+  const specPath = path.join(REPO_ROOT, "docs/designs/tasks/v1.2/spec.md");
+  const lines = fs.readFileSync(specPath, "utf8").split("\n");
+  const windows: string[] = [];
+  lines.forEach((line, index) => {
+    if (V1_2_VISUAL_REF_PATTERN.test(line)) {
+      const window = lines.slice(index, index + 6).join("\n");
+      if (window.includes("Required parity:")) {
+        windows.push(window);
+      }
+    }
+    V1_2_VISUAL_REF_PATTERN.lastIndex = 0;
   });
   return windows;
 }
@@ -244,6 +279,65 @@ describe("split-spec screenshot ownership inventory", () => {
 
     expect(problems, `v1.1 visual sections missing SSIM target notes:\n${problems.join("\n")}`).toEqual([]);
     expect(windows.join("\n")).toMatch(/Dynamic|may differ|small tolerance/i);
+  });
+
+  it("declares v1.2 canonical visual references under editor ownership", () => {
+    const expected = collectV1_2ScreenshotRefs();
+    const problems: string[] = [];
+
+    for (const screenshot of expected) {
+      const entries = visualManifest.filter((entry) => entry.screenshot === screenshot);
+      if (entries.length !== 1) {
+        problems.push(`${screenshot} expected exactly one manifest entry, got ${entries.length}`);
+        continue;
+      }
+      const [entry] = entries;
+      if (entry && (entry.owner !== "editor" || entry.status !== "implemented")) {
+        problems.push(
+          `${screenshot} expected owner=editor/status=implemented actual owner=${entry.owner}/status=${entry.status}`,
+        );
+      }
+    }
+
+    expect(problems, `v1.2 visual parity ownership mismatches:\n${problems.join("\n")}`).toEqual([]);
+  });
+
+  it("maps every v1.2 editor screenshot reference to exactly one visual parity case", () => {
+    const v1_2Refs = new Set(collectV1_2ScreenshotRefs());
+    const visualCaseRefs = [...V1_2_EDITOR_VISUAL_SCREENSHOTS];
+    const uniqueVisualCaseRefs = [...new Set(visualCaseRefs)].sort();
+
+    const missing = [...v1_2Refs].filter((screenshot) => !uniqueVisualCaseRefs.includes(screenshot));
+    const extra = uniqueVisualCaseRefs.filter((screenshot) => !v1_2Refs.has(screenshot));
+    const duplicates = findDuplicates(visualCaseRefs);
+
+    expect(
+      { duplicates, extra, missing },
+      [
+        "v1.2 visual test mapping mismatch.",
+        `Missing visual parity tests: ${missing.length ? missing.join(", ") : "(none)"}`,
+        `Extra visual parity tests: ${extra.length ? extra.join(", ") : "(none)"}`,
+        `Duplicate visual parity tests: ${duplicates.length ? duplicates.join(", ") : "(none)"}`,
+      ].join("\n"),
+    ).toEqual({ duplicates: [], extra: [], missing: [] });
+  });
+
+  it("keeps v1.2 visual thresholds and dynamic tolerances documented", () => {
+    const casesWithoutRequiredThreshold = V1_2_EDITOR_VISUAL_CASES
+      .filter((visualCase) => (visualCase.threshold ?? 0) < V1_2_VISUAL_SSIM_THRESHOLD)
+      .map((visualCase) => visualCase.reference);
+    const casesWithoutDynamicNotes = V1_2_EDITOR_VISUAL_CASES
+      .filter((visualCase) => !visualCase.dynamicData)
+      .map((visualCase) => visualCase.reference);
+    const windows = v1_2VisualReferenceWindows();
+    const specWindowsMissingTarget = windows
+      .filter((window) => !window.includes("SSIM `>= 0.98`"))
+      .map((window) => window.split("\n")[0] ?? "(unknown reference)");
+
+    expect(casesWithoutRequiredThreshold, "v1.2 cases must compare at SSIM >= 0.98").toEqual([]);
+    expect(casesWithoutDynamicNotes, "v1.2 cases must document dynamic data handling").toEqual([]);
+    expect(specWindowsMissingTarget, `v1.2 visual sections missing SSIM target notes:\n${specWindowsMissingTarget.join("\n")}`).toEqual([]);
+    expect(windows.join("\n")).toMatch(/Dynamic|may differ/i);
   });
 
   it("keeps render parity screenshots implemented under render ownership", () => {

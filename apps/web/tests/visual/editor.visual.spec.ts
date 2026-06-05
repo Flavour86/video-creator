@@ -16,6 +16,8 @@ import {
   EDITOR_VISUAL_CASES,
   V1_1_EDITOR_VISUAL_CASES,
   V1_1_VISUAL_REFERENCE_PREFIX,
+  V1_2_EDITOR_VISUAL_CASES,
+  V1_2_VISUAL_REFERENCE_PREFIX,
   type EditorVisualAction,
   type EditorVisualCaptureTarget as CaptureTarget,
   type EditorVisualCase,
@@ -87,6 +89,23 @@ test.describe("editor v1.1 visual parity", () => {
   test.describe.configure({ mode: "serial" });
 
   for (const visualCase of V1_1_EDITOR_VISUAL_CASES) {
+    test.describe(visualCase.name, () => {
+      test.use({
+        deviceScaleFactor: visualCase.deviceScaleFactor ?? 1,
+        viewport: visualCase.viewport ?? EDITOR_VIEWPORT,
+      });
+
+      test(`${visualCase.reference} parity`, async ({ page }) => {
+        await compareEditorVisualCase(page, visualCase);
+      });
+    });
+  }
+});
+
+test.describe("editor v1.2 visual parity", () => {
+  test.describe.configure({ mode: "serial" });
+
+  for (const visualCase of V1_2_EDITOR_VISUAL_CASES) {
     test.describe(visualCase.name, () => {
       test.use({
         deviceScaleFactor: visualCase.deviceScaleFactor ?? 1,
@@ -471,7 +490,7 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
   const screenshotOptions = visualCase.clip ? { clip: visualCase.clip, path: actualPath } : { path: actualPath };
   await captureTarget.screenshot(screenshotOptions);
   await cropActualToReference(actualPath, referencePath);
-  const ignoreRegions: IgnoreRegion[] = [];
+  const ignoreRegions: IgnoreRegion[] = [...(visualCase.ignoreRegions ?? [])];
   let blurRadius = visualCase.blurRadius ?? 0;
   if (!visualCase.strict) {
     if (visualCase.capture === "page") {
@@ -909,6 +928,31 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
       await expect(page.getByRole("heading", { name: /^Coverage schedule$/i })).toHaveCount(0);
       await expect(page.locator("[data-testid='timeline-row-bg'] [data-timeline-clip='true']")).toHaveCount(1);
       return;
+    case "v1-2-background-manual-coverage":
+      await page.getByRole("button", { name: /^Change Background$/i }).click();
+      await expect(page.getByTestId("background-coverage-grid")).toHaveAttribute("data-row-count", "4");
+      await expect(page.getByRole("button", { name: /auto fill/i })).toHaveCount(0);
+      await expect(page.getByLabel("Start ramen-shop.jpg")).toHaveValue("00:00");
+      await expect(page.getByLabel("End ramen-shop.jpg")).toHaveValue("00:00");
+      return;
+    case "v1-2-subtitles-max-characters": {
+      const modal = await openSubtitlesModal(page);
+      await expect(modal.getByLabel("Max characters per line")).toHaveValue("20");
+      await expect(modal.getByTestId("subtitles-preview-cue")).toBeVisible();
+      return;
+    }
+    case "v1-2-subtitles-max-characters-portrait": {
+      await page.getByRole("radio", { name: "9:16" }).click();
+      const modal = await openSubtitlesModal(page);
+      await expect(modal.getByLabel("Max characters per line")).toHaveValue("20");
+      await expect(modal.getByTestId("subtitles-preview-cue")).toBeVisible();
+      return;
+    }
+    case "v1-2-editor-time-display":
+      await expect(page.getByText("00:38").first()).toBeVisible();
+      await expect(page.getByText("15:42").first()).toBeVisible();
+      await expect(page.getByText(/00:38\.\d|15:42\.\d/)).toHaveCount(0);
+      return;
     default: {
       const _exhaustive: never = action;
       return _exhaustive;
@@ -947,8 +991,8 @@ async function waitForInspectorHeading(page: Page, expected: string): Promise<vo
 }
 
 async function prepareVisualPage(page: Page, theme: Theme, visualCase?: EditorVisualCase): Promise<void> {
-  const selected = isV1_1VisualCase(visualCase) ? null : { itemId: "pip-001", layerId: "L-pip-1" };
-  const selectedRange = isV1_1VisualCase(visualCase) ? null : [6, 7];
+  const selected = isVersionedVisualCase(visualCase) ? null : { itemId: "pip-001", layerId: "L-pip-1" };
+  const selectedRange = isVersionedVisualCase(visualCase) ? null : [6, 7];
   await page.addInitScript(
     ({ projectId, selectedItem, selectedRangeValue, themeValue }) => {
       window.localStorage.setItem("vc.theme", themeValue);
@@ -1099,8 +1143,23 @@ function isV1_1VisualCase(visualCase?: EditorVisualCase): boolean {
   return visualCase?.reference.startsWith("../tasks/v1.1/visuals/") ?? false;
 }
 
+function isV1_2VisualCase(visualCase?: EditorVisualCase): boolean {
+  return visualCase?.reference.startsWith(V1_2_VISUAL_REFERENCE_PREFIX) ?? false;
+}
+
+function isVersionedVisualCase(visualCase?: EditorVisualCase): boolean {
+  return isV1_1VisualCase(visualCase) || isV1_2VisualCase(visualCase);
+}
+
 function fixtureForVisualCase(visualCase: EditorVisualCase): { alignment: object; project: object; renderCacheTotal?: number } | null {
   switch (visualCase.action) {
+    case "v1-2-background-manual-coverage":
+      return { alignment: TEST_ALIGNMENT, project: V1_2_BACKGROUND_MANUAL_PROJECT, renderCacheTotal: 4 };
+    case "v1-2-editor-time-display":
+      return { alignment: TEST_ALIGNMENT, project: V1_2_EDITOR_TIME_PROJECT, renderCacheTotal: 3 };
+    case "v1-2-subtitles-max-characters":
+    case "v1-2-subtitles-max-characters-portrait":
+      return { alignment: TEST_ALIGNMENT, project: V1_2_SUBTITLE_PROJECT, renderCacheTotal: 3 };
     case "v1-subtitles-modal-color-bg":
     case "v1-subtitles-modal-none":
       return { alignment: V1_SUBTITLE_ALIGNMENT, project: V1_SUBTITLE_PROJECT, renderCacheTotal: 0 };
@@ -1691,6 +1750,99 @@ const TEST_PROJECT = {
     posX: 9,
     posY: 11,
     scale: 0.08,
+  },
+};
+
+const V1_2_BACKGROUND_MEDIA = [
+  v1MediaAsset("neon-lights.jpg", "neon-lights.jpg", "image", "background"),
+  v1MediaAsset("ramen-shop.jpg", "ramen-shop.jpg", "image", "background"),
+  v1MediaAsset("crowd-cross.jpg", "crowd-cross.jpg", "image", "background"),
+  v1MediaAsset("tokyo-skyline.jpg", "tokyo-skyline.jpg", "image", "background"),
+  v1MediaAsset("station-intro.mp4", "station-intro.mp4", "video", "background", 12),
+  v1MediaAsset("callout-map.png", "callout-map.png", "image", "background"),
+];
+
+const V1_2_BACKGROUND_MEDIA_IDS = new Set(V1_2_BACKGROUND_MEDIA.map((asset) => asset.id));
+
+const V1_2_PROJECT_MEDIA = [
+  ...TEST_PROJECT.media.filter((asset) => !V1_2_BACKGROUND_MEDIA_IDS.has(asset.id)),
+  ...V1_2_BACKGROUND_MEDIA,
+];
+
+const V1_2_BACKGROUND_MANUAL_PROJECT = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => {
+    if (layer.kind !== "bg") return layer;
+    return {
+      ...layer,
+      items: [{
+        cache_status: "warm",
+        crossfade: 0.6,
+        end: 942,
+        id: "bg-v1-2-manual",
+        mediaId: "neon-lights.jpg",
+        mediaIds: ["neon-lights.jpg", "ramen-shop.jpg", "crowd-cross.jpg", "tokyo-skyline.jpg"],
+        motion: { easing: "linear", kind: "ken_burns" },
+        schedule: [
+          { end: 30, id: "seg-v1-2-neon", lockedDuration: false, mediaId: "neon-lights.jpg", start: 0 },
+          { end: 0, id: "seg-v1-2-ramen", lockedDuration: false, mediaId: "ramen-shop.jpg", start: 0 },
+          { end: 0, id: "seg-v1-2-crowd", lockedDuration: false, mediaId: "crowd-cross.jpg", start: 0 },
+          { end: 0, id: "seg-v1-2-tokyo", lockedDuration: false, mediaId: "tokyo-skyline.jpg", start: 0 },
+        ],
+        sentences: [1, 21] as [number, number],
+        start: 0,
+        transitions: { in: "cut", out: "cut" },
+      }],
+    };
+  }),
+  media: V1_2_PROJECT_MEDIA,
+  name: "Tokyo Essay",
+};
+
+const V1_2_EDITOR_TIME_PROJECT = {
+  ...TEST_PROJECT,
+  layers: TEST_PROJECT.layers.map((layer) => {
+    if (layer.kind !== "bg") return layer;
+    return {
+      ...layer,
+      items: [{
+        cache_status: "warm",
+        crossfade: 0.6,
+        end: 942,
+        id: "bg-v1-2-time",
+        mediaId: "neon-lights.jpg",
+        mediaIds: ["neon-lights.jpg", "ramen-shop.jpg", "crowd-cross.jpg"],
+        motion: { easing: "linear", kind: "ken_burns" },
+        schedule: [
+          { end: 942, id: "seg-v1-2-time-neon", lockedDuration: false, mediaId: "neon-lights.jpg", start: 0 },
+          { end: 0, id: "seg-v1-2-time-ramen", lockedDuration: false, mediaId: "ramen-shop.jpg", start: 0 },
+          { end: 0, id: "seg-v1-2-time-crowd", lockedDuration: false, mediaId: "crowd-cross.jpg", start: 0 },
+        ],
+        sentences: [1, 21] as [number, number],
+        start: 0,
+        transitions: { in: "cut", out: "cut" },
+      }],
+    };
+  }),
+  media: V1_2_PROJECT_MEDIA,
+  name: "Tokyo Essay",
+};
+
+const V1_2_SUBTITLE_PROJECT = {
+  ...V1_2_EDITOR_TIME_PROJECT,
+  subtitles: {
+    burn_in: true,
+    style: {
+      bg_color: "#000000",
+      bg_opacity: 62,
+      bg_radius: 8,
+      bg_style: "block",
+      color: "#ffffff",
+      font: "Arial",
+      max_chars_per_line: 20,
+      position: "bottom",
+      size: 42,
+    },
   },
 };
 

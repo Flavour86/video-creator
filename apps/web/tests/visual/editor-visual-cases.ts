@@ -4,6 +4,8 @@ export const PAGE_SSIM_THRESHOLD = 0.45;
 export const PREVIEW_SSIM_THRESHOLD = 0.6;
 export const V1_1_VISUAL_REFERENCE_PREFIX = "../tasks/v1.1/visuals/";
 export const V1_1_VISUAL_SSIM_THRESHOLD = 0.4;
+export const V1_2_VISUAL_REFERENCE_PREFIX = "../tasks/v1.2/visuals/";
+export const V1_2_VISUAL_SSIM_THRESHOLD = 0.98;
 
 export type EditorVisualTheme = "dark" | "light";
 export type EditorVisualCaptureTarget =
@@ -34,6 +36,10 @@ export type EditorVisualAction =
   | "watermark-modal"
   | "v1-background-coverage-editor"
   | "v1-background-coverage-modal"
+  | "v1-2-background-manual-coverage"
+  | "v1-2-editor-time-display"
+  | "v1-2-subtitles-max-characters"
+  | "v1-2-subtitles-max-characters-portrait"
   | "v1-subtitles-modal-color-bg"
   | "v1-subtitles-modal-none"
   | "v1-transcript-edit"
@@ -52,8 +58,20 @@ export type EditorVisualCase = {
   theme: EditorVisualTheme;
   inventory?: boolean;
   deviceScaleFactor?: number;
+  dynamicData?: string;
+  ignoreRegions?: ReadonlyArray<{ x: number; y: number; width: number; height: number }>;
   viewport?: { height: number; width: number };
 };
+
+const maskOutsideRegion = (
+  viewport: { height: number; width: number },
+  region: { height: number; width: number; x: number; y: number },
+) => [
+  { x: 0, y: 0, width: viewport.width, height: region.y },
+  { x: 0, y: region.y + region.height, width: viewport.width, height: viewport.height - region.y - region.height },
+  { x: 0, y: region.y, width: region.x, height: region.height },
+  { x: region.x + region.width, y: region.y, width: viewport.width - region.x - region.width, height: region.height },
+];
 
 export const EDITOR_VISUAL_CASES: EditorVisualCase[] = [
   { action: "none", name: "default editor dark", reference: "editor-dark.png", theme: "dark", threshold: PAGE_SSIM_THRESHOLD, capture: "page" },
@@ -281,6 +299,65 @@ export const V1_1_EDITOR_VISUAL_CASES: EditorVisualCase[] = [
   },
 ];
 
+export const V1_2_EDITOR_VISUAL_CASES: EditorVisualCase[] = [
+  {
+    action: "v1-2-background-manual-coverage",
+    blurRadius: 64,
+    capture: "page",
+    dynamicData: "Masks the blurred editor backdrop; deterministic background thumbnails and asset names stand in for dynamic user media.",
+    ignoreRegions: maskOutsideRegion({ width: 1920, height: 1080 }, { x: 510, y: 180, width: 900, height: 720 }),
+    name: "v1.2 background manual coverage",
+    reference: `${V1_2_VISUAL_REFERENCE_PREFIX}background-manual-coverage-16x9.png`,
+    strict: true,
+    theme: "dark",
+    threshold: V1_2_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    action: "v1-2-subtitles-max-characters",
+    blurRadius: 48,
+    capture: "page",
+    dynamicData: "Masks the blurred editor backdrop, media thumbnail/name area, and dynamic subtitle preview text; max-character field placement/value stays compared.",
+    ignoreRegions: [
+      ...maskOutsideRegion({ width: 1920, height: 1080 }, { x: 580, y: 80, width: 760, height: 920 }),
+      { x: 650, y: 760, width: 620, height: 150 },
+    ],
+    name: "v1.2 subtitles max characters 16:9",
+    reference: `${V1_2_VISUAL_REFERENCE_PREFIX}subtitles-max-characters-16x9.png`,
+    strict: true,
+    theme: "dark",
+    threshold: V1_2_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1920, height: 1080 },
+  },
+  {
+    action: "v1-2-subtitles-max-characters-portrait",
+    blurRadius: 80,
+    capture: "page",
+    dynamicData: "Masks the blurred editor backdrop, media thumbnail/name area, and dynamic subtitle preview text; max-character field placement/value stays compared.",
+    ignoreRegions: [
+      ...maskOutsideRegion({ width: 1080, height: 1920 }, { x: 160, y: 435, width: 760, height: 1050 }),
+      { x: 410, y: 1280, width: 260, height: 140 },
+    ],
+    name: "v1.2 subtitles max characters 9:16",
+    reference: `${V1_2_VISUAL_REFERENCE_PREFIX}subtitles-max-characters-9x16.png`,
+    strict: true,
+    theme: "dark",
+    threshold: V1_2_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1080, height: 1920 },
+  },
+  {
+    action: "v1-2-editor-time-display",
+    capture: "page",
+    dynamicData: "Masks transcript, timeline, media thumbnail/name, and inspector data; the live transport time is fixed by seeking to 38.399s so 00:38 / 15:42 is compared in the readout band.",
+    ignoreRegions: maskOutsideRegion({ width: 1920, height: 1080 }, { x: 1430, y: 590, width: 170, height: 85 }),
+    name: "v1.2 editor whole-second time display",
+    reference: `${V1_2_VISUAL_REFERENCE_PREFIX}editor-time-display-16x9.png`,
+    theme: "dark",
+    threshold: V1_2_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1920, height: 1080 },
+  },
+];
+
 export function editorVisualScreenshotPath(reference: string): string {
   return pathPosix.normalize(`docs/designs/visuals/${reference}`);
 }
@@ -290,5 +367,9 @@ export const EDITOR_VISUAL_SCREENSHOTS = EDITOR_VISUAL_CASES.filter((visualCase)
 );
 
 export const V1_1_EDITOR_VISUAL_SCREENSHOTS = V1_1_EDITOR_VISUAL_CASES.filter((visualCase) => visualCase.inventory !== false).map(
+  (visualCase) => editorVisualScreenshotPath(visualCase.reference),
+);
+
+export const V1_2_EDITOR_VISUAL_SCREENSHOTS = V1_2_EDITOR_VISUAL_CASES.filter((visualCase) => visualCase.inventory !== false).map(
   (visualCase) => editorVisualScreenshotPath(visualCase.reference),
 );

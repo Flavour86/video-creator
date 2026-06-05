@@ -26,6 +26,13 @@ const v1_1EditorScreenshots = [
   "watermark-modal-light.png",
 ].map((screenshot) => `docs/designs/tasks/v1.1/visuals/${screenshot}`);
 
+const v1_2EditorScreenshots = [
+  "background-manual-coverage-16x9.png",
+  "editor-time-display-16x9.png",
+  "subtitles-max-characters-16x9.png",
+  "subtitles-max-characters-9x16.png",
+].map((screenshot) => `docs/designs/tasks/v1.2/visuals/${screenshot}`);
+
 export const visualManifest: VisualManifestEntry[] = [
   { screenshot: "docs/designs/visuals/shell-dark.png", owner: "frontend-global", status: "implemented" },
   { screenshot: "docs/designs/visuals/shell-light.png", owner: "frontend-global", status: "implemented" },
@@ -64,6 +71,11 @@ export const visualManifest: VisualManifestEntry[] = [
   { screenshot: "docs/designs/visuals/change-background-light.png", owner: "editor", status: "implemented" },
   { screenshot: "docs/designs/visuals/SubtitleModal.png", owner: "editor", status: "implemented" },
   ...v1_1EditorScreenshots.map((screenshot) => ({
+    screenshot,
+    owner: "editor" as const,
+    status: "implemented" as const,
+  })),
+  ...v1_2EditorScreenshots.map((screenshot) => ({
     screenshot,
     owner: "editor" as const,
     status: "implemented" as const,
