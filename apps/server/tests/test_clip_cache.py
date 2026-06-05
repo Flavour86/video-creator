@@ -194,6 +194,46 @@ def test_pip_geometry_changes_cache_key_and_uses_alpha_container(tmp_path: Path)
     assert clip_cache_path_for_item(item=item, project_dir=tmp_path).suffix == ".webm"
 
 
+def test_manual_background_schedule_context_changes_cache_key(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path / "media" / "bg.png")
+    item = {
+        "id": "bg-scheduled-1",
+        "media_id": media_path.name,
+        "start": 0.0,
+        "end": 2.0,
+        "motion": {"kind": "none", "easing": "linear"},
+        "transitions": {"in": "cut", "out": "cut"},
+        "crossfade": 0.0,
+        "_cache_context": {
+            "kind": "background_schedule",
+            "parent_id": "bg-scheduled",
+            "segment_id": "seg-bg",
+            "media_id": media_path.name,
+            "schedule_start_s": 0.0,
+            "schedule_end_s": 2.0,
+            "render_start_s": 0.0,
+            "render_end_s": 2.0,
+        },
+    }
+    shifted = {
+        **item,
+        "start": 1.0,
+        "end": 3.0,
+        "_cache_context": {
+            **item["_cache_context"],
+            "schedule_start_s": 1.0,
+            "schedule_end_s": 3.0,
+            "render_start_s": 1.0,
+            "render_end_s": 3.0,
+        },
+    }
+
+    assert clip_cache_key_for_item(item=item, project_dir=tmp_path) != clip_cache_key_for_item(
+        item=shifted,
+        project_dir=tmp_path,
+    )
+
+
 def test_render_pip_clip_encodes_vp9_with_alpha(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

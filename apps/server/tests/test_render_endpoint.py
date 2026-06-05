@@ -21,6 +21,7 @@ from server.domain.project import load_project
 from server.main import app
 from server.pipeline import render as render_pipeline
 from server.pipeline.clip_render import clip_cache_path_for_item
+from server.pipeline.filtergraph import visual_items_bottom_to_top
 from server.pipeline.render import RenderError, RenderResult
 from server.routes import projects as project_routes
 from server.routes import render as render_routes
@@ -975,6 +976,86 @@ async def test_project_render_cache_uses_config_keys_and_detects_partial_on_medi
     assert second.json()["state"] == "partial"
     assert second.json()["cached_count"] == 1
     assert second.json()["total_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_project_render_cache_changes_when_manual_background_schedule_changes(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+
+    def project_payload(start: float, end: float) -> dict[str, object]:
+        return {
+            "version": 1,
+            "name": "manual-bg-cache",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [
+                {
+                    "id": "bg-z0",
+                    "kind": "bg",
+                    "name": "Background",
+                    "items": [
+                        {
+                            "id": "bg-scheduled",
+                            "mediaIds": ["bg.png"],
+                            "schedule": [
+                                {
+                                    "id": "seg-bg",
+                                    "mediaId": "bg.png",
+                                    "start": start,
+                                    "end": end,
+                                    "lockedDuration": False,
+                                }
+                            ],
+                            "sentences": [1, 1],
+                            "start": 0,
+                            "end": 10,
+                            "motion": {"kind": "none", "easing": "linear"},
+                            "transitions": {"in": "cut", "out": "cut"},
+                            "crossfade": 0,
+                        }
+                    ],
+                }
+            ],
+            "subtitles": None,
+            "watermark": None,
+        }
+
+    _write_project(project_dir, project=project_payload(0.0, 2.0))
+    touch_recent(project_dir, "manual-bg-cache")
+    project_id = project_id_for_path(project_dir)
+    media_dir = project_dir / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "bg.png").write_bytes(b"bg-v1")
+
+    [first_scheduled_item] = visual_items_bottom_to_top(load_project(project_dir))
+    first_cache_path = clip_cache_path_for_item(
+        item=first_scheduled_item,
+        project_dir=project_dir,
+        resolution="1920x1080",
+    )
+    first_cache_path.parent.mkdir(parents=True, exist_ok=True)
+    first_cache_path.write_bytes(b"bg-cache")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        before_schedule_change = await client.get(f"/projects/{project_id}/render-cache")
+        _write_project(project_dir, project=project_payload(1.0, 3.0))
+        after_schedule_change = await client.get(f"/projects/{project_id}/render-cache")
+
+    assert before_schedule_change.status_code == 200
+    assert before_schedule_change.json()["state"] == "warm"
+    assert before_schedule_change.json()["cached_count"] == 1
+    assert before_schedule_change.json()["total_count"] == 1
+
+    assert after_schedule_change.status_code == 200
+    assert after_schedule_change.json()["state"] == "cold"
+    assert after_schedule_change.json()["cached_count"] == 0
+    assert after_schedule_change.json()["total_count"] == 1
 
 
 @pytest.mark.asyncio

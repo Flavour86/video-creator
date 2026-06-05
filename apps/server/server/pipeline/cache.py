@@ -85,8 +85,9 @@ def clip_cache_components(
     crf: int,
     crossfade_s: float | None = None,
     pip: BaseModel | Mapping[str, JsonValue] | None = None,
+    cache_context: BaseModel | Mapping[str, JsonValue] | None = None,
 ) -> JsonObject:
-    return {
+    components: JsonObject = {
         "media_sha256": _compute_file_sha256(media_path),
         "duration_s": round(duration_s, 6),
         "motion": _json_object(motion),
@@ -99,6 +100,10 @@ def clip_cache_components(
         "pip": _json_object(pip),
         "format_version": CLIP_CACHE_FORMAT_VERSION,
     }
+    cache_context_json = _json_object(cache_context)
+    if cache_context_json is not None:
+        components["cache_context"] = cache_context_json
+    return components
 
 
 def clip_cache_key_from_components(components: JsonObject) -> str:
@@ -118,6 +123,7 @@ def clip_cache_key(
     crf: int,
     crossfade_s: float | None = None,
     pip: BaseModel | Mapping[str, JsonValue] | None = None,
+    cache_context: BaseModel | Mapping[str, JsonValue] | None = None,
 ) -> str:
     return clip_cache_key_from_components(
         clip_cache_components(
@@ -131,6 +137,7 @@ def clip_cache_key(
             crf=crf,
             crossfade_s=crossfade_s,
             pip=pip,
+            cache_context=cache_context,
         )
     )
 

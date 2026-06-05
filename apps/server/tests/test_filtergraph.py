@@ -103,6 +103,7 @@ def _expected_clip(
     crossfade_s: float | None = None,
     transition_in: str = "cut",
     transition_out: str = "cut",
+    cache_context: dict[str, object] | None = None,
 ) -> Path:
     key = clip_cache_key(
         media_path=media_path,
@@ -114,6 +115,7 @@ def _expected_clip(
         fps=30,
         crf=28,
         crossfade_s=crossfade_s,
+        cache_context=cache_context,
     )
     return clip_cache_path(project_dir, key)
 
@@ -875,9 +877,60 @@ def test_scheduled_background_expands_ranges_and_clamps_video_duration(
 
     assert _input_paths(command) == [
         str(tmp_path / "voice.wav"),
-        str(_expected_clip(tmp_path, bg_red, 30.0, crossfade_s=0.0)),
-        str(_expected_clip(tmp_path, bg_video, 4.0, crossfade_s=0.0)),
-        str(_expected_clip(tmp_path, bg_blue, 50.0, crossfade_s=0.0)),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg_red,
+                30.0,
+                crossfade_s=0.0,
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-scheduled",
+                    "segment_id": "seg-red",
+                    "media_id": "bg-red.jpg",
+                    "schedule_start_s": 0.0,
+                    "schedule_end_s": 30.0,
+                    "render_start_s": 0.0,
+                    "render_end_s": 30.0,
+                },
+            )
+        ),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg_video,
+                4.0,
+                crossfade_s=0.0,
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-scheduled",
+                    "segment_id": "seg-video",
+                    "media_id": "bg-video.mp4",
+                    "schedule_start_s": 30.0,
+                    "schedule_end_s": 40.0,
+                    "render_start_s": 30.0,
+                    "render_end_s": 34.0,
+                },
+            )
+        ),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg_blue,
+                50.0,
+                crossfade_s=0.0,
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-scheduled",
+                    "segment_id": "seg-blue",
+                    "media_id": "bg-blue.jpg",
+                    "schedule_start_s": 40.0,
+                    "schedule_end_s": 90.0,
+                    "render_start_s": 40.0,
+                    "render_end_s": 90.0,
+                },
+            )
+        ),
     ]
     filtergraph = _filtergraph(command)
     assert "color=black:s=1280x720:r=30:d=90[bg]" in filtergraph
@@ -885,6 +938,236 @@ def test_scheduled_background_expands_ranges_and_clamps_video_duration(
     assert "[v1][clip2]overlay=enable='between(t,30,34)':eof_action=pass[v2]" in filtergraph
     assert "[v2][clip3]overlay=enable='between(t,40,90)':eof_action=pass[v3]" in filtergraph
     assert "between(t,34,40)" not in filtergraph
+
+
+def test_scheduled_background_expands_only_positive_manual_rows(tmp_path: Path) -> None:
+    bg0 = _write_media(tmp_path, "bg0.jpg", b"bg0")
+    _write_media(tmp_path, "bg1.jpg", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-scheduled",
+                        "mediaIds": ["bg0.jpg", "bg1.jpg"],
+                        "schedule": [
+                            {"id": "seg-zero", "mediaId": "bg1.jpg", "start": 0.0, "end": 0.0, "lockedDuration": False},
+                            {"id": "seg-bg0", "mediaId": "bg0.jpg", "start": 2.0, "end": 6.0, "lockedDuration": False},
+                        ],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 0.0,
+                    }
+                ],
+            ),
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg0,
+                4.0,
+                crossfade_s=0.0,
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-scheduled",
+                    "segment_id": "seg-bg0",
+                    "media_id": "bg0.jpg",
+                    "schedule_start_s": 2.0,
+                    "schedule_end_s": 6.0,
+                    "render_start_s": 2.0,
+                    "render_end_s": 6.0,
+                },
+            )
+        ),
+    ]
+    filtergraph = _filtergraph(command)
+    assert filtergraph.count("overlay=enable=") == 1
+    assert "[bg][clip1]overlay=enable='between(t,2,6)':eof_action=pass[v1]" in filtergraph
+    assert "bg1" not in filtergraph
+
+
+def test_zero_duration_manual_background_schedule_does_not_fall_back_to_playlist(
+    tmp_path: Path,
+) -> None:
+    _write_media(tmp_path, "bg0.jpg", b"bg0")
+    _write_media(tmp_path, "bg1.jpg", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-zero-only",
+                        "mediaIds": ["bg0.jpg", "bg1.jpg"],
+                        "schedule": [
+                            {"id": "seg-bg0", "mediaId": "bg0.jpg", "start": 0.0, "end": 0.0, "lockedDuration": False},
+                            {"id": "seg-bg1", "mediaId": "bg1.jpg", "start": 5.0, "end": 5.0, "lockedDuration": False},
+                        ],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 0.0,
+                    }
+                ],
+            ),
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [str(tmp_path / "voice.wav")]
+    filtergraph = _filtergraph(command)
+    assert "color=black:s=1280x720:r=30:d=10[bg]" in filtergraph
+    assert "overlay=enable=" not in filtergraph
+
+
+def test_manual_background_schedule_gap_stays_black_between_positive_rows(
+    tmp_path: Path,
+) -> None:
+    bg0 = _write_media(tmp_path, "bg0.jpg", b"bg0")
+    bg1 = _write_media(tmp_path, "bg1.jpg", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-gap",
+                        "mediaIds": ["bg0.jpg", "bg1.jpg"],
+                        "schedule": [
+                            {"id": "seg-bg0", "mediaId": "bg0.jpg", "start": 0.0, "end": 2.0, "lockedDuration": False},
+                            {"id": "seg-bg1", "mediaId": "bg1.jpg", "start": 5.0, "end": 7.0, "lockedDuration": False},
+                        ],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 1.0,
+                    }
+                ],
+            ),
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg0,
+                2.0,
+                crossfade_s=1.0,
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-gap",
+                    "segment_id": "seg-bg0",
+                    "media_id": "bg0.jpg",
+                    "schedule_start_s": 0.0,
+                    "schedule_end_s": 2.0,
+                    "render_start_s": 0.0,
+                    "render_end_s": 2.0,
+                },
+            )
+        ),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg1,
+                2.0,
+                crossfade_s=1.0,
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-gap",
+                    "segment_id": "seg-bg1",
+                    "media_id": "bg1.jpg",
+                    "schedule_start_s": 5.0,
+                    "schedule_end_s": 7.0,
+                    "render_start_s": 5.0,
+                    "render_end_s": 7.0,
+                },
+            )
+        ),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "[bg][clip1]overlay=enable='between(t,0,2)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,5,7)':eof_action=pass[v2]" in filtergraph
+    assert "between(t,2,5)" not in filtergraph
+
+
+def test_legacy_background_playlist_without_schedule_keeps_even_fallback(
+    tmp_path: Path,
+) -> None:
+    bg0 = _write_media(tmp_path, "bg0.jpg", b"bg0")
+    bg1 = _write_media(tmp_path, "bg1.jpg", b"bg1")
+    project = _project(
+        [
+            _bg_layer(
+                "bg-z0",
+                [
+                    {
+                        "id": "bg-legacy",
+                        "mediaIds": ["bg0.jpg", "bg1.jpg"],
+                        "sentences": [1, 1],
+                        "start": 0.0,
+                        "end": 10.0,
+                        "motion": {"kind": "none", "easing": "linear"},
+                        "transitions": {"in": "cut", "out": "cut"},
+                        "crossfade": 0.0,
+                    }
+                ],
+            ),
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, bg0, 5.0, crossfade_s=0.0)),
+        str(_expected_clip(tmp_path, bg1, 5.0, crossfade_s=0.0)),
+    ]
+    filtergraph = _filtergraph(command)
+    assert "[bg][clip1]overlay=enable='between(t,0,5)':eof_action=pass[v1]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,5,10)':eof_action=pass[v2]" in filtergraph
 
 
 def test_scheduled_background_crossfade_overlaps_adjacent_ranges(
@@ -948,8 +1231,44 @@ def test_scheduled_background_crossfade_overlaps_adjacent_ranges(
 
     assert _input_paths(command) == [
         str(tmp_path / "voice.wav"),
-        str(_expected_clip(tmp_path, bg0, 5.0, crossfade_s=1.0, transition_out="fade")),
-        str(_expected_clip(tmp_path, bg1, 6.0, crossfade_s=1.0, transition_in="fade")),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg0,
+                5.0,
+                crossfade_s=1.0,
+                transition_out="fade",
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-scheduled",
+                    "segment_id": "seg-bg0",
+                    "media_id": "bg0.jpg",
+                    "schedule_start_s": 0.0,
+                    "schedule_end_s": 5.0,
+                    "render_start_s": 0.0,
+                    "render_end_s": 5.0,
+                },
+            )
+        ),
+        str(
+            _expected_clip(
+                tmp_path,
+                bg1,
+                6.0,
+                crossfade_s=1.0,
+                transition_in="fade",
+                cache_context={
+                    "kind": "background_schedule",
+                    "parent_id": "bg-scheduled",
+                    "segment_id": "seg-bg1",
+                    "media_id": "bg1.jpg",
+                    "schedule_start_s": 5.0,
+                    "schedule_end_s": 10.0,
+                    "render_start_s": 5.0,
+                    "render_end_s": 10.0,
+                },
+            )
+        ),
     ]
     filtergraph = _filtergraph(command)
     assert "[bg][clip1]overlay=enable='between(t,0,5)':eof_action=pass[v1]" in filtergraph

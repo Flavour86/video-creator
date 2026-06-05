@@ -104,6 +104,7 @@ def clip_cache_key_for_item(
         crf=crf,
         crossfade_s=_crossfade_s(item),
         pip=_pip_value(item),
+        cache_context=_cache_context_value(item),
     )
     return clip_cache_key_from_components(components)
 
@@ -291,6 +292,19 @@ def _pip_value(item: ClipRenderItem) -> BaseModel | Mapping[str, JsonValue] | No
     if isinstance(value, Mapping):
         return cast(Mapping[str, JsonValue], value)
     raise TypeError("Clip item pip must be an object or null.")
+
+
+def _cache_context_value(item: ClipRenderItem) -> BaseModel | Mapping[str, JsonValue] | None:
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        value = raw.get("_cache_context") or raw.get("cache_context") or raw.get("cacheContext")
+    else:
+        value = getattr(raw, "_cache_context", None) or getattr(raw, "cache_context", None)
+    if value is None or isinstance(value, BaseModel):
+        return value
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, JsonValue], value)
+    raise TypeError("Clip item cache context must be an object or null.")
 
 
 def _is_pip_item(item: ClipRenderItem) -> bool:
@@ -582,6 +596,7 @@ def _write_metadata(
         crf=crf,
         crossfade_s=_crossfade_s(item),
         pip=_pip_value(item),
+        cache_context=_cache_context_value(item),
     )
     metadata = {
         "key_components": components,

@@ -31,6 +31,9 @@ class BackgroundScheduleRange:
     media_id: str
     start: float
     end: float
+    segment_id: str | None = None
+    source_start: float | None = None
+    source_end: float | None = None
 
 
 @dataclass(frozen=True)
@@ -173,8 +176,8 @@ def _expand_background_playlist_item(
 ) -> list[ClipRenderItem]:
     media_ids = _item_media_ids(item)
     media_index = _project_media_index(project)
-    schedule = _item_schedule_segments(item, media_ids)
-    if schedule:
+    has_explicit_schedule, schedule = _item_schedule_segments(item, media_ids)
+    if has_explicit_schedule:
         return _expand_scheduled_background_item(item, schedule, media_index)
     if len(media_ids) == 0:
         return [item]
@@ -233,7 +236,16 @@ def _expand_scheduled_background_item(
             end_s = min(end_s, start_s + media_duration)
         if end_s <= start_s:
             continue
-        ranges.append(BackgroundScheduleRange(media_id=segment.media_id, start=start_s, end=end_s))
+        ranges.append(
+            BackgroundScheduleRange(
+                media_id=segment.media_id,
+                start=start_s,
+                end=end_s,
+                segment_id=segment.segment_id,
+                source_start=segment.start,
+                source_end=segment.end,
+            )
+        )
 
     expanded: list[ClipRenderItem] = []
     crossfade_s = _item_crossfade(item)
@@ -266,6 +278,7 @@ def _expand_scheduled_background_item(
                     if index == len(ranges) - 1
                     else "fade" if has_adjacent_next and segment_crossfade_s > 0 else "cut"
                 ),
+                cache_context=_background_schedule_cache_context(item, segment),
             )
         )
     return expanded
@@ -351,6 +364,7 @@ def _playlist_child_item(
     end_s: float,
     transition_in: str,
     transition_out: str,
+    cache_context: Mapping[str, object] | None = None,
 ) -> ClipRenderItem:
     raw = _unwrap_root_model(item)
     if isinstance(raw, Mapping):
@@ -374,6 +388,8 @@ def _playlist_child_item(
     child["start"] = start_s
     child["end"] = end_s
     child["transitions"] = {"in": transition_in, "out": transition_out}
+    if cache_context is not None:
+        child["_cache_context"] = dict(cache_context)
     return child
 
 
@@ -692,11 +708,11 @@ def _item_media_ids(item: ClipRenderItem) -> list[str]:
 def _item_schedule_segments(
     item: ClipRenderItem,
     media_ids: list[str],
-) -> list[BackgroundScheduleRange]:
+) -> tuple[bool, list[BackgroundScheduleRange]]:
     raw = _unwrap_root_model(item)
     value = raw.get("schedule") if isinstance(raw, Mapping) else getattr(raw, "schedule", None)
     if value is None:
-        return []
+        return (False, [])
     if not isinstance(value, list):
         raise TypeError("Background item schedule must be a list.")
     allowed_ids = set(media_ids) if media_ids else None
@@ -709,8 +725,17 @@ def _item_schedule_segments(
         end_s = _schedule_float(segment, "end")
         if end_s <= start_s:
             continue
-        segments.append(BackgroundScheduleRange(media_id=media_id, start=start_s, end=end_s))
-    return segments
+        segments.append(
+            BackgroundScheduleRange(
+                media_id=media_id,
+                start=start_s,
+                end=end_s,
+                segment_id=_schedule_optional_str(segment, "id"),
+                source_start=start_s,
+                source_end=end_s,
+            )
+        )
+    return (True, segments)
 
 
 def _schedule_str(segment: object, name: str) -> str:
@@ -727,11 +752,57 @@ def _schedule_str(segment: object, name: str) -> str:
     return value
 
 
+def _schedule_optional_str(segment: object, name: str) -> str | None:
+    if isinstance(segment, Mapping):
+        value = segment.get(name)
+    else:
+        value = getattr(segment, name, None)
+    if isinstance(value, Enum):
+        return str(value.value)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"Background schedule {name} must be a string.")
+    return value
+
+
 def _schedule_float(segment: object, name: str) -> float:
     value = segment.get(name) if isinstance(segment, Mapping) else getattr(segment, name)
     if not isinstance(value, int | float):
         raise TypeError(f"Background schedule {name} must be numeric.")
     return float(value)
+
+
+def _background_schedule_cache_context(
+    item: ClipRenderItem,
+    segment: BackgroundScheduleRange,
+) -> dict[str, object]:
+    return {
+        "kind": "background_schedule",
+        "parent_id": _item_id(item),
+        "segment_id": segment.segment_id,
+        "media_id": segment.media_id,
+        "schedule_start_s": _round_cache_float(
+            segment.source_start if segment.source_start is not None else segment.start
+        ),
+        "schedule_end_s": _round_cache_float(
+            segment.source_end if segment.source_end is not None else segment.end
+        ),
+        "render_start_s": _round_cache_float(segment.start),
+        "render_end_s": _round_cache_float(segment.end),
+    }
+
+
+def _item_id(item: ClipRenderItem) -> str:
+    raw = _unwrap_root_model(item)
+    value = raw.get("id") if isinstance(raw, Mapping) else getattr(raw, "id", None)
+    if isinstance(value, Enum):
+        return str(value.value)
+    return value if isinstance(value, str) and value else "bg-playlist"
+
+
+def _round_cache_float(value: float) -> float:
+    return round(value, 6)
 
 
 def _item_has_media_id(item: ClipRenderItem) -> bool:
