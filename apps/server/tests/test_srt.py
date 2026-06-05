@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from server.domain.timing import AlignedSentence, AlignedWord, AlignmentResult
 from server.pipeline.srt import alignment_with_sentence_text_overrides, generate_srt, write_aligned_srt_file
 
@@ -69,6 +71,32 @@ def _alignment() -> AlignmentResult:
 
 def _blocks(srt: str) -> list[list[str]]:
     return [block.split("\r\n") for block in srt.strip().split("\r\n\r\n")]
+
+
+def _single_sentence_alignment(text: str) -> AlignmentResult:
+    raw_words = text.split()
+    step = 4.0 / len(raw_words)
+    return AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text=text,
+                start_s=0.0,
+                end_s=4.0,
+                confidence_avg=0.95,
+            )
+        ],
+        words=[
+            AlignedWord(
+                sentence_index=1,
+                text=word,
+                start_s=index * step,
+                end_s=(index + 1) * step,
+                confidence=0.9,
+            )
+            for index, word in enumerate(raw_words)
+        ],
+    )
 
 
 def test_long_sentence_produces_multiple_cues() -> None:
@@ -194,6 +222,32 @@ def test_generate_srt_respects_custom_max_chars_per_line() -> None:
     for block in blocks:
         assert all(len(line) <= 30 for line in block[2:])
         assert len(block[2:]) <= 2
+
+
+@pytest.mark.parametrize(
+    ("requested_max_chars", "expected_max_chars"),
+    [
+        (12, 20),
+        (20, 20),
+        (80, 80),
+        (120, 80),
+    ],
+)
+def test_generate_srt_normalizes_max_chars_per_line_bounds(
+    requested_max_chars: int,
+    expected_max_chars: int,
+) -> None:
+    alignment = _single_sentence_alignment(
+        "Capitalism begins here with a deliberate subtitle wrapping sample that has enough words to exceed eighty characters."
+    )
+
+    blocks = _blocks(generate_srt(alignment, max_line_chars=requested_max_chars))
+    rendered_lines = [line for block in blocks for line in block[2:]]
+
+    assert rendered_lines
+    assert all(len(line) <= expected_max_chars for line in rendered_lines)
+    if requested_max_chars < 20:
+        assert any(len(line) > requested_max_chars for line in rendered_lines)
 
 
 def test_generate_srt_prefers_transcript_sentence_override_text() -> None:

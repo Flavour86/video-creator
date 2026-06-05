@@ -16,6 +16,10 @@ const PYTHON_EXE = process.platform === "win32"
   : path.join(SERVER_DIR, ".venv", "bin", "python");
 const TEST01_SOURCE = path.join(REPO_ROOT, "projects", "test01");
 const RENDER_RESOLUTION = { width: 1280, height: 720 };
+const TASK06_RENDER_RESOLUTIONS = [
+  { label: "16x9", value: "1280x720", width: 1280, height: 720 },
+  { label: "9x16", value: "1080x1920", width: 1080, height: 1920 },
+] as const;
 const FIXTURE_DURATION_S = 60;
 const SUBTITLE_FORCE_STYLE = [
   "Fontname=Arial",
@@ -54,8 +58,14 @@ type RenderHistoryRow = {
 type Cue = {
   end: number;
   index: number;
+  lines: string[];
   start: number;
   text: string;
+};
+
+type RenderResolution = {
+  height: number;
+  width: number;
 };
 
 type Bounds = {
@@ -143,6 +153,42 @@ test.describe("Render correctness E2E", () => {
           await assertWatermarkPresent(artifact);
         }
         expect((await fs.stat(artifact)).size, `${path.basename(artifact)} should be captured`).toBeGreaterThan(0);
+      }
+    } finally {
+      await backend.stop();
+    }
+  });
+
+  test("renders max-20 subtitle wrapping in 16:9 and 9:16 outputs", async ({}, testInfo) => {
+    test.setTimeout(420_000);
+
+    const backend = await startBackend(testInfo);
+    try {
+      for (const resolution of TASK06_RENDER_RESOLUTIONS) {
+        const fixture = await prepareMaxCharsSubtitleFixture(testInfo, resolution.label);
+        await registerProject(backend.baseUrl, fixture.projectDir);
+        const outputPath = await ensureDraftRender(
+          backend.baseUrl,
+          fixture.projectId,
+          fixture.projectDir,
+          resolution.value,
+        );
+        const probe = await ffprobeJson(outputPath);
+        expect(probe.video?.width).toBe(resolution.width);
+        expect(probe.video?.height).toBe(resolution.height);
+
+        const cues = await parseSrt(fixture.srtPath);
+        expect(cues, `${resolution.label} fixture should produce a subtitle cue`).toHaveLength(1);
+        const cue = cues[0];
+        expect(cue.lines).toEqual(["Capitalism begins", "here."]);
+        expect(cue.lines.every((line) => line.length <= 20), `${resolution.label} SRT lines should honor max 20`).toBe(true);
+
+        const actualPath = testInfo.outputPath(`task06-max20-${resolution.label}-actual.png`);
+        const expectedPath = testInfo.outputPath(`task06-max20-${resolution.label}-expected.png`);
+        await extractFrame(outputPath, cue.start + 0.8, actualPath);
+        await renderExpectedSubtitleFrame(fixture.srtPath, cue.start + 0.8, expectedPath, resolution);
+        const similarity = await subtitleSimilarity(actualPath, expectedPath, resolution);
+        expect(similarity, `${resolution.label} rendered subtitle frame should match generated SRT wrapping`).toBeGreaterThanOrEqual(0.85);
       }
     } finally {
       await backend.stop();
@@ -327,6 +373,69 @@ async function prepareTest01Fixture(testInfo: TestInfo): Promise<RenderFixture> 
   };
 }
 
+async function prepareMaxCharsSubtitleFixture(testInfo: TestInfo, label: string): Promise<RenderFixture> {
+  const fixtureRoot = testInfo.outputPath(`task06-max20-${label}-fixture`);
+  const projectDir = path.join(fixtureRoot, "subtitle-wrap");
+  const vcDir = path.join(projectDir, ".vc");
+  await fs.rm(fixtureRoot, { force: true, recursive: true });
+  await fs.mkdir(path.join(vcDir, "drafts"), { recursive: true });
+  await fs.mkdir(path.join(vcDir, "clips"), { recursive: true });
+  await fs.mkdir(path.join(vcDir, "logs"), { recursive: true });
+  await fs.mkdir(path.join(projectDir, "renders"), { recursive: true });
+
+  const voicePath = path.join(projectDir, "voice.wav");
+  await run("ffmpeg", [
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=4",
+    "-ac",
+    "2",
+    "-ar",
+    "48000",
+    voicePath,
+  ]);
+
+  const sentence = { index: 1, text: "Capitalism begins here.", start_s: 0.5, end_s: 3.0, confidence_avg: 0.99 };
+  const transcriptText = sentence.text;
+  await fs.writeFile(path.join(projectDir, "transcript.txt"), transcriptText, "utf-8");
+  const alignment = { cache_hit: true, sentences: [sentence], words: wordsForSentence(sentence) };
+  await fs.writeFile(path.join(vcDir, "alignment.json"), `${JSON.stringify(alignment)}\n`, "utf-8");
+  await fs.writeFile(path.join(vcDir, "alignment.hash"), await alignmentHash(voicePath, transcriptText), "utf-8");
+
+  const now = new Date("2026-06-05T00:00:00.000Z").toISOString();
+  const project = {
+    audio: "voice.wav",
+    created_at: now,
+    layers: [
+      { id: "subtitles", items: [{ auto: true, id: "sub-auto", label: "Auto subtitles", style: "default" }], kind: "sub", name: "Subtitles" },
+    ],
+    media: [],
+    name: `subtitle-wrap-${label}`,
+    output: { fps: 30, preset: "draft", resolution: "720p" },
+    subtitles: {
+      burn_in: true,
+      style: { bg_style: "shadow", font: "Arial", max_chars_per_line: 20, position: "bottom", size: 36 },
+    },
+    transcript: { kind: "plain_text", path: "transcript.txt" },
+    updated_at: now,
+    version: 1,
+    watermark: null,
+  };
+  await fs.writeFile(path.join(projectDir, "project.json"), `${JSON.stringify(project, null, 2)}\n`, "utf-8");
+
+  return {
+    projectDir,
+    projectId: projectIdForPath(projectDir),
+    srtPath: path.join(projectDir, "subtitles.srt"),
+    voicePath,
+  };
+}
+
 function visualItem(id: string, mediaId: string, start: number, end: number, extra: Record<string, unknown> = {}) {
   return {
     cache_status: "cold",
@@ -362,11 +471,16 @@ async function registerProject(baseUrl: string, projectDir: string): Promise<voi
   await expectResponseOk(response);
 }
 
-async function ensureDraftRender(baseUrl: string, projectId: string, projectDir: string): Promise<string> {
-  const reusable = await latestSuccessfulDraft(baseUrl, projectId);
+async function ensureDraftRender(
+  baseUrl: string,
+  projectId: string,
+  projectDir: string,
+  resolution = "1280x720",
+): Promise<string> {
+  const reusable = await latestSuccessfulDraft(baseUrl, projectId, resolution);
   if (reusable) return reusable;
 
-  const response = await fetch(`${baseUrl}/projects/${encodeURIComponent(projectId)}/render?preset=draft&resolution=1280x720`, {
+  const response = await fetch(`${baseUrl}/projects/${encodeURIComponent(projectId)}/render?preset=draft&resolution=${encodeURIComponent(resolution)}`, {
     method: "POST",
   });
   await expectResponseOk(response);
@@ -377,14 +491,14 @@ async function ensureDraftRender(baseUrl: string, projectId: string, projectDir:
   return row.output_path;
 }
 
-async function latestSuccessfulDraft(baseUrl: string, projectId: string): Promise<string | null> {
+async function latestSuccessfulDraft(baseUrl: string, projectId: string, resolution = "1280x720"): Promise<string | null> {
   const response = await fetch(`${baseUrl}/projects/${encodeURIComponent(projectId)}/history`);
   if (!response.ok) return null;
   const rows = (await response.json()) as RenderHistoryRow[];
   const row = rows.find((entry) =>
     entry.output_exists
     && entry.preset === "draft"
-    && entry.resolution === "1280x720"
+    && entry.resolution === resolution
     && ["done", "rendered"].includes(entry.status)
   );
   return row?.output_path ?? null;
@@ -475,16 +589,20 @@ async function assertWatermarkPresent(framePath: string): Promise<void> {
   expect(magentaPixels / total, `watermark signature in ${path.basename(framePath)}`).toBeGreaterThan(0.12);
 }
 
-async function subtitleSimilarity(actualPath: string, expectedPath: string): Promise<number> {
+async function subtitleSimilarity(
+  actualPath: string,
+  expectedPath: string,
+  resolution: RenderResolution = RENDER_RESOLUTION,
+): Promise<number> {
   const actual = await readPng(actualPath);
   const expected = await readPng(expectedPath);
   let maskPixels = 0;
   let matchedPixels = 0;
   const region = {
-    height: Math.round(RENDER_RESOLUTION.height * 0.45),
-    width: RENDER_RESOLUTION.width,
+    height: Math.round(resolution.height * 0.45),
+    width: resolution.width,
     x: 0,
-    y: Math.round(RENDER_RESOLUTION.height * 0.55),
+    y: Math.round(resolution.height * 0.55),
   };
   forEachPixel(expected, region, (r, g, b, _a, x, y) => {
     if (brightness(r, g, b) < 160) return;
@@ -515,7 +633,12 @@ async function extractFrame(videoPath: string, seconds: number, outputPath: stri
   ]);
 }
 
-async function renderExpectedSubtitleFrame(srtPath: string, seconds: number, outputPath: string): Promise<void> {
+async function renderExpectedSubtitleFrame(
+  srtPath: string,
+  seconds: number,
+  outputPath: string,
+  resolution: RenderResolution = RENDER_RESOLUTION,
+): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await run("ffmpeg", [
     "-y",
@@ -525,7 +648,7 @@ async function renderExpectedSubtitleFrame(srtPath: string, seconds: number, out
     "-f",
     "lavfi",
     "-i",
-    `color=black:s=${RENDER_RESOLUTION.width}x${RENDER_RESOLUTION.height}:r=30:d=${FIXTURE_DURATION_S}`,
+    `color=black:s=${resolution.width}x${resolution.height}:r=30:d=${FIXTURE_DURATION_S}`,
     "-ss",
     seconds.toFixed(3),
     "-frames:v",
@@ -543,11 +666,13 @@ async function parseSrt(srtPath: string): Promise<Cue[]> {
     const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
     const index = Number(lines[0]);
     const [startRaw, endRaw] = lines[1].split(/\s+-->\s+/);
+    const cueLines = lines.slice(2);
     return {
       end: parseSrtTime(endRaw),
       index,
+      lines: cueLines,
       start: parseSrtTime(startRaw),
-      text: lines.slice(2).join(" "),
+      text: cueLines.join(" "),
     };
   });
 }

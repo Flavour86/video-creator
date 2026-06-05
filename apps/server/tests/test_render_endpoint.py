@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -20,6 +21,7 @@ from server.db.renders import (
 from server.domain.project import load_project
 from server.main import app
 from server.pipeline import render as render_pipeline
+from server.pipeline.cache import compute_alignment_hash
 from server.pipeline.clip_render import clip_cache_path_for_item
 from server.pipeline.filtergraph import visual_items_bottom_to_top
 from server.pipeline.render import RenderError, RenderResult
@@ -43,6 +45,91 @@ def _write_project(project_dir: Path, project: dict[str, object] | None = None) 
     (project_dir / "project.json").write_text(
         json.dumps(payload),
         encoding="utf-8",
+    )
+
+
+def _write_cached_alignment_project(project_dir: Path, *, max_chars_per_line: int) -> None:
+    transcript_text = "Capitalism begins here."
+    project_dir.mkdir(exist_ok=True)
+    (project_dir / "voice.wav").write_bytes(b"voice-fixture")
+    (project_dir / "transcript.txt").write_text(transcript_text, encoding="utf-8")
+    vc_dir = project_dir / ".vc"
+    vc_dir.mkdir()
+    alignment = {
+        "cache_hit": True,
+        "sentences": [
+            {
+                "index": 1,
+                "text": transcript_text,
+                "start_s": 0.0,
+                "end_s": 2.5,
+                "confidence_avg": 0.95,
+            }
+        ],
+        "words": [
+            {
+                "sentence_index": 1,
+                "text": "Capitalism",
+                "start_s": 0.0,
+                "end_s": 0.8,
+                "confidence": 0.9,
+            },
+            {
+                "sentence_index": 1,
+                "text": "begins",
+                "start_s": 0.8,
+                "end_s": 1.6,
+                "confidence": 0.9,
+            },
+            {
+                "sentence_index": 1,
+                "text": "here.",
+                "start_s": 1.6,
+                "end_s": 2.5,
+                "confidence": 0.9,
+            },
+        ],
+    }
+    (vc_dir / "alignment.json").write_text(json.dumps(alignment), encoding="utf-8")
+    (vc_dir / "alignment.hash").write_text(
+        compute_alignment_hash(project_dir / "voice.wav", transcript_text),
+        encoding="utf-8",
+    )
+    _write_project(
+        project_dir,
+        project={
+            "version": 1,
+            "name": "subtitle-wrap",
+            "audio": "voice.wav",
+            "transcript": {"kind": "plain_text", "path": "transcript.txt"},
+            "output": {"preset": "draft"},
+            "layers": [
+                {
+                    "id": "subtitles",
+                    "kind": "sub",
+                    "name": "Subtitles",
+                    "items": [
+                        {
+                            "auto": True,
+                            "id": "sub-auto",
+                            "label": "Auto subtitles",
+                            "style": "default",
+                        }
+                    ],
+                }
+            ],
+            "subtitles": {
+                "burn_in": True,
+                "style": {
+                    "font": "Arial",
+                    "size": 36,
+                    "position": "bottom",
+                    "max_chars_per_line": max_chars_per_line,
+                    "bg_style": "shadow",
+                },
+            },
+            "watermark": None,
+        },
     )
 
 
@@ -131,6 +218,47 @@ async def test_project_id_render_accepts_snapshot_backed_project_without_project
 
     assert response.status_code == 200
     assert response.json()["render_id"] == "r-snapshot"
+
+
+@pytest.mark.asyncio
+async def test_render_rebuilds_subtitles_srt_with_saved_max_chars_per_line(tmp_path: Path) -> None:
+    _write_cached_alignment_project(tmp_path, max_chars_per_line=20)
+
+    alignment = await render_pipeline._ensure_alignment(tmp_path, load_project(tmp_path))
+
+    assert alignment.sentences[0].text == "Capitalism begins here."
+    srt = (tmp_path / "subtitles.srt").read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert "Capitalism begins\nhere." in srt
+    subtitle_lines = [
+        line
+        for block in srt.strip().split("\n\n")
+        for line in block.split("\n")[2:]
+    ]
+    assert subtitle_lines == ["Capitalism begins", "here."]
+    assert all(len(line) <= 20 for line in subtitle_lines)
+
+
+@pytest.mark.parametrize(
+    ("saved_value", "expected_value"),
+    [
+        (12, 20),
+        (20, 20),
+        (80, 80),
+        (120, 80),
+        (None, 42),
+    ],
+)
+def test_render_subtitle_max_chars_normalizes_to_schema_bounds(
+    saved_value: int | None,
+    expected_value: int,
+) -> None:
+    project = SimpleNamespace(
+        subtitles=SimpleNamespace(
+            style=SimpleNamespace(max_chars_per_line=saved_value),
+        ),
+    )
+
+    assert render_pipeline._subtitle_max_line_chars(project) == expected_value
 
 
 @pytest.mark.asyncio
