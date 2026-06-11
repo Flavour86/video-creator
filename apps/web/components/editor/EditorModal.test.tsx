@@ -174,13 +174,69 @@ describe("EditorModal", () => {
 
     fireEvent.change(maxChars, { target: { value: "10" } });
 
+    expect(maxChars).toHaveValue(10);
+    expect(cue.firstElementChild).toHaveTextContent("This subtitle preview follows your style");
+
+    fireEvent.blur(maxChars);
+
     expect(maxChars).toHaveValue(20);
     expect(cue.firstElementChild).toHaveTextContent("This subtitle");
 
     fireEvent.change(maxChars, { target: { value: "100" } });
 
+    expect(maxChars).toHaveValue(100);
+
+    fireEvent.blur(maxChars);
+
     expect(maxChars).toHaveValue(80);
     expect(cue.firstElementChild).toHaveTextContent("This subtitle preview follows your style and stays inside the safe zone.");
+  });
+
+  it("allows direct manual typing for max characters per line", () => {
+    const { onApplySubtitles } = renderModal({
+      modal: "subtitles",
+      subtitles: {
+        ...DEFAULT_SUBTITLES,
+        burn_in: true,
+      },
+    });
+
+    const maxChars = screen.getByLabelText("Max characters per line");
+    fireEvent.change(maxChars, { target: { value: "6" } });
+    expect(maxChars).toHaveValue(6);
+
+    fireEvent.change(maxChars, { target: { value: "65" } });
+    expect(maxChars).toHaveValue(65);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(onApplySubtitles).toHaveBeenCalledWith({
+      burn_in: true,
+      style: {
+        ...DEFAULT_SUBTITLES.style,
+        max_chars_per_line: 65,
+      },
+    });
+  });
+
+  it("keeps a max-70 subtitle preview to two balanced lines", () => {
+    renderModal({
+      modal: "subtitles",
+      subtitles: {
+        ...DEFAULT_SUBTITLES,
+        burn_in: true,
+        style: {
+          ...DEFAULT_SUBTITLES.style,
+          max_chars_per_line: 70,
+        },
+      },
+    });
+
+    const cue = screen.getByTestId("subtitles-preview-cue");
+    expect(Array.from(cue.children).map((child) => child.textContent)).toEqual([
+      "This subtitle preview follows your style and stays inside the",
+      "safe zone.",
+    ]);
   });
 
   it("disables background rectangle controls by mode", () => {

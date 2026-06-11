@@ -147,12 +147,39 @@ function SubtitlesFields({
   const previewRef = useRef<HTMLDivElement | null>(null);
   const metrics = SUBTITLE_PREVIEW_METRICS[previewResolution];
   const [measuredFrameWidth, setMeasuredFrameWidth] = useState<number | null>(null);
+  const [maxCharsInput, setMaxCharsInput] = useState(() => String(value.style.max_chars_per_line));
   const cueLines = wrapCueLine(SUBTITLE_PREVIEW_TEXT, value.style.max_chars_per_line);
   const frameWidth = measuredFrameWidth ?? metrics.frameWidth;
   const previewScale = frameWidth / metrics.renderWidth;
   const cueStyle = subtitlePreviewCueStyle(value, previewScale, metrics);
   const backgroundRectangleEnabled = value.style.bg_style === "pill" || value.style.bg_style === "block";
   const backgroundRadiusEnabled = value.style.bg_style === "block";
+
+  useEffect(() => {
+    setMaxCharsInput(String(value.style.max_chars_per_line));
+  }, [value.style.max_chars_per_line]);
+
+  function updateMaxCharsInput(rawValue: string) {
+    setMaxCharsInput(rawValue);
+    const trimmed = rawValue.trim();
+    if (!trimmed) return;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 20 || parsed > 80) return;
+    const next = clampNumber(parsed, 20, 80);
+    if (next !== value.style.max_chars_per_line) {
+      onChange({ ...value, style: { ...value.style, max_chars_per_line: next } });
+    }
+  }
+
+  function commitMaxCharsInput() {
+    const trimmed = maxCharsInput.trim();
+    const parsed = trimmed ? Number(trimmed) : value.style.max_chars_per_line;
+    const next = clampNumber(parsed, 20, 80);
+    setMaxCharsInput(String(next));
+    if (next !== value.style.max_chars_per_line) {
+      onChange({ ...value, style: { ...value.style, max_chars_per_line: next } });
+    }
+  }
 
   useEffect(() => {
     setMeasuredFrameWidth(null);
@@ -241,14 +268,10 @@ function SubtitlesFields({
             id="editor-sub-max-chars"
             max={80}
             min={20}
-            onChange={(event) => {
-              const raw = event.target.value.trim();
-              if (!raw) return;
-              const next = clampNumber(Number(raw), 20, 80);
-              onChange({ ...value, style: { ...value.style, max_chars_per_line: next } });
-            }}
+            onBlur={commitMaxCharsInput}
+            onChange={(event) => updateMaxCharsInput(event.target.value)}
             step={1}
-            value={value.style.max_chars_per_line}
+            value={maxCharsInput}
           />
         </Field>
       </div>
@@ -635,5 +658,23 @@ function wrapCueLine(text: string, maxChars: number): string[] {
     }
   }
   if (current) lines.push(current);
-  return lines.slice(0, 2);
+  return rebalanceShortFinalPreviewLine(lines, safeMax).slice(0, 2);
+}
+
+function rebalanceShortFinalPreviewLine(lines: string[], safeMax: number): string[] {
+  if (lines.length !== 2) return lines;
+  let first = lines[0]!;
+  let second = lines[1]!;
+  const minimumTailLength = Math.min(10, Math.ceil(safeMax * 0.15));
+  while (second.length < minimumTailLength) {
+    const firstWords = first.split(/\s+/).filter(Boolean);
+    if (firstWords.length <= 1) break;
+    const moved = firstWords[firstWords.length - 1] ?? "";
+    const candidateFirst = firstWords.slice(0, -1).join(" ");
+    const candidateSecond = `${moved} ${second}`.trim();
+    if (candidateSecond.length > safeMax || candidateFirst.length < minimumTailLength) break;
+    first = candidateFirst;
+    second = candidateSecond;
+  }
+  return [first, second];
 }

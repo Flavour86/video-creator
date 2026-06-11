@@ -30,17 +30,21 @@ Preconditions: Open `/editor/<project_id>` with subtitles enabled and at least o
 Steps:
   1. Click `Subtitles` in the inspector. Expected: the modal opens with a `Max characters per line` numeric field beside the Size control.
   2. Confirm the field loads the current saved value. Expected: a project using the default shows `42`; a project configured for v1.2 evidence shows `20`.
-  3. Enter `20`. Expected: the modal preview wraps the sample cue into shorter lines immediately.
-  4. Enter `10` and blur the field. Expected: the value normalizes to `20`.
-  5. Enter `100` and blur the field. Expected: the value normalizes to `80`.
-  6. Return the field to `20` and click `Apply`. Expected: the modal closes and autosave reaches `Saved`.
-  7. Reopen the modal after reload. Expected: the field still shows `20`, and the preview uses the same wrapping.
-  8. Start a render. Expected: rendered subtitle cues honor the saved max-character value.
+  3. Type `65` directly into the field from the keyboard. Expected: the input accepts `65` without forcing the intermediate `6` to `20`.
+  4. Enter `70`. Expected: the modal preview renders the sample cue as two balanced lines, not a three-line split with `safe` and `zone.` separated.
+  5. Enter `20`. Expected: the modal preview wraps the sample cue into shorter lines immediately.
+  6. Enter `10` and blur the field. Expected: the value normalizes to `20`.
+  7. Enter `100` and blur the field. Expected: the value normalizes to `80`.
+  8. Return the field to `20` and click `Apply`. Expected: the modal closes and autosave reaches `Saved`.
+  9. Reopen the modal after reload. Expected: the field still shows `20`, and the preview uses the same wrapping.
+  10. Start a render. Expected: rendered subtitle cues honor the saved max-character value.
 Evidence: `docs/designs/bugs/v1.2/evidence/subtitles-max-characters-<resolution>.png`
 Visual parity: compare against `docs/designs/tasks/v1.2/visuals/subtitles-max-characters-16x9.png` and `docs/designs/tasks/v1.2/visuals/subtitles-max-characters-9x16.png` at SSIM `>= 0.98`. Dynamic subtitle copy may differ; field label, placement, value, and wrapping response must match.
 Pass criteria:
   - [ ] The `Max characters per line` control is visible in landscape and portrait modal layouts.
+  - [ ] Direct keyboard entry supports values like `65` without arrow-only editing or premature clamping.
   - [ ] Values normalize to the existing `20..80` range.
+  - [ ] A value of `70` keeps the modal sample preview to two balanced visual lines.
   - [ ] Apply persists the value; Cancel does not persist a draft value.
   - [ ] Editor preview and server render use the same saved wrapping value.
   - [ ] Subtitle settings remain undoable and survive reload.
@@ -67,7 +71,7 @@ Pass criteria:
 Preconditions: Use the same project fixture as Items 1 through 3. The render buttons should be enabled after config changes, and the render page should be reachable at `/render/<project_id>/<render_id>`.
 Steps:
   1. In one browser session, create the manual background zero row and gap from Item 1. Expected: autosave reaches `Saved`.
-  2. Set subtitle max characters to `20` from Item 2. Expected: autosave reaches `Saved`.
+  2. Type subtitle max characters directly through `65` and `70`, confirm the two-line `70` preview, then save `20` from Item 2. Expected: autosave reaches `Saved`.
   3. Seek preview to a fractional time around `38.399s`. Expected: transport shows `00:38 / 15:42` with no milliseconds.
   4. Reload `/editor/<project_id>`. Expected: the background schedule, subtitle max-character value, and transport formatting remain visible.
   5. Click `Render final`. Expected: navigation reaches `/render/<project_id>/<render_id>` and the render page shows `Final render ready`.

@@ -72,7 +72,7 @@ test.describe("v1.2 integrated editor flow", () => {
         }
 
         await createManualBackgroundGap(page);
-        await setSubtitleMaxCharacters(page);
+        await setSubtitleMaxCharacters(page, testInfo, target);
         await expect(page.getByLabel("Autosave saved")).toBeVisible();
         assertSavedConfigContainsV1_2Edits(api.savedProject());
 
@@ -143,12 +143,49 @@ async function createManualBackgroundGap(page: Page): Promise<void> {
   });
 }
 
-async function setSubtitleMaxCharacters(page: Page): Promise<void> {
+async function setSubtitleMaxCharacters(
+  page: Page,
+  testInfo: TestInfo,
+  target: Task09Viewport,
+): Promise<void> {
   await page.getByRole("button", { name: /^Subtitles$/i }).click();
   const modal = page.getByRole("dialog", { name: /^Subtitles$/i });
   await expect(modal).toBeVisible();
-  await modal.getByLabel("Max characters per line").fill("20");
-  await expect(modal.getByLabel("Max characters per line")).toHaveValue("20");
+  const maxChars = modal.getByLabel("Max characters per line");
+
+  await maxChars.click();
+  await maxChars.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await page.keyboard.type("65");
+  await expect(maxChars).toHaveValue("65");
+
+  await maxChars.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await page.keyboard.type("70");
+  await expect(maxChars).toHaveValue("70");
+  const cueLines = modal.getByTestId("subtitles-preview-cue").locator("div");
+  await expect(cueLines).toHaveCount(2);
+  await expect(cueLines.nth(0)).toHaveText(
+    "This subtitle preview follows your style and stays inside the",
+  );
+  await expect(cueLines.nth(1)).toHaveText("safe zone.");
+  await captureEvidence(
+    modal.getByTestId("subtitles-live-preview"),
+    testInfo,
+    target,
+    "subtitle-preview-manual-70.png",
+  );
+  await modal.locator("div.overflow-y-auto").evaluate((node) => {
+    node.scrollTop = 180;
+  });
+  await captureEvidence(
+    modal,
+    testInfo,
+    target,
+    "subtitle-modal-manual-70.png",
+  );
+
+  await maxChars.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await page.keyboard.type("20");
+  await expect(maxChars).toHaveValue("20");
   await waitForAutosave(page, async () => {
     await modal.getByRole("button", { name: "Apply" }).click();
   });
