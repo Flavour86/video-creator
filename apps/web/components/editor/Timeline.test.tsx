@@ -159,6 +159,17 @@ describe("Timeline", () => {
     }
   });
 
+  it("uses one grid division system for the ruler and track rows", () => {
+    renderTimeline();
+    const ruler = screen.getByTestId("timeline-ruler");
+    const backgroundTrack = screen.getByTestId("timeline-row-bg").querySelector("[data-timeline-track='1']") as HTMLElement;
+
+    expect(ruler).toHaveAttribute("data-timeline-grid-divisions", "15");
+    expect(ruler.querySelectorAll("[data-timeline-ruler-tick='true']")).toHaveLength(16);
+    expect(backgroundTrack).toHaveAttribute("data-timeline-grid-divisions", "15");
+    expect(backgroundTrack.style.backgroundImage).toContain("6.666666666666667%");
+  });
+
   it("packs overlapping PiP clips into separate rows and keeps non-overlap FG clips in one row", () => {
     renderTimeline();
     expect(screen.getAllByTestId("timeline-row-pip")).toHaveLength(2);

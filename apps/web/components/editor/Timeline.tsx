@@ -65,10 +65,16 @@ const DRAG_ACTIVATION_PX = 2;
 const ROW_ORDER_TOP_TO_BOTTOM: LayerKind[] = ["sub", "pip", "fg", "bg"];
 const LABEL_COLUMN_WIDTH_PX = 95;
 const TRACK_RIGHT_PADDING_PX = 10;
+const TIMELINE_GRID_DIVISIONS = 15;
 const WAVEFORM_BARS = Array.from(
   { length: 200 },
   (_, index) => 30 + Math.abs(Math.sin(index * 0.5) * 30) + Math.abs(Math.sin(index * 0.13) * 25) + (index % 7 === 0 ? 15 : 0),
 ).map((height) => `${height.toFixed(4)}%`);
+
+function timelineGridBackground() {
+  const step = 100 / TIMELINE_GRID_DIVISIONS;
+  return `repeating-linear-gradient(90deg, transparent 0 calc(${step}% - 1px), var(--line-soft) calc(${step}% - 1px) ${step}%)`;
+}
 
 export function Timeline({
   cacheLabel,
@@ -183,17 +189,20 @@ export function Timeline({
 
       <button
         className="relative mx-[10px] h-[22px] border-b border-l border-(--line-soft)"
+        data-testid="timeline-ruler"
+        data-timeline-grid-divisions={TIMELINE_GRID_DIVISIONS}
         onClick={(event) => onSeek(timeFromEvent(event, duration))}
         style={{ marginLeft: `${LABEL_COLUMN_WIDTH_PX}px`, marginRight: `${timelineRightGutterPx}px` }}
         type="button"
       >
-        {Array.from({ length: 16 }, (_, index) => (
+        {Array.from({ length: TIMELINE_GRID_DIVISIONS + 1 }, (_, index) => (
           <span
             className="absolute bottom-0 top-0 border-l border-(--line-soft) font-mono text-[9.5px] text-(--text-4)"
+            data-timeline-ruler-tick="true"
             key={index}
-            style={{ left: `${(index / 15) * 100}%` }}
+            style={{ left: `${(index / TIMELINE_GRID_DIVISIONS) * 100}%` }}
           >
-            {index % 2 === 0 ? <span className="absolute left-1 top-1">{formatRulerDuration((duration / 15) * index)}</span> : null}
+            {index % 2 === 0 ? <span className="absolute left-1 top-1">{formatRulerDuration((duration / TIMELINE_GRID_DIVISIONS) * index)}</span> : null}
           </span>
         ))}
       </button>
@@ -366,12 +375,14 @@ function TrackRow({ duration, onDeleteItem, onSelect, onStartDrag, row, selected
         <span className="sr-only">{`${row.label} · ${row.count}`}</span>
       </div>
       <div
-        className="relative h-full overflow-x-hidden bg-[repeating-linear-gradient(90deg,transparent_0_calc(10%_-_1px),var(--line-soft)_calc(10%_-_1px)_10%)]"
+        className="relative h-full overflow-x-hidden"
+        data-timeline-grid-divisions={TIMELINE_GRID_DIVISIONS}
         data-timeline-track="1"
         onClick={(event) => {
           event.stopPropagation();
           onSelect(null);
         }}
+        style={{ backgroundImage: timelineGridBackground() }}
       >
         {row.clips.map((clip) => {
           const safeDuration = Math.max(duration, 1);
