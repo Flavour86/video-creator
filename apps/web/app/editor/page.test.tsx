@@ -1530,7 +1530,7 @@ it("Apply in subtitles modal updates defaults, appends one operation, and closes
   fireEvent.change(within(modal).getByLabelText("Position"), { target: { value: "top" } });
   fireEvent.change(within(modal).getByLabelText("Font"), { target: { value: "Helvetica Neue" } });
   const maxChars = within(modal).getByLabelText("Max characters per line");
-  expect(maxChars).toHaveValue(42);
+  expect(maxChars).toHaveValue("42");
   fireEvent.change(within(modal).getByLabelText("Color"), { target: { value: "#ffcc00" } });
   fireEvent.change(within(modal).getByLabelText("Background color"), { target: { value: "#112233" } });
   fireEvent.change(within(modal).getByLabelText("Opacity"), { target: { value: "45" } });
@@ -1604,7 +1604,7 @@ it("Cancel in subtitles modal closes without mutation", async () => {
 
   fireEvent.click(screen.getByRole("button", { name: "Subtitles" }));
   const restoredModal = await screen.findByRole("dialog");
-  expect(within(restoredModal).getByLabelText("Max characters per line")).toHaveValue(42);
+  expect(within(restoredModal).getByLabelText("Max characters per line")).toHaveValue("42");
 });
 
 it("updates watermark config, shows preview watermark, and persists watermark operations", async () => {

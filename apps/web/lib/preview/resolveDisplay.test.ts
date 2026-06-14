@@ -296,7 +296,7 @@ describe("resolveDisplay", () => {
     expect(spec.backgrounds[1].opacity).toBeCloseTo(0.5);
   });
 
-  it("returns scheduled background overlap opacity and parent motion metadata", () => {
+  it("keeps scheduled background rows on exact manual boundaries", () => {
     const base = BG_LAYER.items[0]!;
     const layer: Layer = {
       ...BG_LAYER,
@@ -315,14 +315,15 @@ describe("resolveDisplay", () => {
       }],
     };
 
-    const spec = resolveDisplay([layer], [], 4.5);
+    const beforeBoundary = resolveDisplay([layer], [], 4.5);
+    const atBoundary = resolveDisplay([layer], [], 5);
 
-    expect(spec.backgrounds.map((entry) => entry.mediaId)).toEqual(["one.jpg", "two.jpg"]);
-    expect(spec.backgrounds[0].opacity).toBeCloseTo(0.5);
-    expect(spec.backgrounds[1].opacity).toBeCloseTo(0.5);
-    expect(spec.backgrounds[1].motion).toEqual({ kind: "ken_burns", easing: "ease_in" });
-    expect(spec.backgrounds[1].motionProgress).toBeGreaterThan(0);
-    expect(spec.backgrounds[1].motionProgress).toBeLessThan(1);
+    expect(beforeBoundary.backgrounds.map((entry) => entry.mediaId)).toEqual(["one.jpg"]);
+    expect(beforeBoundary.backgrounds[0].opacity).toBe(1);
+    expect(atBoundary.backgrounds.map((entry) => entry.mediaId)).toEqual(["two.jpg"]);
+    expect(atBoundary.backgrounds[0].opacity).toBe(1);
+    expect(atBoundary.backgrounds[0].sourceTime).toBe(0);
+    expect(atBoundary.backgrounds[0].motion).toEqual({ kind: "ken_burns", easing: "ease_in" });
   });
 
   it("includes fg item when currentTime is within its range", () => {

@@ -218,7 +218,7 @@ const backgroundMediaForTime = (bgItem, time) => {
   })?.media || assets[0];
 };
 
-const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, subtitleText, showWatermark, watermarkAsset, watermarkSettings }) => {
+const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, subtitleText, subtitleSettings, showWatermark, watermarkAsset, watermarkSettings }) => {
   // Find the topmost active fullscreen item (PiP and BG are always on)
   const fgItem = (() => {
     for (const L of layers.filter((l) => l.kind === "fg")) {
@@ -235,6 +235,7 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
   const fgMedia = fgItem ? MEDIA_BY_ID[fgItem.item.mediaId] : null;
   const bgMedia = bgItem ? backgroundMediaForTime(bgItem, time) : null;
   const watermarkPlacement = watermarkSettings || { posX: 5, posY: 8, size: 8, opacity: 49 };
+  const subtitleLines = wrapSubtitleText(subtitleText, subtitleSettings?.maxChars ?? 42);
 
   const isVertical = resolution.h > resolution.w;
   const canvasStyle = isVertical
@@ -263,7 +264,10 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
             };
             return <div key={item.id} className="pip-overlay" style={style} />;
           })}
-          <div className="subtitles">{subtitleText}</div>
+          {subtitleSettings?.show !== false &&
+          <div className="subtitles">
+            {subtitleLines.map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
+          </div>}
           {showWatermark && watermarkAsset &&
           <div className="watermark-asset" style={{
             left: `${watermarkPlacement.posX}%`,
@@ -286,9 +290,9 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
           <button className="iconbtn" title="Next sentence"><Icon name="skipFwd" /></button>
         </div>
         <div className="tc-display">
-          <span className="tc-now">{fmtTC(time)}</span>
+          <span className="tc-now">{fmtTC(time, false)}</span>
           <span className="tc-sep">/</span>
-          <span>{fmtTC(PROJECT_DURATION)}</span>
+          <span>{fmtTC(PROJECT_DURATION, false)}</span>
         </div>
       </div>
     </div>);
@@ -429,7 +433,7 @@ const EditorScreen = ({ go }) => {
   const [resolutionKey, setResolutionKey] = React.useState("1080p");
   const [showLayersMenu, setShowLayersMenu] = React.useState(false);
   const [contextMenu, setContextMenu] = React.useState(null); // {x,y,sentenceIdx}
-  const [subSettings, setSubSettings] = React.useState({ burnin: true, show: true, pos: "bottom", font: "Arial", size: 42, color: "#ffffff", bg: "block", bgColor: "#000000", bgOpacity: 62, bgRadius: 8 });
+  const [subSettings, setSubSettings] = React.useState({ burnin: true, show: true, pos: "bottom", font: "Arial", size: 42, maxChars: 42, color: "#ffffff", bg: "block", bgColor: "#000000", bgOpacity: 62, bgRadius: 8 });
   const [watermarkOn, setWatermarkOn] = React.useState(true);
   const [watermarkAssetId, setWatermarkAssetId] = React.useState("m3");
   const [watermarkSettings, setWatermarkSettings] = React.useState({ posX: 5, posY: 8, size: 8, opacity: 49 });
@@ -814,6 +818,7 @@ const EditorScreen = ({ go }) => {
               layers={layers}
               resolution={resolution}
               subtitleText={subtitleText}
+              subtitleSettings={subSettings}
               showWatermark={watermarkOn}
               watermarkAsset={watermarkAsset}
               watermarkSettings={watermarkSettings} />

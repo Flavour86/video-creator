@@ -192,6 +192,45 @@ def test_compose_duration_uses_audio_when_alignment_is_shorter(
     assert "color=black:s=1280x720:r=30:d=300.3[bg]" in _filtergraph(command)
 
 
+def test_draft_compose_can_limit_duration_to_first_minute(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("server.pipeline.filtergraph._probe_audio_duration_s", lambda path: 300.0)
+    first_media = _write_media(tmp_path, "first.jpg", b"first")
+    _write_media(tmp_path, "after-limit.jpg", b"after-limit")
+    project = _project(
+        [
+            _fg_layer(
+                "fg-z1",
+                [
+                    _item("first.jpg", 50.0, 90.0, "fg-crosses-limit"),
+                    _item("after-limit.jpg", 90.0, 120.0, "fg-after-limit"),
+                ],
+            )
+        ]
+    )
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(duration_s=300.0),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+        duration_limit_s=60.0,
+    )
+
+    filtergraph = _filtergraph(command)
+    assert _input_paths(command) == [
+        str(tmp_path / "voice.wav"),
+        str(_expected_clip(tmp_path, first_media, 10.0)),
+    ]
+    assert "color=black:s=1280x720:r=30:d=60[bg]" in filtergraph
+    assert "[1:v]setpts=PTS+50/TB[clip1]" in filtergraph
+    assert "between(t,50,60)" in filtergraph
+    assert "between(t,90,120)" not in filtergraph
+
+
 def test_one_foreground_item_adds_overlay_with_timestamps(tmp_path: Path) -> None:
     media_path = _write_media(tmp_path, "one.jpg", b"one")
     project = _project([_fg_layer("fg-z1", [_item("one.jpg", 1.5, 3.0)])])
@@ -295,11 +334,11 @@ def test_subtitle_burn_in_appends_subtitles_filter(tmp_path: Path) -> None:
 
     filtergraph = _filtergraph(command)
     assert "subtitles='" in filtergraph
-    assert "/subtitles.srt':force_style='Fontname=Arial,Fontsize=28" in filtergraph
+    assert "/subtitles.srt':original_size=1280x720:force_style='Fontname=Arial,Fontsize=16" in filtergraph
     assert "Alignment=2,MarginV=60'[vsub];[vsub]format=yuv420p[vout]" in filtergraph
 
 
-def test_subtitle_style_fields_are_mapped_to_force_style(tmp_path: Path) -> None:
+def test_subtitle_style_fields_match_canvas_preview_scale(tmp_path: Path) -> None:
     project = _project(
         [],
         subtitles={
@@ -327,7 +366,8 @@ def test_subtitle_style_fields_are_mapped_to_force_style(tmp_path: Path) -> None
     )
 
     filtergraph = _filtergraph(command)
-    assert "Fontname=Helvetica Neue,Fontsize=36" in filtergraph
+    assert "Fontname=Helvetica Neue,Fontsize=21" in filtergraph
+    assert ":original_size=1280x720:force_style=" in filtergraph
     assert "Alignment=8,MarginV=40" in filtergraph
     assert "PrimaryColour=&H0000CCFF" in filtergraph
     assert "OutlineColour=&H61302010" in filtergraph
@@ -1170,7 +1210,7 @@ def test_legacy_background_playlist_without_schedule_keeps_even_fallback(
     assert "[v1][clip2]overlay=enable='between(t,5,10)':eof_action=pass[v2]" in filtergraph
 
 
-def test_scheduled_background_crossfade_overlaps_adjacent_ranges(
+def test_scheduled_background_keeps_exact_manual_boundaries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1237,7 +1277,6 @@ def test_scheduled_background_crossfade_overlaps_adjacent_ranges(
                 bg0,
                 5.0,
                 crossfade_s=1.0,
-                transition_out="fade",
                 cache_context={
                     "kind": "background_schedule",
                     "parent_id": "bg-scheduled",
@@ -1254,9 +1293,8 @@ def test_scheduled_background_crossfade_overlaps_adjacent_ranges(
             _expected_clip(
                 tmp_path,
                 bg1,
-                6.0,
+                5.0,
                 crossfade_s=1.0,
-                transition_in="fade",
                 cache_context={
                     "kind": "background_schedule",
                     "parent_id": "bg-scheduled",
@@ -1272,7 +1310,8 @@ def test_scheduled_background_crossfade_overlaps_adjacent_ranges(
     ]
     filtergraph = _filtergraph(command)
     assert "[bg][clip1]overlay=enable='between(t,0,5)':eof_action=pass[v1]" in filtergraph
-    assert "[v1][clip2]overlay=enable='between(t,4,10)':eof_action=pass[v2]" in filtergraph
+    assert "[v1][clip2]overlay=enable='between(t,5,10)':eof_action=pass[v2]" in filtergraph
+    assert "between(t,4,10)" not in filtergraph
 
 
 def test_filtergraph_build_for_50_layers_meets_target(tmp_path: Path) -> None:

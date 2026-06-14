@@ -389,7 +389,7 @@ def _build_clip_filter(
         filters = (
             _image_motion_filters(width, height, duration_s, fps, motion_kind)
             if media_path.suffix.lower() in IMAGE_EXTENSIONS
-            else _video_fit_filters(width, height, fps)
+            else _fullscreen_fit_filters(width, height, fps)
         )
     filters.extend(_fade_filters(duration_s, transition_in, transition_out, fade_seconds))
     filters.extend(["setsar=1", "format=yuva420p" if pip is not None else "format=yuv420p"])
@@ -457,7 +457,7 @@ def _image_motion_filters(
     motion_kind: str,
 ) -> list[str]:
     if motion_kind in {"none", "static"}:
-        return _video_fit_filters(width, height, fps)
+        return _fullscreen_fit_filters(width, height, fps)
 
     frames = max(1, round(duration_s * fps))
     denominator = max(1, frames - 1)
@@ -471,10 +471,10 @@ def _image_motion_filters(
     ]
 
 
-def _video_fit_filters(width: int, height: int, fps: int) -> list[str]:
+def _fullscreen_fit_filters(width: int, height: int, fps: int) -> list[str]:
     return [
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
-        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black",
+        f"scale={width}:{height}:force_original_aspect_ratio=increase",
+        f"crop={width}:{height}",
         f"fps={fps}",
     ]
 

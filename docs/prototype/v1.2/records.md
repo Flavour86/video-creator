@@ -1,0 +1,3 @@
+1. remove auto fill, just keep the state it was, if it first time adding, just show 00:00-00:00. Reference `docs/prototype/v1.2/01.png`
+2. add a new field to control how many charactors showed maximally that we should break the subtitles into multiple lines. Reference `docs/prototype/v1.2/02.png`
+3. Reference `docs/prototype/v1.2/03.png`, the times only keep the fore part, the munites and seconds, like the `03:11.256` is `03:11`, without the `.256`

@@ -57,6 +57,8 @@ from server.pipeline.render_progress import (
 )
 from server.pipeline.srt import alignment_with_sentence_text_overrides, write_srt
 
+DRAFT_DURATION_LIMIT_S = 60.0
+
 
 @dataclass(frozen=True)
 class RenderJob:
@@ -242,6 +244,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
         await _emit(job.render_id, "verify_alignment_cache", 1.0, message="verifying cache")
         alignment = await _ensure_alignment(job.project_dir, job.project)
         preset_config = PRESETS[job.preset]
+        duration_limit_s = _duration_limit_s_for_preset(job.preset)
         await _warm_clip_cache(
             project_dir=job.project_dir,
             project=job.project,
@@ -249,6 +252,7 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             fps=preset_config.fps,
             crf=preset_config.crf,
             render_id=job.render_id,
+            duration_limit_s=duration_limit_s,
         )
         await _emit(job.render_id, "build_subtitles_srt", 10.0, message="building subtitles.srt")
         await _emit(job.render_id, "compose_filtergraph", 12.0, message="ffmpeg compose")
@@ -259,12 +263,13 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             output_path=job.output_path,
             preset=job.preset,
             resolution=job.resolution,
+            duration_limit_s=duration_limit_s,
         )
         media_stats = await _run_ffmpeg(
             _with_progress(command),
             job.output_path,
             render_id=job.render_id,
-            total_s=_alignment_duration_s(alignment),
+            total_s=_render_progress_total_s(alignment, duration_limit_s),
             log_path=_render_log_path(job.project_dir, job.render_id),
         )
         await _emit(job.render_id, "mux_mp4_faststart", 98.0, message="muxing audio")
@@ -472,8 +477,9 @@ async def _warm_clip_cache(
     fps: int,
     crf: int,
     render_id: str,
+    duration_limit_s: float | None = None,
 ) -> None:
-    items = visual_items_bottom_to_top(project)
+    items = visual_items_bottom_to_top(project, duration_limit_s=duration_limit_s)
     if not items:
         await _emit(render_id, "pre_render_cached_clips", 9.0, message="pre-rendering clips")
         return
@@ -793,6 +799,22 @@ def _alignment_duration_s(alignment: AlignmentResult) -> float:
     if alignment.sentences:
         return max(sentence.end_s for sentence in alignment.sentences)
     return 0.001
+
+
+def _duration_limit_s_for_preset(preset: RenderPreset) -> float | None:
+    if preset == "draft":
+        return DRAFT_DURATION_LIMIT_S
+    return None
+
+
+def _render_progress_total_s(
+    alignment: AlignmentResult,
+    duration_limit_s: float | None,
+) -> float:
+    total_s = _alignment_duration_s(alignment)
+    if duration_limit_s is None:
+        return total_s
+    return min(total_s, max(0.001, duration_limit_s))
 
 
 def _int_or_none(value: object) -> int | None:

@@ -937,6 +937,64 @@ async def test_runtime_emits_progress_messages_in_spec_order(
 
 
 @pytest.mark.asyncio
+async def test_draft_runtime_limits_compose_and_progress_to_first_minute(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_publish_progress(event: RenderProgressEvent) -> None:
+        return None
+
+    async def fake_ensure_alignment(project_dir: Path, project: Project) -> AlignmentResult:
+        return AlignmentResult(
+            sentences=[
+                AlignedSentence(
+                    index=1,
+                    text="Long sentence.",
+                    start_s=0.0,
+                    end_s=300.0,
+                    confidence_avg=1.0,
+                )
+            ],
+            words=[],
+            cache_hit=True,
+        )
+
+    async def fake_warm_clip_cache(**kwargs: object) -> None:
+        captured["warm_duration_limit_s"] = kwargs.get("duration_limit_s")
+
+    def fake_build_compose_command(**kwargs: object) -> list[str]:
+        captured["compose_duration_limit_s"] = kwargs.get("duration_limit_s")
+        return ["ffmpeg", "-y", "mock.mp4"]
+
+    async def fake_run_ffmpeg(
+        command: list[str],
+        output_path: Path,
+        *,
+        render_id: str,
+        total_s: float,
+        log_path: Path | None = None,
+    ) -> render_pipeline._RenderMediaStats:
+        captured["progress_total_s"] = total_s
+        return render_pipeline._RenderMediaStats()
+
+    monkeypatch.setattr(render_pipeline, "publish_progress", fake_publish_progress)
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", fake_ensure_alignment)
+    monkeypatch.setattr(render_pipeline, "_warm_clip_cache", fake_warm_clip_cache)
+    monkeypatch.setattr(render_pipeline, "build_compose_command", fake_build_compose_command)
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+    monkeypatch.setattr(render_pipeline, "mark_render_finished", lambda **kwargs: None)
+
+    await render_pipeline._run_job(_render_job(tmp_path / "project", "r-draft-limit"), raise_errors=True)
+
+    assert captured == {
+        "warm_duration_limit_s": 60.0,
+        "compose_duration_limit_s": 60.0,
+        "progress_total_s": 60.0,
+    }
+
+
+@pytest.mark.asyncio
 async def test_subscriber_recovers_latest_event_from_db(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

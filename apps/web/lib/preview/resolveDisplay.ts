@@ -240,7 +240,6 @@ function scheduledPlaylistEntries(
 ): PlaylistEntry[] {
   const parentStart = item.start;
   const parentEnd = item.end;
-  const fade = bgCrossfade(item);
   const ranges = schedule
     .map((segment) => {
       const start = Math.max(parentStart, segment.start);
@@ -253,21 +252,14 @@ function scheduledPlaylistEntries(
     })
     .filter((entry) => entry.end > entry.start);
 
-  return ranges.map((range, index) => {
-    const entryFade = Math.min(fade, (range.end - range.start) / 2);
-    const previous = ranges[index - 1];
-    const next = ranges[index + 1];
-    const hasAdjacentPrevious = previous ? Math.abs(previous.end - range.start) < 0.001 : false;
-    const hasAdjacentNext = next ? Math.abs(range.end - next.start) < 0.001 : false;
-    return {
-      end: range.end,
-      fade: entryFade,
-      mediaId: range.mediaId,
-      start: index > 0 && hasAdjacentPrevious && entryFade > 0 ? Math.max(parentStart, range.start - entryFade) : range.start,
-      transitionIn: index > 0 && hasAdjacentPrevious && entryFade > 0 ? "fade" : "cut",
-      transitionOut: index < ranges.length - 1 && hasAdjacentNext && entryFade > 0 ? "fade" : "cut",
-    };
-  });
+  return ranges.map((range) => ({
+    end: range.end,
+    fade: 0,
+    mediaId: range.mediaId,
+    start: range.start,
+    transitionIn: "cut",
+    transitionOut: "cut",
+  }));
 }
 
 function backgroundDisplay(

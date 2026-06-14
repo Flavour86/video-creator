@@ -907,6 +907,8 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
 }
 .preview-canvas .scene {
   position: absolute; inset: 0;
+  background-position: center;
+  background-size: cover;
 }
 .preview-canvas .scene.skyline {
   background:
@@ -965,6 +967,10 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
   text-shadow: 0 2px 12px oklch(0 0 0 / 0.85), 0 0 2px oklch(0 0 0 / 1);
   letter-spacing: -0.01em;
   pointer-events: none;
+}
+.preview-canvas .subtitles span,
+.sub-preview .sp-cue span {
+  display: block;
 }
 .preview-canvas .watermark {
   position: absolute;
@@ -2448,8 +2454,11 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
   font-weight: 700;
   text-align: center;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   max-width: none;
+}
+.sub-preview .sp-cue span {
+  white-space: nowrap;
 }
 .sub-preview .sp-label {
   font-family: var(--font-mono);
@@ -2979,6 +2988,12 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
 }
 .subtitles-modal .field-row.two {
   gap: 12px;
+}
+.subtitles-modal .subtitle-format-row {
+  align-items: end;
+}
+.subtitles-modal .subtitle-format-row .text-field {
+  width: 100%;
 }
 .subtitles-modal .field-row.two + .field {
   margin-top: 0;

@@ -23,7 +23,7 @@ const TASK06_RENDER_RESOLUTIONS = [
 const FIXTURE_DURATION_S = 60;
 const SUBTITLE_FORCE_STYLE = [
   "Fontname=Arial",
-  "Fontsize=36",
+  "Fontsize=21",
   "PrimaryColour=&H00FFFFFF",
   "OutlineColour=&H00000000",
   "BackColour=&H00000000",
@@ -654,7 +654,7 @@ async function renderExpectedSubtitleFrame(
     "-frames:v",
     "1",
     "-vf",
-    `subtitles='${escapeSubtitlePath(srtPath)}':force_style='${SUBTITLE_FORCE_STYLE}'`,
+    `subtitles='${escapeSubtitlePath(srtPath)}':original_size=${resolution.width}x${resolution.height}:force_style='${SUBTITLE_FORCE_STYLE}'`,
     outputPath,
   ]);
 }

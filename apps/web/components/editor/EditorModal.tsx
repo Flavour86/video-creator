@@ -147,10 +147,10 @@ function SubtitlesFields({
   const previewRef = useRef<HTMLDivElement | null>(null);
   const metrics = SUBTITLE_PREVIEW_METRICS[previewResolution];
   const [measuredFrameWidth, setMeasuredFrameWidth] = useState<number | null>(null);
-  const [maxCharsInput, setMaxCharsInput] = useState(() => String(value.style.max_chars_per_line));
-  const cueLines = wrapCueLine(SUBTITLE_PREVIEW_TEXT, value.style.max_chars_per_line);
   const frameWidth = measuredFrameWidth ?? metrics.frameWidth;
   const previewScale = frameWidth / metrics.renderWidth;
+  const [maxCharsInput, setMaxCharsInput] = useState(() => String(value.style.max_chars_per_line));
+  const cueLines = wrapCueLine(SUBTITLE_PREVIEW_TEXT, value.style.max_chars_per_line);
   const cueStyle = subtitlePreviewCueStyle(value, previewScale, metrics);
   const backgroundRectangleEnabled = value.style.bg_style === "pill" || value.style.bg_style === "block";
   const backgroundRadiusEnabled = value.style.bg_style === "block";
@@ -264,12 +264,17 @@ function SubtitlesFields({
           </div>
         </Field>
         <Field htmlFor="editor-sub-max-chars" label={t("maxChars")}>
-          <NumberInput
+          <TextInput
             id="editor-sub-max-chars"
-            max={80}
-            min={20}
+            inputMode="numeric"
             onBlur={commitMaxCharsInput}
             onChange={(event) => updateMaxCharsInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            pattern="[0-9]*"
             step={1}
             value={maxCharsInput}
           />
@@ -355,7 +360,7 @@ function SubtitlesFields({
             style={cueStyle}
           >
             {cueLines.map((line, index) => (
-              <div key={`${line}-${index}`}>{line}</div>
+              <div className="whitespace-nowrap" key={`${line}-${index}`}>{line}</div>
             ))}
           </div>
         ) : null}

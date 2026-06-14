@@ -26,6 +26,16 @@ class PlaylistChildSource(Protocol):
     crossfade: object
 
 
+class VisualItemSource(Protocol):
+    id: object
+    media_id: object
+    sentences: object
+    start: object
+    end: object
+    motion: object
+    transitions: object
+
+
 @dataclass(frozen=True)
 class BackgroundScheduleRange:
     media_id: str
@@ -71,6 +81,7 @@ def build_compose_command(
     output_path: Path,
     preset: RenderPreset,
     resolution: str | None = None,
+    duration_limit_s: float | None = None,
 ) -> list[str]:
     preset_config = PRESETS[preset]
     config = PresetConfig(
@@ -80,13 +91,16 @@ def build_compose_command(
         x264_preset=preset_config.x264_preset,
         audio_bitrate=preset_config.audio_bitrate,
     )
-    items = visual_items_bottom_to_top(project)
+    duration_limit_s = _normalized_duration_limit_s(duration_limit_s)
+    items = visual_items_bottom_to_top(project, duration_limit_s=duration_limit_s)
     duration_s = _duration_s(
         project=project,
         alignment=alignment,
         audio_path=project_dir / project.audio,
         items=items,
     )
+    if duration_limit_s is not None:
+        duration_s = min(duration_s, duration_limit_s)
     cmd = ["ffmpeg", "-y", "-i", str(project_dir / project.audio)]
     for item in items:
         cmd.extend(
@@ -148,8 +162,84 @@ def build_compose_command(
     return cmd
 
 
-def visual_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
-    return [*_fullscreen_items_bottom_to_top(project), *_pip_items_bottom_to_top(project)]
+def visual_items_bottom_to_top(
+    project: Project,
+    *,
+    duration_limit_s: float | None = None,
+) -> list[ClipRenderItem]:
+    items = [*_fullscreen_items_bottom_to_top(project), *_pip_items_bottom_to_top(project)]
+    return _limit_items_to_duration(items, _normalized_duration_limit_s(duration_limit_s))
+
+
+def _normalized_duration_limit_s(duration_limit_s: float | None) -> float | None:
+    if duration_limit_s is None:
+        return None
+    return max(0.001, float(duration_limit_s))
+
+
+def _limit_items_to_duration(
+    items: list[ClipRenderItem],
+    duration_limit_s: float | None,
+) -> list[ClipRenderItem]:
+    if duration_limit_s is None:
+        return items
+
+    limited: list[ClipRenderItem] = []
+    for item in items:
+        start_s = _item_float(item, "start")
+        end_s = _item_float(item, "end")
+        if start_s >= duration_limit_s or end_s <= 0:
+            continue
+        clamped_end_s = min(end_s, duration_limit_s)
+        if clamped_end_s <= start_s:
+            continue
+        if clamped_end_s == end_s:
+            limited.append(item)
+            continue
+        limited.append(_with_item_end(item, clamped_end_s))
+    return limited
+
+
+def _with_item_end(item: ClipRenderItem, end_s: float) -> ClipRenderItem:
+    child = _item_mapping(item)
+    child["end"] = end_s
+    transitions = child.get("transitions")
+    if hasattr(transitions, "model_dump"):
+        transition_payload = transitions.model_dump(mode="json", by_alias=True)
+    elif isinstance(transitions, Mapping):
+        transition_payload = dict(transitions)
+    else:
+        transition_payload = {"in": _transition_value(item, "in") or "cut"}
+    transition_payload["out"] = "cut"
+    child["transitions"] = transition_payload
+
+    cache_context = (
+        child.get("_cache_context") or child.get("cache_context") or child.get("cacheContext")
+    )
+    if isinstance(cache_context, Mapping):
+        context = dict(cache_context)
+        if context.get("kind") == "background_schedule":
+            context["render_end_s"] = _round_cache_float(end_s)
+        child["_cache_context"] = context
+    return child
+
+
+def _item_mapping(item: ClipRenderItem) -> dict[str, object]:
+    raw = _unwrap_root_model(item)
+    if isinstance(raw, Mapping):
+        return dict(raw)
+    if hasattr(raw, "model_dump"):
+        return cast(dict[str, object], raw.model_dump(mode="json", by_alias=True))
+    source = cast(VisualItemSource, raw)
+    return {
+        "id": source.id,
+        "mediaId": source.media_id,
+        "sentences": source.sentences,
+        "start": source.start,
+        "end": source.end,
+        "motion": source.motion,
+        "transitions": source.transitions,
+    }
 
 
 def _fullscreen_items_bottom_to_top(project: Project) -> list[ClipRenderItem]:
@@ -248,39 +338,21 @@ def _expand_scheduled_background_item(
         )
 
     expanded: list[ClipRenderItem] = []
-    crossfade_s = _item_crossfade(item)
     for index, segment in enumerate(ranges):
-        segment_duration_s = segment.end - segment.start
-        segment_crossfade_s = min(crossfade_s, segment_duration_s / 2)
-        previous = ranges[index - 1] if index > 0 else None
-        next_segment = ranges[index + 1] if index < len(ranges) - 1 else None
-        has_adjacent_previous = (
-            previous is not None and abs(previous.end - segment.start) < 0.001
-        )
-        has_adjacent_next = (
-            next_segment is not None and abs(segment.end - next_segment.start) < 0.001
-        )
-        item_start_s = (
-            max(parent_start_s, segment.start - segment_crossfade_s)
-            if index > 0 and has_adjacent_previous and segment_crossfade_s > 0
-            else segment.start
-        )
         expanded.append(
             _playlist_child_item(
                 item,
                 media_id=segment.media_id,
                 index=index,
-                start_s=item_start_s,
+                start_s=segment.start,
                 end_s=segment.end,
                 transition_in=(
-                    "fade"
-                    if index > 0 and has_adjacent_previous and segment_crossfade_s > 0
-                    else (_transition_value(item, "in") or "cut") if index == 0 else "cut"
+                    (_transition_value(item, "in") or "cut") if index == 0 else "cut"
                 ),
                 transition_out=(
                     (_transition_value(item, "out") or "cut")
                     if index == len(ranges) - 1
-                    else "fade" if has_adjacent_next and segment_crossfade_s > 0 else "cut"
+                    else "cut"
                 ),
                 cache_context=_background_schedule_cache_context(item, segment),
             )
@@ -506,6 +578,7 @@ def _build_filtergraph(
     if subtitles_path is not None:
         segments.append(
             f"[{current}]subtitles='{_escape_subtitles_path(subtitles_path)}':"
+            f"original_size={config.resolution}:"
             f"force_style='{_subtitle_force_style(project)}'[vsub]"
         )
         current = "vsub"
@@ -546,7 +619,7 @@ def _subtitle_force_style(project: Project) -> str:
     subtitles = getattr(project, "subtitles", None)
     style = getattr(subtitles, "style", None)
     font = _subtitle_style_str(style, "font", "Arial")
-    size = _subtitle_style_float(style, "size", 28.0)
+    size = _subtitle_render_font_size(_subtitle_style_float(style, "size", 28.0))
     position = _subtitle_style_str(style, "position", "bottom")
     bg_style = _subtitle_style_str(style, "bg_style", "shadow")
     text_color = _subtitle_style_str(style, "color", "#ffffff")
@@ -605,6 +678,10 @@ def _subtitle_style_opacity(style: object | None, key: str, fallback: float) -> 
     if not isinstance(value, int | float):
         return fallback
     return max(0.0, min(100.0, float(value)))
+
+
+def _subtitle_render_font_size(style_size: float) -> float:
+    return float(max(16, min(42, int(style_size * 0.58 + 0.5))))
 
 
 def _ass_color(hex_color: str, *, alpha: int = 0) -> str:

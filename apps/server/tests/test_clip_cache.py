@@ -276,6 +276,46 @@ def test_render_pip_clip_encodes_vp9_with_alpha(
     assert "yuva420p" in ffmpeg_command
 
 
+def test_render_fullscreen_clip_crops_to_cover_vertical_canvas(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "foreground.png")
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Result:
+        commands.append(cmd)
+        Path(cmd[-1]).write_bytes(b"mp4")
+        return Result()
+
+    monkeypatch.setattr("server.pipeline.clip_render.subprocess.run", fake_run)
+
+    render_clip(
+        item={
+            "id": "fg-1",
+            "media_id": media_path.name,
+            "start": 0.0,
+            "end": 4.0,
+            "motion": {"kind": "none", "easing": "linear"},
+            "transitions": {"in": "cut", "out": "cut"},
+        },
+        project_dir=tmp_path,
+        output_path=tmp_path / ".vc" / "clips" / "foreground.mp4",
+        resolution="1080x1920",
+    )
+
+    ffmpeg_command = commands[0]
+    filtergraph = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
+    assert "scale=1080:1920:force_original_aspect_ratio=increase" in filtergraph
+    assert "crop=1080:1920" in filtergraph
+    assert "pad=1080:1920" not in filtergraph
+
+
 def test_render_video_clip_plays_once_without_looping(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

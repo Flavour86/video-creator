@@ -26,15 +26,12 @@ const bgParseTimeInput = (value, fallback = 0) => {
 const bgDraftKey = (seg, field) => `${seg.id}:${field}`;
 
 const buildBgSchedule = (ids, current = []) => {
-  let cursor = 0;
   return ids.map((mediaId, index) => {
     const media = MEDIA_BY_ID[mediaId];
     const existing = current.find((seg) => seg.mediaId === mediaId);
     const native = bgNativeDuration(media);
-    const defaultDuration = native || Math.max(12, Math.min(120, BG_PROJECT_DURATION / Math.max(ids.length, 1)));
-    const start = bgClamp(existing?.start ?? cursor);
-    const end = bgClamp(existing?.end ?? start + defaultDuration, start + 1);
-    cursor = end;
+    const start = bgClamp(existing?.start ?? 0);
+    const end = bgClamp(existing?.end ?? 0, start);
     return {
       id: existing?.id || `bg-seg-${mediaId}-${index + 1}`,
       mediaId,
@@ -84,15 +81,12 @@ const BGModal = ({ open, onClose, onApply, bgItem }) => {
       if (mediaIds.length === 1) return;
       syncIds(mediaIds.filter((x) => x !== mm.id), segments.filter((seg) => seg.mediaId !== mm.id));
     } else {
-      const lastEnd = segments.reduce((max, seg) => Math.max(max, seg.end), 0);
       const native = bgNativeDuration(mm);
-      const defaultDuration = native || 30;
-      const start = bgClamp(lastEnd >= BG_PROJECT_DURATION ? BG_PROJECT_DURATION - defaultDuration : lastEnd);
       const nextSegments = [...segments, {
         id: `bg-seg-${mm.id}-${mediaIds.length + 1}`,
         mediaId: mm.id,
-        start,
-        end: bgClamp(start + defaultDuration, start + 1),
+        start: 0,
+        end: 0,
         lockedDuration: !!native
       }];
       syncIds([...mediaIds, mm.id], nextSegments);
@@ -117,35 +111,12 @@ const BGModal = ({ open, onClose, onApply, bgItem }) => {
       const media = MEDIA_BY_ID[seg.mediaId];
       const native = bgNativeDuration(media);
       let start = patch.start !== undefined ? bgClamp(patch.start) : seg.start;
-      let end = patch.end !== undefined ? bgClamp(patch.end, start + 1) : seg.end;
-      if (patch.duration !== undefined) end = bgClamp(start + Math.max(1, Number(patch.duration) || 1), start + 1);
-      if (native && patch.start !== undefined && patch.end === undefined && patch.duration === undefined) end = bgClamp(start + native, start + 1);
-      if (end <= start) end = start + 1;
+      let end = patch.end !== undefined ? bgClamp(patch.end, start) : seg.end;
+      if (patch.duration !== undefined) end = bgClamp(start + Math.max(0, Number(patch.duration) || 0), start);
+      if (native && patch.start !== undefined && patch.end === undefined && patch.duration === undefined) end = bgClamp(start + native, start);
+      if (end < start) end = start;
       return { ...seg, start, end, lockedDuration: !!native };
     }));
-  };
-
-  const fillCoverage = () => {
-    const videoSeconds = mediaIds.reduce((sum, id) => sum + (bgNativeDuration(MEDIA_BY_ID[id]) || 0), 0);
-    const imageCount = mediaIds.filter((id) => MEDIA_BY_ID[id]?.kind !== "video").length;
-    const imageSeconds = imageCount > 0 ? Math.max(8, (BG_PROJECT_DURATION - videoSeconds) / imageCount) : 0;
-    let cursor = 0;
-    const next = mediaIds.map((id, index) => {
-      const media = MEDIA_BY_ID[id];
-      const native = bgNativeDuration(media);
-      const duration = native || imageSeconds;
-      const start = cursor;
-      const end = index === mediaIds.length - 1 ? BG_PROJECT_DURATION : bgClamp(cursor + duration, cursor + 1);
-      cursor = end;
-      return {
-        id: segments.find((seg) => seg.mediaId === id)?.id || `bg-seg-${id}-${index + 1}`,
-        mediaId: id,
-        start,
-        end,
-        lockedDuration: !!native
-      };
-    });
-    setSegments(next);
   };
 
   const extendToEnd = (index) => patchSegment(index, { end: BG_PROJECT_DURATION });
@@ -165,14 +136,14 @@ const BGModal = ({ open, onClose, onApply, bgItem }) => {
   const commitTimeDraft = (index, seg, field) => {
     const key = bgDraftKey(seg, field);
     if (timeDrafts[key] === undefined) return;
-    const duration = Math.max(1, seg.end - seg.start);
+    const duration = Math.max(0, seg.end - seg.start);
     const fallback = field === "hold" ? duration : seg[field];
     const nextValue = bgParseTimeInput(timeDrafts[key], fallback);
     patchSegment(index, field === "hold" ? { duration: nextValue } : { [field]: nextValue });
     clearTimeDraft(key);
   };
   const renderTimeField = (seg, index, field, label, disabled = false) => {
-    const duration = Math.max(1, seg.end - seg.start);
+    const duration = Math.max(0, seg.end - seg.start);
     const numeric = field === "hold" ? duration : seg[field];
     const key = bgDraftKey(seg, field);
     return (
@@ -315,7 +286,6 @@ const BGModal = ({ open, onClose, onApply, bgItem }) => {
                 <label>Coverage plan</label>
                 <span>{imageRangeCount} image ranges / {orderedSegments.length} total / drag rows to reorder</span>
               </div>
-              <button className="btn ghost" onClick={fillCoverage}>Auto fill</button>
             </div>
 
             <div className="bg-segment-list">

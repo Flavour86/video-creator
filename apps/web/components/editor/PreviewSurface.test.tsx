@@ -440,7 +440,7 @@ describe("PreviewSurface", () => {
     expect(drawnFilenames().at(-1)).toBe("bg-b.png");
   });
 
-  it("draws scheduled background crossfades with configured motion crop", () => {
+  it("keeps scheduled background media on exact manual boundaries", () => {
     vi.stubGlobal("Image", vi.fn(function imageFactory() {
       const image = document.createElement("img");
       Object.defineProperty(image, "complete", { configurable: true, value: true });
@@ -465,12 +465,22 @@ describe("PreviewSurface", () => {
       }],
     };
 
-    renderSurface({ currentTime: 4.5, layers: [layer] });
+    const { rerender, props } = renderSurface({ currentTime: 4.5, layers: [layer] });
 
-    expect(drawnFilenames().slice(0, 2)).toEqual(["bg-a.png", "bg-b.png"]);
-    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-active-backgrounds", "bg-a.png,bg-b.png");
-    const secondBackgroundDraw = drawImage.mock.calls.find((call) => filenameFromSource(call[0]) === "bg-b.png");
-    expect(secondBackgroundDraw?.[3]).toBeLessThan(1920);
+    expect(drawnFilenames()).toContain("bg-a.png");
+    expect(drawnFilenames()).not.toContain("bg-b.png");
+    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-active-backgrounds", "bg-a.png");
+
+    drawImage.mockClear();
+    rerender(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PreviewSurface {...props} currentTime={5} layers={[layer]} />
+      </NextIntlClientProvider>,
+    );
+
+    expect(drawnFilenames()).toContain("bg-b.png");
+    expect(drawnFilenames()).not.toContain("bg-a.png");
+    expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-active-backgrounds", "bg-b.png");
   });
 
   it("uses uploaded media URLs for newly imported background assets", () => {
@@ -542,6 +552,44 @@ describe("PreviewSurface", () => {
     ];
     expect([x, y, width, height]).toEqual([0, 0, 1920, 1080]);
     expect(cropWidth / cropHeight).toBeCloseTo(16 / 9);
+  });
+
+  it("crops fullscreen foreground media to cover a vertical preview frame", () => {
+    vi.stubGlobal("Image", vi.fn(function imageFactory() {
+      const image = document.createElement("img");
+      Object.defineProperty(image, "complete", { configurable: true, value: true });
+      Object.defineProperty(image, "naturalWidth", { configurable: true, value: 1920 });
+      Object.defineProperty(image, "naturalHeight", { configurable: true, value: 1080 });
+      return image;
+    }));
+
+    renderSurface({
+      currentTime: 5,
+      layers: [FG_LAYER],
+      resolution: "9:16",
+    });
+
+    const foregroundDraw = drawImage.mock.calls.find((call) => filenameFromSource(call[0]) === "fg0.png");
+    expect(foregroundDraw).toBeDefined();
+    expect(foregroundDraw).toHaveLength(9);
+    const [, sourceX, sourceY, cropWidth, cropHeight, x, y, width, height] = foregroundDraw as [
+      unknown,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+    ];
+    expect(x).toBe(0);
+    expect(y).toBe(0);
+    expect(width).toBe(1080);
+    expect(height).toBe(1920);
+    expect(sourceX).toBeGreaterThan(0);
+    expect(sourceY).toBe(0);
+    expect(cropWidth / cropHeight).toBeCloseTo(9 / 16);
   });
 
   it("renders one or more active pip overlays in state metadata", () => {

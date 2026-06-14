@@ -214,9 +214,11 @@ export function PreviewSurface({
       for (const layer of resolvedDisplay.fg) {
         const source = resolveSource(layer.mediaId, layer.sourceTime);
         if (!source) continue;
-        drawContain(context, source, {
+        drawCover(context, source, {
           canvasHeight,
           canvasWidth,
+          motionKind: "none",
+          motionProgress: 0,
           opacity: clamp(layer.opacity, 0, 1),
           translateX: layer.translateX,
         });
@@ -436,31 +438,10 @@ function sourceDimensions(
   return { width, height };
 }
 
-function drawContain(
-  context: CanvasRenderingContext2D,
-  source: HTMLImageElement | HTMLVideoElement,
-  options: { canvasHeight: number; canvasWidth: number; opacity: number; translateX: number },
-): void {
-  const dimensions = sourceDimensions(source, options.canvasWidth, options.canvasHeight);
-  const scale = Math.min(options.canvasWidth / dimensions.width, options.canvasHeight / dimensions.height);
-  const drawWidth = dimensions.width * scale;
-  const drawHeight = dimensions.height * scale;
-  const x = (options.canvasWidth - drawWidth) / 2 + (options.translateX / 100) * options.canvasWidth;
-  const y = (options.canvasHeight - drawHeight) / 2;
-  context.save();
-  context.globalAlpha = clamp(options.opacity, 0, 1);
-  try {
-    context.drawImage(source, x, y, drawWidth, drawHeight);
-  } catch {
-    // Ignore draw errors while image/video resources are still becoming drawable.
-  }
-  context.restore();
-}
-
 function drawCover(
   context: CanvasRenderingContext2D,
   source: HTMLImageElement | HTMLVideoElement,
-  options: { canvasHeight: number; canvasWidth: number; motionKind?: string; motionProgress?: number; opacity: number },
+  options: { canvasHeight: number; canvasWidth: number; motionKind?: string; motionProgress?: number; opacity: number; translateX?: number },
 ): void {
   const dimensions = sourceDimensions(source, options.canvasWidth, options.canvasHeight);
   const frameAspect = options.canvasWidth / options.canvasHeight;
@@ -486,6 +467,7 @@ function drawCover(
   });
   context.save();
   context.globalAlpha = clamp(options.opacity, 0, 1);
+  const x = ((options.translateX ?? 0) / 100) * options.canvasWidth;
   try {
     context.drawImage(
       source,
@@ -493,7 +475,7 @@ function drawCover(
       motionCrop.y,
       motionCrop.width,
       motionCrop.height,
-      0,
+      x,
       0,
       options.canvasWidth,
       options.canvasHeight,

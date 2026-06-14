@@ -151,7 +151,7 @@ describe("EditorModal", () => {
       },
     });
 
-    expect(screen.getByLabelText("Max characters per line")).toHaveValue(64);
+    expect(screen.getByLabelText("Max characters per line")).toHaveValue("64");
     expect(screen.getByLabelText("Color")).toBeInTheDocument();
     expect(screen.getByLabelText("Background color")).toBeInTheDocument();
     expect(screen.getByLabelText("Opacity")).toBeInTheDocument();
@@ -169,26 +169,26 @@ describe("EditorModal", () => {
 
     const maxChars = screen.getByLabelText("Max characters per line");
     const cue = screen.getByTestId("subtitles-preview-cue");
-    expect(maxChars).toHaveValue(42);
+    expect(maxChars).toHaveValue("42");
     expect(cue.firstElementChild).toHaveTextContent("This subtitle preview follows your style");
 
     fireEvent.change(maxChars, { target: { value: "10" } });
 
-    expect(maxChars).toHaveValue(10);
+    expect(maxChars).toHaveValue("10");
     expect(cue.firstElementChild).toHaveTextContent("This subtitle preview follows your style");
 
     fireEvent.blur(maxChars);
 
-    expect(maxChars).toHaveValue(20);
+    expect(maxChars).toHaveValue("20");
     expect(cue.firstElementChild).toHaveTextContent("This subtitle");
 
     fireEvent.change(maxChars, { target: { value: "100" } });
 
-    expect(maxChars).toHaveValue(100);
+    expect(maxChars).toHaveValue("100");
 
     fireEvent.blur(maxChars);
 
-    expect(maxChars).toHaveValue(80);
+    expect(maxChars).toHaveValue("80");
     expect(cue.firstElementChild).toHaveTextContent("This subtitle preview follows your style and stays inside the safe zone.");
   });
 
@@ -202,11 +202,12 @@ describe("EditorModal", () => {
     });
 
     const maxChars = screen.getByLabelText("Max characters per line");
+    expect(maxChars).toHaveAttribute("type", "text");
     fireEvent.change(maxChars, { target: { value: "6" } });
-    expect(maxChars).toHaveValue(6);
+    expect(maxChars).toHaveValue("6");
 
     fireEvent.change(maxChars, { target: { value: "65" } });
-    expect(maxChars).toHaveValue(65);
+    expect(maxChars).toHaveValue("65");
 
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 

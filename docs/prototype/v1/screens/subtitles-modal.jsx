@@ -2,12 +2,35 @@
 
 const SubtitlesModal = ({ open, onClose, settings, onSave, resolution }) => {
   const [s, setS] = React.useState(settings || {});
-  React.useEffect(() => {if (open) setS(settings || {});}, [open, settings]);
+  const [maxCharsDraft, setMaxCharsDraft] = React.useState(String((settings || {}).maxChars ?? 42));
+  React.useEffect(() => {
+    if (!open) return;
+    setS(settings || {});
+    setMaxCharsDraft(String((settings || {}).maxChars ?? 42));
+  }, [open, settings]);
   if (!open) return null;
 
   const renderResolution = resolution || RESOLUTIONS["1080p"];
   const shown = s.show ?? s.burnin ?? true;
   const upd = (k, v) => setS({ ...s, [k]: v });
+  const clampMaxChars = (value, fallback = s.maxChars ?? 42) => {
+    const parsed = Number(String(value ?? "").trim() || fallback);
+    if (!Number.isFinite(parsed)) return Math.max(20, Math.min(80, Math.round(fallback)));
+    return Math.max(20, Math.min(80, Math.round(parsed)));
+  };
+  const updateMaxChars = (raw) => {
+    setMaxCharsDraft(raw);
+    const trimmed = String(raw).trim();
+    if (!trimmed) return;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 20 || parsed > 80) return;
+    setS({ ...s, maxChars: Math.round(parsed) });
+  };
+  const commitMaxChars = () => {
+    const next = clampMaxChars(maxCharsDraft);
+    setMaxCharsDraft(String(next));
+    setS({ ...s, maxChars: next });
+  };
   const updShow = () => {
     const next = !shown;
     setS({ ...s, show: next, burnin: next });
@@ -44,6 +67,11 @@ const SubtitlesModal = ({ open, onClose, settings, onSave, resolution }) => {
     top: s.pos === "top" ? safeTop : "auto",
     bottom: s.pos === "top" ? "auto" : safeBottom
   };
+  const maxChars = clampMaxChars(s.maxChars ?? 42);
+  const previewLines = wrapSubtitleText(
+    "This subtitle preview follows your style and stays inside the safe zone.",
+    maxChars
+  );
 
   return (
     <div className="modal-back" onClick={onClose}>
@@ -90,11 +118,25 @@ const SubtitlesModal = ({ open, onClose, settings, onSave, resolution }) => {
               </div>
             </div>
           </div>
-          <div className="field">
-            <label>Size</label>
-            <div className="range-row">
-              <input type="range" min={28} max={72} value={s.size || 42} onChange={(e) => upd("size", +e.target.value)} style={{ flex: 1 }} />
-              <span className="num-val">{s.size || 42}px</span>
+          <div className="field-row two subtitle-format-row">
+            <div className="field">
+              <label>Size</label>
+              <div className="range-row">
+                <input type="range" min={28} max={72} value={s.size || 42} onChange={(e) => upd("size", +e.target.value)} style={{ flex: 1 }} />
+                <span className="num-val">{s.size || 42}px</span>
+              </div>
+            </div>
+            <div className="field">
+              <label>Max characters per line</label>
+              <input
+                className="text-field"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={maxCharsDraft}
+                onBlur={commitMaxChars}
+                onChange={(e) => updateMaxChars(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
             </div>
           </div>
           <label className="switch-row subtitle-switch">
@@ -136,7 +178,7 @@ const SubtitlesModal = ({ open, onClose, settings, onSave, resolution }) => {
               <span className="sp-label">Preview · {renderResolution.aspect < 1 ? "9:16" : "16:9"}</span>
               {shown && (
                 <div className={"sp-cue " + bgMode} style={cueStyle}>
-                  This subtitle preview follows your style and stays inside the safe zone.
+                  {previewLines.map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
                 </div>
               )}
             </div>

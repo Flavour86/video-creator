@@ -46,6 +46,44 @@ const fmtTC = (s, withMs = true) => {
   return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
 };
 
+const wrapSubtitleText = (text, maxChars = 42) => {
+  const value = String(text || "").trim();
+  if (!value) return [];
+  const limit = Math.max(20, Math.min(80, Math.floor(Number(maxChars) || 42)));
+  const useWords = /\s/.test(value);
+  const tokens = useWords ? value.split(/\s+/) : Array.from(value);
+  const separator = useWords ? " " : "";
+  const lines = tokens.reduce((lines, token) => {
+    const current = lines[lines.length - 1] || "";
+    const next = current ? `${current}${separator}${token}` : token;
+    if (!current || next.length <= limit) {
+      lines[lines.length - 1] = next;
+    } else {
+      lines.push(token);
+    }
+    return lines;
+  }, [""]);
+  return rebalanceShortSubtitleTail(lines.filter(Boolean), limit);
+};
+
+const rebalanceShortSubtitleTail = (lines, limit) => {
+  if (lines.length !== 2 || !/\s/.test(lines[0])) return lines;
+  let first = lines[0];
+  let second = lines[1];
+  const minimumTailLength = Math.min(10, Math.ceil(limit * 0.15));
+  while (second.length < minimumTailLength) {
+    const firstWords = first.split(/\s+/).filter(Boolean);
+    if (firstWords.length <= 1) break;
+    const moved = firstWords[firstWords.length - 1];
+    const nextFirst = firstWords.slice(0, -1).join(" ");
+    const nextSecond = `${moved} ${second}`.trim();
+    if (nextSecond.length > limit || nextFirst.length < minimumTailLength) break;
+    first = nextFirst;
+    second = nextSecond;
+  }
+  return [first, second];
+};
+
 const PROJECTS = [
   { name: "Tokyo Essay", path: "E:\\video-projects\\tokyo-essay", voice: "15:42", sentences: 164, media: 38, thumb: "night", lastOpened: "2 hours ago", rendered: true, renderFile: "final-2026-05-06-1530.mp4", renderStatus: "rendered" },
   { name: "Camera Test Script", path: "E:\\video-projects\\camera-test", voice: "03:28", sentences: 29, media: 7, thumb: "warm", lastOpened: "Yesterday", renderStatus: "rendering" },
@@ -142,3 +180,4 @@ window.MEDIA_BY_ID = MEDIA_BY_ID;
 window.INITIAL_LAYERS = INITIAL_LAYERS;
 window.thumbGrad = thumbGrad;
 window.fmtTC = fmtTC;
+window.wrapSubtitleText = wrapSubtitleText;
