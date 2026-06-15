@@ -263,6 +263,7 @@
       "E:\\claude\\video-creator\\apps\\web\\scripts\\run-visual-tests.mjs",
       "E:\\claude\\video-creator\\apps\\web\\styles\\globals.test.ts",
       "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\e2e-utils.ts",
+      "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\editor-fullscreen.spec.ts",
       "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\launcher-setup-flows.spec.ts",
       "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\render-correctness-v1-1-integrated-editor-flow.spec.ts",
       "E:\\claude\\video-creator\\apps\\web\\tests\\e2e\\render-correctness-v1-2-integrated-editor-flow.spec.ts",
@@ -290,10 +291,10 @@
     ],
     "video": []
   },
-  "total_files": 281,
-  "total_words": 189267,
+  "total_files": 282,
+  "total_words": 191622,
   "needs_graph": true,
-  "warning": "Large corpus: 281 files \u00b7 ~189,267 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 282 files \u00b7 ~191,622 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "E:\\claude\\video-creator\\apps\\server\\.env",
     "E:\\claude\\video-creator\\apps\\server\\.env.example",
