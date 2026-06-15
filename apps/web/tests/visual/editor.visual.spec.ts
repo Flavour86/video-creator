@@ -18,6 +18,8 @@ import {
   V1_1_VISUAL_REFERENCE_PREFIX,
   V1_2_EDITOR_VISUAL_CASES,
   V1_2_VISUAL_REFERENCE_PREFIX,
+  V1_3_EDITOR_VISUAL_CASES,
+  V1_3_VISUAL_REFERENCE_PREFIX,
   type EditorVisualAction,
   type EditorVisualCaptureTarget as CaptureTarget,
   type EditorVisualCase,
@@ -106,6 +108,23 @@ test.describe("editor v1.2 visual parity", () => {
   test.describe.configure({ mode: "serial" });
 
   for (const visualCase of V1_2_EDITOR_VISUAL_CASES) {
+    test.describe(visualCase.name, () => {
+      test.use({
+        deviceScaleFactor: visualCase.deviceScaleFactor ?? 1,
+        viewport: visualCase.viewport ?? EDITOR_VIEWPORT,
+      });
+
+      test(`${visualCase.reference} parity`, async ({ page }) => {
+        await compareEditorVisualCase(page, visualCase);
+      });
+    });
+  }
+});
+
+test.describe("editor v1.3 visual parity", () => {
+  test.describe.configure({ mode: "serial" });
+
+  for (const visualCase of V1_3_EDITOR_VISUAL_CASES) {
     test.describe(visualCase.name, () => {
       test.use({
         deviceScaleFactor: visualCase.deviceScaleFactor ?? 1,
@@ -525,6 +544,7 @@ async function compareEditorVisualCase(page: Page, visualCase: EditorVisualCase)
     actualPath,
     blurRadius,
     ignoreRegions: ignoreRegions.length > 0 ? ignoreRegions : undefined,
+    normalizeDarkPixels: visualCase.normalizeDarkPixels,
     referencePath,
     stateName: visualCase.name,
     threshold: visualCase.threshold ?? UI_SSIM_THRESHOLD,
@@ -953,6 +973,32 @@ async function runEditorVisualAction(page: Page, action: EditorVisualAction): Pr
       await expect(page.getByText("15:42").first()).toBeVisible();
       await expect(page.getByText(/00:38\.\d|15:42\.\d/)).toHaveCount(0);
       return;
+    case "v1-3-editor-fullscreen-button": {
+      const fullscreenButton = page.getByRole("button", { name: "Fullscreen preview" });
+      await expect(fullscreenButton).toBeVisible();
+      await expect(fullscreenButton).toHaveAttribute("title", "Fullscreen preview");
+      const timecode = fullscreenButton.locator("xpath=following-sibling::div[1]");
+      await expect(timecode).toContainText("00:38");
+      await expect(timecode).toContainText("15:42");
+      await expect
+        .poll(
+          async () => timecode.evaluate((node) => node.previousElementSibling?.getAttribute("title") ?? ""),
+          { message: "Expected fullscreen button immediately before the timecode" },
+        )
+        .toBe("Fullscreen preview");
+      const [buttonBox, timecodeBox] = await Promise.all([fullscreenButton.boundingBox(), timecode.boundingBox()]);
+      expect(buttonBox).not.toBeNull();
+      expect(timecodeBox).not.toBeNull();
+      if (!buttonBox || !timecodeBox) return;
+      expect(Math.round(buttonBox.width)).toBe(32);
+      expect(Math.round(buttonBox.height)).toBe(32);
+      const gap = timecodeBox.x - (buttonBox.x + buttonBox.width);
+      expect(gap).toBeGreaterThanOrEqual(6);
+      expect(gap).toBeLessThanOrEqual(12);
+      const verticalOffset = Math.abs((buttonBox.y + buttonBox.height / 2) - (timecodeBox.y + timecodeBox.height / 2));
+      expect(verticalOffset).toBeLessThanOrEqual(2);
+      return;
+    }
     default: {
       const _exhaustive: never = action;
       return _exhaustive;
@@ -1147,8 +1193,12 @@ function isV1_2VisualCase(visualCase?: EditorVisualCase): boolean {
   return visualCase?.reference.startsWith(V1_2_VISUAL_REFERENCE_PREFIX) ?? false;
 }
 
+function isV1_3VisualCase(visualCase?: EditorVisualCase): boolean {
+  return visualCase?.reference.startsWith(V1_3_VISUAL_REFERENCE_PREFIX) ?? false;
+}
+
 function isVersionedVisualCase(visualCase?: EditorVisualCase): boolean {
-  return isV1_1VisualCase(visualCase) || isV1_2VisualCase(visualCase);
+  return isV1_1VisualCase(visualCase) || isV1_2VisualCase(visualCase) || isV1_3VisualCase(visualCase);
 }
 
 function fixtureForVisualCase(visualCase: EditorVisualCase): { alignment: object; project: object; renderCacheTotal?: number } | null {
@@ -1157,6 +1207,8 @@ function fixtureForVisualCase(visualCase: EditorVisualCase): { alignment: object
       return { alignment: TEST_ALIGNMENT, project: V1_2_BACKGROUND_MANUAL_PROJECT, renderCacheTotal: 4 };
     case "v1-2-editor-time-display":
       return { alignment: TEST_ALIGNMENT, project: V1_2_EDITOR_TIME_PROJECT, renderCacheTotal: 3 };
+    case "v1-3-editor-fullscreen-button":
+      return { alignment: TEST_ALIGNMENT, project: V1_2_EDITOR_TIME_PROJECT, renderCacheTotal: 24 };
     case "v1-2-subtitles-max-characters":
     case "v1-2-subtitles-max-characters-portrait":
       return { alignment: TEST_ALIGNMENT, project: V1_2_SUBTITLE_PROJECT, renderCacheTotal: 3 };

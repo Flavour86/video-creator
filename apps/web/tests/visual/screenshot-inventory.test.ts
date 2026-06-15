@@ -10,6 +10,9 @@ import {
   V1_2_EDITOR_VISUAL_CASES,
   V1_2_EDITOR_VISUAL_SCREENSHOTS,
   V1_2_VISUAL_SSIM_THRESHOLD,
+  V1_3_EDITOR_VISUAL_CASES,
+  V1_3_EDITOR_VISUAL_SCREENSHOTS,
+  V1_3_VISUAL_SSIM_THRESHOLD,
 } from "./editor-visual-cases";
 import { RENDER_STATE_CASES, RENDER_VISUAL_SCREENSHOTS, type RenderVisualState } from "./render-visual-cases";
 import { visualManifest, type VisualOwner } from "./visual-manifest";
@@ -338,6 +341,59 @@ describe("split-spec screenshot ownership inventory", () => {
     expect(casesWithoutDynamicNotes, "v1.2 cases must document dynamic data handling").toEqual([]);
     expect(specWindowsMissingTarget, `v1.2 visual sections missing SSIM target notes:\n${specWindowsMissingTarget.join("\n")}`).toEqual([]);
     expect(windows.join("\n")).toMatch(/Dynamic|may differ/i);
+  });
+
+  it("declares v1.3 canonical visual references under editor ownership", () => {
+    const expected = ["docs/designs/tasks/v1.3/visuals/editor-fullscreen-button-1920x1080.png"];
+    const problems: string[] = [];
+
+    for (const screenshot of expected) {
+      const entries = visualManifest.filter((entry) => entry.screenshot === screenshot);
+      if (entries.length !== 1) {
+        problems.push(`${screenshot} expected exactly one manifest entry, got ${entries.length}`);
+        continue;
+      }
+      const [entry] = entries;
+      if (entry && (entry.owner !== "editor" || entry.status !== "implemented")) {
+        problems.push(
+          `${screenshot} expected owner=editor/status=implemented actual owner=${entry.owner}/status=${entry.status}`,
+        );
+      }
+    }
+
+    expect(problems, `v1.3 visual parity ownership mismatches:\n${problems.join("\n")}`).toEqual([]);
+  });
+
+  it("maps every v1.3 editor screenshot reference to exactly one visual parity case", () => {
+    const v1_3Refs = new Set(["docs/designs/tasks/v1.3/visuals/editor-fullscreen-button-1920x1080.png"]);
+    const visualCaseRefs = [...V1_3_EDITOR_VISUAL_SCREENSHOTS];
+    const uniqueVisualCaseRefs = [...new Set(visualCaseRefs)].sort();
+
+    const missing = [...v1_3Refs].filter((screenshot) => !uniqueVisualCaseRefs.includes(screenshot));
+    const extra = uniqueVisualCaseRefs.filter((screenshot) => !v1_3Refs.has(screenshot));
+    const duplicates = findDuplicates(visualCaseRefs);
+
+    expect(
+      { duplicates, extra, missing },
+      [
+        "v1.3 visual test mapping mismatch.",
+        `Missing visual parity tests: ${missing.length ? missing.join(", ") : "(none)"}`,
+        `Extra visual parity tests: ${extra.length ? extra.join(", ") : "(none)"}`,
+        `Duplicate visual parity tests: ${duplicates.length ? duplicates.join(", ") : "(none)"}`,
+      ].join("\n"),
+    ).toEqual({ duplicates: [], extra: [], missing: [] });
+  });
+
+  it("keeps v1.3 visual thresholds and dynamic tolerances documented", () => {
+    const casesWithoutRequiredThreshold = V1_3_EDITOR_VISUAL_CASES
+      .filter((visualCase) => (visualCase.threshold ?? 0) < V1_3_VISUAL_SSIM_THRESHOLD)
+      .map((visualCase) => visualCase.reference);
+    const casesWithoutDynamicNotes = V1_3_EDITOR_VISUAL_CASES
+      .filter((visualCase) => !visualCase.dynamicData)
+      .map((visualCase) => visualCase.reference);
+
+    expect(casesWithoutRequiredThreshold, "v1.3 cases must compare at SSIM >= 0.98").toEqual([]);
+    expect(casesWithoutDynamicNotes, "v1.3 cases must document dynamic data handling").toEqual([]);
   });
 
   it("keeps render parity screenshots implemented under render ownership", () => {

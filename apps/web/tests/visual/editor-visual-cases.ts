@@ -6,6 +6,8 @@ export const V1_1_VISUAL_REFERENCE_PREFIX = "../tasks/v1.1/visuals/";
 export const V1_1_VISUAL_SSIM_THRESHOLD = 0.4;
 export const V1_2_VISUAL_REFERENCE_PREFIX = "../tasks/v1.2/visuals/";
 export const V1_2_VISUAL_SSIM_THRESHOLD = 0.98;
+export const V1_3_VISUAL_REFERENCE_PREFIX = "../tasks/v1.3/visuals/";
+export const V1_3_VISUAL_SSIM_THRESHOLD = 0.98;
 
 export type EditorVisualTheme = "dark" | "light";
 export type EditorVisualCaptureTarget =
@@ -40,6 +42,7 @@ export type EditorVisualAction =
   | "v1-2-editor-time-display"
   | "v1-2-subtitles-max-characters"
   | "v1-2-subtitles-max-characters-portrait"
+  | "v1-3-editor-fullscreen-button"
   | "v1-subtitles-modal-color-bg"
   | "v1-subtitles-modal-none"
   | "v1-transcript-edit"
@@ -60,6 +63,7 @@ export type EditorVisualCase = {
   deviceScaleFactor?: number;
   dynamicData?: string;
   ignoreRegions?: ReadonlyArray<{ x: number; y: number; width: number; height: number }>;
+  normalizeDarkPixels?: number;
   viewport?: { height: number; width: number };
 };
 
@@ -358,6 +362,28 @@ export const V1_2_EDITOR_VISUAL_CASES: EditorVisualCase[] = [
   },
 ];
 
+export const V1_3_EDITOR_VISUAL_CASES: EditorVisualCase[] = [
+  {
+    action: "v1-3-editor-fullscreen-button",
+    capture: "page",
+    clip: { x: 1220, y: 594, width: 368, height: 48 },
+    dynamicData:
+      "Compares the fullscreen-control/timecode segment from the full 1920x1080 reference. Masks exact time values and icon glyph pixels; normalizes near-black transport background token drift; browser assertions cover the fullscreen button order, 32x32 control size, timecode adjacency, gap, and vertical alignment.",
+    ignoreRegions: [
+      { x: 198, y: 8, width: 26, height: 22 },
+      { x: 246, y: 12, width: 106, height: 20 },
+    ],
+    name: "v1.3 editor fullscreen button transport row",
+    normalizeDarkPixels: 24,
+    reference: `${V1_3_VISUAL_REFERENCE_PREFIX}editor-fullscreen-button-1920x1080.png`,
+    referenceClip: { x: 1220, y: 622, width: 368, height: 48 },
+    strict: true,
+    theme: "dark",
+    threshold: V1_3_VISUAL_SSIM_THRESHOLD,
+    viewport: { width: 1920, height: 1080 },
+  },
+];
+
 export function editorVisualScreenshotPath(reference: string): string {
   return pathPosix.normalize(`docs/designs/visuals/${reference}`);
 }
@@ -371,5 +397,9 @@ export const V1_1_EDITOR_VISUAL_SCREENSHOTS = V1_1_EDITOR_VISUAL_CASES.filter((v
 );
 
 export const V1_2_EDITOR_VISUAL_SCREENSHOTS = V1_2_EDITOR_VISUAL_CASES.filter((visualCase) => visualCase.inventory !== false).map(
+  (visualCase) => editorVisualScreenshotPath(visualCase.reference),
+);
+
+export const V1_3_EDITOR_VISUAL_SCREENSHOTS = V1_3_EDITOR_VISUAL_CASES.filter((visualCase) => visualCase.inventory !== false).map(
   (visualCase) => editorVisualScreenshotPath(visualCase.reference),
 );

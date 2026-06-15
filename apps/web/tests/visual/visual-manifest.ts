@@ -33,6 +33,10 @@ const v1_2EditorScreenshots = [
   "subtitles-max-characters-9x16.png",
 ].map((screenshot) => `docs/designs/tasks/v1.2/visuals/${screenshot}`);
 
+const v1_3EditorScreenshots = [
+  "editor-fullscreen-button-1920x1080.png",
+].map((screenshot) => `docs/designs/tasks/v1.3/visuals/${screenshot}`);
+
 export const visualManifest: VisualManifestEntry[] = [
   { screenshot: "docs/designs/visuals/shell-dark.png", owner: "frontend-global", status: "implemented" },
   { screenshot: "docs/designs/visuals/shell-light.png", owner: "frontend-global", status: "implemented" },
@@ -76,6 +80,11 @@ export const visualManifest: VisualManifestEntry[] = [
     status: "implemented" as const,
   })),
   ...v1_2EditorScreenshots.map((screenshot) => ({
+    screenshot,
+    owner: "editor" as const,
+    status: "implemented" as const,
+  })),
+  ...v1_3EditorScreenshots.map((screenshot) => ({
     screenshot,
     owner: "editor" as const,
     status: "implemented" as const,

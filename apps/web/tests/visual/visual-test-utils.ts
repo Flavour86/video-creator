@@ -16,6 +16,7 @@ export type VisualCompareOptions = {
   actualPath: string;
   ignoreRegions?: ReadonlyArray<{ x: number; y: number; width: number; height: number }>;
   blurRadius?: number;
+  normalizeDarkPixels?: number;
   stateName?: string;
 };
 
@@ -25,6 +26,7 @@ export async function compareScreenshots({
   actualPath,
   ignoreRegions,
   blurRadius = 0,
+  normalizeDarkPixels,
   stateName,
 }: VisualCompareOptions): Promise<number> {
   const [referenceBuffer, actualBuffer] = await Promise.all([
@@ -36,6 +38,10 @@ export async function compareScreenshots({
   if (ignoreRegions && ignoreRegions.length > 0) {
     applyIgnoredRegions(referencePng, ignoreRegions);
     applyIgnoredRegions(actualPng, ignoreRegions);
+  }
+  if (normalizeDarkPixels !== undefined) {
+    normalizeNearBlackPixels(referencePng, normalizeDarkPixels);
+    normalizeNearBlackPixels(actualPng, normalizeDarkPixels);
   }
   if (blurRadius > 0) {
     applyBoxBlur(referencePng, blurRadius);
@@ -64,6 +70,21 @@ export async function compareScreenshots({
   }
 
   return score;
+}
+
+function normalizeNearBlackPixels(png: PNG, threshold: number): void {
+  const clampedThreshold = Math.max(0, Math.min(255, Math.floor(threshold)));
+  for (let index = 0; index < png.data.length; index += 4) {
+    const red = png.data[index] ?? 0;
+    const green = png.data[index + 1] ?? 0;
+    const blue = png.data[index + 2] ?? 0;
+    if (red <= clampedThreshold && green <= clampedThreshold && blue <= clampedThreshold) {
+      png.data[index] = 0;
+      png.data[index + 1] = 0;
+      png.data[index + 2] = 0;
+      png.data[index + 3] = 255;
+    }
+  }
 }
 
 function applyIgnoredRegions(png: PNG, regions: ReadonlyArray<{ x: number; y: number; width: number; height: number }>): void {
