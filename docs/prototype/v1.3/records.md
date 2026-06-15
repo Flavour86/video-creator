@@ -1,0 +1,1 @@
+1. add a new icon button which is used for full-screening the video, in the green frame position ![screenshot](image.png)

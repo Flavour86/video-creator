@@ -37,6 +37,7 @@ const Icon = ({ name, size = 16, className = "" }) => {
     close: <path d="m4 4 8 8M12 4l-8 8" />,
     sun: <g><circle cx="8" cy="8" r="3" /><path d="M8 1.5v1.5M8 13v1.5M14.5 8H13M3 8H1.5M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6" /></g>,
     moon: <path d="M13 8.5A5.5 5.5 0 0 1 7.5 3a5.5 5.5 0 1 0 5.5 5.5z" />,
+    fullscreen: <g><path d="M6 2.5H3.5a1 1 0 0 0-1 1V6" /><path d="M10 2.5h2.5a1 1 0 0 1 1 1V6" /><path d="M13.5 10v2.5a1 1 0 0 1-1 1H10" /><path d="M6 13.5H3.5a1 1 0 0 1-1-1V10" /></g>,
     plusCircle: <g><circle cx="8" cy="8" r="6" /><path d="M8 5.5v5M5.5 8h5" /></g>
   };
   return (

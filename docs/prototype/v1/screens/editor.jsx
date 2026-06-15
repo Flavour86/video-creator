@@ -219,6 +219,7 @@ const backgroundMediaForTime = (bgItem, time) => {
 };
 
 const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolution, subtitleText, subtitleSettings, showWatermark, watermarkAsset, watermarkSettings }) => {
+  const stageRef = React.useRef(null);
   // Find the topmost active fullscreen item (PiP and BG are always on)
   const fgItem = (() => {
     for (const L of layers.filter((l) => l.kind === "fg")) {
@@ -241,10 +242,17 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
   const canvasStyle = isVertical
     ? { height: "100%", maxWidth: "100%", aspectRatio: "9 / 16" }
     : { width: "100%", maxHeight: "100%", aspectRatio: "16 / 9" };
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+      return;
+    }
+    stageRef.current?.requestFullscreen?.();
+  };
 
   return (
     <div className="preview-wrap">
-      <div className="preview-stage">
+      <div className="preview-stage" ref={stageRef}>
         <div className="preview-canvas" style={canvasStyle}>
           {bgMedia && <div className="scene bg-scene" style={{ background: thumbGrad(bgMedia.thumb) }} />}
           {!bgMedia && <div className="scene empty"><span>No background</span></div>}
@@ -289,10 +297,15 @@ const Preview = ({ playing, time, onTogglePlay, currentSentence, layers, resolut
           </button>
           <button className="iconbtn" title="Next sentence"><Icon name="skipFwd" /></button>
         </div>
-        <div className="tc-display">
-          <span className="tc-now">{fmtTC(time, false)}</span>
-          <span className="tc-sep">/</span>
-          <span>{fmtTC(PROJECT_DURATION, false)}</span>
+        <div className="preview-time-actions">
+          <button className="iconbtn fullscreen-btn" title="Fullscreen preview" aria-label="Fullscreen preview" onClick={toggleFullscreen}>
+            <Icon name="fullscreen" />
+          </button>
+          <div className="tc-display">
+            <span className="tc-now">{fmtTC(time, false)}</span>
+            <span className="tc-sep">/</span>
+            <span>{fmtTC(PROJECT_DURATION, false)}</span>
+          </div>
         </div>
       </div>
     </div>);

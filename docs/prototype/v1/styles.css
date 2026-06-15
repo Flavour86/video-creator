@@ -1024,6 +1024,19 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; 
 .transport .iconbtn .icon { width: 16px; height: 16px; }
 .transport .play { background: var(--text); color: var(--bg-0); }
 .transport .play:hover { background: var(--text); color: var(--bg-0); }
+.preview-time-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.preview-time-actions .iconbtn {
+  width: 32px;
+  height: 32px;
+}
+.preview-time-actions .iconbtn .icon {
+  width: 16px;
+  height: 16px;
+}
 .tc-display {
   font-family: var(--font-mono);
   font-size: 14px;
