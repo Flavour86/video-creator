@@ -350,7 +350,8 @@
         "prev": "Previous sentence",
         "play": "Play",
         "pause": "Pause",
-        "next": "Next sentence"
+        "next": "Next sentence",
+        "fullscreen": "Fullscreen preview"
       },
       "inspector": {
         "title": "Inspector",

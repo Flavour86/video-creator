@@ -350,7 +350,8 @@
         "prev": "Previous sentence",
         "play": "Play",
         "pause": "Pause",
-        "next": "Next sentence"
+        "next": "Next sentence",
+        "fullscreen": "全屏预览"
       },
       "inspector": {
         "title": "检查器",

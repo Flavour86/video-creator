@@ -1,4 +1,4 @@
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Maximize2, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Project } from "@vc/shared-schemas";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
@@ -55,6 +55,7 @@ export function PreviewSurface({
   const t = useTranslations("pages.editor.transport");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number | null>(null);
+  const previewStageRef = useRef<HTMLDivElement>(null);
   const videoDecoderRefs = useRef(new Map<string, HTMLVideoElement>());
   const imageCacheRef = useRef(new Map<string, HTMLImageElement>());
   const redrawRef = useRef<() => void>(() => {});
@@ -293,12 +294,35 @@ export function PreviewSurface({
     };
   }, [drawAtClock, playing]);
 
+  const handleToggleFullscreen = useCallback(() => {
+    const target = previewStageRef.current;
+    if (!target) return;
+
+    if (document.fullscreenElement === target) {
+      if (typeof document.exitFullscreen !== "function") return;
+      try {
+        void document.exitFullscreen().catch(() => {});
+      } catch {
+        // Fullscreen failures are browser UI state only.
+      }
+      return;
+    }
+
+    if (typeof target.requestFullscreen !== "function") return;
+    try {
+      void target.requestFullscreen().catch(() => {});
+    } catch {
+      // Fullscreen failures are browser UI state only.
+    }
+  }, []);
+
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-3 p-4">
       <div className="relative flex min-h-0 flex-1 items-center justify-center">
         <div
           className="relative grid h-full min-h-0 w-full place-items-center overflow-hidden rounded-(--r-md) border border-(--line) bg-black shadow-(--shadow-1)"
           data-testid="preview-stage"
+          ref={previewStageRef}
         >
           <div className={`relative overflow-hidden bg-black ${canvasFrameClass}`} data-testid="preview-canvas-frame" style={{ aspectRatio: canvasAspect }}>
             <canvas
@@ -345,10 +369,13 @@ export function PreviewSurface({
           />
           <IconButton className="h-8 w-8" icon={SkipForward} label={t("next")} onClick={onNext} />
         </div>
-        <div className="rounded border border-(--line) bg-(--bg-2) px-2.5 py-1 text-sm tracking-[0.02em]">
-          <span className="text-(--amber)">{formatPreviewTimecode(displayTime)}</span>
-          <span className="mx-2 text-(--text-3)">/</span>
-          <span className="text-(--text-3)">{formatPreviewTimecode(duration)}</span>
+        <div className="flex items-center gap-2">
+          <IconButton className="h-8 w-8" icon={Maximize2} label={t("fullscreen")} onClick={handleToggleFullscreen} />
+          <div className="rounded border border-(--line) bg-(--bg-2) px-2.5 py-1 text-sm tracking-[0.02em]">
+            <span className="text-(--amber)">{formatPreviewTimecode(displayTime)}</span>
+            <span className="mx-2 text-(--text-3)">/</span>
+            <span className="text-(--text-3)">{formatPreviewTimecode(duration)}</span>
+          </div>
         </div>
       </div>
     </section>

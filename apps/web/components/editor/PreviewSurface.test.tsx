@@ -218,6 +218,27 @@ function renderSurface(overrides: Partial<ComponentProps<typeof PreviewSurface>>
   };
 }
 
+function mockDocumentFullscreen(getElement: () => Element | null, exitFullscreen?: () => Promise<void>) {
+  const fullscreenDescriptor = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
+  const exitDescriptor = Object.getOwnPropertyDescriptor(document, "exitFullscreen");
+  Object.defineProperty(document, "fullscreenElement", { configurable: true, get: getElement });
+  if (exitFullscreen) {
+    Object.defineProperty(document, "exitFullscreen", { configurable: true, value: exitFullscreen });
+  }
+  return () => {
+    restoreDocumentProperty("fullscreenElement", fullscreenDescriptor);
+    restoreDocumentProperty("exitFullscreen", exitDescriptor);
+  };
+}
+
+function restoreDocumentProperty(key: "exitFullscreen" | "fullscreenElement", descriptor?: PropertyDescriptor) {
+  if (descriptor) {
+    Object.defineProperty(document, key, descriptor);
+    return;
+  }
+  delete (document as unknown as Record<string, unknown>)[key];
+}
+
 function filenameFromSource(source: unknown): string | null {
   if (!(source instanceof HTMLImageElement || source instanceof HTMLVideoElement)) {
     return null;
@@ -897,6 +918,79 @@ describe("PreviewSurface", () => {
     expect(decoder.src).toContain("/api/server/uploads/media-file");
     expect(decoder.src).toContain("filename=logo.mov");
     expect(load).toHaveBeenCalled();
+  });
+
+  it("renders a localized fullscreen control immediately before timecode and toggles the preview stage", async () => {
+    let fullscreenElement: Element | null = null;
+    const requestFullscreen = vi.fn(function requestFullscreen(this: HTMLElement) {
+      fullscreenElement = this;
+      return Promise.resolve();
+    });
+    const exitFullscreen = vi.fn(() => {
+      fullscreenElement = null;
+      return Promise.resolve();
+    });
+    const restoreFullscreen = mockDocumentFullscreen(() => fullscreenElement, exitFullscreen);
+    try {
+      renderSurface({ currentTime: 12.5, duration: 30 });
+      const fullscreenButton = screen.getByRole("button", { name: "Fullscreen preview" });
+      const timecodeDisplay = screen.getByText("00:12").closest("div");
+      const previewStage = screen.getByTestId("preview-stage") as HTMLElement;
+      Object.defineProperty(previewStage, "requestFullscreen", { configurable: true, value: requestFullscreen });
+
+      expect(fullscreenButton).toHaveAttribute("title", "Fullscreen preview");
+      expect(fullscreenButton.className).toContain("h-8");
+      expect(fullscreenButton.className).toContain("w-8");
+      expect(timecodeDisplay?.previousElementSibling).toBe(fullscreenButton);
+
+      fireEvent.click(fullscreenButton);
+      await waitFor(() => expect(requestFullscreen).toHaveBeenCalledTimes(1));
+      expect(requestFullscreen.mock.contexts[0]).toBe(previewStage);
+      expect(fullscreenElement).toBe(previewStage);
+
+      fireEvent.click(fullscreenButton);
+      await waitFor(() => expect(exitFullscreen).toHaveBeenCalledTimes(1));
+      expect(fullscreenElement).toBeNull();
+    } finally {
+      restoreFullscreen();
+    }
+  });
+
+  it.each(["720p", "9:16"] as const)("keeps the fullscreen control immediately before timecode for %s", (resolution) => {
+    renderSurface({ currentTime: 12.5, duration: 30, resolution });
+
+    const fullscreenButton = screen.getByRole("button", { name: "Fullscreen preview" });
+    const timecodeDisplay = screen.getByText("00:12").closest("div");
+
+    expect(timecodeDisplay?.previousElementSibling).toBe(fullscreenButton);
+  });
+
+  it("ignores rejected or missing Fullscreen API calls without affecting playback controls", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const requestFullscreen = vi.fn(() => Promise.reject(new Error("Fullscreen denied")));
+    const restoreFullscreen = mockDocumentFullscreen(() => null);
+    try {
+      const { props } = renderSurface({ currentTime: 12.5, duration: 30, playing: false });
+      const fullscreenButton = screen.getByRole("button", { name: "Fullscreen preview" });
+      const previewStage = screen.getByTestId("preview-stage") as HTMLElement;
+      Object.defineProperty(previewStage, "requestFullscreen", { configurable: true, value: requestFullscreen });
+
+      fireEvent.click(fullscreenButton);
+      await waitFor(() => expect(requestFullscreen).toHaveBeenCalledTimes(1));
+      await Promise.resolve();
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(props.onTogglePlay).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+      expect(screen.getByText("00:12")).toBeInTheDocument();
+      expect(screen.getByText("00:30")).toBeInTheDocument();
+
+      Object.defineProperty(previewStage, "requestFullscreen", { configurable: true, value: undefined });
+      expect(() => fireEvent.click(fullscreenButton)).not.toThrow();
+      expect(props.onTogglePlay).not.toHaveBeenCalled();
+    } finally {
+      restoreFullscreen();
+    }
   });
 
   it("renders transport controls and playing/paused states", () => {
