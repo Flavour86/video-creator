@@ -151,6 +151,76 @@ Routing rules:
 - [Launcher And Setup](SPEC_LAUNCHER.md): Launcher page, recent projects, thumbnails, pagination, and the four-step Setup subflow.
 - [Editor](SPEC_EDITOR.md): editor toolbar, draft render strip, transcript pane, preview, timeline, inspector, modals, and media/layer model.
 - [Render](SPEC_RENDER.md): Render page layout, progress card, output panel, history, after-render actions, render states, and cancel behavior.
+  你们不明白你不能那个家伙 后即可v复合句分割符号v那边你麻痹韩剧                                                                                                                                                                                                                                                             吧居于用日特哇4
+## Preview-To-Export Parity Verification
+
+Generated MP4 approval requires frame parity against the Editor preview, not just successful browser playback. The canonical comparison is:
+
+```text
+same project config + same output resolution + same timestamp
+Editor preview canvas PNG <-> exported MP4 frame PNG
+```
+
+Browser playback is still required, but it only proves delivery/playability. It does not prove the video looks like the web preview.
+
+Approval standard:
+
+- Draw order must be `black -> bg -> fg -> pip -> subtitle -> watermark`.
+- Layer start/end transitions must match the preview manifest within 2 frames at 30fps.
+- PiP and watermark bounding boxes must match within 2% of frame width/height.
+- Subtitle cue text, timing, line wrapping, position, font size, color, background style, opacity, and safe-area placement must match within the configured visual tolerance.
+- Whole frame and targeted regions must pass pixel comparison for background/foreground stack, subtitles, PiP, and watermark.
+- The MP4 must pass `ffprobe` checks for duration, resolution, audio stream, and faststart.
+- The MP4 route `/api/server/projects/:projectId/render/:renderId` must return HTTP 200 with `video/mp4`, expose correct `<video>` metadata, and seek cleanly to sampled timestamps in a browser.
+
+Required automated flow:
+
+1. Start the app and backend with the normal development command, then confirm `/api/server/health` reports `ffmpeg` ready.
+2. Open `/editor/:projectId`, select the target preview resolution, and wait for the preview canvas to expose a render manifest.
+3. Trigger a draft/final render for the same project config and resolution.
+4. Save the backend render manifest beside the MP4 and save a sample plan containing representative timestamps for background-only, foreground, PiP, subtitles, watermark, and near layer transitions.
+5. For each sampled timestamp, seek the Editor preview, capture the canvas PNG, extract the MP4 frame with ffmpeg, and compare:
+   - whole frame,
+   - background/foreground stack,
+   - subtitle region,
+   - PiP region when active,
+   - watermark region when active.
+6. Compare the preview manifest and export manifest for active media IDs, draw order, source time, opacity, transition state, and bounding boxes.
+7. Open the generated MP4 through the render route in a real browser, read `<video>` metadata, seek to sampled timestamps, and save visible playback evidence.
+8. Save evidence PNGs, ffprobe metadata, render manifest, preview/export parity report, browser playback metadata, and any console findings under a run-specific evidence folder.
+
+Current repo helper commands, when available:
+
+```bash
+# One restored-project draft parity run.
+node .codex-runlogs/verify-draft-parity.mjs
+
+# Parameter sweep for every visible field in the Subtitle, Watermark,
+# Background, Foreground, and PiP controls.
+node .codex-runlogs/param-sweep-variant.mjs init
+node .codex-runlogs/param-sweep-variant.mjs variant subtitle-off
+node .codex-runlogs/param-sweep-variant.mjs variant subtitle-none-top-wrap
+node .codex-runlogs/param-sweep-variant.mjs variant subtitle-pill
+node .codex-runlogs/param-sweep-variant.mjs variant subtitle-block-radius
+node .codex-runlogs/param-sweep-variant.mjs variant subtitle-shadow
+node .codex-runlogs/param-sweep-variant.mjs variant watermark-off
+node .codex-runlogs/param-sweep-variant.mjs variant watermark-logo-position
+node .codex-runlogs/param-sweep-variant.mjs variant background-schedule-motion
+node .codex-runlogs/param-sweep-variant.mjs variant foreground-range-motion-transition
+node .codex-runlogs/param-sweep-variant.mjs variant pip-placement-motion-transition
+node .codex-runlogs/param-sweep-variant.mjs summary
+node .codex-runlogs/param-sweep-variant.mjs restore
+```
+
+The parameter sweep is complete only when its summary reports all expected fields covered and every variant passed. It must cover:
+
+- Subtitle: show/hide, background style, position, font, color, size, max characters per line, background color, opacity, and radius.
+- Watermark: enabled state, selected asset, POSX, POSY, size/scale, and opacity.
+- Background: asset selection, coverage media/start/end/hold, motion, easing, and crossfade.
+- Foreground: media, range from/to, motion, easing, transition in, and transition out.
+- PiP: media, placement grid, POSX, POSY, size, radius, opacity, range from/to, motion, easing, transition in, and transition out.
+
+If any parameter variant fails, fix the preview/export mismatch in place and rerun the failing variant until it passes. After a sweep, restore the original project config and run one final parity check on the restored draft.
 
 ## Performance Targets
 

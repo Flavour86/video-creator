@@ -180,6 +180,7 @@ export type RenderArtifactKind =
   | "log"
   | "graph"
   | "filtergraph"
+  | "manifest"
   | "subtitles"
   | "thumbnail"
   | "companion";

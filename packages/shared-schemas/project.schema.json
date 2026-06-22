@@ -147,6 +147,7 @@
         "log",
         "graph",
         "filtergraph",
+        "manifest",
         "subtitles",
         "thumbnail",
         "companion"

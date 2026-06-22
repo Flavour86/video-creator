@@ -290,7 +290,7 @@ def test_render_fullscreen_clip_crops_to_cover_vertical_canvas(
 
     def fake_run(cmd: list[str], **kwargs: object) -> Result:
         commands.append(cmd)
-        Path(cmd[-1]).write_bytes(b"mp4")
+        Path(cmd[-1]).write_bytes(b"webm")
         return Result()
 
     monkeypatch.setattr("server.pipeline.clip_render.subprocess.run", fake_run)
@@ -302,10 +302,10 @@ def test_render_fullscreen_clip_crops_to_cover_vertical_canvas(
             "start": 0.0,
             "end": 4.0,
             "motion": {"kind": "none", "easing": "linear"},
-            "transitions": {"in": "cut", "out": "cut"},
+            "transitions": {"in": "fade", "out": "cut"},
         },
         project_dir=tmp_path,
-        output_path=tmp_path / ".vc" / "clips" / "foreground.mp4",
+        output_path=tmp_path / ".vc" / "clips" / "foreground.webm",
         resolution="1080x1920",
     )
 
@@ -313,7 +313,12 @@ def test_render_fullscreen_clip_crops_to_cover_vertical_canvas(
     filtergraph = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
     assert "scale=1080:1920:force_original_aspect_ratio=increase" in filtergraph
     assert "crop=1080:1920" in filtergraph
+    assert "format=rgba,fade=t=in:st=0:d=0.4:alpha=1" in filtergraph
+    assert "fade=t=in:st=0:d=0.4:alpha=1" in filtergraph
+    assert "format=yuva420p" in filtergraph
     assert "pad=1080:1920" not in filtergraph
+    assert "libvpx-vp9" in ffmpeg_command
+    assert "yuva420p" in ffmpeg_command
 
 
 def test_render_video_clip_plays_once_without_looping(
@@ -352,6 +357,125 @@ def test_render_video_clip_plays_once_without_looping(
     ffmpeg_command = next(command for command in commands if command[0] == "ffmpeg")
     assert "-stream_loop" not in ffmpeg_command
     assert ffmpeg_command[ffmpeg_command.index("-t") + 1] == "3"
+
+
+def test_render_video_motion_advances_one_source_frame_per_output_frame(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "clip.mp4")
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = "3.0"
+        stderr = ""
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Result:
+        commands.append(cmd)
+        if cmd[0] == "ffmpeg":
+            Path(cmd[-1]).write_bytes(b"mp4")
+        return Result()
+
+    monkeypatch.setattr("server.pipeline.clip_render.subprocess.run", fake_run)
+
+    render_clip(
+        item={
+            "id": "bg-1",
+            "media_id": media_path.name,
+            "start": 0.0,
+            "end": 3.0,
+            "motion": {"kind": "ken_burns", "easing": "ease_in_out"},
+            "transitions": {"in": "cut", "out": "cut"},
+        },
+        project_dir=tmp_path,
+        output_path=tmp_path / ".vc" / "clips" / "video.mp4",
+    )
+
+    ffmpeg_command = next(command for command in commands if command[0] == "ffmpeg")
+    filtergraph = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
+    assert "zoompan=" in filtergraph
+    assert ":d=1:" in filtergraph
+    assert "if(lt(on/89,0.5),2*(on/89)*(on/89),1-pow(-2*(on/89)+2,2)/2)" in filtergraph
+
+
+def test_render_pan_motion_wraps_easing_expression_precedence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "foreground.jpg")
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Result:
+        commands.append(cmd)
+        Path(cmd[-1]).write_bytes(b"mp4")
+        return Result()
+
+    monkeypatch.setattr("server.pipeline.clip_render.subprocess.run", fake_run)
+
+    render_clip(
+        item={
+            "id": "fg-1",
+            "media_id": media_path.name,
+            "start": 0.0,
+            "end": 3.0,
+            "motion": {"kind": "pan_left", "easing": "ease_out"},
+            "transitions": {"in": "cut", "out": "cut"},
+        },
+        project_dir=tmp_path,
+        output_path=tmp_path / ".vc" / "clips" / "foreground.mp4",
+    )
+
+    ffmpeg_command = commands[0]
+    filtergraph = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
+    assert "x='(iw-iw/zoom)*(1-(1-on/89)*(1-on/89))'" in filtergraph
+
+
+def test_render_pip_motion_preserves_source_aspect_ratio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = _write_media(tmp_path / "media" / "pip.png")
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = "1600x900"
+        stderr = ""
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Result:
+        commands.append(cmd)
+        if cmd[0] == "ffmpeg":
+            Path(cmd[-1]).write_bytes(b"webm")
+        return Result()
+
+    monkeypatch.setattr("server.pipeline.clip_render.subprocess.run", fake_run)
+
+    render_clip(
+        item={
+            "id": "pip-1",
+            "media_id": media_path.name,
+            "start": 0.0,
+            "end": 3.0,
+            "motion": {"kind": "zoom_in", "easing": "ease_out"},
+            "transitions": {"in": "cut", "out": "cut"},
+            "pip": {"posX": 96, "posY": 4, "size": 22, "radius": 4, "opacity": 55},
+        },
+        project_dir=tmp_path,
+        output_path=tmp_path / ".vc" / "clips" / "pip.webm",
+    )
+
+    ffmpeg_command = next(command for command in commands if command[0] == "ffmpeg")
+    filtergraph = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
+    assert "zoompan=" in filtergraph
+    assert "s=282x158" in filtergraph
+    assert ":d=90:" in filtergraph
+    assert "1-(1-on/89)*(1-on/89)" in filtergraph
 
 
 def test_clip_cache_rebuilds_only_edited_clip_and_reuses_unaffected_clip(

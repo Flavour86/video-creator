@@ -183,6 +183,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => HTMLMediaElement.HAVE_CURRENT_DATA });
+  Object.defineProperty(HTMLMediaElement.prototype, "seeking", { configurable: true, get: () => false });
+  Object.defineProperty(HTMLVideoElement.prototype, "videoWidth", { configurable: true, get: () => 1920 });
+  Object.defineProperty(HTMLVideoElement.prototype, "videoHeight", { configurable: true, get: () => 1080 });
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(fakeContext);
 });
 
@@ -215,6 +219,43 @@ function renderSurface(overrides: Partial<ComponentProps<typeof PreviewSurface>>
         <PreviewSurface {...props} />
       </NextIntlClientProvider>,
     ),
+  };
+}
+
+function stubLoadedImages(width = 1920, height = 1080) {
+  vi.stubGlobal("Image", vi.fn(function imageFactory() {
+    const image = document.createElement("img");
+    Object.defineProperty(image, "complete", { configurable: true, value: true });
+    Object.defineProperty(image, "naturalWidth", { configurable: true, value: width });
+    Object.defineProperty(image, "naturalHeight", { configurable: true, value: height });
+    return image;
+  }));
+}
+
+function previewManifest() {
+  const canvas = screen.getByTestId("preview-canvas") as HTMLCanvasElement;
+  const rawManifest = canvas.dataset.renderManifest;
+  if (!rawManifest) throw new Error("Preview render manifest missing.");
+  return JSON.parse(rawManifest) as {
+    activeMediaIds: string[];
+    drawOrder: string[];
+    frame: { height: number; width: number };
+    layers: Array<{
+      bbox?: { height: number; width: number; x: number; y: number };
+      itemId?: string;
+      kind: string;
+      layerId?: string;
+      lines?: string[];
+      mediaId?: string;
+      opacity?: number;
+      sourceTime?: number;
+      style?: Record<string, unknown>;
+      text?: string;
+      transition?: Record<string, unknown>;
+    }>;
+    resolution: string;
+    timestamp: number;
+    version: 1;
   };
 }
 
@@ -255,6 +296,15 @@ function drawnFilenames(): string[] {
   return drawImage.mock.calls
     .map((call) => filenameFromSource(call[0]))
     .filter((value): value is string => Boolean(value));
+}
+
+function drawDestination(call: unknown[]): { height: number; width: number; x: number; y: number } {
+  if (call.length >= 9) {
+    const [, , , , , x, y, width, height] = call as [unknown, number, number, number, number, number, number, number, number];
+    return { height, width, x, y };
+  }
+  const [, x, y, width, height] = call as [unknown, number, number, number, number];
+  return { height, width, x, y };
 }
 
 describe("PreviewSurface", () => {
@@ -321,15 +371,66 @@ describe("PreviewSurface", () => {
     expect(fillText).toHaveBeenCalled();
   });
 
-  it("draws both background images during a playlist crossfade", () => {
-    const imageFactory = vi.fn(function imageFactory() {
-      const image = document.createElement("img");
-      Object.defineProperty(image, "complete", { configurable: true, value: true });
-      Object.defineProperty(image, "naturalWidth", { configurable: true, value: 1920 });
-      Object.defineProperty(image, "naturalHeight", { configurable: true, value: 1080 });
-      return image;
+  it("exposes a preview render manifest with draw order, timing, geometry, and subtitle style", () => {
+    stubLoadedImages();
+
+    renderSurface({
+      currentTime: 5,
+      layers: [PIP_LAYER, FG_LAYER, BG_LAYER],
+      resolution: "720p",
+      subtitles: SUBTITLES_ON,
+      watermark: WATERMARK_ON,
     });
-    vi.stubGlobal("Image", imageFactory);
+
+    const manifest = previewManifest();
+    expect(manifest).toMatchObject({
+      activeMediaIds: ["bg0.png", "fg0.png", "pip0.png", "logo.png"],
+      drawOrder: ["black", "bg", "fg", "pip", "subtitle", "watermark"],
+      frame: { width: 1280, height: 720 },
+      resolution: "720p",
+      timestamp: 5,
+      version: 1,
+    });
+    expect((window as Window & { __VC_PREVIEW_RENDER_MANIFEST__?: unknown }).__VC_PREVIEW_RENDER_MANIFEST__).toEqual(manifest);
+
+    const byKind = Object.fromEntries(manifest.layers.map((layer) => [layer.kind, layer]));
+    expect(byKind.bg).toMatchObject({
+      bbox: { x: 0, y: 0, width: 1280, height: 720 },
+      itemId: "bg-1",
+      layerId: "bg-main",
+      mediaId: "bg0.png",
+      sourceTime: 5,
+    });
+    expect(byKind.fg).toMatchObject({
+      itemId: "fg-1",
+      layerId: "fg-main",
+      mediaId: "fg0.png",
+      sourceTime: 5,
+      transition: { duration: 0.4, kind: "cut", phase: "stable", progress: 1, translateX: 0 },
+    });
+    expect(byKind.pip?.bbox).toEqual({ x: 627.2, y: 50.4, width: 384, height: 216 });
+    expect(byKind.pip?.opacity).toBe(0.8);
+    expect(byKind.subtitle).toMatchObject({
+      lines: ["Capitalism begins here."],
+      style: {
+        bgStyle: "pill",
+        font: "Helvetica Neue",
+        fontSize: 21,
+        maxCharsPerLine: 30,
+        position: "top",
+        sourceSize: 36,
+      },
+    });
+    expect(byKind.watermark?.bbox).toEqual({ x: 1059.84, y: 66.24, width: 102.4, height: 57.6 });
+    expect(byKind.watermark).toMatchObject({
+      mediaId: "logo.png",
+      opacity: 0.9,
+      style: { posX: 90, posY: 10, scale: 0.08 },
+    });
+  });
+
+  it("draws both background images during a playlist crossfade", () => {
+    stubLoadedImages();
     const layer: Layer = {
       ...BG_LAYER,
       items: [{
@@ -663,7 +764,7 @@ describe("PreviewSurface", () => {
       unmount();
 
       expect(pipDraw, placement.label).toBeDefined();
-      const [, x, y, width, height] = pipDraw as [unknown, number, number, number, number];
+      const { height, width, x, y } = drawDestination(pipDraw ?? []);
       expect(x, placement.label).toBeGreaterThanOrEqual(0);
       expect(y, placement.label).toBeGreaterThanOrEqual(0);
       expect(x + width, placement.label).toBeLessThanOrEqual(canvasWidth);
@@ -807,6 +908,32 @@ describe("PreviewSurface", () => {
     expect(drawnText).toContain("Capitalism begins");
     expect(drawnText).toContain("here.");
     expect(drawnText).not.toContain("Capitalism");
+  });
+
+  it("resolves long CJK subtitles to the same active SRT cue as export", () => {
+    const sentenceText = "我相信每一个在中国读过书的人都知道这样一句话我们是社会";
+    renderSurface({
+      currentTime: 3.425,
+      layers: [BG_LAYER],
+      sentences: [{ confidence_avg: 0.95, end_s: 7, index: 1, start_s: 0, text: sentenceText }],
+      subtitles: {
+        burn_in: true,
+        style: {
+          bg_style: "none",
+          font: "Helvetica Neue",
+          max_chars_per_line: 20,
+          position: "top",
+          size: 40,
+        },
+      },
+      subtitleTextOverrides: true,
+      words: [],
+    });
+
+    const subtitle = previewManifest().layers.find((layer) => layer.kind === "subtitle");
+    expect(subtitle?.text).toBe("我相信每一个在中国读过书的人都知道这样一");
+    expect(subtitle?.lines).toEqual(["我相信每一个在中国读", "过书的人都知道这样一"]);
+    expect(screen.getByTestId("preview-subtitle-live")).toHaveTextContent("我相信每一个在中国读过书的人都知道这样一");
   });
 
   it("toggles watermark visibility from config", () => {

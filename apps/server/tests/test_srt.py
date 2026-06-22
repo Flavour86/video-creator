@@ -188,6 +188,34 @@ def test_aligned_cjk_characters_render_without_inserted_spaces() -> None:
     assert " " not in rendered_text
 
 
+def test_cjk_line_wrapping_uses_visible_width_like_preview() -> None:
+    text = "\u4e00" * 21
+    alignment = AlignmentResult(
+        sentences=[
+            AlignedSentence(
+                index=1,
+                text=text,
+                start_s=0.0,
+                end_s=4.0,
+                confidence_avg=0.95,
+            )
+        ],
+        words=[
+            AlignedWord(
+                sentence_index=1,
+                text=text,
+                start_s=0.0,
+                end_s=4.0,
+                confidence=0.9,
+            )
+        ],
+    )
+
+    lines = _blocks(generate_srt(alignment, max_line_chars=40))[0][2:]
+
+    assert lines == ["\u4e00" * 20, "\u4e00"]
+
+
 def test_cue_numbers_are_one_based_and_contiguous() -> None:
     blocks = _blocks(generate_srt(_alignment()))
 

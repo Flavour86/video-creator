@@ -2,6 +2,8 @@ import type { AlignedSentence } from "@/lib/hooks/useAlignment";
 import type { BackgroundScheduleSegment } from "@vc/shared-schemas";
 import { backgroundDeclaredMediaIdsForItem, hasBackgroundSchedule, normalizeBackgroundSchedule } from "./backgroundSchedule";
 
+export const PREVIEW_TRANSITION_SECONDS = 0.4;
+
 // ── Layer shape (mirrors project.json schema) ────────────────────────────────
 
 type Motion = { kind: string; easing: string };
@@ -47,18 +49,28 @@ export type PipPlacement = {
 };
 
 type BackgroundDisplay = {
+  itemId: string;
+  layerId: string;
   mediaId: string;
   motion: Motion;
   motionProgress: number;
   opacity: number;
   sourceTime: number;
+  transition: TransitionState;
+};
+
+export type TransitionState = {
+  duration: number;
+  kind: string;
+  phase: "in" | "out" | "stable";
+  progress: number;
 };
 
 export type DisplaySpec = {
   bg?: BackgroundDisplay;
   backgrounds: BackgroundDisplay[];
-  fg: Array<{ mediaId: string; compositing: "fullscreen"; opacity: number; sourceTime: number; translateX: number }>;
-  pip: Array<{ mediaId: string; placement: PipPlacement; opacity: number; sourceTime: number; translateX: number }>;
+  fg: Array<{ itemId: string; layerId: string; mediaId: string; compositing: "fullscreen"; motion: Motion; motionProgress: number; opacity: number; sourceTime: number; transition: TransitionState; translateX: number }>;
+  pip: Array<{ itemId: string; layerId: string; mediaId: string; motion: Motion; motionProgress: number; placement: PipPlacement; opacity: number; sourceTime: number; transition: TransitionState; translateX: number }>;
   watermark?: { mediaId: string; posX: number; posY: number; scale: number; opacity: number };
   subtitle?: { text: string };
 };
@@ -77,7 +89,7 @@ type ResolveDisplayOptions = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function transitionOpacity(item: BaseItem, t: number): number {
-  const fadeDuration = bgCrossfade(item);
+  const fadeDuration = transitionDuration(item);
   if (item.transitions.in === "fade" && t - item.start < fadeDuration) {
     return (t - item.start) / fadeDuration;
   }
@@ -88,7 +100,7 @@ function transitionOpacity(item: BaseItem, t: number): number {
 }
 
 function transitionTranslateX(item: BaseItem, t: number): number {
-  const duration = bgCrossfade(item);
+  const duration = transitionDuration(item);
   const elapsed = t - item.start;
   const remaining = item.end - t;
 
@@ -105,6 +117,39 @@ function transitionTranslateX(item: BaseItem, t: number): number {
     return (1 - remaining / duration) * 100;
   }
   return 0;
+}
+
+function transitionDuration(item: BaseItem): number {
+  if ("crossfade" in item && typeof item.crossfade === "number" && item.crossfade > 0) {
+    return Math.max(0, item.crossfade);
+  }
+  return PREVIEW_TRANSITION_SECONDS;
+}
+
+function transitionState(item: BaseItem, t: number): TransitionState {
+  const duration = Math.min(transitionDuration(item), Math.max((item.end - item.start) / 2, 0));
+  if (duration <= 0) {
+    return { duration: 0, kind: "cut", phase: "stable", progress: 1 };
+  }
+  const elapsed = t - item.start;
+  const remaining = item.end - t;
+  if (item.transitions.in !== "cut" && elapsed < duration) {
+    return {
+      duration,
+      kind: item.transitions.in,
+      phase: "in",
+      progress: clamp(elapsed / duration, 0, 1),
+    };
+  }
+  if (item.transitions.out !== "cut" && remaining < duration) {
+    return {
+      duration,
+      kind: item.transitions.out,
+      phase: "out",
+      progress: clamp(1 - remaining / duration, 0, 1),
+    };
+  }
+  return { duration, kind: "cut", phase: "stable", progress: 1 };
 }
 
 function bgCrossfade(item: BaseItem): number {
@@ -136,8 +181,9 @@ function backgroundMediaAtTime(
   item: BgItem,
   currentTime: number,
   mediaIndex: ReadonlyMap<string, ResolveMediaInfo>,
+  layerId: string,
 ): BackgroundDisplay[] {
-  const scheduled = scheduledBackgroundMediaAtTime(item, currentTime, mediaIndex);
+  const scheduled = scheduledBackgroundMediaAtTime(item, currentTime, mediaIndex, layerId);
   if (scheduled !== null) return scheduled;
 
   const playlist = item.mediaIds?.filter(Boolean) ?? [];
@@ -148,7 +194,7 @@ function backgroundMediaAtTime(
     const duration = isVideoMedia(mediaId, mediaIndex) ? mediaDuration(mediaId, mediaIndex) : null;
     const end = duration === null ? item.end : Math.min(item.end, item.start + duration);
     return item.start <= currentTime && currentTime < end
-      ? [backgroundDisplay(item, mediaId, transitionOpacity({ ...item, end }, currentTime), currentTime - item.start, item.start, end, currentTime)]
+      ? [backgroundDisplay({ ...item, end }, mediaId, layerId, transitionOpacity({ ...item, end }, currentTime), currentTime - item.start, item.start, end, currentTime)]
       : [];
   }
   const useVideoDurations = mediaIds.some((mediaId) => isVideoMedia(mediaId, mediaIndex) && mediaDuration(mediaId, mediaIndex) !== null);
@@ -157,19 +203,20 @@ function backgroundMediaAtTime(
     : imagePlaylistEntries(item, mediaIds);
   return entries
     .filter((entry) => entry.start <= currentTime && currentTime < entry.end)
-    .map((entry) => backgroundDisplay(item, entry.mediaId, opacityForWindow(entry, currentTime), currentTime - entry.start, entry.start, entry.end, currentTime));
+    .map((entry) => backgroundDisplay(item, entry.mediaId, layerId, opacityForWindow(entry, currentTime), currentTime - entry.start, entry.start, entry.end, currentTime, entry));
 }
 
 function scheduledBackgroundMediaAtTime(
   item: BgItem,
   currentTime: number,
   mediaIndex: ReadonlyMap<string, ResolveMediaInfo>,
+  layerId: string,
 ): BackgroundDisplay[] | null {
   const schedule = normalizeBackgroundSchedule(item.schedule, backgroundDeclaredMediaIdsForItem(item));
   if (!hasBackgroundSchedule(item) && schedule.length === 0) return null;
   return scheduledPlaylistEntries(item, schedule, mediaIndex)
     .filter((entry) => entry.start <= currentTime && currentTime < entry.end)
-    .map((entry) => backgroundDisplay(item, entry.mediaId, opacityForWindow(entry, currentTime), currentTime - entry.start, entry.start, entry.end, currentTime));
+    .map((entry) => backgroundDisplay(item, entry.mediaId, layerId, opacityForWindow(entry, currentTime), currentTime - entry.start, entry.start, entry.end, currentTime, entry));
 }
 
 type PlaylistEntry = {
@@ -265,19 +312,44 @@ function scheduledPlaylistEntries(
 function backgroundDisplay(
   item: BgItem,
   mediaId: string,
+  layerId: string,
   opacity: number,
   sourceTime: number,
   start: number,
   end: number,
   currentTime: number,
+  entry?: PlaylistEntry,
 ): BackgroundDisplay {
   return {
+    itemId: item.id,
+    layerId,
     mediaId,
     motion: item.motion,
     motionProgress: easedProgress(item.motion.easing, start, end, currentTime),
     opacity,
     sourceTime,
+    transition: backgroundTransitionState(item, start, end, currentTime, entry),
   };
+}
+
+function backgroundTransitionState(
+  item: BgItem,
+  start: number,
+  end: number,
+  currentTime: number,
+  entry?: PlaylistEntry,
+): TransitionState {
+  const fade = entry?.fade ?? transitionDuration(item);
+  if (fade <= 0) {
+    return { duration: 0, kind: "cut", phase: "stable", progress: 1 };
+  }
+  if (entry?.transitionIn === "fade" && currentTime - start < fade) {
+    return { duration: fade, kind: "fade", phase: "in", progress: clamp((currentTime - start) / fade, 0, 1) };
+  }
+  if (entry?.transitionOut === "fade" && end - currentTime < fade) {
+    return { duration: fade, kind: "fade", phase: "out", progress: clamp(1 - (end - currentTime) / fade, 0, 1) };
+  }
+  return transitionState({ ...item, start, end }, currentTime);
 }
 
 function easedProgress(easing: string, start: number, end: number, currentTime: number): number {
@@ -353,7 +425,7 @@ export function resolveDisplay(
         }
       }
       if (item) {
-        const backgrounds = backgroundMediaAtTime(item, currentTime, mediaIndex);
+        const backgrounds = backgroundMediaAtTime(item, currentTime, mediaIndex, layer.id);
         if (backgrounds.length > 0) {
           spec.backgrounds = backgrounds;
           spec.bg = backgrounds.at(-1);
@@ -363,20 +435,33 @@ export function resolveDisplay(
       const item = activeItem(layer.items, currentTime);
       const mediaId = item ? mediaIdAtTime(item, currentTime) : null;
       if (item && mediaId) {
+        const opacity = transitionOpacity(item, currentTime);
+        const translateX = transitionTranslateX(item, currentTime);
         spec.fg.push({
+          itemId: item.id,
+          layerId: layer.id,
           mediaId,
           compositing: "fullscreen",
-          opacity: transitionOpacity(item, currentTime),
+          motion: item.motion,
+          motionProgress: easedProgress(item.motion.easing, item.start, item.end, currentTime),
+          opacity,
           sourceTime: currentTime - item.start,
-          translateX: transitionTranslateX(item, currentTime),
+          transition: transitionState(item, currentTime),
+          translateX,
         });
       }
     } else if (layer.kind === "pip") {
       const item = activeItem(layer.items as PipItem[], currentTime);
       const mediaId = item ? mediaIdAtTime(item, currentTime) : null;
       if (item && mediaId) {
+        const opacity = transitionOpacity(item, currentTime);
+        const translateX = transitionTranslateX(item, currentTime);
         spec.pip.push({
+          itemId: item.id,
+          layerId: layer.id,
           mediaId,
+          motion: item.motion,
+          motionProgress: easedProgress(item.motion.easing, item.start, item.end, currentTime),
           placement: {
             posX: item.pip.posX,
             posY: item.pip.posY,
@@ -384,9 +469,10 @@ export function resolveDisplay(
             radius: item.pip.radius,
             opacity: item.pip.opacity,
           },
-          opacity: transitionOpacity(item, currentTime),
+          opacity,
           sourceTime: currentTime - item.start,
-          translateX: transitionTranslateX(item, currentTime),
+          transition: transitionState(item, currentTime),
+          translateX,
         });
       }
     }

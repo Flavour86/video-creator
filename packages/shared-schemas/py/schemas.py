@@ -143,6 +143,7 @@ class RenderArtifactKind(Enum):
     log = 'log'
     graph = 'graph'
     filtergraph = 'filtergraph'
+    manifest = 'manifest'
     subtitles = 'subtitles'
     thumbnail = 'thumbnail'
     companion = 'companion'

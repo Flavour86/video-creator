@@ -14,7 +14,7 @@ from pydantic import BaseModel
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
 
-CLIP_CACHE_FORMAT_VERSION = 3
+CLIP_CACHE_FORMAT_VERSION = 6
 _HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _KANA_RE = re.compile(r"[\u3040-\u30ff]")
 _HANGUL_RE = re.compile(r"[\uac00-\ud7af]")

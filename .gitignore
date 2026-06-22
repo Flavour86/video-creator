@@ -61,3 +61,4 @@ docs/designs/**/evidences
 docs/designs/bugs*/
 uploads/
 setup-cache/
+.codex-runlogs/

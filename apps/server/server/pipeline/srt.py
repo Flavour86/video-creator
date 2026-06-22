@@ -286,7 +286,7 @@ def _split_oversized_word(word: AlignedWord, *, max_line_chars: int) -> list[Ali
     if duration_s > 0:
         duration_chars = max(
             1,
-            math.floor(len(text) * (MAX_CUE_SECONDS - 0.001) / duration_s),
+            math.floor(_visible_length(text) * (MAX_CUE_SECONDS - 0.001) / duration_s),
         )
         chunk_limit = min(max_cue_chars, duration_chars)
     else:
@@ -317,9 +317,9 @@ def _split_text_chunks(text: str, chunk_limit: int) -> list[str]:
     chunks: list[str] = []
     start = 0
     while start < len(text):
-        end = min(len(text), start + chunk_limit)
+        end = _visible_chunk_end(text, start, chunk_limit)
         if end < len(text):
-            earliest_break = start + max(1, chunk_limit // 2)
+            earliest_break = _visible_chunk_end(text, start, max(1, chunk_limit // 2))
             for candidate in range(end, earliest_break - 1, -1):
                 if text[candidate - 1] in BREAK_PUNCTUATION:
                     end = candidate
@@ -327,6 +327,18 @@ def _split_text_chunks(text: str, chunk_limit: int) -> list[str]:
         chunks.append(text[start:end])
         start = end
     return chunks
+
+
+def _visible_chunk_end(text: str, start: int, limit: int) -> int:
+    end = start
+    width = 0
+    while end < len(text):
+        next_width = _visible_char_width(text[end])
+        if end > start and width + next_width > limit:
+            break
+        width += next_width
+        end += 1
+    return max(start + 1, end)
 
 
 def _normalized_cue_spans(cues: list[_Cue]) -> list[tuple[float, float]]:
@@ -373,10 +385,12 @@ def _best_chunk_end(words: list[AlignedWord], start: int, *, max_line_chars: int
 def _fits_cue(words: list[AlignedWord], *, max_line_chars: int) -> bool:
     text = _words_text(words)
     max_cue_chars = max_line_chars * MAX_CUE_LINES
-    if len(text) > max_cue_chars:
+    if _visible_length(text) > max_cue_chars:
         return False
     lines = _wrap_text(text, max_line_chars=max_line_chars)
-    return len(lines) <= MAX_CUE_LINES and all(len(line) <= max_line_chars for line in lines)
+    return len(lines) <= MAX_CUE_LINES and all(
+        _visible_length(line) <= max_line_chars for line in lines
+    )
 
 
 def _wrap_text(text: str, *, max_line_chars: int) -> list[str]:
@@ -392,7 +406,7 @@ def _wrap_text(text: str, *, max_line_chars: int) -> list[str]:
     current = ""
     for word in words:
         candidate = word if not current else f"{current} {word}"
-        if len(candidate) <= max_line_chars or not current:
+        if _visible_length(candidate) <= max_line_chars or not current:
             current = candidate
             continue
         lines.append(current)
@@ -408,6 +422,27 @@ def _normalize_max_line_chars(value: int) -> int:
     if not isinstance(value, int):
         return MAX_LINE_CHARS
     return max(20, min(80, value))
+
+
+def _visible_length(value: str) -> int:
+    return sum(_visible_char_width(character) for character in value)
+
+
+def _visible_char_width(character: str) -> int:
+    return 2 if _is_wide_character(character) else 1
+
+
+def _is_wide_character(character: str) -> bool:
+    codepoint = ord(character)
+    return (
+        0x1100 <= codepoint <= 0x115F
+        or 0x2E80 <= codepoint <= 0xA4CF
+        or 0xAC00 <= codepoint <= 0xD7AF
+        or 0xF900 <= codepoint <= 0xFAFF
+        or 0xFE10 <= codepoint <= 0xFE6F
+        or 0xFF00 <= codepoint <= 0xFF60
+        or 0xFFE0 <= codepoint <= 0xFFE6
+    )
 
 
 def _is_sentence_span_text_word(

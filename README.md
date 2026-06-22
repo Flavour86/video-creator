@@ -9,5 +9,5 @@ pnpm dev
 ```
 
 ## Documentation
-- Design: [`docs/designs/PHASE_1_DESIGN.md`](docs/designs/PHASE_1_DESIGN.md)
+- Design: [`docs/designs/PHASE_1_DESIGN.md`](docs/designs/PHASE_1_DESIGN.md) ,m
 - Execution guide: [`docs/executions/00_OVERVIEW.md`](docs/executions/00_OVERVIEW.md)

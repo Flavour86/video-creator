@@ -33,7 +33,7 @@ import {
   undoLast,
   type EditorRecoverySelection,
 } from "@/lib/editor-operation-log/operation-log";
-import { type AlignedSentence, useProjectAlignment } from "@/lib/hooks/useAlignment";
+import { type AlignedSentence, type AlignedWord, useProjectAlignment } from "@/lib/hooks/useAlignment";
 import { deleteVisualItem, hasSentenceOverlap, normalizeBackgroundPlaylists, patchBackgroundItems, patchVisualItem } from "@/lib/layers";
 import { reorderItemsByIds } from "@/lib/media-order";
 import type { Layer } from "@/lib/preview/resolveDisplay";
@@ -133,9 +133,15 @@ function EditorContent() {
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const alignmentSentences = useMemo(() => alignmentState.status === "done" ? alignmentState.result.sentences : [], [alignmentState]);
+  const alignmentWords = useMemo(() => alignmentState.status === "done" ? alignmentState.result.words : [], [alignmentState]);
   const normalizedAlignmentSentences = useMemo(
     () => normalizeAlignedSentences(alignmentSentences),
     [alignmentSentences],
+  );
+  const transcriptSentences = useMemo(() => sanitizeTranscriptSentences(project?.transcript), [project?.transcript]);
+  const previewSubtitleWords = useMemo<AlignedWord[]>(
+    () => transcriptSentences.length > 0 ? [] : alignmentWords,
+    [alignmentWords, transcriptSentences.length],
   );
   const [sentences, setSentences] = useState<AlignedSentence[]>([]);
   const duration = Math.max(audioDuration, sentences.at(-1)?.end_s ?? 0);
@@ -305,7 +311,6 @@ function EditorContent() {
   }, [projectId]);
 
   useEffect(() => {
-    const transcriptSentences = sanitizeTranscriptSentences(project?.transcript);
     setSentences(
       transcriptSentences.length > 0
         ? transcriptSentences
@@ -315,7 +320,7 @@ function EditorContent() {
       setSelectedSentenceRange(pendingSelectedRangeRef.current);
       pendingSelectedRangeRef.current = null;
     }
-  }, [normalizedAlignmentSentences, project?.transcript]);
+  }, [normalizedAlignmentSentences, transcriptSentences]);
 
   useEffect(() => {
     if (!project || !loadedProjectRef.current) return;
@@ -1172,7 +1177,9 @@ function EditorContent() {
               resolution={resolution}
               sentences={sentences}
               subtitles={project?.subtitles ?? null}
+              subtitleTextOverrides={transcriptSentences.length > 0}
               watermark={project?.watermark ?? null}
+              words={previewSubtitleWords}
             />
             <div className="relative">
               <PreviewControls

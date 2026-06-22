@@ -103,18 +103,19 @@ def build_compose_command(
         duration_s = min(duration_s, duration_limit_s)
     cmd = ["ffmpeg", "-y", "-i", str(project_dir / project.audio)]
     for item in items:
+        clip_path = clip_cache_path_for_item(
+            item=item,
+            project_dir=project_dir,
+            resolution=config.resolution,
+            fps=config.fps,
+            crf=config.crf,
+        )
+        if clip_path.suffix.lower() == ".webm":
+            cmd.extend(["-c:v", "libvpx-vp9"])
         cmd.extend(
             [
                 "-i",
-                str(
-                    clip_cache_path_for_item(
-                        item=item,
-                        project_dir=project_dir,
-                        resolution=config.resolution,
-                        fps=config.fps,
-                        crf=config.crf,
-                    )
-                ),
+                str(clip_path),
             ]
         )
     watermark_path = _watermark_path(project_dir, project)
@@ -559,7 +560,8 @@ def _build_filtergraph(
                 f"[{next_label}]"
             )
         else:
-            segments.append(f"[{input_index}:v]setpts=PTS+{start_s}/TB[{timed_input}]")
+            alpha_format = ",format=rgba" if _fullscreen_item_has_alpha(item) else ""
+            segments.append(f"[{input_index}:v]setpts=PTS+{start_s}/TB{alpha_format}[{timed_input}]")
             overlay_args = _fullscreen_overlay_args(item)
             segments.append(
                 f"[{current}][{timed_input}]"
@@ -579,7 +581,7 @@ def _build_filtergraph(
         segments.append(
             f"[{current}]subtitles='{_escape_subtitles_path(subtitles_path)}':"
             f"original_size={config.resolution}:"
-            f"force_style='{_subtitle_force_style(project)}'[vsub]"
+            f"force_style='{_subtitle_force_style(project, config.resolution)}'[vsub]"
         )
         current = "vsub"
     if watermark is not None and watermark_input_index is not None:
@@ -591,7 +593,7 @@ def _build_filtergraph(
         wm_pos_y = _watermark_float(watermark, "pos_y")
         segments.append(
             f"[{watermark_input_index}:v]"
-            f"scale={_fmt(width * scale)}:-1,"
+            f"scale={_fmt(width * scale)}:-1:flags=bilinear,"
             f"format=rgba,colorchannelmixer=aa={_fmt(opacity)}[wm]"
         )
         segments.append(
@@ -615,36 +617,50 @@ def _escape_subtitles_path(path: Path) -> str:
     return path.resolve().as_posix().replace(":", r"\:").replace("'", r"\'")
 
 
-def _subtitle_force_style(project: Project) -> str:
+ASS_PLAY_RES_Y = 288.0
+SUBTITLE_ASS_BOX_PADDING = 10.0
+
+
+def _subtitle_force_style(project: Project, resolution: str) -> str:
     subtitles = getattr(project, "subtitles", None)
     style = getattr(subtitles, "style", None)
     font = _subtitle_style_str(style, "font", "Arial")
-    size = _subtitle_render_font_size(_subtitle_style_float(style, "size", 28.0))
+    size = _subtitle_ass_units(
+        _subtitle_render_font_size(_subtitle_style_float(style, "size", 28.0)),
+        resolution,
+    )
     position = _subtitle_style_str(style, "position", "bottom")
     bg_style = _subtitle_style_str(style, "bg_style", "shadow")
     text_color = _subtitle_style_str(style, "color", "#ffffff")
     bg_color = _subtitle_style_str(style, "bg_color", "#000000")
     bg_opacity = _subtitle_style_opacity(style, "bg_opacity", 62.0)
     alignment, margin_v = _subtitle_position_style(position)
-    border_style, outline, shadow = _subtitle_background_style(bg_style)
+    margin_v = _subtitle_ass_units(float(margin_v), resolution)
+    border_style, outline, shadow = _subtitle_background_style(bg_style, resolution=resolution)
     background_ass_color = (
         _ass_color(bg_color, alpha=_ass_alpha_from_opacity(bg_opacity))
         if bg_style in {"block", "pill"}
         else _ass_color("#000000")
     )
+    outline_ass_color = background_ass_color
+    if bg_style == "block":
+        # BorderStyle=4 uses Outline as block padding, but a visible OutlineColour also
+        # strokes the glyphs. Keep the block in BackColour and make that stroke transparent.
+        outline_ass_color = _ass_color(bg_color, alpha=255)
 
     return ",".join(
         [
             f"Fontname={font}",
             f"Fontsize={_fmt(size)}",
+            "Bold=1",
             f"PrimaryColour={_ass_color(text_color)}",
-            f"OutlineColour={background_ass_color}",
+            f"OutlineColour={outline_ass_color}",
             f"BackColour={background_ass_color}",
             f"BorderStyle={border_style}",
-            f"Outline={outline}",
+            f"Outline={_fmt(outline)}",
             f"Shadow={shadow}",
             f"Alignment={alignment}",
-            f"MarginV={margin_v}",
+            f"MarginV={_fmt(margin_v)}",
         ]
     )
 
@@ -684,6 +700,18 @@ def _subtitle_render_font_size(style_size: float) -> float:
     return float(max(16, min(42, int(style_size * 0.58 + 0.5))))
 
 
+def _subtitle_ass_units(preview_pixels: float, resolution: str) -> float:
+    frame_height = _resolution_height(resolution)
+    return preview_pixels * (ASS_PLAY_RES_Y / frame_height)
+
+
+def _resolution_height(resolution: str) -> float:
+    try:
+        return float(resolution.split("x", maxsplit=1)[1])
+    except (IndexError, ValueError):
+        return 720.0
+
+
 def _ass_color(hex_color: str, *, alpha: int = 0) -> str:
     color = hex_color.strip().removeprefix("#")
     if len(color) != 6:
@@ -704,20 +732,23 @@ def _ass_alpha_from_opacity(opacity: float) -> int:
 
 def _subtitle_position_style(position: str) -> tuple[int, int]:
     if position == "top":
-        return (8, 40)
+        return (8, 140)
     if position == "bottom_low":
-        return (2, 24)
-    return (2, 60)
+        return (2, 48)
+    return (2, 126)
 
 
-def _subtitle_background_style(bg_style: str) -> tuple[int, int, int]:
+def _subtitle_background_style(bg_style: str, *, resolution: str | None = None) -> tuple[int, float, int]:
+    def padding_units(preview_pixels: float) -> float:
+        return _subtitle_ass_units(preview_pixels, resolution) if resolution is not None else preview_pixels
+
     if bg_style == "block":
-        return (4, 0, 0)
+        return (4, padding_units(SUBTITLE_ASS_BOX_PADDING), 0)
     if bg_style == "pill":
-        return (3, 0, 0)
+        return (3, padding_units(SUBTITLE_ASS_BOX_PADDING), 0)
     if bg_style == "none":
         return (1, 0, 0)
-    return (1, 2, 1)
+    return (1, 1, 0)
 
 
 def _watermark_path(project_dir: Path, project: Project) -> Path | None:
@@ -749,6 +780,13 @@ def _watermark_is_video(project: Project, watermark_path: Path) -> bool:
         if media_id and media_id in media_ids:
             return "video" in media_kind
     return watermark_path.suffix.lower() in {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
+
+
+def _fullscreen_item_has_alpha(item: ClipRenderItem) -> bool:
+    if _is_pip_item(item):
+        return False
+    media_ids = _item_media_ids(item)
+    return any(Path(media_id).suffix.lower() in {".png", ".webp"} for media_id in media_ids)
 
 
 def _watermark_float(watermark: object, name: str) -> float:

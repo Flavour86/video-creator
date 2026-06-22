@@ -48,6 +48,7 @@ from server.pipeline.filtergraph import (
     build_compose_command,
     visual_items_bottom_to_top,
 )
+from server.pipeline.render_manifest import write_render_manifest
 from server.pipeline.render_progress import (
     RenderLogEvent,
     RenderProgressEvent,
@@ -311,6 +312,15 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
             message="appending render history",
         )
         try:
+            manifest_path = write_render_manifest(
+                project_dir=job.project_dir,
+                render_id=job.render_id,
+                project=job.project,
+                alignment=alignment,
+                resolution=job.resolution,
+                duration_limit_s=duration_limit_s,
+                max_line_chars=_subtitle_max_line_chars(job.project),
+            )
             mark_render_finished(
                 render_id=job.render_id,
                 finished_at=datetime.now(UTC),
@@ -326,6 +336,8 @@ async def _run_job(job: RenderJob, *, raise_errors: bool) -> None:
                 audio_bitrate_kbps=media_stats.audio_bitrate_kbps,
                 audio_sample_rate=media_stats.audio_sample_rate,
             )
+            if get_render(job.render_id) is not None:
+                add_render_artifact(render_id=job.render_id, kind="manifest", path=manifest_path)
         except Exception as exc:
             message = f"Render history update failed: {exc}"
             with suppress(Exception):

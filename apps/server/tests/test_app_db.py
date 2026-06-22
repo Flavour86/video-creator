@@ -45,6 +45,7 @@ def test_init_records_migration_once(monkeypatch, tmp_path: Path) -> None:
         (8, "render_history_canonical"),
         (9, "render_artifacts_events_canonical"),
         (10, "app_settings_whitelist"),
+        (11, "render_manifest_artifacts"),
     ]
 
 

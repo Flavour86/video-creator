@@ -469,6 +469,57 @@ def test_persist_render_log_artifact_records_reopenable_log(
     assert artifacts[0]["size_bytes"] == log_path.stat().st_size
 
 
+@pytest.mark.asyncio
+async def test_successful_render_records_manifest_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "app_db_path", tmp_path / "test.db")
+    project_dir = tmp_path / "project"
+    _write_project(project_dir)
+    render_id = "r-manifest"
+    job = _render_job(project_dir, render_id)
+    insert_render(
+        render_id=render_id,
+        project_path=project_dir,
+        output_path=job.output_path,
+        preset="draft",
+        started_at=job.started_at,
+        resolution=job.resolution,
+        width=1280,
+        height=720,
+    )
+    mark_render_started(render_id=render_id)
+
+    async def fake_run_ffmpeg(
+        command: list[str],
+        output_path: Path,
+        *,
+        render_id: str,
+        total_s: float,
+        log_path: Path | None = None,
+    ) -> render_pipeline._RenderMediaStats:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"mp4")
+        return render_pipeline._RenderMediaStats(duration_s=1.0, width=1280, height=720)
+
+    monkeypatch.setattr(render_pipeline, "_ensure_alignment", _fake_alignment)
+    monkeypatch.setattr(render_pipeline, "_warm_clip_cache", _noop_warm_clip_cache)
+    monkeypatch.setattr(render_pipeline, "build_compose_command", lambda **kwargs: ["ffmpeg"])
+    monkeypatch.setattr(render_pipeline, "_run_ffmpeg", fake_run_ffmpeg)
+
+    await render_pipeline._run_job(job, raise_errors=False)
+
+    artifacts = list_render_artifacts(render_id)
+    manifest_artifact = next(row for row in artifacts if row["kind"] == "manifest")
+    manifest_path = Path(str(manifest_artifact["path"]))
+    assert manifest_path == (project_dir / ".vc" / "manifests" / f"{render_id}.json").resolve()
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert payload["version"] == 1
+    assert payload["resolution"] == "1280x720"
+    assert payload["samples"][0]["drawOrder"] == ["black"]
+
+
 def test_probe_output_metadata_reads_ffprobe_json(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

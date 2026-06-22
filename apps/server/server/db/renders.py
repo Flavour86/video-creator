@@ -687,6 +687,8 @@ def _canonical_artifact_kind(kind: str) -> str | None:
         "logs": "log",
         "graph": "graph",
         "filtergraph": "graph",
+        "manifest": "manifest",
+        "render_manifest": "manifest",
         "subtitles": "subtitles",
         "subtitle": "subtitles",
         "srt": "subtitles",

@@ -117,7 +117,10 @@ def _expected_clip(
         crossfade_s=crossfade_s,
         cache_context=cache_context,
     )
-    return clip_cache_path(project_dir, key)
+    path = clip_cache_path(project_dir, key)
+    if media_path.suffix.lower() in {".png", ".webp"}:
+        return path.with_suffix(".webm")
+    return path
 
 
 def test_empty_foreground_uses_black_canvas_and_audio(tmp_path: Path) -> None:
@@ -334,8 +337,30 @@ def test_subtitle_burn_in_appends_subtitles_filter(tmp_path: Path) -> None:
 
     filtergraph = _filtergraph(command)
     assert "subtitles='" in filtergraph
-    assert "/subtitles.srt':original_size=1280x720:force_style='Fontname=Arial,Fontsize=16" in filtergraph
-    assert "Alignment=2,MarginV=60'[vsub];[vsub]format=yuv420p[vout]" in filtergraph
+    assert "/subtitles.srt':original_size=1280x720:force_style='Fontname=Arial,Fontsize=6.4,Bold=1" in filtergraph
+    assert "Alignment=2,MarginV=50.4'[vsub];[vsub]format=yuv420p[vout]" in filtergraph
+
+
+def test_alpha_webm_clip_inputs_force_libvpx_decoder(tmp_path: Path) -> None:
+    media_path = _write_media(tmp_path, "foreground.png", b"fg")
+    project = _project([_fg_layer("fg-z1", [_item("foreground.png", 1.0, 3.0, "fg-1")])])
+
+    command = build_compose_command(
+        project_dir=tmp_path,
+        project=project,
+        alignment=_alignment(),
+        output_path=tmp_path / "draft.mp4",
+        preset="draft",
+    )
+
+    expected_clip = _expected_clip(tmp_path, media_path, 2.0)
+    clip_index = command.index(str(expected_clip))
+    assert command[clip_index - 3:clip_index + 1] == [
+        "-c:v",
+        "libvpx-vp9",
+        "-i",
+        str(expected_clip),
+    ]
 
 
 def test_subtitle_style_fields_match_canvas_preview_scale(tmp_path: Path) -> None:
@@ -366,13 +391,13 @@ def test_subtitle_style_fields_match_canvas_preview_scale(tmp_path: Path) -> Non
     )
 
     filtergraph = _filtergraph(command)
-    assert "Fontname=Helvetica Neue,Fontsize=21" in filtergraph
+    assert "Fontname=Helvetica Neue,Fontsize=8.4,Bold=1" in filtergraph
     assert ":original_size=1280x720:force_style=" in filtergraph
-    assert "Alignment=8,MarginV=40" in filtergraph
+    assert "Alignment=8,MarginV=56" in filtergraph
     assert "PrimaryColour=&H0000CCFF" in filtergraph
-    assert "OutlineColour=&H61302010" in filtergraph
+    assert "OutlineColour=&HFF302010" in filtergraph
     assert "BackColour=&H61302010" in filtergraph
-    assert "BorderStyle=4,Outline=0,Shadow=0" in filtergraph
+    assert "BorderStyle=4,Outline=4,Shadow=0" in filtergraph
     assert "Radius" not in filtergraph
 
 
@@ -425,7 +450,7 @@ def test_watermark_appends_topmost_overlay(tmp_path: Path) -> None:
 
     filtergraph = _filtergraph(command)
     assert _input_paths(command) == [str(tmp_path / "voice.wav"), str(media_path)]
-    assert "[1:v]scale=102.4:-1,format=rgba,colorchannelmixer=aa=0.6[wm]" in filtergraph
+    assert "[1:v]scale=102.4:-1:flags=bilinear,format=rgba,colorchannelmixer=aa=0.6[wm]" in filtergraph
     assert "[bg][wm]overlay=x='(W-w)*1':y='(H-h)*1':eof_action=pass[vwm]" in filtergraph
     assert "[vwm]format=yuv420p[vout]" in filtergraph
 

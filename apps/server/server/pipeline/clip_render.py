@@ -123,6 +123,7 @@ def render_clip(
 
     media_path = _resolve_media_path(project_dir, _media_id(item))
     duration_s = _effective_duration_s(item, media_path)
+    has_alpha = _clip_output_has_alpha(item=item, media_path=media_path)
     width, height = _parse_resolution(resolution)
     filtergraph = _build_clip_filter(
         media_path=media_path,
@@ -131,10 +132,12 @@ def render_clip(
         duration_s=duration_s,
         fps=fps,
         motion_kind=_motion_kind(item),
+        motion_easing=_motion_easing(item),
         transition_in=_transition_value(item, "in"),
         transition_out=_transition_value(item, "out"),
         fade_seconds=_fade_seconds(item),
         pip=_pip_value(item),
+        preserve_alpha=has_alpha,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_name(f"{output_path.stem}.tmp{output_path.suffix}")
@@ -148,7 +151,7 @@ def render_clip(
         fps=fps,
         crf=crf,
         output_path=tmp_path,
-        has_alpha=_is_pip_item(item),
+        has_alpha=has_alpha,
     )
     result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode != 0:
@@ -233,6 +236,26 @@ def _probe_media_duration_s(media_path: Path) -> float:
     return duration_s
 
 
+def _probe_media_dimensions(media_path: Path) -> tuple[int, int]:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "csv=s=x:p=0",
+        str(media_path),
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe dimensions failed: {result.stderr.strip()}")
+    width_text, height_text = result.stdout.strip().split("x", 1)
+    return int(width_text), int(height_text)
+
+
 def _motion_value(item: ClipRenderItem) -> BaseModel | Mapping[str, JsonValue] | None:
     value = _field(item, "motion")
     if value is None or isinstance(value, BaseModel):
@@ -252,6 +275,19 @@ def _motion_kind(item: ClipRenderItem) -> str:
         value = motion.get("kind", "none")
     if not isinstance(value, str):
         return "none"
+    return value
+
+
+def _motion_easing(item: ClipRenderItem) -> str:
+    motion = _motion_value(item)
+    if motion is None:
+        return "linear"
+    if isinstance(motion, BaseModel):
+        value = motion.model_dump(mode="json").get("easing", "linear")
+    else:
+        value = motion.get("easing", "linear")
+    if not isinstance(value, str):
+        return "linear"
     return value
 
 
@@ -352,14 +388,19 @@ def _fade_filters(
     transition_in: str | None,
     transition_out: str | None,
     fade_seconds: float,
+    *,
+    alpha: bool = False,
 ) -> list[str]:
     filters: list[str] = []
+    alpha_suffix = ":alpha=1" if alpha else ""
     if transition_in == "fade":
         fade_in = min(fade_seconds, duration_s / 2)
-        filters.append(f"fade=t=in:st=0:d={_fmt(fade_in)}")
+        filters.append(f"fade=t=in:st=0:d={_fmt(fade_in)}{alpha_suffix}")
     if transition_out == "fade":
         fade_out = min(fade_seconds, duration_s / 2)
-        filters.append(f"fade=t=out:st={_fmt(max(0.0, duration_s - fade_out))}:d={_fmt(fade_out)}")
+        filters.append(
+            f"fade=t=out:st={_fmt(max(0.0, duration_s - fade_out))}:d={_fmt(fade_out)}{alpha_suffix}"
+        )
     return filters
 
 
@@ -371,10 +412,12 @@ def _build_clip_filter(
     duration_s: float,
     fps: int,
     motion_kind: str,
+    motion_easing: str,
     transition_in: str | None,
     transition_out: str | None,
     fade_seconds: float,
     pip: BaseModel | Mapping[str, JsonValue] | None,
+    preserve_alpha: bool,
 ) -> str:
     if pip is not None:
         filters = _pip_clip_filters(
@@ -382,17 +425,36 @@ def _build_clip_filter(
             duration_s=duration_s,
             fps=fps,
             motion_kind=motion_kind,
+            motion_easing=motion_easing,
             media_path=media_path,
             pip=pip,
         )
     else:
         filters = (
-            _image_motion_filters(width, height, duration_s, fps, motion_kind)
-            if media_path.suffix.lower() in IMAGE_EXTENSIONS
+            _image_motion_filters(
+                width,
+                height,
+                duration_s,
+                fps,
+                motion_kind,
+                motion_easing,
+                still_image=media_path.suffix.lower() in IMAGE_EXTENSIONS,
+            )
+            if media_path.suffix.lower() in IMAGE_EXTENSIONS or motion_kind not in {"none", "static"}
             else _fullscreen_fit_filters(width, height, fps)
         )
-    filters.extend(_fade_filters(duration_s, transition_in, transition_out, fade_seconds))
-    filters.extend(["setsar=1", "format=yuva420p" if pip is not None else "format=yuv420p"])
+    if preserve_alpha and pip is None:
+        filters.append("format=rgba")
+    filters.extend(
+        _fade_filters(
+            duration_s,
+            transition_in,
+            transition_out,
+            fade_seconds,
+            alpha=preserve_alpha,
+        )
+    )
+    filters.extend(["setsar=1", "format=yuva420p" if preserve_alpha else "format=yuv420p"])
     return f"[0:v]{','.join(filters)}[vout]"
 
 
@@ -402,6 +464,7 @@ def _pip_clip_filters(
     duration_s: float,
     fps: int,
     motion_kind: str,
+    motion_easing: str,
     media_path: Path,
     pip: BaseModel | Mapping[str, JsonValue],
 ) -> list[str]:
@@ -413,7 +476,15 @@ def _pip_clip_filters(
                 f"fps={fps}",
             ]
             if motion_kind in {"none", "static"}
-            else _image_motion_filters(pip_width, pip_width, duration_s, fps, motion_kind)
+            else _image_motion_filters(
+                pip_width,
+                _pip_target_height(media_path, pip_width),
+                duration_s,
+                fps,
+                motion_kind,
+                motion_easing,
+                still_image=True,
+            )
         )
     else:
         filters = [
@@ -439,6 +510,13 @@ def _pip_object_float(pip: BaseModel | Mapping[str, JsonValue], name: str) -> fl
     return float(value)
 
 
+def _pip_target_height(media_path: Path, pip_width: int) -> int:
+    source_width, source_height = _probe_media_dimensions(media_path)
+    if source_width <= 0 or source_height <= 0:
+        return pip_width
+    return max(2, round((pip_width * source_height / source_width) / 2) * 2)
+
+
 def _rounded_alpha_expr(radius: float) -> str:
     r = _fmt(radius)
     return (
@@ -455,6 +533,9 @@ def _image_motion_filters(
     duration_s: float,
     fps: int,
     motion_kind: str,
+    motion_easing: str,
+    *,
+    still_image: bool,
 ) -> list[str]:
     if motion_kind in {"none", "static"}:
         return _fullscreen_fit_filters(width, height, fps)
@@ -463,11 +544,12 @@ def _image_motion_filters(
     denominator = max(1, frames - 1)
     scaled_width = width * 2
     scaled_height = height * 2
-    zoom, x_pos, y_pos = _zoompan_expressions(motion_kind, denominator)
+    zoom, x_pos, y_pos = _zoompan_expressions(motion_kind, motion_easing, denominator)
+    frames_per_input = frames if still_image else 1
     return [
         f"scale={scaled_width}:{scaled_height}:force_original_aspect_ratio=increase",
         f"crop={scaled_width}:{scaled_height}",
-        f"zoompan=z='{zoom}':x='{x_pos}':y='{y_pos}':d={frames}:s={width}x{height}:fps={fps}",
+        f"zoompan=z='{zoom}':x='{x_pos}':y='{y_pos}':d={frames_per_input}:s={width}x{height}:fps={fps}",
     ]
 
 
@@ -479,20 +561,32 @@ def _fullscreen_fit_filters(width: int, height: int, fps: int) -> list[str]:
     ]
 
 
-def _zoompan_expressions(motion_kind: str, denominator: int) -> tuple[str, str, str]:
+def _zoompan_expressions(motion_kind: str, motion_easing: str, denominator: int) -> tuple[str, str, str]:
     center_x = "iw/2-(iw/zoom/2)"
     center_y = "ih/2-(ih/zoom/2)"
+    progress = f"({_motion_progress_expression(motion_easing, denominator)})"
     if motion_kind == "ken_burns_strong":
-        return f"min(1.18,1+on*0.18/{denominator})", center_x, center_y
+        return f"min(1.18,1+0.18*{progress})", center_x, center_y
     if motion_kind == "zoom_in" or motion_kind == "ken_burns":
-        return f"min(1.08,1+on*0.08/{denominator})", center_x, center_y
+        return f"min(1.08,1+0.08*{progress})", center_x, center_y
     if motion_kind == "zoom_out":
-        return f"max(1,1.12-on*0.12/{denominator})", center_x, center_y
+        return f"max(1,1.12-0.12*{progress})", center_x, center_y
     if motion_kind == "pan_left":
-        return "1.08", f"(iw-iw/zoom)*on/{denominator}", center_y
+        return "1.08", f"(iw-iw/zoom)*{progress}", center_y
     if motion_kind == "pan_right":
-        return "1.08", f"(iw-iw/zoom)*(1-on/{denominator})", center_y
-    return f"min(1.08,1+on*0.08/{denominator})", center_x, center_y
+        return "1.08", f"(iw-iw/zoom)*(1-{progress})", center_y
+    return f"min(1.08,1+0.08*{progress})", center_x, center_y
+
+
+def _motion_progress_expression(motion_easing: str, denominator: int) -> str:
+    linear = f"on/{denominator}"
+    if motion_easing == "ease_in":
+        return f"({linear})*({linear})"
+    if motion_easing == "ease_out":
+        return f"1-(1-{linear})*(1-{linear})"
+    if motion_easing == "ease_in_out":
+        return f"if(lt({linear},0.5),2*({linear})*({linear}),1-pow(-2*({linear})+2,2)/2)"
+    return linear
 
 
 def _ffmpeg_command(
@@ -612,6 +706,10 @@ def _write_metadata(
 
 def _clip_cache_path_for_key(project_dir: Path, key: str, item: ClipRenderItem) -> Path:
     path = clip_cache_path(project_dir, key)
-    if _is_pip_item(item):
+    if _clip_output_has_alpha(item=item, media_path=_resolve_media_path(project_dir, _media_id(item))):
         return path.with_suffix(".webm")
     return path
+
+
+def _clip_output_has_alpha(*, item: ClipRenderItem, media_path: Path) -> bool:
+    return _is_pip_item(item) or media_path.suffix.lower() in {".png", ".webp"}

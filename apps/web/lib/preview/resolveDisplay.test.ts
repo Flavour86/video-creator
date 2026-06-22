@@ -330,6 +330,8 @@ describe("resolveDisplay", () => {
     const spec = resolveDisplay([BG_LAYER, FG_LAYER], [], 10);
     expect(spec.fg).toHaveLength(1);
     expect(spec.fg[0].mediaId).toBe("dog.jpg");
+    expect(spec.fg[0].itemId).toBe("fg-1");
+    expect(spec.fg[0].layerId).toBe("L-fg");
   });
 
   it("excludes fg item when currentTime is outside its range", () => {
@@ -472,6 +474,38 @@ describe("resolveDisplay", () => {
     expect(spec.pip.map((item) => item.mediaId)).toEqual(["pip-bottom.jpg", "pip-top.jpg"]);
   });
 
+  it("keeps foreground and PiP motion progress for canvas rendering", () => {
+    const fgLayer: Layer = {
+      ...FG_LAYER,
+      items: [{
+        ...FG_LAYER.items[0]!,
+        motion: { kind: "pan_left", easing: "ease_out" },
+      }],
+    };
+    const pipLayer: Layer = {
+      id: "L-pip",
+      kind: "pip",
+      name: "PiP",
+      items: [{
+        id: "pip-1",
+        mediaId: "pip.jpg",
+        sentences: [1, 1],
+        start: 5,
+        end: 20,
+        motion: { kind: "zoom_in", easing: "ease_in" },
+        transitions: { in: "cut", out: "cut" },
+        pip: { posX: 10, posY: 10, size: 30, radius: 8, opacity: 90 },
+      }],
+    };
+
+    const spec = resolveDisplay([fgLayer, pipLayer], [], 12.5);
+
+    expect(spec.fg[0].motion).toEqual({ kind: "pan_left", easing: "ease_out" });
+    expect(spec.fg[0].motionProgress).toBeCloseTo(0.75);
+    expect(spec.pip[0].motion).toEqual({ kind: "zoom_in", easing: "ease_in" });
+    expect(spec.pip[0].motionProgress).toBeCloseTo(0.25);
+  });
+
   it("approximates slide transitions with translateX", () => {
     const layer: Layer = {
       ...FG_LAYER,
@@ -486,7 +520,34 @@ describe("resolveDisplay", () => {
     };
 
     expect(resolveDisplay([layer], [], 5).fg[0].translateX).toBe(-100);
+    const transition = resolveDisplay([layer], [], 5.2).fg[0].transition;
+    expect(transition.duration).toBe(0.4);
+    expect(transition.kind).toBe("slide_right");
+    expect(transition.phase).toBe("in");
+    expect(transition.progress).toBeCloseTo(0.5);
+    expect(resolveDisplay([layer], [], 5.2).fg[0].translateX).toBeCloseTo(-50);
     expect(resolveDisplay([layer], [], 10).fg[0].translateX).toBe(0);
     expect(resolveDisplay([layer], [], 19.75).fg[0].translateX).toBeLessThan(0);
+  });
+
+  it("uses the export transition default even when a background crossfade is zero", () => {
+    const layer: Layer = {
+      ...BG_LAYER,
+      items: [{
+        ...BG_LAYER.items[0]!,
+        transitions: { in: "fade", out: "cut" },
+        crossfade: 0,
+      }],
+    };
+
+    const spec = resolveDisplay([layer], [], 0.2);
+
+    expect(spec.bg?.opacity).toBeCloseTo(0.5);
+    expect(spec.bg?.transition).toEqual({
+      duration: 0.4,
+      kind: "fade",
+      phase: "in",
+      progress: 0.5,
+    });
   });
 });

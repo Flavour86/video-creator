@@ -151,6 +151,11 @@ it("strips cached transcript markdown noise before exposing sentences", async ()
         { index: 2, text: "---", start_s: 1, end_s: 2, confidence_avg: 0.9 },
         { index: 3, text: "**World.**", start_s: 2, end_s: 3, confidence_avg: 0.9 },
       ],
+      words: [
+        { sentence_index: 1, text: "Hello.", start_s: 0, end_s: 1, confidence: 0.9 },
+        { sentence_index: 2, text: "---", start_s: 1, end_s: 2, confidence: 0.9 },
+        { sentence_index: 3, text: "World.", start_s: 2, end_s: 3, confidence: 0.9 },
+      ],
     }),
   });
 
@@ -160,5 +165,9 @@ it("strips cached transcript markdown noise before exposing sentences", async ()
   if (result.current.state.status === "done") {
     expect(result.current.state.result.sentences.map((sentence) => sentence.text)).toEqual(["Hello.", "World."]);
     expect(result.current.state.result.sentences.map((sentence) => sentence.index)).toEqual([1, 2]);
+    expect(result.current.state.result.words.map((word) => [word.sentence_index, word.text])).toEqual([
+      [1, "Hello."],
+      [2, "World."],
+    ]);
   }
 });

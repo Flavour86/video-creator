@@ -121,14 +121,33 @@ function alignmentPath(target: AlignmentTarget, force = false): string {
 }
 
 function normalizeAlignmentResult(result: AlignmentResult): AlignmentResult {
+  const sentenceIndexMap = new Map<number, number>();
   const sentences = result.sentences
-    .map((sentence) => ({ ...sentence, text: cleanSentenceText(sentence.text) }))
+    .map((sentence) => ({ ...sentence, text: cleanSentenceText(sentence.text), originalIndex: sentence.index }))
     .filter((sentence) => sentence.text.length > 0)
-    .map((sentence, index) => ({ ...sentence, index: index + 1 }));
+    .map((sentence, index) => {
+      const nextIndex = index + 1;
+      sentenceIndexMap.set(sentence.originalIndex, nextIndex);
+      return {
+        confidence_avg: sentence.confidence_avg,
+        end_s: sentence.end_s,
+        index: nextIndex,
+        start_s: sentence.start_s,
+        text: sentence.text,
+      };
+    });
+  const words = result.words
+    .map((word) => {
+      const sentenceIndex = sentenceIndexMap.get(word.sentence_index);
+      if (sentenceIndex === undefined) return null;
+      return { ...word, sentence_index: sentenceIndex };
+    })
+    .filter((word): word is AlignedWord => word !== null);
 
   return {
     ...result,
     sentences,
+    words,
   };
 }
 

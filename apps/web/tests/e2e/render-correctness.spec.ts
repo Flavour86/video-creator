@@ -28,8 +28,8 @@ const SUBTITLE_FORCE_STYLE = [
   "OutlineColour=&H00000000",
   "BackColour=&H00000000",
   "BorderStyle=1",
-  "Outline=2",
-  "Shadow=1",
+  "Outline=1",
+  "Shadow=0",
   "Alignment=2",
   "MarginV=60",
 ].join(",");
@@ -47,12 +47,29 @@ type RenderFixture = {
 };
 
 type RenderHistoryRow = {
+  artifacts: RenderArtifactRow[];
   id: string;
   output_exists: boolean;
   output_path: string;
   preset: string | null;
   resolution: string | null;
   status: string;
+};
+
+type RenderArtifactRow = {
+  artifact_id: string;
+  kind: string;
+  path: string;
+  playable: boolean;
+  render_id: string;
+  reusable: boolean;
+  size: number | null;
+};
+
+type RenderResult = {
+  outputPath: string;
+  renderId: string;
+  row: RenderHistoryRow;
 };
 
 type Cue = {
@@ -77,15 +94,65 @@ type Bounds = {
 
 type PngFrame = PNG & { data: Buffer };
 
+type RenderManifestSample = {
+  activeMediaIds: string[];
+  drawOrder: string[];
+  layers: Array<{
+    bbox?: Bounds;
+    kind: string;
+    mediaId?: string;
+    opacity?: number;
+    style?: Record<string, unknown>;
+    text?: string;
+    lines?: string[];
+  }>;
+  timestamp: number;
+};
+
+type RenderManifest = {
+  frame: RenderResolution;
+  resolution: string;
+  samples: RenderManifestSample[];
+  timestamps: number[];
+  version: 1;
+};
+
+type PreviewRenderManifest = {
+  activeMediaIds: string[];
+  drawOrder: string[];
+  frame: RenderResolution;
+  layers: RenderManifestSample["layers"];
+  resolution: string;
+  timestamp: number;
+  version: 1;
+};
+
 test.describe("Render correctness E2E", () => {
-  test("probes the test01 draft and verifies sampled frames", async ({}, testInfo) => {
+  test("probes the test01 draft, manifest, playback route, and sampled frames", async ({ page }, testInfo) => {
     test.setTimeout(420_000);
 
     const backend = await startBackend(testInfo);
     try {
       const fixture = await prepareTest01Fixture(testInfo);
       await registerProject(backend.baseUrl, fixture.projectDir);
-      const outputPath = await ensureDraftRender(backend.baseUrl, fixture.projectId, fixture.projectDir);
+      const render = await ensureDraftRender(backend.baseUrl, fixture.projectId, fixture.projectDir);
+      const { outputPath, renderId, row } = render;
+      const playbackTimestamps = [1.2, 24.2, 44.2];
+      const parityTimestamps = [1.2, 5.2, 24.2, 44.2];
+
+      const manifest = await readRenderManifest(row, testInfo);
+      expect(manifest.version).toBe(1);
+      expect(manifest.resolution).toBe("1280x720");
+      expect(manifest.frame).toEqual(RENDER_RESOLUTION);
+      const pipSample = nearestManifestSample(manifest, 24.2);
+      expect(pipSample.drawOrder).toEqual(["black", "bg", "pip", "subtitle", "watermark"]);
+      expect(pipSample.activeMediaIds).toContain("pip.png");
+      expect(pipSample.layers.find((layer) => layer.kind === "pip")?.bbox).toMatchObject({
+        height: expect.any(Number),
+        width: expect.any(Number),
+        x: expect.any(Number),
+        y: expect.any(Number),
+      });
 
       const voiceDuration = await ffprobeDuration(fixture.voicePath);
       const outputProbe = await ffprobeJson(outputPath);
@@ -94,6 +161,23 @@ test.describe("Render correctness E2E", () => {
       expect(outputProbe.video?.height).toBe(RENDER_RESOLUTION.height);
       expect(outputProbe.audio, "audio stream should be present").toBeTruthy();
       expect(await hasFaststart(outputPath), "MP4 moov atom should precede mdat").toBe(true);
+      await verifyPreviewExportParity(
+        page,
+        testInfo,
+        backend.baseUrl,
+        fixture.projectId,
+        outputPath,
+        manifest,
+        parityTimestamps,
+      );
+      await verifyBrowserPlaybackRoute(
+        page,
+        testInfo,
+        backend.baseUrl,
+        fixture.projectId,
+        renderId,
+        playbackTimestamps,
+      );
 
       const cues = await parseSrt(fixture.srtPath);
       expect(cues.length, "fixture should produce subtitle cues").toBeGreaterThan(0);
@@ -167,7 +251,7 @@ test.describe("Render correctness E2E", () => {
       for (const resolution of TASK06_RENDER_RESOLUTIONS) {
         const fixture = await prepareMaxCharsSubtitleFixture(testInfo, resolution.label);
         await registerProject(backend.baseUrl, fixture.projectDir);
-        const outputPath = await ensureDraftRender(
+        const { outputPath } = await ensureDraftRender(
           backend.baseUrl,
           fixture.projectId,
           fixture.projectDir,
@@ -438,6 +522,7 @@ async function prepareMaxCharsSubtitleFixture(testInfo: TestInfo, label: string)
 
 function visualItem(id: string, mediaId: string, start: number, end: number, extra: Record<string, unknown> = {}) {
   return {
+    anchor: "time",
     cache_status: "cold",
     id,
     mediaId,
@@ -476,7 +561,7 @@ async function ensureDraftRender(
   projectId: string,
   projectDir: string,
   resolution = "1280x720",
-): Promise<string> {
+): Promise<RenderResult> {
   const reusable = await latestSuccessfulDraft(baseUrl, projectId, resolution);
   if (reusable) return reusable;
 
@@ -488,10 +573,10 @@ async function ensureDraftRender(
   const row = await waitForRender(baseUrl, projectId, body.render_id);
   expect(row.output_exists, `render output should exist for ${body.render_id}`).toBe(true);
   expect(path.resolve(row.output_path).startsWith(path.resolve(projectDir, ".vc", "drafts"))).toBe(true);
-  return row.output_path;
+  return { outputPath: row.output_path, renderId: body.render_id, row };
 }
 
-async function latestSuccessfulDraft(baseUrl: string, projectId: string, resolution = "1280x720"): Promise<string | null> {
+async function latestSuccessfulDraft(baseUrl: string, projectId: string, resolution = "1280x720"): Promise<RenderResult | null> {
   const response = await fetch(`${baseUrl}/projects/${encodeURIComponent(projectId)}/history`);
   if (!response.ok) return null;
   const rows = (await response.json()) as RenderHistoryRow[];
@@ -500,8 +585,9 @@ async function latestSuccessfulDraft(baseUrl: string, projectId: string, resolut
     && entry.preset === "draft"
     && entry.resolution === resolution
     && ["done", "rendered"].includes(entry.status)
+    && entry.artifacts.some((artifact) => artifact.kind === "manifest")
   );
-  return row?.output_path ?? null;
+  return row ? { outputPath: row.output_path, renderId: row.id, row } : null;
 }
 
 async function expectResponseOk(response: Response): Promise<void> {
@@ -517,13 +603,349 @@ async function waitForRender(baseUrl: string, projectId: string, renderId: strin
     await expectResponseOk(response);
     const rows = (await response.json()) as RenderHistoryRow[];
     lastRow = rows.find((row) => row.id === renderId);
-    if (lastRow && ["done", "rendered"].includes(lastRow.status)) return lastRow;
+    if (
+      lastRow
+      && ["done", "rendered"].includes(lastRow.status)
+      && lastRow.artifacts.some((artifact) => artifact.kind === "manifest")
+    ) {
+      return lastRow;
+    }
     if (lastRow && ["failed", "cancelled", "output_missing", "ffmpeg_fatal_error"].includes(lastRow.status)) {
       throw new Error(`Render ${renderId} finished with ${lastRow.status}`);
     }
     await delay(1000);
   }
   throw new Error(`Timed out waiting for render ${renderId}; last row: ${JSON.stringify(lastRow)}`);
+}
+
+async function readRenderManifest(row: RenderHistoryRow, testInfo: TestInfo): Promise<RenderManifest> {
+  const manifestArtifact = row.artifacts.find((artifact) => artifact.kind === "manifest");
+  expect(manifestArtifact, "render history should include a manifest artifact").toBeTruthy();
+  expect(manifestArtifact?.reusable).toBe(true);
+  const manifest = JSON.parse(await fs.readFile(manifestArtifact!.path, "utf-8")) as RenderManifest;
+  await fs.writeFile(testInfo.outputPath("render-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+  return manifest;
+}
+
+function nearestManifestSample(manifest: RenderManifest, timestamp: number): RenderManifestSample {
+  const sample = manifest.samples.reduce((nearest, candidate) =>
+    Math.abs(candidate.timestamp - timestamp) < Math.abs(nearest.timestamp - timestamp)
+      ? candidate
+      : nearest,
+  );
+  expect(Math.abs(sample.timestamp - timestamp), `manifest sample near ${timestamp}s`).toBeLessThanOrEqual(0.25);
+  return sample;
+}
+
+async function verifyPreviewExportParity(
+  page: Page,
+  testInfo: TestInfo,
+  backendBaseUrl: string,
+  projectId: string,
+  outputPath: string,
+  manifest: RenderManifest,
+  timestamps: number[],
+): Promise<void> {
+  await preparePage(page, "dark");
+  await installBackendProxy(page, backendBaseUrl);
+  await page.goto(`/editor/${encodeURIComponent(projectId)}`);
+  await expect(page.getByTestId("preview-canvas")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("timeline-ruler")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const preview = await readPreviewManifest(page);
+      return preview?.frame.width === RENDER_RESOLUTION.width && preview.frame.height === RENDER_RESOLUTION.height;
+    }, { message: "preview manifest should initialize at render resolution", timeout: 30_000 })
+    .toBe(true);
+
+  const report: Array<Record<string, unknown>> = [];
+  for (const timestamp of timestamps) {
+    const exportSample = nearestManifestSample(manifest, timestamp);
+    const preview = await capturePreviewFrame(page, testInfo, timestamp, exportSample);
+    assertPreviewManifestMatchesExport(preview.manifest, exportSample, manifest.frame, timestamp);
+
+    const exportFramePath = testInfo.outputPath(`parity-export-${timeLabel(timestamp)}.png`);
+    await extractFrame(outputPath, timestamp, exportFramePath);
+    report.push({
+      timestamp,
+      previewPath: preview.path,
+      exportPath: exportFramePath,
+      comparisons: await comparePreviewExportFrames(
+        preview.path,
+        exportFramePath,
+        preview.manifest,
+        exportSample,
+      ),
+    });
+  }
+
+  await fs.writeFile(
+    testInfo.outputPath("preview-export-parity-report.json"),
+    `${JSON.stringify(report, null, 2)}\n`,
+    "utf-8",
+  );
+}
+
+async function installBackendProxy(page: Page, backendBaseUrl: string): Promise<void> {
+  await page.route("**/api/server/**", async (route) => {
+    const request = route.request();
+    const sourceUrl = new URL(request.url());
+    const targetPath = sourceUrl.pathname.replace(/^\/api\/server/, "") || "/";
+    const targetUrl = `${backendBaseUrl}${targetPath}${sourceUrl.search}`;
+    const headers = new Headers(request.headers());
+    headers.delete("host");
+    const init: RequestInit = {
+      headers,
+      method: request.method(),
+    };
+    const body = request.postDataBuffer();
+    if (body && !["GET", "HEAD"].includes(request.method())) {
+      init.body = new Uint8Array(body);
+    }
+    const response = await fetch(targetUrl, init);
+    const responseHeaders: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      const normalized = key.toLowerCase();
+      if (["content-encoding", "content-length", "transfer-encoding"].includes(normalized)) return;
+      responseHeaders[key] = value;
+    });
+    await route.fulfill({
+      body: Buffer.from(await response.arrayBuffer()),
+      headers: responseHeaders,
+      status: response.status,
+    });
+  });
+}
+
+async function capturePreviewFrame(
+  page: Page,
+  testInfo: TestInfo,
+  timestamp: number,
+  exportSample: RenderManifestSample,
+): Promise<{ manifest: PreviewRenderManifest; path: string }> {
+  await seekPreview(page, timestamp);
+  await expect
+    .poll(async () => {
+      const manifest = await readPreviewManifest(page);
+      if (!manifest) return "missing";
+      if (Math.abs(manifest.timestamp - timestamp) > 0.15) return `time:${manifest.timestamp}`;
+      const active = new Set(manifest.activeMediaIds);
+      const expectedReady = exportSample.activeMediaIds.every((mediaId) => active.has(mediaId));
+      return expectedReady ? "ready" : `media:${[...active].join(",")}`;
+    }, { message: `preview frame should resolve at ${timestamp}s`, timeout: 30_000 })
+    .toBe("ready");
+
+  const canvas = page.getByTestId("preview-canvas");
+  const dataUrl = await canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL("image/png"));
+  const base64 = dataUrl.split(",", 2)[1] ?? "";
+  const outputPath = testInfo.outputPath(`parity-preview-${timeLabel(timestamp)}.png`);
+  await fs.writeFile(outputPath, Buffer.from(base64, "base64"));
+  return {
+    manifest: (await readPreviewManifest(page))!,
+    path: outputPath,
+  };
+}
+
+async function seekPreview(page: Page, timestamp: number): Promise<void> {
+  const ruler = page.getByTestId("timeline-ruler");
+  const box = await ruler.boundingBox();
+  expect(box, "timeline ruler should have a layout box").toBeTruthy();
+  const x = Math.min(Math.max(1, (box!.width * timestamp) / FIXTURE_DURATION_S), box!.width - 1);
+  await ruler.click({ position: { x, y: Math.max(1, box!.height / 2) } });
+}
+
+async function readPreviewManifest(page: Page): Promise<PreviewRenderManifest | null> {
+  const raw = await page.getByTestId("preview-canvas").getAttribute("data-render-manifest");
+  if (!raw) return null;
+  return JSON.parse(raw) as PreviewRenderManifest;
+}
+
+function assertPreviewManifestMatchesExport(
+  preview: PreviewRenderManifest,
+  exported: RenderManifestSample,
+  frame: RenderResolution,
+  timestamp: number,
+): void {
+  expect(preview.version, `preview manifest version at ${timestamp}s`).toBe(1);
+  expect(preview.frame, `preview manifest frame at ${timestamp}s`).toEqual(frame);
+  expect(preview.drawOrder, `draw order at ${timestamp}s`).toEqual(exported.drawOrder);
+  expect(new Set(preview.activeMediaIds), `active media ids at ${timestamp}s`).toEqual(new Set(exported.activeMediaIds));
+
+  for (const kind of ["pip", "watermark"] as const) {
+    const previewLayer = firstLayer(preview, kind);
+    const exportLayer = firstLayer(exported, kind);
+    if (!exportLayer) {
+      expect(previewLayer, `${kind} should be absent at ${timestamp}s`).toBeUndefined();
+      continue;
+    }
+    expect(previewLayer?.bbox, `${kind} preview bbox at ${timestamp}s`).toBeTruthy();
+    expect(exportLayer.bbox, `${kind} export bbox at ${timestamp}s`).toBeTruthy();
+    expectBoxWithinTolerance(previewLayer!.bbox!, exportLayer.bbox!, frame, `${kind} bbox at ${timestamp}s`);
+  }
+
+  const previewSubtitle = firstLayer(preview, "subtitle");
+  const exportSubtitle = firstLayer(exported, "subtitle");
+  if (!exportSubtitle) {
+    expect(previewSubtitle, `subtitle should be absent at ${timestamp}s`).toBeUndefined();
+    return;
+  }
+  expect(previewSubtitle?.text, `subtitle text at ${timestamp}s`).toBe(exportSubtitle.text);
+  expect(previewSubtitle?.lines, `subtitle lines at ${timestamp}s`).toEqual(exportSubtitle.lines);
+  expect(previewSubtitle?.style, `subtitle style at ${timestamp}s`).toMatchObject({
+    bgColor: exportSubtitle.style?.bgColor,
+    bgOpacity: exportSubtitle.style?.bgOpacity,
+    bgStyle: exportSubtitle.style?.bgStyle,
+    color: exportSubtitle.style?.color,
+    font: exportSubtitle.style?.font,
+    fontSize: exportSubtitle.style?.fontSize,
+    maxCharsPerLine: exportSubtitle.style?.maxCharsPerLine,
+    position: exportSubtitle.style?.position,
+    sourceSize: exportSubtitle.style?.sourceSize,
+  });
+}
+
+async function comparePreviewExportFrames(
+  previewPath: string,
+  exportPath: string,
+  preview: PreviewRenderManifest,
+  exported: RenderManifestSample,
+): Promise<Array<{ label: string; meanAbsoluteDifference: number; threshold: number }>> {
+  const previewFrame = await readPng(previewPath);
+  const exportFrame = await readPng(exportPath);
+  expect(previewFrame.width, "preview/export width").toBe(exportFrame.width);
+  expect(previewFrame.height, "preview/export height").toBe(exportFrame.height);
+
+  const regions = parityRegions(preview, exported);
+  return regions.map((region) => {
+    const mean = meanAbsoluteDifference(previewFrame, exportFrame, region.bounds);
+    expect(mean, `${region.label} preview/export mean diff`).toBeLessThanOrEqual(region.maxMeanDiff);
+    return {
+      label: region.label,
+      meanAbsoluteDifference: Number(mean.toFixed(3)),
+      threshold: region.maxMeanDiff,
+    };
+  });
+}
+
+function parityRegions(
+  preview: PreviewRenderManifest,
+  exported: RenderManifestSample,
+): Array<{ bounds: Bounds; label: string; maxMeanDiff: number }> {
+  const frame = { height: preview.frame.height, width: preview.frame.width, x: 0, y: 0 };
+  const regions: Array<{ bounds: Bounds; label: string; maxMeanDiff: number }> = [
+    { bounds: frame, label: "whole-frame", maxMeanDiff: 18 },
+  ];
+  if (firstLayer(exported, "bg")) {
+    regions.push({ bounds: frame, label: "background/foreground stack", maxMeanDiff: 18 });
+  }
+  if (firstLayer(exported, "fg")) {
+    regions.push({ bounds: frame, label: "foreground stack", maxMeanDiff: 18 });
+  }
+  const pip = firstLayer(preview, "pip")?.bbox ?? firstLayer(exported, "pip")?.bbox;
+  if (pip) {
+    regions.push({ bounds: expandBounds(pip, 12, preview.frame), label: "pip", maxMeanDiff: 20 });
+  }
+  const subtitle = firstLayer(preview, "subtitle")?.bbox;
+  if (subtitle) {
+    regions.push({ bounds: expandBounds(subtitle, 28, preview.frame), label: "subtitle", maxMeanDiff: 40 });
+  }
+  const watermark = firstLayer(preview, "watermark")?.bbox ?? firstLayer(exported, "watermark")?.bbox;
+  if (watermark) {
+    regions.push({ bounds: expandBounds(watermark, 6, preview.frame), label: "watermark", maxMeanDiff: 12 });
+  }
+  return regions;
+}
+
+function firstLayer(
+  manifest: Pick<PreviewRenderManifest | RenderManifestSample, "layers">,
+  kind: string,
+): RenderManifestSample["layers"][number] | undefined {
+  return manifest.layers.find((layer) => layer.kind === kind);
+}
+
+function expectBoxWithinTolerance(actual: Bounds, expected: Bounds, frame: RenderResolution, label: string): void {
+  const toleranceX = frame.width * 0.02;
+  const toleranceY = frame.height * 0.02;
+  expect(Math.abs(actual.x - expected.x), `${label} x`).toBeLessThanOrEqual(toleranceX);
+  expect(Math.abs(actual.y - expected.y), `${label} y`).toBeLessThanOrEqual(toleranceY);
+  expect(Math.abs(actual.width - expected.width), `${label} width`).toBeLessThanOrEqual(toleranceX);
+  expect(Math.abs(actual.height - expected.height), `${label} height`).toBeLessThanOrEqual(toleranceY);
+}
+
+function expandBounds(bounds: Bounds, padding: number, frame: RenderResolution): Bounds {
+  const x = Math.max(0, Math.floor(bounds.x - padding));
+  const y = Math.max(0, Math.floor(bounds.y - padding));
+  const right = Math.min(frame.width, Math.ceil(bounds.x + bounds.width + padding));
+  const bottom = Math.min(frame.height, Math.ceil(bounds.y + bounds.height + padding));
+  return {
+    height: Math.max(1, bottom - y),
+    width: Math.max(1, right - x),
+    x,
+    y,
+  };
+}
+
+function timeLabel(seconds: number): string {
+  return `${seconds.toFixed(1).replace(".", "p")}s`;
+}
+
+async function verifyBrowserPlaybackRoute(
+  page: Page,
+  testInfo: TestInfo,
+  baseUrl: string,
+  projectId: string,
+  renderId: string,
+  timestamps: number[],
+): Promise<void> {
+  const videoUrl = `${baseUrl}/projects/${encodeURIComponent(projectId)}/render/${encodeURIComponent(renderId)}`;
+  const response = await page.goto(videoUrl);
+  expect(response?.status(), "video route status").toBe(200);
+  expect(response?.headers()["content-type"], "video route content type").toContain("video/mp4");
+
+  const video = page.locator("video");
+  await expect(video).toBeVisible();
+  const metadata = await video.evaluate((node: HTMLVideoElement) =>
+    new Promise<{ duration: number; height: number; readyState: number; width: number }>((resolve) => {
+      const read = () => resolve({
+        duration: node.duration,
+        height: node.videoHeight,
+        readyState: node.readyState,
+        width: node.videoWidth,
+      });
+      if (node.readyState >= 1) {
+        read();
+        return;
+      }
+      node.addEventListener("loadedmetadata", read, { once: true });
+    }),
+  );
+  expect(metadata.width).toBe(RENDER_RESOLUTION.width);
+  expect(metadata.height).toBe(RENDER_RESOLUTION.height);
+  expect(metadata.duration).toBeGreaterThan(0);
+  await fs.writeFile(
+    testInfo.outputPath("browser-playback-metadata.json"),
+    `${JSON.stringify({ ...metadata, renderId, url: videoUrl }, null, 2)}\n`,
+    "utf-8",
+  );
+
+  for (const timestamp of timestamps) {
+    await video.evaluate((node: HTMLVideoElement, seconds) =>
+      new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          node.removeEventListener("seeked", onSeeked);
+          reject(new Error(`Timed out seeking to ${seconds}s`));
+        }, 10_000);
+        const onSeeked = () => {
+          window.clearTimeout(timeout);
+          resolve();
+        };
+        node.pause();
+        node.addEventListener("seeked", onSeeked, { once: true });
+        node.currentTime = seconds;
+      }),
+    timestamp);
+    await page.screenshot({ path: testInfo.outputPath(`browser-playback-${timestamp.toFixed(1)}s.png`) });
+  }
 }
 
 async function assertBoundary(
